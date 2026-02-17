@@ -4,36 +4,38 @@ namespace App\Filament\Resources\Machines;
 
 use App\Filament\Resources\Machines\Pages;
 use App\Models\Machine;
+
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+
 use Filament\Resources\Resource;
+
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\Alignment;
-use Filament\Support\Icons\Heroicon;
 
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
-
-use Filament\Tables\Actions\ActionGroup;
-use Filament\Tables\Actions\ViewAction;
-use Filament\Tables\Actions\EditAction;
-use Filament\Tables\Actions\DeleteAction;
-use Filament\Tables\Actions\RestoreAction;
-use Filament\Tables\Actions\ForceDeleteAction;
-
-use Filament\Tables\Actions\BulkActionGroup;
-use Filament\Tables\Actions\DeleteBulkAction;
-use Filament\Tables\Actions\RestoreBulkAction;
-use Filament\Tables\Actions\ForceDeleteBulkAction;
-
-use Filament\Tables\Filters\TrashedFilter;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
+
+use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkActionGroup;
+
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\ViewAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
+use Filament\Support\Enums\Alignment;
+use Filament\Support\Icons\Heroicon;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -42,16 +44,17 @@ use Illuminate\Support\Facades\Auth;
 
 class MachineResource extends Resource
 {
+    // Filament v4: Resource očekuje ?string
     protected static ?string $model = Machine::class;
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedCog;
 
-    protected static string $navigationLabel = 'Radna Oprema';
-    protected static string $modelLabel = 'Radna Oprema';
-    protected static string $pluralModelLabel = 'Radna Oprema';
+    protected static ?string $navigationLabel = 'Radna Oprema';
+    protected static ?string $modelLabel = 'Radna Oprema';
+    protected static ?string $pluralModelLabel = 'Radna Oprema';
 
     protected static \UnitEnum|string|null $navigationGroup = 'Ispitivanja';
-    protected static int $navigationSort = 1;
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {
@@ -233,17 +236,17 @@ class MachineResource extends Resource
                         ->where('examination_valid_until', '>=', Carbon::today())
                         ->where('examination_valid_until', '<=', Carbon::today()->addDays(30))),
             ])
-            ->actions([
-                ActionGroup::make([
-                    ViewAction::make()->label('Prikaži'),
-                    EditAction::make()->label('Uredi'),
-                    DeleteAction::make()->label('Deaktiviraj')->requiresConfirmation(),
-                    RestoreAction::make()->label('Vrati')->requiresConfirmation(),
-                    ForceDeleteAction::make()->label('Trajno obriši')->requiresConfirmation(),
-                ])
-                    ->icon(Heroicon::EllipsisVertical)
-                    ->label(''),
-            ])
+            ->recordActions([
+    ActionGroup::make([
+        ViewAction::make()->label('Prikaži'),
+        EditAction::make()->label('Uredi'),
+        DeleteAction::make()->label('Deaktiviraj')->requiresConfirmation(),
+        RestoreAction::make()->label('Vrati')->requiresConfirmation(),
+        ForceDeleteAction::make()->label('Trajno obriši')->requiresConfirmation(),
+    ])
+        ->icon(Heroicon::EllipsisVertical)
+        ->label(''),
+])
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()->label('Deaktiviraj označeno'),

@@ -34,8 +34,10 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return (bool) ($this->is_admin ?? false) || ($this->role === 'admin');
+        // podržava i boolean i "role=admin"
+        return (bool) ($this->is_admin ?? false) || ($this->role ?? null) === 'admin';
     }
 }
+
 
 

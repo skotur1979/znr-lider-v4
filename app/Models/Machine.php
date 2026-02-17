@@ -28,7 +28,7 @@ class Machine extends Model
     protected $casts = [
         'examination_valid_from' => 'date',
         'examination_valid_until' => 'date',
-        'pdf' => 'array', // <-- KLJUČNO
+        'pdf' => 'array', // ✅ ključno za multiple upload
     ];
 
     public function user(): BelongsTo
@@ -36,3 +36,4 @@ class Machine extends Model
         return $this->belongsTo(User::class);
     }
 }
+
