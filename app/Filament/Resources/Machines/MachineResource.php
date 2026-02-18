@@ -41,9 +41,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use App\Support\ExpiryBadge;
+
 
 class MachineResource extends Resource
 {
+    use ExpiryBadge;
     // Filament v4: Resource očekuje ?string
     protected static ?string $model = Machine::class;
 
@@ -190,15 +193,16 @@ class MachineResource extends Resource
                     ->alignment(Alignment::Center),
 
                 TextColumn::make('examination_valid_until')
-                    ->label('Ispitivanje vrijedi do')
-                    ->date('d.m.Y.')
-                    ->badge()
-                    ->color(fn ($state) => blank($state) ? 'gray' : (
-                        Carbon::parse($state)->lt(Carbon::today()) ? 'danger' :
-                        (Carbon::parse($state)->diffInDays(Carbon::today()) <= 30 ? 'warning' : 'success')
-                    ))
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    ->label('Ispitivanje vrijedi do')
+    ->date('d.m.Y.')
+    ->badge()
+    ->sortable()
+    ->alignment(Alignment::Center)
+    ->color(fn ($state) => static::expiryColor($state))
+    ->extraAttributes(fn ($state) => ['class' => static::expiryClasses($state)])
+    ->icon(fn ($state) => static::expiryIcon($state))
+    ->iconPosition('before')
+    ->tooltip(fn ($state) => static::expiryTooltip($state)),
 
                 TextColumn::make('location')
                     ->label('Lokacija')
@@ -218,24 +222,30 @@ class MachineResource extends Resource
                         : 'Nema priloga'),
             ])
             ->filters([
-                TrashedFilter::make(),
+    TrashedFilter::make()
+        ->label('Aktivni/neaktivni zapisi')
+        ->placeholder('Sve')
+        ->trueLabel('Deaktivirani')
+        ->falseLabel('Aktivni'),
 
-                SelectFilter::make('location')
-                    ->label('Lokacije')
-                    ->placeholder('Sve')
-                    ->options(fn () => static::getLocationOptions())
-                    ->searchable(),
+    SelectFilter::make('location')
+        ->label('Lokacije')
+        ->placeholder('Sve')
+        ->options(fn () => static::getLocationOptions())
+        ->searchable(),
 
-                Filter::make('isteklo')
-                    ->label('Ispitivanje (isteklo)')
-                    ->query(fn (Builder $query) => $query->where('examination_valid_until', '<', Carbon::today())),
+    Filter::make('isteklo')
+        ->label('Ispitivanje (isteklo)')
+        ->query(fn (Builder $query) => $query->where('examination_valid_until', '<', Carbon::today())),
 
-                Filter::make('uskoro')
-                    ->label('Ispitivanje (uskoro ističe)')
-                    ->query(fn (Builder $query) => $query
-                        ->where('examination_valid_until', '>=', Carbon::today())
-                        ->where('examination_valid_until', '<=', Carbon::today()->addDays(30))),
-            ])
+    Filter::make('uskoro')
+        ->label('Ispitivanje (uskoro ističe)')
+        ->query(fn (Builder $query) => $query
+            ->where('examination_valid_until', '>=', Carbon::today())
+            ->where('examination_valid_until', '<=', Carbon::today()->addDays(30))),
+])
+        ->paginated([10, 25, 50, 'all']) // ✅ dodano "all"
+
             ->recordActions([
     ActionGroup::make([
         ViewAction::make()->label('Prikaži'),
