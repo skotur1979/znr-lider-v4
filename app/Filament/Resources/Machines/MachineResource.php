@@ -43,10 +43,9 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use App\Support\ExpiryBadge;
 
-
 class MachineResource extends Resource
 {
-    use ExpiryBadge;
+    
     // Filament v4: Resource očekuje ?string
     protected static ?string $model = Machine::class;
 
@@ -198,11 +197,10 @@ class MachineResource extends Resource
     ->badge()
     ->sortable()
     ->alignment(Alignment::Center)
-    ->color(fn ($state) => static::expiryColor($state))
-    ->extraAttributes(fn ($state) => ['class' => static::expiryClasses($state)])
-    ->icon(fn ($state) => static::expiryIcon($state))
+    ->color(fn ($state) => ExpiryBadge::color($state))
+    ->icon(fn ($state) => ExpiryBadge::icon($state))
     ->iconPosition('before')
-    ->tooltip(fn ($state) => static::expiryTooltip($state)),
+    ->tooltip(fn ($state) => ExpiryBadge::tooltip($state)),
 
                 TextColumn::make('location')
                     ->label('Lokacija')
