@@ -34,7 +34,7 @@
 <table>
     <thead>
     <tr>
-        <th class="center" style="width: 35px;">R.br.</th>
+        <th class="center" style="width: 35px;">Red.br.</th>
         <th>Naziv</th>
         <th>Proizvođač</th>
         <th class="center">Tvornički broj</th>
