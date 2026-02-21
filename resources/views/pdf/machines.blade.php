@@ -3,22 +3,7 @@
 <head>
     <meta charset="utf-8">
     <title>Radna oprema</title>
-    <style>
-        body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #111; }
-        h1 { font-size: 16px; margin: 0 0 10px 0; }
-        .meta { font-size: 10px; margin-bottom: 10px; color: #333; }
-
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #222; padding: 4px 6px; vertical-align: middle; }
-        th { background: #eee; font-weight: bold; text-align: left; }
-
-        .center { text-align: center; }
-        .right  { text-align: right; }
-
-        /* jake boje kao marker */
-        .rok-expired { background: #ff0000; color: #ffffff; font-weight: bold; }
-        .rok-soon    { background: #ffff00; color: #000000; font-weight: bold; }
-    </style>
+    @include('pdf.partials.styles')
 </head>
 <body>
 @php

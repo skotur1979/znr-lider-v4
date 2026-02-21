@@ -237,6 +237,7 @@ public static function infolist(Schema $schema): Schema
                     ->alignment(Alignment::Center)
                     ->date('d.m.Y.')
                     ->sortable(),
+    
             ])
             ->filters([
                 TrashedFilter::make(),
@@ -251,7 +252,9 @@ public static function infolist(Schema $schema): Schema
                         ->whereDate('examination_valid_until', '>=', Carbon::today())
                         ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))
                     ),
-            ])
+                   ])
+        ->paginated([10, 25, 50, 'all']) // ✅ dodano "all" 
+            
             ->actions([
                 ActionGroup::make([
                     ViewAction::make(),

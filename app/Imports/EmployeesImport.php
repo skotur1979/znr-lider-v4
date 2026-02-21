@@ -22,24 +22,52 @@ class EmployeesImport implements ToCollection, WithHeadingRow
                 'ime_i_prezime' => ['required', 'string', 'max:255'],
             ])->validate();
 
-            // ✅ upsert po emailu unutar user scope-a (kao prije)
-            $employee = Employee::query()
-                ->when(!Auth::user()?->isAdmin(), fn ($q) => $q->where('user_id', Auth::id()))
-                ->when(!empty($d['email'] ?? null), fn ($q) => $q->where('email', $d['email']))
-                ->first();
+            $userId = Auth::id();
+
+            $oib   = trim((string) ($d['oib'] ?? ''));
+            $email = trim((string) ($d['email'] ?? ''));
+
+            // ✅ pronađi postojećeg po prioritetu:
+            // 1) OIB (najbolje)
+            // 2) email
+            // 3) fallback: ime + telefon (ako baš ništa)
+            $employeeQuery = Employee::query()
+                ->when(! Auth::user()?->isAdmin(), fn ($q) => $q->where('user_id', $userId));
+
+            $employee = null;
+
+            if ($oib !== '') {
+                $employee = (clone $employeeQuery)->where('OIB', $oib)->first();
+            }
+
+            if (! $employee && $email !== '') {
+                $employee = (clone $employeeQuery)->where('email', $email)->first();
+            }
+
+            if (! $employee) {
+                $name  = trim((string) ($d['ime_i_prezime'] ?? ''));
+                $phone = trim((string) ($d['telefon'] ?? ''));
+
+                if ($name !== '' && $phone !== '') {
+                    $employee = (clone $employeeQuery)
+                        ->where('name', $name)
+                        ->where('phone', $phone)
+                        ->first();
+                }
+            }
 
             if (! $employee) {
                 $employee = new Employee();
-                $employee->user_id = Auth::id();
+                $employee->user_id = $userId;
             }
 
-            // ✅ mapiranje prema tvom Employee modelu
+            // ✅ mapiranje
             $employee->name = $d['ime_i_prezime'] ?? null;
             $employee->address = $d['adresa'] ?? null;
             $employee->gender = $d['spol'] ?? null;
-            $employee->OIB = $d['oib'] ?? null;
+            $employee->OIB = $oib !== '' ? $oib : null;
             $employee->phone = $d['telefon'] ?? null;
-            $employee->email = $d['email'] ?? null;
+            $employee->email = $email !== '' ? $email : null;
 
             $employee->workplace = $d['radno_mjesto'] ?? null;
             $employee->organization_unit = $d['organizacijska_jedinica'] ?? null;
@@ -77,9 +105,7 @@ class EmployeesImport implements ToCollection, WithHeadingRow
             // ✅ certifikati 1..10 (bez dupliranja)
             for ($i = 1; $i <= 10; $i++) {
                 $title = trim((string) ($d["certifikat_{$i}_naziv"] ?? ''));
-                if ($title === '') {
-                    continue;
-                }
+                if ($title === '') continue;
 
                 $from = $this->parseCroDate($d["certifikat_{$i}_od"] ?? null);
                 $until = $this->parseCroDate($d["certifikat_{$i}_do"] ?? null);
@@ -98,7 +124,6 @@ class EmployeesImport implements ToCollection, WithHeadingRow
     {
         if ($value === null || $value === '') return null;
 
-        // Excel zna poslati Carbon/DateTime ili broj, ali najčešće string
         if ($value instanceof \DateTimeInterface) {
             return Carbon::instance($value)->format('Y-m-d');
         }
@@ -110,11 +135,10 @@ class EmployeesImport implements ToCollection, WithHeadingRow
 
         try {
             return Carbon::createFromFormat('d.m.Y', $v)->format('Y-m-d');
-        } catch (\Throwable $e) {
-            // fallback ako je već Y-m-d
+        } catch (\Throwable) {
             try {
                 return Carbon::parse($v)->format('Y-m-d');
-            } catch (\Throwable $e2) {
+            } catch (\Throwable) {
                 return null;
             }
         }
