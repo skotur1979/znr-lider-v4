@@ -18,7 +18,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
-
+use Filament\Support\Enums\MaxWidth;
 
 class EmployeeResource extends Resource
 {
@@ -49,6 +49,10 @@ class EmployeeResource extends Resource
     {
         return EmployeesTable::configure($table);
     }
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     public static function getPages(): array
     {
