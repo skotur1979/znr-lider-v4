@@ -220,11 +220,23 @@ class MachineResource extends Resource
                         : 'Nema priloga'),
             ])
             ->filters([
-    TrashedFilter::make()
-        ->label('Aktivni/neaktivni zapisi')
-        ->placeholder('Sve')
-        ->trueLabel('Deaktivirani')
-        ->falseLabel('Aktivni'),
+    SelectFilter::make('status')
+    ->label('Status zapisa')
+    ->placeholder('Odaberi status')
+    ->options([
+        'active'  => 'Aktivni zapisi',
+        'trashed' => 'Deaktivirani zapisi',
+        'all'     => 'Svi zapisi',
+    ])
+    ->query(function (Builder $query, array $data) {
+        $value = $data['value'] ?? null;
+
+        return match ($value) {
+            'trashed' => $query->onlyTrashed(),
+            'all'     => $query->withTrashed(),
+            default   => $query->withoutTrashed(), // ✅ bez filtera = samo aktivni
+        };
+    }),
 
     SelectFilter::make('location')
         ->label('Lokacije')
@@ -234,13 +246,13 @@ class MachineResource extends Resource
 
     Filter::make('isteklo')
         ->label('Ispitivanje (isteklo)')
-        ->query(fn (Builder $query) => $query->where('examination_valid_until', '<', Carbon::today())),
+        ->query(fn (Builder $query) => $query->whereDate('examination_valid_until', '<', Carbon::today())),
 
     Filter::make('uskoro')
         ->label('Ispitivanje (uskoro ističe)')
         ->query(fn (Builder $query) => $query
-            ->where('examination_valid_until', '>=', Carbon::today())
-            ->where('examination_valid_until', '<=', Carbon::today()->addDays(30))),
+            ->whereDate('examination_valid_until', '>=', Carbon::today())
+            ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))),
 ])
         ->paginated([10, 25, 50, 'all']) // ✅ dodano "all"
 
@@ -276,27 +288,27 @@ class MachineResource extends Resource
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
+{
+    $query = parent::getEloquentQuery()
+        ->withoutGlobalScopes([SoftDeletingScope::class]);
 
-        if (Auth::user()?->isAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::id());
+    if (Auth::user()?->isAdmin()) {
+        return $query;
     }
+
+    return $query->where('user_id', Auth::id());
+}
 
     public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
+{
+    $q = static::getModel()::query(); // default scope = samo aktivni
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
+    if (! Auth::user()?->isAdmin()) {
+        $q->where('user_id', Auth::id());
     }
+
+    return (string) $q->count();
+}
 
     public static function getPages(): array
     {

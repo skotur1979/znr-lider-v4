@@ -42,6 +42,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Filament\Tables\Filters\SelectFilter;
 
 class FireResource extends Resource
 {
@@ -240,7 +241,23 @@ public static function infolist(Schema $schema): Schema
     
             ])
             ->filters([
-                TrashedFilter::make(),
+               SelectFilter::make('status')
+    ->label('Status zapisa')
+    ->placeholder('Odaberi status')
+    ->options([
+        'active'  => 'Aktivni zapisi',
+        'trashed' => 'Deaktivirani zapisi',
+        'all'     => 'Svi zapisi',
+    ])
+    ->query(function (Builder $query, array $data) {
+        $value = $data['value'] ?? null;
+
+        return match ($value) {
+            'trashed' => $query->onlyTrashed(),
+            'all'     => $query->withTrashed(),
+            default   => $query->withoutTrashed(), // ✅ bez filtera = samo aktivni
+        };
+    }),
 
                 Filter::make('examination_validity_expired')
                     ->label('Ispitivanje (isteklo)')
@@ -257,18 +274,18 @@ public static function infolist(Schema $schema): Schema
             
             ->actions([
                 ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make(),
-                    DeleteAction::make()->requiresConfirmation(),
-                    RestoreAction::make()->requiresConfirmation(),
-                    ForceDeleteAction::make()->requiresConfirmation(),
+        ViewAction::make()->label('Prikaži'),
+        EditAction::make()->label('Uredi'),
+        DeleteAction::make()->label('Deaktiviraj')->requiresConfirmation(),
+        RestoreAction::make()->label('Vrati')->requiresConfirmation(),
+        ForceDeleteAction::make()->label('Trajno obriši')->requiresConfirmation(),
                 ]),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
+                    DeleteBulkAction::make()->label('Deaktiviraj označeno'),
+                    RestoreBulkAction::make()->label('Vrati označeno'),
+                    ForceDeleteBulkAction::make()->label('Trajno obriši označeno'),
                 ]),
             ]);
     }

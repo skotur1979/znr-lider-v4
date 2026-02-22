@@ -68,12 +68,13 @@ class EmployeeResource extends Resource
     public static function getEloquentQuery(): Builder
 {
     $query = parent::getEloquentQuery()
-        ->withoutGlobalScopes([SoftDeletingScope::class])
-        ->with('certificates');
+        ->withoutGlobalScopes([SoftDeletingScope::class]);
 
-    return Auth::user()?->isAdmin()
-        ? $query
-        : $query->where('user_id', Auth::id());
+    if (Auth::user()?->isAdmin()) {
+        return $query;
+    }
+
+    return $query->where('user_id', Auth::id());
 }
 
     public static function getRecordRouteBindingEloquentQuery(): Builder
@@ -83,13 +84,13 @@ class EmployeeResource extends Resource
     }
 
     public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
+{
+    $q = static::getModel()::query(); // samo aktivni
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
+    if (! Auth::user()?->isAdmin()) {
+        $q->where('user_id', Auth::id());
     }
+
+    return (string) $q->count();
+}
 }

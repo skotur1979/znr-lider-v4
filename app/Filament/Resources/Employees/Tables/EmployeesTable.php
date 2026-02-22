@@ -25,6 +25,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Filament\Tables\Filters\SelectFilter;
 
 class EmployeesTable
 {
@@ -105,28 +106,50 @@ class EmployeesTable
                         : 'Nema priloga'),
             ])
             ->filters([
-                TrashedFilter::make(),
+    SelectFilter::make('status')
+    ->label('Status zapisa')
+    ->placeholder('Odaberi status')
+    ->options([
+        'active'  => 'Aktivni zapisi',
+        'trashed' => 'Deaktivirani zapisi',
+        'all'     => 'Svi zapisi',
+    ])
+    ->query(function (Builder $query, array $data) {
+        $value = $data['value'] ?? null;
 
-                Filter::make('medical_examination_expired')
-                    ->label('Liječnički (istekao)')
-                    ->query(fn (Builder $q) => $q->whereDate('medical_examination_valid_until', '<', Carbon::today())),
+        return match ($value) {
+            'trashed' => $query->onlyTrashed(),
+            'all'     => $query->withTrashed(),
+            default   => $query->withoutTrashed(), // ✅ bez filtera = samo aktivni
+        };
+    }),
 
-                Filter::make('medical_examination_expiring')
-                    ->label('Liječnički (uskoro ističe)')
-                    ->query(fn (Builder $q) => $q
-                        ->whereDate('medical_examination_valid_until', '>=', Carbon::today())
-                        ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30))),
+    Filter::make('medical_examination_expired')
+        ->label('Liječnički (istekao)')
+        ->query(fn (Builder $q) =>
+            $q->whereDate('medical_examination_valid_until', '<', Carbon::today())
+        ),
 
-                Filter::make('toxicology_expired')
-                    ->label('Toksikologija (istekla)')
-                    ->query(fn (Builder $q) => $q->whereDate('toxicology_valid_until', '<', Carbon::today())),
+    Filter::make('medical_examination_expiring')
+        ->label('Liječnički (uskoro ističe)')
+        ->query(fn (Builder $q) =>
+            $q->whereDate('medical_examination_valid_until', '>=', Carbon::today())
+              ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30))
+        ),
 
-                Filter::make('toxicology_expiring')
-                    ->label('Toksikologija (uskoro ističe)')
-                    ->query(fn (Builder $q) => $q
-                        ->whereDate('toxicology_valid_until', '>=', Carbon::today())
-                        ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30))),
-            ])
+    Filter::make('toxicology_expired')
+        ->label('Toksikologija (istekla)')
+        ->query(fn (Builder $q) =>
+            $q->whereDate('toxicology_valid_until', '<', Carbon::today())
+        ),
+
+    Filter::make('toxicology_expiring')
+        ->label('Toksikologija (uskoro ističe)')
+        ->query(fn (Builder $q) =>
+            $q->whereDate('toxicology_valid_until', '>=', Carbon::today())
+              ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30))
+        ),
+])
             ->actions([
     ViewAction::make()->label('Prikaži'),
     EditAction::make()->label('Uredi'),
