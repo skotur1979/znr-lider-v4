@@ -269,9 +269,9 @@ class MachineResource extends Resource
 ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make()->label('Deaktiviraj označeno'),
-                    RestoreBulkAction::make()->label('Vrati označeno'),
-                    ForceDeleteBulkAction::make()->label('Trajno obriši označeno'),
+                    DeleteBulkAction::make()->label('Deaktiviraj označeno')->requiresConfirmation(),
+                    RestoreBulkAction::make()->label('Vrati označeno')->requiresConfirmation(),
+                    ForceDeleteBulkAction::make()->label('Trajno obriši označeno')->requiresConfirmation(),
                 ]),
             ]);
     }

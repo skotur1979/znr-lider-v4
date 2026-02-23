@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\Categories;
 
-use App\Filament\Resources\Categories\CategoryResource\Pages;
+use App\Filament\Resources\Categories\Pages;
 use App\Models\Category;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -17,16 +17,14 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
+
 
 class CategoryResource extends Resource
 {
     protected static ?string $model = Category::class;
 
-    protected static \BackedEnum|string|null $navigationIcon  = 'heroicon-o-tag';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-tag';
     protected static ?string $navigationLabel = 'Kategorije ispitivanja';
     protected static ?string $modelLabel = 'Kategorija';
     protected static ?string $pluralModelLabel = 'Kategorije ispitivanja';
@@ -68,8 +66,9 @@ class CategoryResource extends Resource
                 ]),
             ])
             ->bulkActions([
-                    ForceDeleteBulkAction::make()->label('Trajno obriši označeno'),
+                DeleteBulkAction::make(),
             ]);
+            
     }
 
     public static function getPages(): array
@@ -100,5 +99,11 @@ class CategoryResource extends Resource
         }
 
         return (string) $q->count();
+    }
+
+    public static function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['user_id'] = $data['user_id'] ?? Auth::id();
+        return $data;
     }
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Categories\CategoryResource\Pages;
+namespace App\Filament\Resources\Categories\Pages;
 
 use App\Filament\Resources\Categories\CategoryResource;
 use Filament\Resources\Pages\CreateRecord;
@@ -12,6 +12,8 @@ class CreateCategory extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['user_id'] = $data['user_id'] ?? auth()->id();
+
         return $data;
     }
+    
 }

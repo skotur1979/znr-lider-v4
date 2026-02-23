@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\Miscellaneouses;
 
-use App\Filament\Resources\Miscellaneouses\MiscellaneousResource\Pages;
+use App\Filament\Resources\Miscellaneouses\Pages;
+use App\Imports\MiscellaneousesImport;
 use App\Models\Category;
 use App\Models\Miscellaneous;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -30,7 +32,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
-use Filament\Actions\BulkActionGroup;
+use Maatwebsite\Excel\Facades\Excel;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -57,53 +59,48 @@ class MiscellaneousResource extends Resource
                         ->maxLength(255),
 
                     Select::make('category_id')
-    ->label('Kategorija')
-    ->searchable()
-    ->preload()
+                        ->label('Kategorija')
+                        ->required()
+                        ->searchable()
+                        ->preload()
+                        ->options(function () {
+                            $q = Category::query();
 
-    // opcije (filtrirano po useru)
-    ->options(function () {
-        $q = Category::query();
+                            if (! Auth::user()?->isAdmin()) {
+                                $q->where('user_id', Auth::id());
+                            }
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
+                            return $q->orderBy('name')->pluck('name', 'id')->toArray();
+                        })
+                        ->getSearchResultsUsing(function (string $search) {
+                            $q = Category::query()
+                                ->where('name', 'like', "%{$search}%")
+                                ->orderBy('name')
+                                ->limit(50);
 
-        return $q->orderBy('name')->pluck('name', 'id')->toArray();
-    })
+                            if (! Auth::user()?->isAdmin()) {
+                                $q->where('user_id', Auth::id());
+                            }
 
-    // search rezultati (isto filtrirano)
-    ->getSearchResultsUsing(function (string $search) {
-        $q = Category::query()
-            ->where('name', 'like', "%{$search}%")
-            ->orderBy('name')
-            ->limit(50);
+                            return $q->pluck('name', 'id')->toArray();
+                        })
+                        ->getOptionLabelUsing(fn ($value) => Category::find($value)?->name)
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
+                        // ✅ + dodavanje nove kategorije direktno iz selecta
+                        ->createOptionForm([
+                            TextInput::make('name')
+                                ->label('Naziv kategorije')
+                                ->required()
+                                ->maxLength(255),
+                        ])
+                        ->createOptionUsing(function (array $data): int {
+                            $category = Category::create([
+                                'name' => $data['name'],
+                                'user_id' => Auth::id(),
+                            ]);
 
-        return $q->pluck('name', 'id')->toArray();
-    })
-
-    // labela za spremljenu vrijednost
-    ->getOptionLabelUsing(fn ($value) => Category::find($value)?->name)
-
-    // ✅ PLUS: dodaj novu kategoriju direktno iz selecta
-    ->createOptionForm([
-        TextInput::make('name')
-            ->label('Naziv kategorije')
-            ->required()
-            ->maxLength(255),
-    ])
-    ->createOptionUsing(function (array $data) {
-        return Category::create([
-            'name'    => $data['name'],
-            'user_id' => Auth::id(), // user vlasništvo
-        ])->id;
-    })
-
-    ->required(),
+                            return $category->id;
+                        }),
 
                     TextInput::make('examiner')
                         ->label('Ispitao')
@@ -122,14 +119,14 @@ class MiscellaneousResource extends Resource
                     DatePicker::make('examination_valid_from')
                         ->label('Vrijedi od (obavezno)')
                         ->required()
-                        ->displayFormat('d.m.Y.')
+                        ->displayFormat('d.m.Y')
                         ->weekStartsOnMonday()
                         ->timezone('Europe/Zagreb'),
 
                     DatePicker::make('examination_valid_until')
                         ->label('Vrijedi do (obavezno)')
                         ->required()
-                        ->displayFormat('d.m.Y.')
+                        ->displayFormat('d.m.Y')
                         ->weekStartsOnMonday()
                         ->timezone('Europe/Zagreb'),
                 ])
@@ -152,7 +149,7 @@ class MiscellaneousResource extends Resource
                         ->directory('pdfs')
                         ->multiple()
                         ->maxFiles(5)
-                        ->maxSize(30720)
+                        ->maxSize(30720) // 30 MB (KB)
                         ->preserveFilenames()
                         ->enableOpen()
                         ->enableDownload()
@@ -203,19 +200,14 @@ class MiscellaneousResource extends Resource
                     ->sortable()
                     ->alignCenter(),
 
+                // ✅ expiry badge kao na Fires
                 TextColumn::make('examination_valid_until')
                     ->label('Ispitivanje vrijedi do')
                     ->date('d.m.Y')
                     ->badge()
-                    ->color(function ($state) {
-                        if (! $state) return 'gray';
-                        $d = Carbon::parse($state);
-
-                        if ($d->lt(Carbon::today())) return 'danger';
-
-                        $diff = Carbon::today()->diffInDays($d, false);
-                        return $diff <= 30 ? 'warning' : 'success';
-                    })
+                    ->icon(fn ($state) => self::expiryIcon($state))
+                    ->color(fn ($state) => self::expiryColor($state))
+                    ->tooltip(fn ($state) => self::expiryTooltip($state))
                     ->sortable()
                     ->alignCenter(),
 
@@ -274,40 +266,19 @@ class MiscellaneousResource extends Resource
                     ViewAction::make(),
                     EditAction::make(),
                     DeleteAction::make()->requiresConfirmation(),
-
                     RestoreAction::make()
                         ->visible(fn (Miscellaneous $record) => method_exists($record, 'trashed') && $record->trashed()),
-
                     ForceDeleteAction::make()
                         ->visible(fn (Miscellaneous $record) => method_exists($record, 'trashed') && $record->trashed())
                         ->requiresConfirmation(),
                 ]),
             ])
-           ->bulkActions([
-                BulkActionGroup::make([
+            ->bulkActions([
                     DeleteBulkAction::make()->label('Deaktiviraj označeno'),
                     RestoreBulkAction::make()->label('Vrati označeno'),
                     ForceDeleteBulkAction::make()->label('Trajno obriši označeno'),
-                ]),
-            ])
-    
-            ->headerActions([
-                Action::make('export_pdf')
-                    ->label('Izvoz u PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('warning')
-                    ->action(function (Tables\Contracts\HasTable $livewire) {
-                        // TODO: PDF export
-                    }),
-
-                Action::make('export_excel')
-                    ->label('Izvoz u Excel')
-                    ->icon('heroicon-o-document-arrow-down')
-                    ->color('success')
-                    ->action(function (Tables\Contracts\HasTable $livewire) {
-                        // TODO: Excel export
-                    }),
             ]);
+            
     }
 
     public static function getPages(): array
@@ -344,5 +315,41 @@ class MiscellaneousResource extends Resource
         }
 
         return (string) $q->count();
+    }
+
+    private static function expiryColor($state): string
+    {
+        if (! $state) return 'gray';
+
+        $d = Carbon::parse($state);
+
+        if ($d->lt(Carbon::today())) return 'danger';
+
+        $diff = Carbon::today()->diffInDays($d, false);
+        return $diff <= 30 ? 'warning' : 'success';
+    }
+
+    private static function expiryIcon($state): ?string
+    {
+        if (! $state) return 'heroicon-o-minus-circle';
+
+        $d = Carbon::parse($state);
+
+        if ($d->lt(Carbon::today())) return 'heroicon-o-x-circle';
+
+        $diff = Carbon::today()->diffInDays($d, false);
+        return $diff <= 30 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle';
+    }
+
+    private static function expiryTooltip($state): string
+    {
+        if (! $state) return 'Nema roka';
+
+        $d = Carbon::parse($state);
+
+        if ($d->lt(Carbon::today())) return 'Rok je istekao';
+
+        $diff = Carbon::today()->diffInDays($d, false);
+        return $diff <= 30 ? 'Rok uskoro ističe' : 'Rok je važeći';
     }
 }

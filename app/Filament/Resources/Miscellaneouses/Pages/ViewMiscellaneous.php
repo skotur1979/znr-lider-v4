@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Miscellaneouses\MiscellaneousResource\Pages;
+namespace App\Filament\Resources\Miscellaneouses\Pages;
 
 use App\Filament\Resources\Miscellaneouses\MiscellaneousResource;
 use Filament\Actions\EditAction;
