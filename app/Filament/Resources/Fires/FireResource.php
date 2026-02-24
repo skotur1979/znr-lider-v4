@@ -17,13 +17,14 @@ use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
 
 use Filament\Infolists\Components\TextEntry;
+
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\TrashedFilter;
+use Filament\Tables\Filters\SelectFilter;
 
 use Filament\Actions\ActionGroup;
-use Filament\Actions\BulkActionGroup;
 
 use Filament\Actions\ViewAction;
 use Filament\Actions\EditAction;
@@ -42,7 +43,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Filament\Tables\Filters\SelectFilter;
 
 class FireResource extends Resource
 {
@@ -57,7 +57,6 @@ class FireResource extends Resource
     protected static \UnitEnum|string|null $navigationGroup = 'Ispitivanja';
     protected static ?int $navigationSort = 2;
 
-    /** ✅ Create/Edit (Schema API kao Machine) */
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -77,13 +76,13 @@ class FireResource extends Resource
                         ->maxLength(255),
 
                     TextInput::make('factory_number_year_of_production')
-    ->label('Tvornički broj/Godina proizvodnje')
-    ->maxLength(255)
-    // ✅ kad se učitava Edit forma, povuci iz stvarnog DB stupca
-    ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
-    // ✅ kad se sprema, upiši u stvarni DB stupac
-    ->dehydrateStateUsing(fn ($state) => $state)
-    ->saveRelationshipsUsing(null), // nije relacija, čisto da ne pokušava gluposti
+                        ->label('Tvornički broj/Godina proizvodnje')
+                        ->maxLength(255)
+                        // ako ti je u bazi stvarno čudan naziv stupca, ostavi ovo;
+                        // ako nije, makni formatStateUsing.
+                        ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
+                        ->dehydrateStateUsing(fn ($state) => $state)
+                        ->saveRelationshipsUsing(null),
 
                     TextInput::make('serial_label_number')
                         ->label('Serijski broj evidencijske naljepnice')
@@ -162,37 +161,36 @@ class FireResource extends Resource
         ]);
     }
 
-    /** ✅ View (Pregled) – Schema-based infolist */
-public static function infolist(Schema $schema): Schema
-{
-    return $schema->components([
-        Section::make('Podatci o vatrogasnom aparatu')
-            ->components([
-                TextEntry::make('place')->label('Mjesto gdje se aparat nalazi'),
-                TextEntry::make('type')->label('Tip aparata'),
-                TextEntry::make('factory_number_year_of_production')->label('Tvornički broj/Godina proizvodnje'),
-                TextEntry::make('serial_label_number')->label('Serijski broj evidencijske naljepnice'),
-            ])
-            ->columns(2),
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('Podatci o vatrogasnom aparatu')
+                ->components([
+                    TextEntry::make('place')->label('Mjesto gdje se aparat nalazi'),
+                    TextEntry::make('type')->label('Tip aparata'),
+                    TextEntry::make('factory_number_year_of_production')->label('Tvornički broj/Godina proizvodnje'),
+                    TextEntry::make('serial_label_number')->label('Serijski broj evidencijske naljepnice'),
+                ])
+                ->columns(2),
 
-        Section::make('Ispitivanje vatrogasnog aparata')
-            ->components([
-                TextEntry::make('examination_valid_from')->label('Datum periodičkog servisa')->date('d.m.Y.'),
-                TextEntry::make('examination_valid_until')->label('Vrijedi do')->date('d.m.Y.'),
-                TextEntry::make('service')->label('Naziv servisera'),
-                TextEntry::make('regular_examination_valid_from')->label('Datum redovnog pregleda')->date('d.m.Y.'),
-            ])
-            ->columns(2),
+            Section::make('Ispitivanje vatrogasnog aparata')
+                ->components([
+                    TextEntry::make('examination_valid_from')->label('Datum periodičkog servisa')->date('d.m.Y.'),
+                    TextEntry::make('examination_valid_until')->label('Vrijedi do')->date('d.m.Y.'),
+                    TextEntry::make('service')->label('Naziv servisera'),
+                    TextEntry::make('regular_examination_valid_from')->label('Datum redovnog pregleda')->date('d.m.Y.'),
+                ])
+                ->columns(2),
 
-        Section::make('Ostalo')
-            ->components([
-                TextEntry::make('visible')->label('Uočljivost i dostupnost aparata'),
-                TextEntry::make('remark')->label('Uočeni nedostatci'),
-                TextEntry::make('action')->label('Postupci otklanjanja'),
-            ])
-            ->columns(2),
-    ]);
-}
+            Section::make('Ostalo')
+                ->components([
+                    TextEntry::make('visible')->label('Uočljivost i dostupnost aparata'),
+                    TextEntry::make('remark')->label('Uočeni nedostatci'),
+                    TextEntry::make('action')->label('Postupci otklanjanja'),
+                ])
+                ->columns(2),
+        ]);
+    }
 
     public static function table(Table $table): Table
     {
@@ -238,26 +236,25 @@ public static function infolist(Schema $schema): Schema
                     ->alignment(Alignment::Center)
                     ->date('d.m.Y.')
                     ->sortable(),
-    
             ])
             ->filters([
-               SelectFilter::make('status')
-    ->label('Status zapisa')
-    ->placeholder('Odaberi status')
-    ->options([
-        'active'  => 'Aktivni zapisi',
-        'trashed' => 'Deaktivirani zapisi',
-        'all'     => 'Svi zapisi',
-    ])
-    ->query(function (Builder $query, array $data) {
-        $value = $data['value'] ?? null;
+                SelectFilter::make('status')
+                    ->label('Status zapisa')
+                    ->placeholder('Odaberi status')
+                    ->options([
+                        'active'  => 'Aktivni zapisi',
+                        'trashed' => 'Deaktivirani zapisi',
+                        'all'     => 'Svi zapisi',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
 
-        return match ($value) {
-            'trashed' => $query->onlyTrashed(),
-            'all'     => $query->withTrashed(),
-            default   => $query->withoutTrashed(), // ✅ bez filtera = samo aktivni
-        };
-    }),
+                        return match ($value) {
+                            'trashed' => $query->onlyTrashed(),
+                            'all'     => $query->withTrashed(),
+                            default   => $query->withoutTrashed(),
+                        };
+                    }),
 
                 Filter::make('examination_validity_expired')
                     ->label('Ispitivanje (isteklo)')
@@ -267,27 +264,71 @@ public static function infolist(Schema $schema): Schema
                     ->label('Ispitivanje (uskoro ističe)')
                     ->query(fn (Builder $query) => $query
                         ->whereDate('examination_valid_until', '>=', Carbon::today())
-                        ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))
-                    ),
-                   ])
-        ->paginated([10, 25, 50, 'all']) // ✅ dodano "all" 
-            
+                        ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))),
+            ])
+            ->paginated([10, 25, 50, 'all'])
             ->actions([
                 ActionGroup::make([
-        ViewAction::make()->label('Prikaži'),
-        EditAction::make()->label('Uredi'),
-        DeleteAction::make()->label('Deaktiviraj')->requiresConfirmation(),
-        RestoreAction::make()->label('Vrati')->requiresConfirmation(),
-        ForceDeleteAction::make()->label('Trajno obriši')->requiresConfirmation(),
-                ]),
+                    ViewAction::make()->label('Prikaži'),
+
+                    EditAction::make()
+                        ->label('Uredi')
+                        ->visible(fn (Fire $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+
+                    DeleteAction::make()
+                        ->label('Deaktiviraj')
+                        ->requiresConfirmation()
+                        ->visible(fn (Fire $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+
+                    RestoreAction::make()
+                        ->label('Vrati')
+                        ->requiresConfirmation()
+                        ->visible(fn (Fire $record) => method_exists($record, 'trashed') && $record->trashed()),
+
+                    ForceDeleteAction::make()
+                        ->label('Trajno obriši')
+                        ->requiresConfirmation()
+                        ->visible(fn (Fire $record) => method_exists($record, 'trashed') && $record->trashed()),
+                ])
+                    ->icon(Heroicon::EllipsisVertical)
+                    ->label(''),
             ])
             ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make()->label('Deaktiviraj označeno'),
-                    RestoreBulkAction::make()->label('Vrati označeno'),
-                    ForceDeleteBulkAction::make()->label('Trajno obriši označeno'),
-                ]),
+                DeleteBulkAction::make()
+                    ->label('Deaktiviraj označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Deaktiviraj odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+            ->modalSubmitActionLabel('Deaktiviraj')
+            ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+
+                RestoreBulkAction::make()
+                    ->label('Vrati označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Vrati odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+            ->modalSubmitActionLabel('Vrati')
+            ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+
+                ForceDeleteBulkAction::make()
+                    ->label('Trajno obriši označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Trajno obriši odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+            ->modalSubmitActionLabel('Trajno obriši')
+            ->modalCancelActionLabel('Odustani')
+            
             ]);
+    }
+
+    private static function isOnlyTrashed(HasTable $livewire): bool
+    {
+        $state = $livewire->getTableFilterState('status');
+        $value = data_get($state, 'value');
+
+        return $value === 'trashed';
     }
 
     public static function getEloquentQuery(): Builder

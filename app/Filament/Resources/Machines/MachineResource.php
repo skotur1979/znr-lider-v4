@@ -5,6 +5,18 @@ namespace App\Filament\Resources\Machines;
 use App\Filament\Resources\Machines\Pages;
 use App\Models\Machine;
 
+use App\Support\ExpiryBadge;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\ViewAction;
+
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
+
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
@@ -13,40 +25,25 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 
 use Filament\Resources\Resource;
-
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
+use Filament\Support\Enums\Alignment;
+use Filament\Support\Icons\Heroicon;
+
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TrashedFilter;
-
-use Filament\Actions\ActionGroup;
-use Filament\Actions\BulkActionGroup;
-
-use Filament\Actions\DeleteAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteAction;
-use Filament\Actions\RestoreAction;
-use Filament\Actions\ViewAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
-use Filament\Support\Enums\Alignment;
-use Filament\Support\Icons\Heroicon;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
-use App\Support\ExpiryBadge;
 
 class MachineResource extends Resource
 {
-    
-    // Filament v4: Resource očekuje ?string
     protected static ?string $model = Machine::class;
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedCog;
@@ -192,15 +189,15 @@ class MachineResource extends Resource
                     ->alignment(Alignment::Center),
 
                 TextColumn::make('examination_valid_until')
-    ->label('Ispitivanje vrijedi do')
-    ->date('d.m.Y.')
-    ->badge()
-    ->sortable()
-    ->alignment(Alignment::Center)
-    ->color(fn ($state) => ExpiryBadge::color($state))
-    ->icon(fn ($state) => ExpiryBadge::icon($state))
-    ->iconPosition('before')
-    ->tooltip(fn ($state) => ExpiryBadge::tooltip($state)),
+                    ->label('Ispitivanje vrijedi do')
+                    ->date('d.m.Y.')
+                    ->badge()
+                    ->sortable()
+                    ->alignment(Alignment::Center)
+                    ->color(fn ($state) => ExpiryBadge::color($state))
+                    ->icon(fn ($state) => ExpiryBadge::icon($state))
+                    ->iconPosition('before')
+                    ->tooltip(fn ($state) => ExpiryBadge::tooltip($state)),
 
                 TextColumn::make('location')
                     ->label('Lokacija')
@@ -220,60 +217,103 @@ class MachineResource extends Resource
                         : 'Nema priloga'),
             ])
             ->filters([
-    SelectFilter::make('status')
-    ->label('Status zapisa')
-    ->placeholder('Odaberi status')
-    ->options([
-        'active'  => 'Aktivni zapisi',
-        'trashed' => 'Deaktivirani zapisi',
-        'all'     => 'Svi zapisi',
-    ])
-    ->query(function (Builder $query, array $data) {
-        $value = $data['value'] ?? null;
+                SelectFilter::make('status')
+                    ->label('Status zapisa')
+                    ->placeholder('Odaberi status')
+                    ->options([
+                        'active'  => 'Aktivni zapisi',
+                        'trashed' => 'Deaktivirani zapisi',
+                        'all'     => 'Svi zapisi',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
 
-        return match ($value) {
-            'trashed' => $query->onlyTrashed(),
-            'all'     => $query->withTrashed(),
-            default   => $query->withoutTrashed(), // ✅ bez filtera = samo aktivni
-        };
-    }),
+                        return match ($value) {
+                            'trashed' => $query->onlyTrashed(),
+                            'all'     => $query->withTrashed(),
+                            default   => $query->withoutTrashed(),
+                        };
+                    }),
 
-    SelectFilter::make('location')
-        ->label('Lokacije')
-        ->placeholder('Sve')
-        ->options(fn () => static::getLocationOptions())
-        ->searchable(),
+                SelectFilter::make('location')
+                    ->label('Lokacije')
+                    ->placeholder('Sve')
+                    ->options(fn () => static::getLocationOptions())
+                    ->searchable(),
 
-    Filter::make('isteklo')
-        ->label('Ispitivanje (isteklo)')
-        ->query(fn (Builder $query) => $query->whereDate('examination_valid_until', '<', Carbon::today())),
+                Filter::make('isteklo')
+                    ->label('Ispitivanje (isteklo)')
+                    ->query(fn (Builder $query) => $query->whereDate('examination_valid_until', '<', Carbon::today())),
 
-    Filter::make('uskoro')
-        ->label('Ispitivanje (uskoro ističe)')
-        ->query(fn (Builder $query) => $query
-            ->whereDate('examination_valid_until', '>=', Carbon::today())
-            ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))),
-])
-        ->paginated([10, 25, 50, 'all']) // ✅ dodano "all"
+                Filter::make('uskoro')
+                    ->label('Ispitivanje (uskoro ističe)')
+                    ->query(fn (Builder $query) => $query
+                        ->whereDate('examination_valid_until', '>=', Carbon::today())
+                        ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))),
+            ])
+            ->paginated([10, 25, 50, 'all'])
+            ->actions([
+                ActionGroup::make([
+                    ViewAction::make()->label('Prikaži'),
 
-            ->recordActions([
-    ActionGroup::make([
-        ViewAction::make()->label('Prikaži'),
-        EditAction::make()->label('Uredi'),
-        DeleteAction::make()->label('Deaktiviraj')->requiresConfirmation(),
-        RestoreAction::make()->label('Vrati')->requiresConfirmation(),
-        ForceDeleteAction::make()->label('Trajno obriši')->requiresConfirmation(),
-    ])
-        ->icon(Heroicon::EllipsisVertical)
-        ->label(''),
-])
+                    EditAction::make()
+                        ->label('Uredi')
+                        ->visible(fn (Machine $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+
+                    DeleteAction::make()
+                        ->label('Deaktiviraj')
+                        ->requiresConfirmation()
+                        ->visible(fn (Machine $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+
+                    RestoreAction::make()
+                        ->label('Vrati')
+                        ->requiresConfirmation()
+                        ->visible(fn (Machine $record) => method_exists($record, 'trashed') && $record->trashed()),
+
+                    ForceDeleteAction::make()
+                        ->label('Trajno obriši')
+                        ->requiresConfirmation()
+                        ->visible(fn (Machine $record) => method_exists($record, 'trashed') && $record->trashed()),
+                ])
+                    ->icon(Heroicon::EllipsisVertical)
+                    ->label(''),
+            ])
             ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make()->label('Deaktiviraj označeno')->requiresConfirmation(),
-                    RestoreBulkAction::make()->label('Vrati označeno')->requiresConfirmation(),
-                    ForceDeleteBulkAction::make()->label('Trajno obriši označeno')->requiresConfirmation(),
-                ]),
+                DeleteBulkAction::make()
+                    ->label('Deaktiviraj označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Deaktiviraj odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+            ->modalSubmitActionLabel('Deaktiviraj')
+            ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+
+                RestoreBulkAction::make()
+                    ->label('Vrati označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Vrati odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+            ->modalSubmitActionLabel('Vrati')
+            ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+
+                ForceDeleteBulkAction::make()
+                    ->label('Trajno obriši označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Trajno obriši odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+            ->modalSubmitActionLabel('Trajno obriši')
+            ->modalCancelActionLabel('Odustani')
+            
             ]);
+    }
+
+    private static function isOnlyTrashed(HasTable $livewire): bool
+    {
+        $state = $livewire->getTableFilterState('status');
+        $value = data_get($state, 'value');
+
+        return $value === 'trashed';
     }
 
     protected static function getLocationOptions(): array
@@ -288,27 +328,27 @@ class MachineResource extends Resource
     }
 
     public static function getEloquentQuery(): Builder
-{
-    $query = parent::getEloquentQuery()
-        ->withoutGlobalScopes([SoftDeletingScope::class]);
+    {
+        $query = parent::getEloquentQuery()
+            ->withoutGlobalScopes([SoftDeletingScope::class]);
 
-    if (Auth::user()?->isAdmin()) {
-        return $query;
+        if (Auth::user()?->isAdmin()) {
+            return $query;
+        }
+
+        return $query->where('user_id', Auth::id());
     }
-
-    return $query->where('user_id', Auth::id());
-}
 
     public static function getNavigationBadge(): ?string
-{
-    $q = static::getModel()::query(); // default scope = samo aktivni
+    {
+        $q = static::getModel()::query();
 
-    if (! Auth::user()?->isAdmin()) {
-        $q->where('user_id', Auth::id());
+        if (! Auth::user()?->isAdmin()) {
+            $q->where('user_id', Auth::id());
+        }
+
+        return (string) $q->count();
     }
-
-    return (string) $q->count();
-}
 
     public static function getPages(): array
     {

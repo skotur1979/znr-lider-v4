@@ -9,7 +9,7 @@ use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\TrashedFilter;
+use Filament\Tables\Filters\SelectFilter;
 
 use Filament\Actions\ActionGroup;
 use Filament\Actions\ViewAction;
@@ -18,14 +18,13 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ForceDeleteAction;
 
-use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ForceDeleteBulkAction;
 
+use Filament\Tables\Contracts\HasTable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
-use Filament\Tables\Filters\SelectFilter;
 
 class EmployeesTable
 {
@@ -88,11 +87,10 @@ class EmployeesTable
                     ->sortable()
                     ->alignment(Alignment::Center),
 
-                // ovo je JEDAN view – vrijedi gdje god treba, nije “po modulu”
                 ViewColumn::make('certificates')
-    ->label('Ostale edukacije')
-    ->state(fn (Employee $record) => $record->certificates)
-    ->view('filament.components.certificates-filtered'),
+                    ->label('Ostale edukacije')
+                    ->state(fn (Employee $record) => $record->certificates)
+                    ->view('filament.components.certificates-filtered'),
 
                 TextColumn::make('pdf')
                     ->label('Prilozi')
@@ -106,66 +104,110 @@ class EmployeesTable
                         : 'Nema priloga'),
             ])
             ->filters([
-    SelectFilter::make('status')
-    ->label('Status zapisa')
-    ->placeholder('Odaberi status')
-    ->options([
-        'active'  => 'Aktivni zapisi',
-        'trashed' => 'Deaktivirani zapisi',
-        'all'     => 'Svi zapisi',
-    ])
-    ->query(function (Builder $query, array $data) {
-        $value = $data['value'] ?? null;
+                SelectFilter::make('status')
+                    ->label('Status zapisa')
+                    ->placeholder('Odaberi status')
+                    ->options([
+                        'active'  => 'Aktivni zapisi',
+                        'trashed' => 'Deaktivirani zapisi',
+                        'all'     => 'Svi zapisi',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
 
-        return match ($value) {
-            'trashed' => $query->onlyTrashed(),
-            'all'     => $query->withTrashed(),
-            default   => $query->withoutTrashed(), // ✅ bez filtera = samo aktivni
-        };
-    }),
+                        return match ($value) {
+                            'trashed' => $query->onlyTrashed(),
+                            'all'     => $query->withTrashed(),
+                            default   => $query->withoutTrashed(),
+                        };
+                    }),
 
-    Filter::make('medical_examination_expired')
-        ->label('Liječnički (istekao)')
-        ->query(fn (Builder $q) =>
-            $q->whereDate('medical_examination_valid_until', '<', Carbon::today())
-        ),
+                Filter::make('medical_examination_expired')
+                    ->label('Liječnički (istekao)')
+                    ->query(fn (Builder $q) =>
+                        $q->whereDate('medical_examination_valid_until', '<', Carbon::today())
+                    ),
 
-    Filter::make('medical_examination_expiring')
-        ->label('Liječnički (uskoro ističe)')
-        ->query(fn (Builder $q) =>
-            $q->whereDate('medical_examination_valid_until', '>=', Carbon::today())
-              ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30))
-        ),
+                Filter::make('medical_examination_expiring')
+                    ->label('Liječnički (uskoro ističe)')
+                    ->query(fn (Builder $q) =>
+                        $q->whereDate('medical_examination_valid_until', '>=', Carbon::today())
+                            ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30))
+                    ),
 
-    Filter::make('toxicology_expired')
-        ->label('Toksikologija (istekla)')
-        ->query(fn (Builder $q) =>
-            $q->whereDate('toxicology_valid_until', '<', Carbon::today())
-        ),
+                Filter::make('toxicology_expired')
+                    ->label('Toksikologija (istekla)')
+                    ->query(fn (Builder $q) =>
+                        $q->whereDate('toxicology_valid_until', '<', Carbon::today())
+                    ),
 
-    Filter::make('toxicology_expiring')
-        ->label('Toksikologija (uskoro ističe)')
-        ->query(fn (Builder $q) =>
-            $q->whereDate('toxicology_valid_until', '>=', Carbon::today())
-              ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30))
-        ),
-])
-            ->actions([
-    ViewAction::make()->label('Prikaži'),
-    EditAction::make()->label('Uredi'),
-    DeleteAction::make()->label('Deaktiviraj')->requiresConfirmation(),
-    RestoreAction::make()->label('Vrati')->requiresConfirmation(),
-    ForceDeleteAction::make()->label('Trajno obriši')->requiresConfirmation(),
-])
-            ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make()->label('Deaktiviraj označeno')->requiresConfirmation(),
-                    RestoreBulkAction::make()->label('Vrati označeno')->requiresConfirmation(),
-                    ForceDeleteBulkAction::make()->label('Trajno obriši označeno')->requiresConfirmation(),
-                ]),
+                Filter::make('toxicology_expiring')
+                    ->label('Toksikologija (uskoro ističe)')
+                    ->query(fn (Builder $q) =>
+                        $q->whereDate('toxicology_valid_until', '>=', Carbon::today())
+                            ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30))
+                    ),
             ])
-            // ako ti "all" radi na Machines, radit će i tu
+            ->actions([
+                ActionGroup::make([
+                    ViewAction::make()->label('Prikaži'),
+
+                    EditAction::make()
+                        ->label('Uredi')
+                        ->visible(fn (Employee $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+
+                    DeleteAction::make()
+                        ->label('Deaktiviraj')
+                        ->requiresConfirmation()
+                        ->visible(fn (Employee $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+
+                    RestoreAction::make()
+                        ->label('Vrati')
+                        ->requiresConfirmation()
+                        ->visible(fn (Employee $record) => method_exists($record, 'trashed') && $record->trashed()),
+
+                    ForceDeleteAction::make()
+                        ->label('Trajno obriši')
+                        ->requiresConfirmation()
+                        ->visible(fn (Employee $record) => method_exists($record, 'trashed') && $record->trashed()),
+                ])->label('Akcije'),
+            ])
+            ->bulkActions([
+                DeleteBulkAction::make()
+                    ->label('Deaktiviraj označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Deaktiviraj odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+            ->modalSubmitActionLabel('Deaktiviraj')
+            ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+
+                RestoreBulkAction::make()
+                    ->label('Vrati označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Vrati odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+            ->modalSubmitActionLabel('Vrati')
+            ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+
+                ForceDeleteBulkAction::make()
+                    ->label('Trajno obriši označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Trajno obriši odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+            ->modalSubmitActionLabel('Trajno obriši')
+            ->modalCancelActionLabel('Odustani')
+            ])
             ->paginated([10, 25, 50, 'all']);
+    }
+
+    private static function isOnlyTrashed(HasTable $livewire): bool
+    {
+        $state = $livewire->getTableFilterState('status');
+        $value = data_get($state, 'value');
+
+        return $value === 'trashed';
     }
 }
 

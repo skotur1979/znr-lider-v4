@@ -3,39 +3,38 @@
 namespace App\Filament\Resources\Miscellaneouses;
 
 use App\Filament\Resources\Miscellaneouses\Pages;
-use App\Imports\MiscellaneousesImport;
 use App\Models\Category;
 use App\Models\Miscellaneous;
 use Carbon\Carbon;
-use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
-use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ViewAction;
+
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
+
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
-use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Section;
-use Filament\Tables;
+use Filament\Schemas\Schema;
+
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Filament\Tables\Contracts\HasTable;
+
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
-use Maatwebsite\Excel\Facades\Excel;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
 
 class MiscellaneousResource extends Resource
 {
@@ -231,12 +230,32 @@ class MiscellaneousResource extends Resource
                     })
                     ->state(fn (Miscellaneous $record) => is_array($record->pdf) ? count($record->pdf) : 0)
                     ->tooltip(function (Miscellaneous $record) {
-                        if (! is_array($record->pdf) || count($record->pdf) === 0) return 'Nema priloga';
+                        if (! is_array($record->pdf) || count($record->pdf) === 0) {
+                            return 'Nema priloga';
+                        }
+
                         return implode("\n", $record->pdf);
                     }),
             ])
             ->filters([
-                TrashedFilter::make(),
+                // ✅ status filter (active/trashed/all)
+                SelectFilter::make('status')
+                    ->label('Status zapisa')
+                    ->placeholder('Odaberi status')
+                    ->options([
+                        'active'  => 'Aktivni zapisi',
+                        'trashed' => 'Deaktivirani zapisi',
+                        'all'     => 'Svi zapisi',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
+
+                        return match ($value) {
+                            'trashed' => $query->onlyTrashed(),
+                            'all'     => $query->withTrashed(),
+                            default   => $query->withoutTrashed(),
+                        };
+                    }),
 
                 SelectFilter::make('category_id')
                     ->label('Kategorije')
@@ -261,24 +280,51 @@ class MiscellaneousResource extends Resource
                         ->whereDate('examination_valid_until', '>=', Carbon::today())
                         ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))),
             ])
+            ->paginated([10, 25, 50, 'all'])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make(),
                     EditAction::make(),
-                    DeleteAction::make()->requiresConfirmation(),
+
+                    DeleteAction::make()
+                        ->requiresConfirmation(),
+
                     RestoreAction::make()
                         ->visible(fn (Miscellaneous $record) => method_exists($record, 'trashed') && $record->trashed()),
+
                     ForceDeleteAction::make()
                         ->visible(fn (Miscellaneous $record) => method_exists($record, 'trashed') && $record->trashed())
                         ->requiresConfirmation(),
                 ]),
             ])
             ->bulkActions([
-                    DeleteBulkAction::make()->label('Deaktiviraj označeno'),
-                    RestoreBulkAction::make()->label('Vrati označeno'),
-                    ForceDeleteBulkAction::make()->label('Trajno obriši označeno'),
-            ]);
+                DeleteBulkAction::make()
+                    ->label('Deaktiviraj označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Deaktiviraj odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+            ->modalSubmitActionLabel('Deaktiviraj')
+            ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+
+                RestoreBulkAction::make()
+                    ->label('Vrati označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Vrati odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+            ->modalSubmitActionLabel('Vrati')
+            ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+
+                ForceDeleteBulkAction::make()
+                    ->label('Trajno obriši označeno')
+            ->requiresConfirmation()
+            ->modalHeading('Trajno obriši odabrano')
+            ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+            ->modalSubmitActionLabel('Trajno obriši')
+            ->modalCancelActionLabel('Odustani')
             
+            ]);
     }
 
     public static function getPages(): array
@@ -315,6 +361,14 @@ class MiscellaneousResource extends Resource
         }
 
         return (string) $q->count();
+    }
+
+    private static function isOnlyTrashed(HasTable $livewire): bool
+    {
+        $state = $livewire->getTableFilterState('status');
+        $value = data_get($state, 'value');
+
+        return $value === 'trashed';
     }
 
     private static function expiryColor($state): string

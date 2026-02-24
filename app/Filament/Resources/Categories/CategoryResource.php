@@ -58,6 +58,7 @@ class CategoryResource extends Resource
                     ->label('Vlasnik')
                     ->visible(fn () => Auth::user()?->isAdmin()),
             ])
+            ->paginated([10, 25, 50, 'all']) // ✅ dodano "all"
             ->actions([
                 ActionGroup::make([
                     ViewAction::make(),
