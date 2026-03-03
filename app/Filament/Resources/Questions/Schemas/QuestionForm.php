@@ -32,7 +32,7 @@ class QuestionForm
                                 }
                             }
                         )
-                        ->searchable()
+                        ->searchable(false)
                         ->required()
                         ->columnSpanFull(),
 

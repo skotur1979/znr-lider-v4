@@ -53,27 +53,34 @@ class AnswerResource extends Resource
 ]);
     }
 
+    public static function getNavigationBadge(): ?string
+{
+    $q = static::getModel()::query();
+
+    if (Auth::user()?->isAdmin()) {
+        return (string) $q->count();
+    }
+
+    $q->where(function (Builder $qq) {
+        $qq->whereNull('user_id')
+           ->orWhere('user_id', Auth::id());
+    });
+
+    return (string) $q->count();
+}
     public static function getEloquentQuery(): Builder
-    {
-        $q = parent::getEloquentQuery();
+{
+    $q = parent::getEloquentQuery();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
+    if (Auth::user()?->isAdmin()) {
         return $q;
     }
 
-    public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
-    }
+    return $q->where(function (Builder $qq) {
+        $qq->whereNull('user_id')
+           ->orWhere('user_id', Auth::id());
+    });
+}
 
     public static function getPages(): array
     {

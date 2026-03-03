@@ -9,12 +9,8 @@ class CreateAnswer extends CreateRecord
 {
     protected static string $resource = AnswerResource::class;
 
-    protected function mutateFormDataBeforeCreate(array $data): array
+    protected function getRedirectUrl(): string
     {
-        if (! auth()->user()?->isAdmin()) {
-            $data['user_id'] = auth()->id();
-        }
-
-        return $data;
+        return $this->getResource()::getUrl('index');
     }
 }

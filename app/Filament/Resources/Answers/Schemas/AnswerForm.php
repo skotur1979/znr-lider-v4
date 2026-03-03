@@ -20,7 +20,7 @@ class AnswerForm
                     Select::make('question_id')
                         ->label('Pitanje')
                         ->relationship('question', 'tekst')
-                        ->searchable()
+                        ->searchable(false)
                         ->required()
                         ->columnSpanFull(),
 
