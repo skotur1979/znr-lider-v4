@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Filament\Resources\RiskAssessmentResource\Tables;
+namespace App\Filament\Resources\RiskAssessments\Tables;
 
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 
-class RiskAssessmentTable
+class RiskAssessmentsTable
 {
     public static function table(Table $table): Table
     {

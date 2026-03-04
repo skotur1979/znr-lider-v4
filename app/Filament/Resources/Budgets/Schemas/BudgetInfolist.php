@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Budgets\Budgets\Schemas;
+namespace App\Filament\Resources\Budgets\Schemas;
 
 use Filament\Schemas\Schema;
 

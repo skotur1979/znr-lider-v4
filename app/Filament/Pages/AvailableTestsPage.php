@@ -4,14 +4,13 @@ namespace App\Filament\Pages;
 
 use App\Models\Test;
 use Filament\Pages\Page;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 use BackedEnum;
 
 class AvailableTestsPage extends Page
 {
-    // ✅ Filament v4: view je NON-static
     protected string $view = 'filament.pages.available-tests-page';
 
     protected static string|UnitEnum|null $navigationGroup = 'Testiranje';
@@ -19,18 +18,43 @@ class AvailableTestsPage extends Page
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?int $navigationSort = 95;
 
-    // ✅ Naslov stranice
     protected static ?string $title = 'Dostupni testovi';
 
-    public $tests = [];
+    /**
+     * ✅ Badge u navigaciji (broj dostupnih testova za usera)
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        $q = Test::query();
 
-    public function mount(): void
+        if (! Auth::user()?->isAdmin()) {
+            $q->where(function (Builder $qq) {
+                $qq->whereNull('user_id')
+                    ->orWhere('user_id', Auth::id());
+            });
+        }
+
+        return (string) $q->count();
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
+    /**
+     * ✅ Filament view data
+     */
+    protected function getViewData(): array
     {
         abort_unless(Auth::check(), 401);
 
-        $this->tests = $this->getTestsQuery()
+        $tests = $this->getTestsQuery()
+            ->withCount('questions') // ✅ questions_count
             ->orderBy('naziv')
             ->get();
+
+        return compact('tests');
     }
 
     protected function getTestsQuery(): Builder
@@ -42,12 +66,12 @@ class AvailableTestsPage extends Page
             return $q;
         }
 
-        // ✅ User vidi:
+        // User vidi:
         // - globalne testove (user_id NULL)
         // - svoje privatne testove (user_id = Auth::id())
         return $q->where(function (Builder $qq) {
             $qq->whereNull('user_id')
-               ->orWhere('user_id', Auth::id());
+                ->orWhere('user_id', Auth::id());
         });
     }
 }

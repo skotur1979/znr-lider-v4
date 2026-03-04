@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Filament\Resources\Budgets\Budgets;
+namespace App\Filament\Resources\Budgets;
 
-use App\Filament\Resources\Budgets\Budgets\Pages;
+use App\Filament\Resources\Budgets\Pages;
 use App\Models\Budget;
 
 use Filament\Resources\Resource;

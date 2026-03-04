@@ -98,6 +98,11 @@ class ExpenseResource extends Resource
                     ->options(ExpenseForm::months())
                     ->placeholder('Sve'),
 
+                    SelectFilter::make('category')
+    ->label('Kategorija')
+    ->relationship('category', 'name') // ili 'naziv'
+    ->preload(),
+
                 SelectFilter::make('godina')
                     ->label('Godina')
                     ->options(function () {

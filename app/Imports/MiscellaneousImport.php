@@ -13,7 +13,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use DateTimeInterface;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
-class MiscellaneousesImport implements ToModel, WithHeadingRow
+class MiscellaneousImport implements ToModel, WithHeadingRow
 {
     public function headingRow(): int
     {

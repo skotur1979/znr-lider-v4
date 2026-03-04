@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Filament\Resources\Budgets\Budgets\Pages;
+namespace App\Filament\Resources\Budgets\Pages;
 
-use App\Filament\Resources\Budgets\Budgets\BudgetResource;
+use App\Filament\Resources\Budgets\BudgetResource;
 use Filament\Resources\Pages\ListRecords;
 
 class ListBudgets extends ListRecords

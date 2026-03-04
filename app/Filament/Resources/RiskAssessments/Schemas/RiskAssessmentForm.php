@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\RiskAssessmentResource\Schemas;
+namespace App\Filament\Resources\RiskAssessments\Schemas;
 
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
