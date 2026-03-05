@@ -38,6 +38,7 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Schemas\Components\Utilities\Set;
 
 class PPELogResource extends Resource
 {
@@ -71,45 +72,57 @@ class PPELogResource extends Resource
             Section::make('Podaci o zaposleniku')
                 ->schema([
                     Select::make('employee_lookup')
-                        ->label('Pronađi zaposlenika (ime ili OIB)')
-                        ->placeholder('')
-                        ->searchable()
-                        ->getSearchResultsUsing(function (string $search): array {
-                            $table = (new Employee)->getTable();
-                            $hasOIBUpper = DbSchema::hasColumn($table, 'OIB');
-                            $hasOIBLower = DbSchema::hasColumn($table, 'oib');
+    ->label('Zaposlenik')
+    ->searchable()
+    ->live()
+    ->getSearchResultsUsing(function (string $search): array {
+        return Employee::query()
+            ->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('OIB', 'like', "%{$search}%");
+            })
+            ->orderBy('name')
+            ->limit(50)
+            ->get()
+            ->mapWithKeys(fn (Employee $e) => [
+                $e->id => "{$e->name} ({$e->oib})",
+            ])
+            ->toArray();
+    })
+    ->getOptionLabelUsing(function ($value): ?string {
+        if (! $value) {
+            return null;
+        }
 
-                            return Employee::query()
-                                ->when(strlen($search) > 0, function ($q) use ($search, $hasOIBUpper, $hasOIBLower) {
-                                    $q->where(function ($qq) use ($search, $hasOIBUpper, $hasOIBLower) {
-                                        $qq->where('name', 'like', "%{$search}%");
-                                        if ($hasOIBUpper) $qq->orWhere('OIB', 'like', "%{$search}%");
-                                        if ($hasOIBLower) $qq->orWhere('oib', 'like', "%{$search}%");
-                                    });
-                                })
-                                ->limit(20)
-                                ->get()
-                                ->mapWithKeys(function ($e) {
-                                    $fullName = $e->name ?? 'Zaposlenik';
-                                    $oib = $e->OIB ?? $e->oib ?? '';
-                                    return [$e->id => $fullName . ($oib ? " ({$oib})" : '')];
-                                })
-                                ->toArray();
-                        })
-                        ->reactive()
-                        ->afterStateUpdated(function ($state, callable $set) {
-                            if (! $state) return;
+        $e = Employee::find($value);
 
-                            $emp = Employee::find($state);
-                            if (! $emp) return;
+        return $e ? "{$e->name} ({$e->oib})" : null;
+    })
+    ->afterStateUpdated(function ($state, $set) {
+        if (! $state) {
+            // očisti polja kad makneš zaposlenika
+            $set('user_id', null);
+            $set('user_last_name', null);
+            $set('user_oib', null);
+            $set('workplace', null);
+            $set('organization_unit', null);
+            return;
+        }
 
-                            $set('user_last_name', $emp->name ?? '');
-                            $set('user_oib', $emp->OIB ?? $emp->oib ?? null);
-                            $set('workplace', $emp->workplace ?? null);
-                            $set('organization_unit', $emp->organization_unit ?? null);
-                        })
-                        ->dehydrated(false)
-                        ->columnSpanFull(),
+        $employee = Employee::find($state);
+
+        if (! $employee) {
+            return;
+        }
+
+        // upiši sve u log
+        $set('user_id', $employee->id);
+        $set('user_last_name', $employee->name);
+        $set('user_oib', $employee->oib); // radi zbog accessor-a iznad
+        $set('workplace', $employee->workplace);
+        $set('organization_unit', $employee->organization_unit);
+    })
+    ->dehydrated(false),
 
                     TextInput::make('user_last_name')
                         ->label('Prezime i ime')

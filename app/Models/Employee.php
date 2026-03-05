@@ -71,5 +71,9 @@ class Employee extends Model
 {
     return $this->hasMany(\App\Models\EmployeeCertificate::class, 'employee_id');
 }
+public function getOibAttribute(): ?string
+{
+    return $this->attributes['OIB'] ?? null;
+}
 }
 
