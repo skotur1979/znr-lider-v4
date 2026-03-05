@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Filament\Support\Facades\FilamentView;
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,4 +23,13 @@ class AppServiceProvider extends ServiceProvider
     {
         //
     }
+    public function panel(\Filament\Panel $panel): \Filament\Panel
+{
+    FilamentView::registerRenderHook(
+        'panels::head.end',
+        fn () => \Illuminate\Support\Facades\Vite::withEntryPoints(['resources/js/app.js'])->toHtml()
+    );
+
+    return $panel;
+}
 }
