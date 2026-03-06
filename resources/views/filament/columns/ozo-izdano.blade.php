@@ -1,17 +1,27 @@
 @php
     use Illuminate\Support\Carbon;
 
-    /** @var \App\Models\PPELog|null $record */
-    $record = $getRecord();
-    $items  = $record?->items ?? collect();
+    $items = collect($getRecord()->items ?? [])->sortBy('equipment_name')->values();
 @endphp
 
-<div style="display:flex;flex-direction:column;gap:4px;white-space:nowrap;">
-    @forelse ($items as $item)
-        <span>
+<div style="display:flex; flex-direction:column; gap:4px;">
+    @forelse($items as $item)
+        <div style="
+            min-height: 28px;
+            display:flex;
+            align-items:center;
+            white-space:nowrap;
+        ">
             {{ $item->issue_date ? Carbon::parse($item->issue_date)->format('d.m.Y.') : '—' }}
-        </span>
+        </div>
     @empty
-        <span>—</span>
+        <div style="
+            min-height: 28px;
+            display:flex;
+            align-items:center;
+            color:#9ca3af;
+        ">
+            —
+        </div>
     @endforelse
 </div>

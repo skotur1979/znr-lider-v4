@@ -185,7 +185,7 @@
 
 @forelse ($tests as $test)
 
-<div class="test-card light">
+<div class="test-card">
 
 <div class="test-left">
 
@@ -243,7 +243,7 @@ Pokreni test
 
 @empty
 
-<div class="test-card light">
+<div class="test-card">
 Nema dostupnih testova
 </div>
 

@@ -170,23 +170,40 @@ class PPELogResource extends Resource
     return $table
         ->modifyQueryUsing(fn (Builder $query) => $query->with('items'))
         ->columns([
-    TextColumn::make('user_last_name')->label('Ime i prezime')->searchable(),
-    TextColumn::make('user_oib')->label('OIB')->alignCenter(),
+    TextColumn::make('user_last_name')
+        ->label('Ime i prezime')
+        ->searchable()
+        ->extraAttributes([
+            'style' => 'vertical-align: top;',
+        ]),
+
+    TextColumn::make('user_oib')
+        ->label('OIB')
+        ->alignCenter()
+        ->extraAttributes([
+            'style' => 'vertical-align: top;',
+        ]),
 
     ViewColumn::make('nazivi')
         ->label('Naziv OZO')
-        ->alignCenter()
-        ->view('filament.columns.ozo-nazivi'),
+        ->view('filament.columns.ozo-nazivi')
+        ->extraAttributes([
+            'style' => 'vertical-align: top; min-width: 260px;',
+        ]),
 
     ViewColumn::make('izdano')
         ->label('Izdano')
         ->view('filament.columns.ozo-izdano')
-        ->extraAttributes(['class' => 'whitespace-nowrap align-middle']),
+        ->extraAttributes([
+            'style' => 'vertical-align: top; min-width: 120px;',
+        ]),
 
     ViewColumn::make('istek')
         ->label('Istek')
         ->view('filament.columns.ozo-items-expiring')
-        ->extraAttributes(['class' => 'whitespace-nowrap align-middle']),
+        ->extraAttributes([
+            'style' => 'vertical-align: top; min-width: 150px;',
+        ]),
 ])
             ->filters([
                 TrashedFilter::make(),

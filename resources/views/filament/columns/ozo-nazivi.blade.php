@@ -1,14 +1,25 @@
 @php
-    $record = $getRecord(); // ✅ Filament v4
-    $items = $record?->items ?? collect();
+    $items = collect($getRecord()->items ?? [])->sortBy('equipment_name')->values();
 @endphp
 
-<div class="space-y-1 text-sm">
+<div style="display:flex; flex-direction:column; gap:4px;">
     @forelse($items as $item)
-        <div class="font-semibold">
+        <div style="
+            min-height: 28px;
+            display:flex;
+            align-items:center;
+            white-space:nowrap;
+        ">
             {{ $item->equipment_name }}
         </div>
     @empty
-        <div class="text-gray-500">—</div>
+        <div style="
+            min-height: 28px;
+            display:flex;
+            align-items:center;
+            color:#9ca3af;
+        ">
+            —
+        </div>
     @endforelse
 </div>
