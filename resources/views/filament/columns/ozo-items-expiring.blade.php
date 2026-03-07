@@ -43,11 +43,11 @@
 
     $soonDays = 30;
 
-    $styleMap = [
-        'danger'  => 'display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:9999px;border:1px solid rgba(239,68,68,.9);background:rgba(239,68,68,.18);color:#fecaca;font-weight:700;line-height:1.2;',
-        'warning' => 'display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:9999px;border:1px solid rgba(245,158,11,.95);background:rgba(245,158,11,.18);color:#fde68a;font-weight:700;line-height:1.2;',
-        'success' => 'display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:9999px;border:1px solid rgba(34,197,94,.9);background:rgba(34,197,94,.16);color:#bbf7d0;font-weight:700;line-height:1.2;',
-        'gray'    => 'display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:9999px;border:1px solid rgba(156,163,175,.7);background:rgba(156,163,175,.10);color:#e5e7eb;font-weight:600;line-height:1.2;',
+    $classMap = [
+        'danger'  => 'ozo-badge ozo-badge-danger',
+        'warning' => 'ozo-badge ozo-badge-warning',
+        'success' => 'ozo-badge ozo-badge-success',
+        'gray'    => 'ozo-badge ozo-badge-gray',
     ];
 
     $svg = [
@@ -58,6 +58,71 @@
     ];
 @endphp
 
+<style>
+    .ozo-badge{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        min-height:24px;
+        padding:2px 10px;
+        border-radius:9999px;
+        border:1px solid;
+        font-weight:700;
+        line-height:1.2;
+        white-space:nowrap;
+    }
+
+    /* LIGHT MODE */
+    .ozo-badge-success{
+        border-color:#86efac;
+        background:rgba(34,197,94,.12);
+        color:#166534;
+    }
+
+    .ozo-badge-warning{
+        border-color:#fcd34d;
+        background:rgba(245,158,11,.14);
+        color:#92400e;
+    }
+
+    .ozo-badge-danger{
+        border-color:#fca5a5;
+        background:rgba(239,68,68,.12);
+        color:#991b1b;
+    }
+
+    .ozo-badge-gray{
+        border-color:#d1d5db;
+        background:rgba(107,114,128,.08);
+        color:#374151;
+    }
+
+    /* DARK MODE */
+    .dark .ozo-badge-success{
+        border-color:rgba(34,197,94,.9);
+        background:rgba(34,197,94,.16);
+        color:#bbf7d0;
+    }
+
+    .dark .ozo-badge-warning{
+        border-color:rgba(245,158,11,.95);
+        background:rgba(245,158,11,.18);
+        color:#fde68a;
+    }
+
+    .dark .ozo-badge-danger{
+        border-color:rgba(239,68,68,.9);
+        background:rgba(239,68,68,.18);
+        color:#fecaca;
+    }
+
+    .dark .ozo-badge-gray{
+        border-color:rgba(156,163,175,.7);
+        background:rgba(156,163,175,.10);
+        color:#e5e7eb;
+    }
+</style>
+
 <div style="display:flex; flex-direction:column; gap:6px;">
     @forelse($items as $item)
         @php
@@ -65,19 +130,19 @@
             $status = ExpiryBadge::color($date, $soonDays);
             $iconKey = ExpiryBadge::icon($date, $soonDays);
             $tooltip = ExpiryBadge::tooltip($date, $soonDays);
-            $style = $styleMap[$status] ?? $styleMap['gray'];
+            $classes = $classMap[$status] ?? $classMap['gray'];
             $text = $date ? $date->format('d.m.Y.') : '—';
         @endphp
 
         <div style="min-height:30px; display:flex; align-items:center; white-space:nowrap;">
-            <span style="{{ $style }}" title="{{ $tooltip }}">
+            <span class="{{ $classes }}" title="{{ $tooltip }}">
                 {!! $svg[$iconKey] ?? '' !!}
                 <span>{{ $text }}</span>
             </span>
         </div>
     @empty
         <div style="min-height:30px; display:flex; align-items:center; white-space:nowrap;">
-            <span style="{{ $styleMap['gray'] }}" title="Rok nije definiran">—</span>
+            <span class="{{ $classMap['gray'] }}" title="Rok nije definiran">—</span>
         </div>
     @endforelse
 </div>
