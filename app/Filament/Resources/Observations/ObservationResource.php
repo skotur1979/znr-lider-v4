@@ -3,10 +3,11 @@
 namespace App\Filament\Resources\Observations;
 
 use App\Filament\Resources\Observations\Pages;
+use App\Filament\Resources\Observations\Widgets\ObservationMonthlySummary;
+use App\Filament\Resources\Observations\Widgets\ObservationStatsOverview;
 use App\Models\Employee;
 use App\Models\Observation;
 
-use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -37,12 +38,12 @@ use Filament\Tables\Table;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Illuminate\Support\Facades\Storage;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class ObservationResource extends Resource
 {
@@ -58,133 +59,131 @@ class ObservationResource extends Resource
     protected static ?int $navigationSort = 4;
 
     public static function form(Schema $schema): Schema
-{
-    return $schema->schema([
-        // Admin bira korisnika, useru se automatski setira.
-        Select::make('user_id')
-            ->label('Korisnik')
-            ->relationship('user', 'name')
-            ->searchable()
-            ->preload()
-            ->required()
-            ->visible(fn () => Auth::user()?->isAdmin())
-            ->dehydrated(fn () => Auth::user()?->isAdmin()),
+    {
+        return $schema->schema([
+            Select::make('user_id')
+                ->label('Korisnik')
+                ->relationship('user', 'name')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->visible(fn () => Auth::user()?->isAdmin())
+                ->dehydrated(fn () => Auth::user()?->isAdmin()),
 
-        Hidden::make('user_id')
-            ->default(fn () => Auth::id())
-            ->visible(fn () => ! Auth::user()?->isAdmin())
-            ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+            Hidden::make('user_id')
+                ->default(fn () => Auth::id())
+                ->visible(fn () => ! Auth::user()?->isAdmin())
+                ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
 
-        // ✅ SVE U JEDNOJ SEKCIJI
-        Section::make('Zapažanje')
-            ->columns(2)
-            ->schema([
-                DatePicker::make('incident_date')
-                    ->label('Datum')
-                    ->required()
-                    ->displayFormat('d.m.Y.')
-                    ->weekStartsOnMonday()
-                    ->timezone('Europe/Zagreb'),
+            Section::make('Zapažanje')
+                ->columns(2)
+                ->schema([
+                    DatePicker::make('incident_date')
+                        ->label('Datum')
+                        ->required()
+                        ->displayFormat('d.m.Y.')
+                        ->weekStartsOnMonday()
+                        ->timezone('Europe/Zagreb'),
 
-                Select::make('observation_type')
-                    ->label('Vrsta zapažanja')
-                    ->options([
-                        'Near Miss' => 'Near Miss - Skoro nezgoda',
-                        'Negative Observation' => 'Negativno zapažanje',
-                        'Positive Observation' => 'Pozitivno zapažanje',
-                    ])
-                    ->required(),
+                    Select::make('observation_type')
+                        ->label('Vrsta zapažanja')
+                        ->options([
+                            'Near Miss' => 'Near Miss - Skoro nezgoda',
+                            'Negative Observation' => 'Negativno zapažanje',
+                            'Positive Observation' => 'Pozitivno zapažanje',
+                        ])
+                        ->required(),
 
-                TextInput::make('location')
-                    ->label('Lokacija')
-                    ->required()
-                    ->maxLength(255),
+                    TextInput::make('location')
+                        ->label('Lokacija')
+                        ->required()
+                        ->maxLength(255),
 
-                TextInput::make('item')
-                    ->label('Opis zapažanja')
-                    ->required()
-                    ->maxLength(255),
+                    TextInput::make('item')
+                        ->label('Opis zapažanja')
+                        ->required()
+                        ->maxLength(255),
 
-                TextInput::make('potential_incident_type')
-                    ->label('Vrsta opasnosti')
-                    ->datalist([
-                        'Kontakt s pokretnim dijelovima strojeva',
-                        'Utapanje ili gušenje',
-                        'Izloženost struji',
-                        'Izloženost ekstremnim temperaturama',
-                        'Izloženost vatri',
-                        'Pad s visine',
-                        'Pad na istoj razini',
-                        'Udarac pokretnim vozilom',
-                        'Udarac pokretnim, letećim ili padajućim predmetom',
-                        'Udarac u nešto nepomično',
-                        'Ručno rukovanje, podizanje ili nošenje',
-                        'Profesionalna bolest/bolest',
-                        'Fizički napad',
-                        'Padovi, spoticanje ili pokliznuće',
-                        'Incident s trećom stranom',
-                        'Zarobljenost nečim što se ruši',
-                        'Ostalo',
-                        'Porezotine, ogrebotine ili abrazije',
-                        'Blokirana protupožarna oprema',
-                        'Blokirani evakuacijski putevi',
-                        'Nedostatak odgovarajuće rasvjete',
-                        'Nedostatak čistoće',
-                        'Nepravilno skladištenje',
-                    ])
-                    ->required()
-                    ->maxLength(255)
-                    ->columnSpanFull(), // ✅ da bude široko jer je dugačko
+                    TextInput::make('potential_incident_type')
+                        ->label('Vrsta opasnosti')
+                        ->datalist([
+                            'Kontakt s pokretnim dijelovima strojeva',
+                            'Utapanje ili gušenje',
+                            'Izloženost struji',
+                            'Izloženost ekstremnim temperaturama',
+                            'Izloženost vatri',
+                            'Pad s visine',
+                            'Pad na istoj razini',
+                            'Udarac pokretnim vozilom',
+                            'Udarac pokretnim, letećim ili padajućim predmetom',
+                            'Udarac u nešto nepomično',
+                            'Ručno rukovanje, podizanje ili nošenje',
+                            'Profesionalna bolest/bolest',
+                            'Fizički napad',
+                            'Padovi, spoticanje ili pokliznuće',
+                            'Incident s trećom stranom',
+                            'Zarobljenost nečim što se ruši',
+                            'Ostalo',
+                            'Porezotine, ogrebotine ili abrazije',
+                            'Blokirana protupožarna oprema',
+                            'Blokirani evakuacijski putevi',
+                            'Nedostatak odgovarajuće rasvjete',
+                            'Nedostatak čistoće',
+                            'Nepravilno skladištenje',
+                        ])
+                        ->required()
+                        ->maxLength(255)
+                        ->columnSpanFull(),
 
-                FileUpload::make('picture_path')
-                    ->label('Slika')
-                    ->image()
-                    ->disk('public')
-                    ->directory('observations')
-                    ->visibility('public')
-                    ->preserveFilenames()
-                    ->openable()
-                    ->downloadable()
-                    ->columnSpanFull(), // ✅ slika preko cijele širine
+                    FileUpload::make('picture_path')
+                        ->label('Slika')
+                        ->image()
+                        ->disk('public')
+                        ->directory('observations')
+                        ->visibility('public')
+                        ->preserveFilenames()
+                        ->openable()
+                        ->downloadable()
+                        ->columnSpanFull(),
 
-                Textarea::make('action')
-                    ->label('Potrebna radnja')
-                    ->rows(3)
-                    ->columnSpanFull(),
+                    Textarea::make('action')
+                        ->label('Potrebna radnja')
+                        ->rows(3)
+                        ->columnSpanFull(),
 
-                TextInput::make('responsible')
-                    ->label('Odgovorna osoba')
-                    ->datalist(fn () => Employee::query()
-                        ->orderBy('name')
-                        ->pluck('name')
-                        ->unique()
-                        ->toArray()
-                    )
-                    ->placeholder('Upiši ime')
-                    ->maxLength(255),
+                    TextInput::make('responsible')
+                        ->label('Odgovorna osoba')
+                        ->datalist(fn () => Employee::query()
+                            ->orderBy('name')
+                            ->pluck('name')
+                            ->unique()
+                            ->toArray()
+                        )
+                        ->placeholder('Upiši ime')
+                        ->maxLength(255),
 
-                DatePicker::make('target_date')
-                    ->label('Rok za provedbu')
-                    ->displayFormat('d.m.Y.')
-                    ->weekStartsOnMonday()
-                    ->timezone('Europe/Zagreb'),
+                    DatePicker::make('target_date')
+                        ->label('Rok za provedbu')
+                        ->displayFormat('d.m.Y.')
+                        ->weekStartsOnMonday()
+                        ->timezone('Europe/Zagreb'),
 
-                Select::make('status')
-                    ->label('Status')
-                    ->options([
-                        'Not started' => 'Nije započeto',
-                        'In progress' => 'U tijeku',
-                        'Complete' => 'Završeno',
-                    ])
-                    ->required(),
+                    Select::make('status')
+                        ->label('Status')
+                        ->options([
+                            'Not started' => 'Nije započeto',
+                            'In progress' => 'U tijeku',
+                            'Complete' => 'Završeno',
+                        ])
+                        ->required(),
 
-                Textarea::make('comments')
-                    ->label('Komentar')
-                    ->rows(3)
-                    ->columnSpanFull(),
-            ]),
-    ]);
-}
+                    Textarea::make('comments')
+                        ->label('Komentar')
+                        ->rows(3)
+                        ->columnSpanFull(),
+                ]),
+        ]);
+    }
 
     public static function table(Table $table): Table
     {
@@ -224,18 +223,18 @@ class ObservationResource extends Resource
                     ->wrap(),
 
                 ImageColumn::make('picture_path')
-    ->label('Slika')
-    ->disk('public')          // ✅ BITNO
-    ->visibility('public')
-    ->height(50)
-    ->width(80)
-    ->extraImgAttributes(['style' => 'object-fit: cover; border-radius: 6px;'])
-    ->getStateUsing(fn ($record) => $record->picture_path ?: null)
-    ->url(fn ($record) => $record->picture_path
-        ? Storage::disk('public')->url($record->picture_path)
-        : null
-    )
-    ->openUrlInNewTab(),
+                    ->label('Slika')
+                    ->disk('public')
+                    ->visibility('public')
+                    ->height(50)
+                    ->width(80)
+                    ->extraImgAttributes(['style' => 'object-fit: cover; border-radius: 6px;'])
+                    ->getStateUsing(fn ($record) => $record->picture_path ?: null)
+                    ->url(fn ($record) => $record->picture_path
+                        ? Storage::disk('public')->url($record->picture_path)
+                        : null
+                    )
+                    ->openUrlInNewTab(),
 
                 TextColumn::make('action')
                     ->label('Potrebna radnja')
@@ -264,7 +263,7 @@ class ObservationResource extends Resource
                             return 'danger';
                         }
 
-                        if ($datum->diffInDays($danas) <= 30) {
+                        if ($datum->greaterThanOrEqualTo($danas) && $datum->diffInDays($danas) <= 30) {
                             return 'warning';
                         }
 
@@ -294,8 +293,7 @@ class ObservationResource extends Resource
                     ->wrap(),
             ])
             ->filters([
-                // 1) Aktivni / Deaktivirani / Svi (isti pattern kao Machines)
-                SelectFilter::make('status')
+                SelectFilter::make('record_state')
                     ->label('Status zapisa')
                     ->placeholder('Odaberi status')
                     ->options([
@@ -313,7 +311,6 @@ class ObservationResource extends Resource
                         };
                     }),
 
-                // 2) Vrsta zapažanja (samo filter po tipu, ne miješamo trashed ovdje)
                 SelectFilter::make('observation_type')
                     ->label('Vrsta zapažanja')
                     ->placeholder('Sve')
@@ -328,17 +325,17 @@ class ObservationResource extends Resource
                             : $query
                     ),
 
-                // 3) Godina nastanka
                 SelectFilter::make('year')
-                    ->label('Godina nastanka')
-                    ->placeholder('Sve')
-                    ->options(fn () => static::getYearOptions())
-                    ->query(function (Builder $query, array $data) {
-                        $year = $data['value'] ?? null;
+    ->label('Godina nastanka')
+    ->placeholder('Sve')
+    ->options(fn () => static::getYearOptions())
+    ->default((string) now()->year)
+    ->query(function (Builder $query, array $data) {
+        $year = $data['value'] ?? null;
 
-                        if (filled($year)) {
-                            $query->whereYear('incident_date', (int) $year);
-                        }
+        if (filled($year)) {
+            $query->whereYear('incident_date', (int) $year);
+        }
 
                         return $query;
                     }),
@@ -371,47 +368,45 @@ class ObservationResource extends Resource
                     ->label(''),
             ])
             ->bulkActions([
-    DeleteBulkAction::make()
-        ->label('Deaktiviraj označeno')
-        ->requiresConfirmation()
-        ->modalHeading('Deaktiviraj odabrano')
-        ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-        ->modalSubmitActionLabel('Deaktiviraj')
-        ->modalCancelActionLabel('Odustani')
-        ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+                DeleteBulkAction::make()
+                    ->label('Deaktiviraj označeno')
+                    ->requiresConfirmation()
+                    ->modalHeading('Deaktiviraj odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalSubmitActionLabel('Deaktiviraj')
+                    ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
 
-    RestoreBulkAction::make()
-        ->label('Vrati označeno')
-        ->requiresConfirmation()
-        ->modalHeading('Vrati odabrano')
-        ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-        ->modalSubmitActionLabel('Vrati')
-        ->modalCancelActionLabel('Odustani')
-        ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+                RestoreBulkAction::make()
+                    ->label('Vrati označeno')
+                    ->requiresConfirmation()
+                    ->modalHeading('Vrati odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalSubmitActionLabel('Vrati')
+                    ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
 
-    ForceDeleteBulkAction::make()
-        ->label('Trajno obriši označeno')
-        ->requiresConfirmation()
-        ->modalHeading('Trajno obriši odabrano')
-        ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
-        ->modalSubmitActionLabel('Trajno obriši')
-        ->modalCancelActionLabel('Odustani'),
+                ForceDeleteBulkAction::make()
+                    ->label('Trajno obriši označeno')
+                    ->requiresConfirmation()
+                    ->modalHeading('Trajno obriši odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+                    ->modalSubmitActionLabel('Trajno obriši')
+                    ->modalCancelActionLabel('Odustani'),
             ])
             ->defaultSort('incident_date', 'desc');
     }
 
     private static function isOnlyTrashed(HasTable $livewire): bool
-{
-    // Filter u tvom resource-u: SelectFilter::make('observation_filter') + opcija 'trashed'
-    $state = $livewire->getTableFilterState('observation_filter');
-    $value = data_get($state, 'value');
+    {
+        $state = $livewire->getTableFilterState('record_state');
+        $value = data_get($state, 'value');
 
-    return $value === 'trashed';
-}
+        return $value === 'trashed';
+    }
 
     protected static function getYearOptions(): array
     {
-        // uzmi godine iz queryja koji poštuje admin/user scope i soft deletes scope (bez global scope)
         return static::getEloquentQuery()
             ->selectRaw('YEAR(incident_date) as year')
             ->whereNotNull('incident_date')
@@ -420,6 +415,15 @@ class ObservationResource extends Resource
             ->pluck('year', 'year')
             ->toArray();
     }
+
+    public static function getWidgets(): array
+{
+    return [
+        \App\Filament\Resources\Observations\Widgets\ObservationStatsTopRow::class,
+        \App\Filament\Resources\Observations\Widgets\ObservationStatsBottomRow::class,
+        \App\Filament\Resources\Observations\Widgets\ObservationMonthlySummary::class,
+    ];
+}
 
     public static function getEloquentQuery(): Builder
     {

@@ -8,6 +8,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 use Maatwebsite\Excel\Facades\Excel;
+use Filament\Pages\Concerns\ExposesTableToWidgets;
 
 // (Opcionalno) za import:
 // use Filament\Forms\Components\FileUpload;
@@ -18,6 +19,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ListObservations extends ListRecords
 {
+    use ExposesTableToWidgets;
     protected static string $resource = ObservationResource::class;
 
     protected function getHeaderActions(): array
@@ -92,5 +94,9 @@ class ListObservations extends ListRecords
                 }),
             */
         ];
+    }
+    protected function getHeaderWidgets(): array
+    {
+        return ObservationResource::getWidgets();
     }
 }
