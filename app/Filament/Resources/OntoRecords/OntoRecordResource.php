@@ -166,9 +166,30 @@ class OntoRecordResource extends Resource
                     ->weight('bold'),
 
                 TextColumn::make('wasteType.waste_code')
-                    ->label('K.B.')
-                    ->searchable()
-                    ->sortable(),
+    ->label('K.B.')
+    ->html()
+    ->formatStateUsing(function (?string $state): string {
+
+        if (!$state) {
+            return '-';
+        }
+
+        $hasStar = str_ends_with($state, '*');
+        $code = rtrim($state, '*');
+
+        if (strlen($code) === 6) {
+            $code =
+                substr($code, 0, 2) . ' ' .
+                substr($code, 2, 2) . ' ' .
+                substr($code, 4, 2);
+        }
+
+        return $hasStar
+            ? $code . '<sup style="font-size:0.75em">*</sup>'
+            : $code;
+    })
+    ->sortable()
+    ->searchable(),
 
                 TextColumn::make('wasteType.name')
                     ->label('Naziv otpada')
