@@ -527,4 +527,14 @@ class OntoRecordResource extends Resource
             'edit' => EditOntoRecord::route('/{record}/edit'),
         ];
     }
+    public static function getNavigationBadge(): ?string
+    {
+        $q = static::getModel()::query();
+
+        if (! Auth::user()?->isAdmin()) {
+            $q->where('user_id', Auth::id());
+        }
+
+        return (string) $q->count();
+    }
 }

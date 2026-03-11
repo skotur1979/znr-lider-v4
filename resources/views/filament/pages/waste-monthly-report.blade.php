@@ -92,7 +92,7 @@
             white-space: nowrap;
             position: sticky;
             top: 0;
-            z-index: 5;
+            z-index: 8;
             box-shadow: 0 1px 0 rgba(255,255,255,.08);
         }
 
@@ -114,20 +114,8 @@
             white-space: nowrap;
         }
 
-        .wmr-code sup {
-            font-size: 0.75em;
-            vertical-align: baseline;
-            position: relative;
-            top: -0.35em;
-        }
-
         .wmr-name {
             min-width: 260px;
-        }
-
-        .wmr-total-row td {
-            font-weight: 800;
-            background: rgba(255,255,255,.03);
         }
 
         .wmr-empty {
@@ -148,6 +136,13 @@
             margin-left: 8px;
         }
 
+        .wmr-code sup {
+            font-size: 0.75em;
+            vertical-align: baseline;
+            position: relative;
+            top: -0.35em;
+        }
+
         /* STICKY PRVI STUPCI */
         .wmr-sticky-rbr,
         .wmr-sticky-kb,
@@ -161,7 +156,7 @@
         .wmr-table thead .wmr-sticky-kb,
         .wmr-table thead .wmr-sticky-name {
             background: #16213a !important;
-            z-index: 6;
+            z-index: 9;
         }
 
         .wmr-sticky-rbr {
@@ -186,9 +181,21 @@
             box-shadow: 1px 0 0 rgba(255,255,255,.08);
         }
 
-        .wmr-total-row .wmr-sticky-rbr,
-        .wmr-total-row .wmr-sticky-kb,
-        .wmr-total-row .wmr-sticky-name {
+        /* STICKY FOOTER */
+        .wmr-table tfoot td {
+            position: sticky;
+            bottom: 0;
+            z-index: 7;
+            background: #16213a !important;
+            font-weight: 800;
+            border-top: 1px solid rgba(255,255,255,.10);
+            box-shadow: 0 -1px 0 rgba(255,255,255,.08);
+        }
+
+        .wmr-table tfoot .wmr-sticky-rbr,
+        .wmr-table tfoot .wmr-sticky-kb,
+        .wmr-table tfoot .wmr-sticky-name {
+            z-index: 10;
             background: #16213a !important;
         }
 
@@ -273,8 +280,10 @@
                                     </td>
                                 </tr>
                             @endforeach
+                        </tbody>
 
-                            <tr class="wmr-total-row">
+                        <tfoot>
+                            <tr>
                                 <td class="center wmr-sticky-rbr"></td>
                                 <td class="left wmr-sticky-kb"></td>
                                 <td class="left wmr-sticky-name">Ukupno po mjesecima</td>
@@ -285,7 +294,7 @@
 
                                 <td class="right">{{ $this->formatKg($this->totals['grand_total']) }}</td>
                             </tr>
-                        </tbody>
+                        </tfoot>
                     </table>
                 </div>
             @else

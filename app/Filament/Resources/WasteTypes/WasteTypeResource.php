@@ -275,4 +275,8 @@ class WasteTypeResource extends Resource
             'edit' => EditWasteType::route('/{record}/edit'),
         ];
     }
+    public static function getNavigationBadge(): ?string
+{
+    return (string) static::getModel()::query()->count();
+}
 }

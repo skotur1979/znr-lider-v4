@@ -82,4 +82,5 @@ class OntoRecord extends Model
 
         return "{$location} / {$waste} / {$this->year}";
     }
+    
 }       
