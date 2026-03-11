@@ -53,7 +53,7 @@ class OntoRecord extends Model
         return $this->belongsTo(WasteOrganization::class, 'waste_organization_id');
     }
 
-    public function location(): BelongsTo
+    public function organizationLocation(): BelongsTo
     {
         return $this->belongsTo(WasteOrganizationLocation::class, 'waste_organization_location_id');
     }
@@ -77,10 +77,12 @@ class OntoRecord extends Model
 
     public function getDisplayNameAttribute(): string
     {
-        $location = $this->location?->name ?? '-';
+        $location = $this->organizationLocation?->name
+            ?? $this->organizationLocation?->location_name
+            ?? '-';
+
         $waste = $this->wasteType?->waste_code ?? '-';
 
         return "{$location} / {$waste} / {$this->year}";
     }
-    
-}       
+}    

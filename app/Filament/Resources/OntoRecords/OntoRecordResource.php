@@ -160,11 +160,17 @@ class OntoRecordResource extends Resource
                     ->sortable()
                     ->toggleable(),
 
-                TextColumn::make('location.name')
-                    ->label('Lokacija')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold'),
+                TextColumn::make('organizationLocation.name')
+    ->label('Lokacija')
+    ->formatStateUsing(fn ($state, OntoRecord $record) =>
+        $record->organizationLocation?->display_name
+            ?? $record->organizationLocation?->name
+            ?? $record->organizationLocation?->location_name
+            ?? '-'
+    )
+    ->searchable()
+    ->sortable()
+    ->weight('bold'),
 
                 TextColumn::make('wasteType.waste_code')
     ->label('K.B.')
@@ -249,10 +255,10 @@ class OntoRecordResource extends Resource
                     ->preload(),
 
                 SelectFilter::make('waste_organization_location_id')
-                    ->label('Lokacija')
-                    ->relationship('location', 'name')
-                    ->searchable()
-                    ->preload(),
+    ->label('Lokacija')
+    ->relationship('organizationLocation', 'name')
+    ->searchable()
+    ->preload(),
 
                 SelectFilter::make('waste_type_id')
                     ->label('Vrsta otpada')
@@ -434,7 +440,8 @@ class OntoRecordResource extends Resource
                                 'description' => $data['description'] ?? $record->wasteType?->name,
                                 'sender_name' => $record->organization?->company_name,
                                 'sender_oib' => $record->organization?->oib,
-                                'sender_address' => $record->location?->address,
+                                'sender_address' => $record->organizationLocation?->address
+                                ??$record->organization?->address,
                                 'note' => $data['note'] ?? null,
                             ]);
 
@@ -483,7 +490,7 @@ class OntoRecordResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->with(['organization', 'location', 'wasteType'])
+    ->with(['organization', 'organizationLocation', 'wasteType'])
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ]);

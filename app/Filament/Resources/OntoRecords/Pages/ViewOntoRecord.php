@@ -5,11 +5,13 @@ namespace App\Filament\Resources\OntoRecords\Pages;
 use App\Filament\Resources\OntoRecords\OntoRecordResource;
 use App\Models\WasteTrackingForm;
 use App\Services\OntoService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
@@ -24,7 +26,8 @@ class ViewOntoRecord extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
+            EditAction::make()
+                ->label('Uredi'),
 
             Action::make('add_input')
                 ->label('Unesi ulaz')
@@ -130,6 +133,28 @@ class ViewOntoRecord extends ViewRecord
                     }
                 }),
 
+            Actions\Action::make('export_pdf')
+                ->label('Izvoz u PDF')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('danger')
+                ->action(function () {
+                    $record = $this->record->load([
+                        'wasteType',
+                        'entries',
+                        'organization',
+                        'organizationLocation',
+                    ]);
+
+                    $pdf = Pdf::loadView('pdf.onto-record', [
+    'record' => $record,
+])->setPaper('a4', 'landscape');
+
+                    return response()->streamDownload(
+                        fn () => print($pdf->output()),
+                        'onto-obrazac-' . $record->id . '.pdf'
+                    );
+                }),
+
             Action::make('create_tracking_form')
                 ->label('Novi prateći list')
                 ->icon('heroicon-o-document-text')
@@ -168,9 +193,11 @@ class ViewOntoRecord extends ViewRecord
                         'handover_date' => $data['handover_date'] ?? now()->format('Y-m-d'),
                         'quantity_kg' => $data['quantity_kg'],
                         'description' => $data['description'] ?? $this->record->wasteType?->name,
-                        'sender_name' => $this->record->organization?->company_name,
+                        'sender_name' => $this->record->organization?->company_name
+                            ?? $this->record->organization?->name,
                         'sender_oib' => $this->record->organization?->oib,
-                        'sender_address' => $this->record->location?->address,
+                        'sender_address' => $this->record->organizationLocation?->address
+                            ?? $this->record->organization?->address,
                         'note' => $data['note'] ?? null,
                     ]);
 
@@ -189,7 +216,7 @@ class ViewOntoRecord extends ViewRecord
     {
         $record = $this->getRecord()->load([
             'organization',
-            'location',
+            'organizationLocation',
             'wasteType',
             'entries' => fn ($query) => $query->orderBy('entry_no'),
         ]);

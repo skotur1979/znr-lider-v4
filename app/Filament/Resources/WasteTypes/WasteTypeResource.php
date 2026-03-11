@@ -9,6 +9,7 @@ use App\Filament\Resources\WasteTypes\Pages\ViewWasteType;
 use App\Models\WasteType;
 use App\Models\WasteCatalogItem;
 use App\Support\WasteCodeFormatter;
+use App\Filament\Resources\WasteTypes\Pages;
 
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
