@@ -1,10 +1,19 @@
 <x-filament-panels::page>
-    @php
-        $formatKg = fn ($value) => number_format((float) $value, 2, ',', '.');
+@php
 
-        $wasteCode = $record->wasteType?->formatted_waste_code ?? '-';
-        $wasteName = $record->wasteType?->name ?? '-';
-    @endphp
+$formatKg = fn ($value) => number_format((float) $value, 2, ',', '.');
+
+$rawWasteCode = $record->wasteType?->waste_code ?? null;
+
+$wasteCode = \App\Support\WasteCodeFormatter::plain($rawWasteCode);
+
+$wasteCodeWithoutStar = rtrim($wasteCode, '*');
+
+$hasDangerStar = str_ends_with((string) $rawWasteCode, '*');
+
+$wasteName = $record->wasteType?->name ?? '-';
+
+@endphp
 
     <style>
         .onto-wrap {
@@ -319,26 +328,12 @@
                     </div>
 
                     <div class="onto-field">
-                        <span class="onto-label">Ključni broj otpada</span>
-                        @php
-$raw = $record->wasteType?->waste_code ?? null;
+    <span class="onto-label">Ključni broj otpada</span>
 
-$danger = str_contains($raw ?? '', '*');
-
-$code = str_replace('*','',$raw);
-
-$formatted = $code
-    ? substr($code,0,2).' '.substr($code,2,2).' '.substr($code,4,2)
-    : '-';
-@endphp
-
-<div class="onto-value">
-    {{ $formatted }}
-    @if($danger)
-        <sup style="font-size:0.7em">*</sup>
-    @endif
+    <div class="onto-value">
+    {!! \App\Support\WasteCodeFormatter::html($record->wasteType?->waste_code) !!}
 </div>
-                    </div>
+</div>
 
                     <div class="onto-field">
                         <span class="onto-label">Naziv otpada</span>

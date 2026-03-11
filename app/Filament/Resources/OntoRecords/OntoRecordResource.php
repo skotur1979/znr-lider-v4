@@ -43,6 +43,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use RuntimeException;
 
+
 class OntoRecordResource extends Resource
 {
     protected static ?string $model = OntoRecord::class;

@@ -8,6 +8,7 @@ use App\Filament\Resources\WasteTypes\Pages\ListWasteTypes;
 use App\Filament\Resources\WasteTypes\Pages\ViewWasteType;
 use App\Models\WasteType;
 use App\Models\WasteCatalogItem;
+use App\Support\WasteCodeFormatter;
 
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -51,79 +52,88 @@ class WasteTypeResource extends Resource
     protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->components([
+{
+    return $schema->components([
+        FormSection::make('Podaci o vrsti otpada')
+            ->schema([
+                Select::make('catalog_select')
+                    ->label('Katalog otpada')
+                    ->placeholder('Počni upisivati ključni broj ili naziv...')
+                    ->searchable()
+                    ->live()
+                    ->dehydrated(false)
+                    ->getSearchResultsUsing(function (string $search) {
+                        return WasteCatalogItem::query()
+                            ->where('waste_code', 'like', '%' . str_replace(' ', '', $search) . '%')
+                            ->orWhere('name', 'like', "%{$search}%")
+                            ->limit(50)
+                            ->get()
+                            ->mapWithKeys(fn ($item) => [
+                                $item->id => $item->display_name,
+                            ])
+                            ->toArray();
+                    })
+                    ->getOptionLabelUsing(fn ($value) => WasteCatalogItem::find($value)?->display_name)
+                    ->afterStateUpdated(function ($state, callable $set): void {
+                        if (! $state) {
+                            return;
+                        }
 
-            FormSection::make('Podaci o vrsti otpada')
-                ->schema([
+                        $item = WasteCatalogItem::find($state);
 
-                    Select::make('catalog_select')
-                        ->label('Katalog otpada')
-                        ->placeholder('Počni upisivati ključni broj ili naziv...')
-                        ->searchable()
-                        ->live()
-                        ->dehydrated(false)
+                        if (! $item) {
+                            return;
+                        }
 
-                        ->getSearchResultsUsing(function (string $search) {
+                        $set('waste_code', $item->waste_code);
+                        $set('name', $item->name);
+                        $set('is_hazardous', $item->is_hazardous);
+                    })
+                    ->columnSpanFull(),
 
-                            return WasteCatalogItem::query()
-                                ->where('waste_code', 'like', '%' . str_replace(' ', '', $search) . '%')
-                                ->orWhere('name', 'like', "%{$search}%")
-                                ->limit(50)
-                                ->get()
-                                ->mapWithKeys(fn ($item) => [
-                                    $item->id =>
-                                        $item->formatted_waste_code .
-                                        ' - ' .
-                                        $item->name
-                                ])
-                                ->toArray();
-                        })
+                TextInput::make('waste_code')
+    ->label('Ključni broj otpada')
+    ->required()
+    ->maxLength(20)
+    ->placeholder('npr. 150110*')
+    ->unique(ignoreRecord: true)
+    ->formatStateUsing(function (?string $state) {
+        if (! $state) {
+            return null;
+        }
 
-                        ->getOptionLabelUsing(fn ($value) =>
-                            WasteCatalogItem::find($value)?->display_name
-                        )
+        $raw = trim($state);
+        $hasStar = str_ends_with($raw, '*');
+        $code = rtrim($raw, '*');
+        $digits = preg_replace('/\D+/', '', $code);
 
-                        ->afterStateUpdated(function ($state, callable $set) {
+        if (strlen($digits) === 6) {
+            $code = substr($digits, 0, 2) . ' ' . substr($digits, 2, 2) . ' ' . substr($digits, 4, 2);
+        }
 
-                            if (!$state) {
-                                return;
-                            }
+        return $hasStar ? $code . '*' : $code;
+    })
+    ->dehydrateStateUsing(function (?string $state) {
+        if (! $state) {
+            return null;
+        }
 
-                            $item = WasteCatalogItem::find($state);
+        return str_replace(' ', '', $state);
+    }),
 
-                            if (!$item) {
-                                return;
-                            }
+                TextInput::make('name')
+                    ->label('Naziv')
+                    ->required()
+                    ->columnSpan(2),
 
-                            $set('waste_code', $item->waste_code);
-                            $set('name', $item->name);
-                            $set('is_hazardous', $item->is_hazardous);
-                        })
-
-                        ->columnSpanFull(),
-
-                    TextInput::make('waste_code')
-                        ->label('Ključni broj otpada')
-                        ->required()
-                        ->maxLength(20)
-                        ->placeholder('npr. 150110*')
-                        ->unique(ignoreRecord: true),
-
-                    TextInput::make('name')
-                        ->label('Naziv')
-                        ->required()
-                        ->columnSpan(2),
-
-                    Toggle::make('is_hazardous')
-                        ->label('Opasan otpad')
-                        ->default(false),
-
-                ])
-                ->columns(3),
-
-        ]);
-    }
+                Toggle::make('is_hazardous')
+                    ->label('Opasan otpad')
+                    ->default(false)
+                    ->columnSpanFull(),
+            ])
+            ->columns(3),
+    ]);
+}
 
     public static function table(Table $table): Table
     {
