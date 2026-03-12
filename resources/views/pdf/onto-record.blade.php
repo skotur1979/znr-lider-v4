@@ -118,7 +118,7 @@
         }
 
         .entry td {
-            font-size: 9.5px;
+            font-size: 9.4px;
             height: 17px;
             padding: 1px 3px;
             line-height: 1.05;
@@ -163,7 +163,7 @@
 
     $formatKg = fn ($value) => number_format((float) $value, 2, ',', '.');
 
-    $fixedRows = 17;
+    $fixedRows = 22;
 @endphp
 
 <div class="page">
@@ -239,25 +239,15 @@
     </table>
 
     <table class="entries">
-        <colgroup>
-            <col style="width:4.3%">
-            <col style="width:7.8%">
-            <col style="width:8.4%">
-            <col style="width:8.4%">
-            <col style="width:29.8%">
-            <col style="width:10.0%">
-            <col style="width:31.3%">
-        </colgroup>
-
         <tr class="head">
-            <th>BR.</th>
-            <th>DATUM</th>
-            <th>ULAZ (kg)</th>
-            <th>IZLAZ (kg)</th>
-            <th>NAČIN</th>
-            <th>STANJE (kg)</th>
-            <th>Napomena</th>
-        </tr>
+    <th style="width:3%">BR.</th>
+    <th style="width:8%">DATUM</th>
+    <th style="width:9%">ULAZ (kg)</th>
+    <th style="width:9%">IZLAZ (kg)</th>
+    <th style="width:31%">NAČIN</th>
+    <th style="width:10%">STANJE (kg)</th>
+    <th style="width:30%">Napomena</th>
+</tr>
 
         @for ($i = 0; $i < $fixedRows; $i++)
             @php
