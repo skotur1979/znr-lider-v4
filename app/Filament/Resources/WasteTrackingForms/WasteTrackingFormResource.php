@@ -43,6 +43,7 @@ use Illuminate\Support\Facades\Auth;
 use RuntimeException;
 use Filament\Schemas\Components\Grid;
 use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Placeholder;
 
 class WasteTrackingFormResource extends Resource
 {
@@ -100,26 +101,30 @@ class WasteTrackingFormResource extends Resource
                     ->label('Broj PL-O')
                     ->maxLength(255),
 
-                TextInput::make('waste_code_manual')
-                    ->label('Ključni broj')
-                    ->maxLength(50),
+                Grid::make(3)
+    ->schema([
+        TextInput::make('waste_code_manual')
+            ->label('Ključni broj')
+            ->maxLength(50),
 
-                Radio::make('waste_kind')
-                    ->label('Vrsta otpada')
-                    ->options([
-                        'opasni' => 'Opasni',
-                        'neopasni' => 'Neopasni',
-                    ])
-                    ->inline()
-                    ->inlineLabel(false),
+        CheckboxList::make('waste_source_types')
+            ->label('Izvor otpada')
+            ->options([
+                'komunalni' => 'Komunalni',
+                'proizvodni' => 'Proizvodni',
+            ])
+            ->columns(2),
 
-                CheckboxList::make('waste_source_types')
-                    ->label('Izvor otpada')
-                    ->options([
-                        'komunalni' => 'Komunalni',
-                        'proizvodni' => 'Proizvodni',
-                    ])
-                    ->columns(2),
+        Radio::make('waste_kind')
+            ->label('Vrsta otpada')
+            ->options([
+                'opasni' => 'Opasni',
+                'neopasni' => 'Neopasni',
+            ])
+            ->inline()
+            ->inlineLabel(false),
+    ])
+    ->columnSpanFull(),
 
                 CheckboxList::make('hazard_properties')
                     ->label('Opasna svojstva')
@@ -140,50 +145,58 @@ class WasteTrackingFormResource extends Resource
                         'HP14' => 'HP14',
                         'HP15' => 'HP15',
                     ])
-                    ->columns(5)
+                    ->columns(15)
                     ->columnSpanFull(),
 
-                CheckboxList::make('physical_properties')
-                    ->label('Fizikalna svojstva')
-                    ->options([
-                        'kruto' => 'Kruto',
-                        'muljevito' => 'Muljevito',
-                        'prasina' => 'Prašina',
-                        'tekucina' => 'Tekućina',
-                        'plinovito' => 'Plinovito',
-                        'ostalo' => 'Ostalo',
-                    ])
-                    ->columns(6)
-                    ->columnSpanFull()
-                    ->live(),
+                Grid::make(12)
+    ->schema([
 
-                TextInput::make('physical_properties_other')
-                    ->label('Fizikalna svojstva - ostalo')
-                    ->visible(fn (callable $get) => in_array('ostalo', $get('physical_properties') ?? [])),
+        CheckboxList::make('physical_properties')
+            ->label('Fizikalna svojstva')
+            ->options([
+                'kruto' => 'Kruto',
+                'muljevito' => 'Muljevito',
+                'prasina' => 'Prašina',
+                'tekucina' => 'Tekućina',
+                'plinovito' => 'Plinovito',
+                'ostalo' => 'Ostalo',
+            ])
+            ->columns(6)
+            ->live()
+            ->columnSpan(8),
 
-                CheckboxList::make('packaging_types')
-                    ->label('Pakiranje otpada')
-                    ->options([
-                        'rasuto' => 'Rasuto',
-                        'posude' => 'Posude',
-                        'kanta' => 'Kanta',
-                        'kutija' => 'Kutija',
-                        'kanister' => 'Kanister',
-                        'kontejner' => 'Kontejner',
-                        'bacva' => 'Bačva',
-                        'vreca' => 'Vreća',
-                        'ostalo' => 'Ostalo',
-                    ])
-                    ->columns(5)
-                    ->columnSpanFull()
-                    ->live(),
+        TextInput::make('physical_properties_other')
+            ->label('Ostalo')
+            ->placeholder('Upišite svojstvo')
+            ->visible(fn (callable $get) => in_array('ostalo', $get('physical_properties') ?? []))
+            ->columnSpan(4),
 
-                TextInput::make('packaging_other')
-                    ->label('Pakiranje otpada - ostalo')
-                    ->visible(fn (callable $get) => in_array('ostalo', $get('packaging_types') ?? [])),
+    ])
+    ->columnSpanFull(),
+                Grid::make(12)
+    ->schema([
+        CheckboxList::make('packaging_types')
+            ->label('Pakiranje otpada')
+            ->options([
+                'rasuto' => 'Rasuto',
+                'posude' => 'Posude',
+                'kanta' => 'Kanta',
+                'kutija' => 'Kutija',
+                'kanister' => 'Kanister',
+                'kontejner' => 'Kontejner',
+                'bacva' => 'Bačva',
+                'vreca' => 'Vreća',
+                'ostalo' => 'Ostalo',
+            ])
+            ->columns(9)
+            ->columnSpan(9),
 
-                TextInput::make('package_count')
-                    ->label('Broj pakiranja'),
+        TextInput::make('package_count')
+            ->label('Broj pakiranja')
+            ->numeric()
+            ->columnSpan(3),
+    ])
+    ->columnSpanFull(),
 
                 Textarea::make('waste_description')
                     ->label('Opis otpada')
@@ -220,61 +233,102 @@ class WasteTrackingFormResource extends Resource
             ->columnSpan(1),
 
         FormSection::make('TOK OTPADA (F)')
+    ->schema([
+        Grid::make(12)
             ->schema([
-                TextInput::make('waste_owner_at_handover')
-                    ->label('Vlasnik otpada pri predaji'),
+                Placeholder::make('report_choice_label')
+                    ->hiddenLabel()
+                    ->content('IZVJEŠĆE: O OBRADI OTPADA:')
+                    ->columnSpan(6),
 
                 Radio::make('report_choice')
-                    ->label('Izvješće')
+                    ->hiddenLabel()
                     ->options([
                         'da' => 'Da',
                         'ne' => 'Ne',
                     ])
                     ->inline()
-                    ->inlineLabel(false),
+                    ->columnSpan(6),
+
+                Placeholder::make('purpose_choice_label')
+                    ->hiddenLabel()
+                    ->content('NAMJENA:')
+                    ->columnSpan(6),
 
                 Radio::make('purpose_choice')
-                    ->label('Namjena')
+                    ->hiddenLabel()
                     ->options([
                         'oporaba' => 'Oporaba',
                         'zbrinjavanje' => 'Zbrinjavanje',
                     ])
                     ->inline()
-                    ->inlineLabel(false),
+                    ->columnSpan(6),
+
+                Placeholder::make('dispatch_point_label')
+                    ->hiddenLabel()
+                    ->content('POLAZIŠTE:')
+                    ->columnSpan(3),
 
                 TextInput::make('dispatch_point')
-                    ->label('Polazište'),
+                    ->hiddenLabel()
+                    ->columnSpan(9),
+
+                Placeholder::make('destination_point_label')
+                    ->hiddenLabel()
+                    ->content('ODREDIŠTE:')
+                    ->columnSpan(3),
 
                 TextInput::make('destination_point')
-                    ->label('Odredište'),
+                    ->hiddenLabel()
+                    ->columnSpan(9),
+
+                Placeholder::make('quantity_label')
+                    ->hiddenLabel()
+                    ->content('KOLIČINA:')
+                    ->columnSpan(2),
 
                 TextInput::make('quantity_m3')
-                    ->label('Količina (m³)')
-                    ->numeric(),
+                    ->label('m³')
+                    ->numeric()
+                    ->columnSpan(2),
 
                 TextInput::make('quantity_kg')
-                    ->label('Količina (kg)')
+                    ->label('kg')
                     ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->columnSpan(2),
 
                 Radio::make('quantity_determination_choice')
-                    ->label('Količina određena')
+                    ->hiddenLabel()
                     ->options([
                         'vaganje' => 'Vaganje',
                         'procjena' => 'Procjena',
                     ])
                     ->inline()
-                    ->inlineLabel(false),
+                    ->columnSpan(6),
 
-                DateTimePicker::make('handover_datetime')
-                    ->label('Vrijeme predaje')
-                    ->native(false),
+                Placeholder::make('handover_date_label')
+                    ->hiddenLabel()
+                    ->content('DATUM PREDAJE:')
+                    ->columnSpan(3),
+
+                DatePicker::make('handover_date')
+                    ->hiddenLabel()
+                    ->native(false)
+                    ->columnSpan(9),
+
+                Placeholder::make('handed_over_by_label')
+                    ->hiddenLabel()
+                    ->content('PREDAO:')
+                    ->columnSpan(3),
 
                 TextInput::make('handed_over_by')
-                    ->label('Predao'),
-            ])
-            ->columns(2)
-            ->columnSpan(1),
+                    ->hiddenLabel()
+                    ->columnSpan(9),
+            ]),
+    ])
+    ->columns(1)
+    ->columnSpan(1),
 
         FormSection::make('PRIJEVOZNIK (C)')
             ->schema([
