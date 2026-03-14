@@ -44,6 +44,9 @@ use RuntimeException;
 use Filament\Schemas\Components\Grid;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Placeholder;
+use Illuminate\Database\Eloquent\Collection;
+use Filament\Actions\BulkAction;
+
 
 class WasteTrackingFormResource extends Resource
 {
@@ -75,27 +78,64 @@ class WasteTrackingFormResource extends Resource
                             $query->where('user_id', Auth::id());
                         }
 
-                        return $query->get()->mapWithKeys(fn (OntoRecord $record) => [
-                            $record->id => $record->display_name,
-                        ])->toArray();
+                        return $query->get()->mapWithKeys(function (OntoRecord $record) {
+    $code = $record->wasteType?->waste_code ?? '';
+
+    if ($code !== '') {
+        $hasStar = str_contains($code, '*');
+        $code = str_replace('*', '', $code);
+        $code = preg_replace('/\D/', '', $code);
+        $code = trim(chunk_split($code, 2, ' '));
+
+        if ($hasStar) {
+            $code .= '*';
+        }
+    }
+
+    $location =
+        $record->organizationLocation?->display_name
+        ?? $record->organizationLocation?->name
+        ?? $record->organizationLocation?->location_name
+        ?? 'Lokacija';
+
+    return [
+        $record->id => $location . ' / ' . $code . ' / ' . $record->year,
+    ];
+})->toArray();
                     })
                     ->searchable()
                     ->preload()
                     ->required()
                     ->live()
-                    ->afterStateUpdated(function ($state, callable $set) {
-                        $record = OntoRecord::with('wasteType')->find($state);
+                   ->afterStateUpdated(function ($state, callable $set) {
+    $record = OntoRecord::with([
+        'wasteType',
+        'organizationLocation.organization',
+    ])->find($state);
 
-                        if ($record?->wasteType) {
-                            $set('waste_code_manual', $record->wasteType->waste_code);
-                            $set('description', $record->wasteType->name);
-                            $set('waste_description', $record->wasteType->name);
-                            $set(
-                                'waste_kind',
-                                str_ends_with((string) $record->wasteType->waste_code, '*') ? 'opasni' : 'neopasni'
-                            );
-                        }
-                    }),
+    if (! $record || ! $record->wasteType) {
+        return;
+    }
+
+    $rawWasteCode = (string) $record->wasteType->waste_code;
+
+    $displayWasteCode = preg_replace('/\D/', '', str_replace('*', '', $rawWasteCode));
+    $displayWasteCode = trim(chunk_split($displayWasteCode, 2, ' '));
+
+    if (str_contains($rawWasteCode, '*')) {
+        $displayWasteCode .= '*';
+    }
+
+    $set('waste_code_manual', $displayWasteCode);
+    $set('description', $record->wasteType->name);
+    $set('waste_description', $record->wasteType->name);
+    $set(
+        'waste_kind',
+        str_ends_with($rawWasteCode, '*') ? 'opasni' : 'neopasni'
+    );
+
+    $set('document_number', static::generateDocumentNumberFromOnto($record));
+}),
 
                 TextInput::make('document_number')
                     ->label('Broj PL-O')
@@ -189,12 +229,12 @@ class WasteTrackingFormResource extends Resource
                 'ostalo' => 'Ostalo',
             ])
             ->columns(9)
-            ->columnSpan(9),
+            ->columnSpan(10),
 
         TextInput::make('package_count')
             ->label('Broj pakiranja')
             ->numeric()
-            ->columnSpan(3),
+            ->columnSpan(2),
     ])
     ->columnSpanFull(),
 
@@ -215,10 +255,10 @@ class WasteTrackingFormResource extends Resource
         FormSection::make('POŠILJATELJ (B)')
             ->schema([
                 TextInput::make('sender_person_name')
-                    ->label('Naziv osobe'),
+                    ->label('Naziv'),
 
                 TextInput::make('sender_oib')
-                    ->label('OIB / P.'),
+                    ->label('OIB / B.P.'),
 
                 TextInput::make('sender_nkd_code')
                     ->label('NKD razred (2007)'),
@@ -315,6 +355,7 @@ class WasteTrackingFormResource extends Resource
                 DatePicker::make('handover_date')
                     ->hiddenLabel()
                     ->native(false)
+                    ->displayFormat('d.m.Y.')
                     ->columnSpan(9),
 
                 Placeholder::make('handed_over_by_label')
@@ -337,7 +378,7 @@ class WasteTrackingFormResource extends Resource
                         FormSection::make('')
                             ->schema([
                                 TextInput::make('carrier_name')
-                                    ->label('TVRTKA'),
+                                    ->label('NAZIV'),
 
                                 TextInput::make('carrier_oib')
                                     ->label('OIB'),
@@ -356,16 +397,16 @@ class WasteTrackingFormResource extends Resource
                         FormSection::make('')
                             ->schema([
                                 CheckboxList::make('transport_modes')
-                                    ->label('NAČIN PRIJEVOZA')
-                                    ->options([
-                                        'cestovni' => 'cestovni',
-                                        'zeljeznicki' => 'željeznički',
-                                        'morski' => 'morski',
-                                        'zracni' => 'zračni',
-                                        'unutarnji_plovni_put' => 'unutarnjim plovnim putem',
-                                    ])
-                                    ->columns(2)
-                                    ->columnSpanFull(),
+    ->label('NAČIN PRIJEVOZA')
+    ->options([
+        'cestovni' => 'cestovni',
+        'zracni' => 'zračni',
+        'zeljeznicki' => 'željeznički',
+        'unutarnji_plovni_put' => 'unutarnjim plovnim putem',
+        'morski' => 'morski',
+    ])
+    ->columns(3)
+    ->columnSpanFull(),
 
                                 TextInput::make('carrier_vehicle_registration')
                                     ->label('REGISTARSKA OZNAKA'),
@@ -373,8 +414,9 @@ class WasteTrackingFormResource extends Resource
                                 TextInput::make('carrier_taken_over_by')
                                     ->label('PREUZEO'),
 
-                                DateTimePicker::make('carrier_taken_over_at')
-                                    ->label('VRIJEME PREDAJE')
+                                DatePicker::make('carrier_taken_over_at')
+                                    ->label('DATUM PREDAJE')
+                                    ->displayFormat('d.m.Y.')
                                     ->native(false),
 
                                 TextInput::make('carrier_delivered_by')
@@ -392,7 +434,7 @@ class WasteTrackingFormResource extends Resource
                         FormSection::make('')
                             ->schema([
                                 TextInput::make('receiver_name')
-                                    ->label('TVRTKA'),
+                                    ->label('NAZIV'),
 
                                 TextInput::make('receiver_oib')
                                     ->label('OIB'),
@@ -413,8 +455,9 @@ class WasteTrackingFormResource extends Resource
                                 TextInput::make('receiver_taken_over_by')
                                     ->label('PREUZEO'),
 
-                                DateTimePicker::make('receiver_weighing_time')
-                                    ->label('VRIJEME VAGANJA')
+                                DatePicker::make ('receiver_weighing_time')
+                                    ->label('DATUM VAGANJA')
+                                    ->displayFormat('d.m.Y.')
                                     ->native(false),
 
                                 TextInput::make('receiver_measured_quantity_kg')
@@ -429,7 +472,7 @@ class WasteTrackingFormResource extends Resource
         FormSection::make('POSREDNIK ILI TRGOVAC (E)')
             ->schema([
                 TextInput::make('trader_name')
-                    ->label('TVRTKA'),
+                    ->label('NAZIV'),
 
                 TextInput::make('trader_oib')
                     ->label('OIB'),
@@ -446,10 +489,10 @@ class WasteTrackingFormResource extends Resource
             ->columns(1)
             ->columnSpan(1),
 
-        FormSection::make('OBRAĐIVAČ (G)')
+        FormSection::make('KONAČNI OBRAĐIVAČ (G)')
             ->schema([
                 TextInput::make('processor_name')
-                    ->label('TVRTKA'),
+                    ->label('NAZIV'),
 
                 TextInput::make('processor_oib')
                     ->label('OIB'),
@@ -459,6 +502,7 @@ class WasteTrackingFormResource extends Resource
 
                 DatePicker::make('processing_completed_at')
                     ->label('OBRADA ZAVRŠENA DANA')
+                    ->displayFormat('d.m.Y.')
                     ->native(false),
 
                 TextInput::make('final_processing_method')
@@ -470,7 +514,7 @@ class WasteTrackingFormResource extends Resource
             ->columns(1)
             ->columnSpan(1),
 
-        FormSection::make('NAPOMENE I PRILOZI (H)')
+         FormSection::make('NAPOMENE I PRILOZI (H)')
             ->schema([
                 Textarea::make('note')
                     ->label('NAPOMENE')
@@ -493,67 +537,91 @@ class WasteTrackingFormResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('handover_date', 'desc')
-            ->columns([
-                TextColumn::make('document_number')
-                    ->label('Broj PL-O')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold'),
+        ->modifyQueryUsing(fn (Builder $query) => $query
+            ->orderByDesc('handover_date')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+        )
+        ->columns([
+    TextColumn::make('document_number')
+        ->label('Broj PL-O')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->toggleable(),
 
-                TextColumn::make('handover_date')
-                    ->label('Datum')
-                    ->date('d.m.Y.')
-                    ->sortable(),
+    TextColumn::make('handover_date')
+        ->label('Datum')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('ontoRecord.organizationLocation.name')
-                    ->label('Lokacija')
-                    ->formatStateUsing(fn ($state, WasteTrackingForm $record) =>
-                        $record->ontoRecord?->organizationLocation?->display_name
-                            ?? $record->ontoRecord?->organizationLocation?->name
-                            ?? $record->ontoRecord?->organizationLocation?->location_name
-                            ?? '-'
-                    )
-                    ->searchable()
-                    ->sortable(),
+    TextColumn::make('ontoRecord.organizationLocation.name')
+        ->label('Lokacija')
+        ->formatStateUsing(fn ($state, WasteTrackingForm $record) =>
+            $record->ontoRecord?->organizationLocation?->display_name
+                ?? $record->ontoRecord?->organizationLocation?->name
+                ?? $record->ontoRecord?->organizationLocation?->location_name
+                ?? '-'
+        )
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('ontoRecord.wasteType.waste_code')
-                    ->label('K.B.')
-                    ->searchable()
-                    ->sortable(),
+    TextColumn::make('ontoRecord.wasteType.waste_code')
+        ->label('K.B.')
+        ->html()
+        ->formatStateUsing(function ($state) {
+            if (! $state) {
+                return '-';
+            }
 
-                TextColumn::make('ontoRecord.wasteType.name')
-                    ->label('Naziv otpada')
-                    ->searchable()
-                    ->sortable()
-                    ->wrap(),
+            $star = str_contains($state, '*') ? '<sup>*</sup>' : '';
+            $code = str_replace('*', '', $state);
+            $code = preg_replace('/\D/', '', $code);
+            $formatted = trim(chunk_split($code, 2, ' '));
 
-                TextColumn::make('quantity_kg')
-                    ->label('Količina (kg)')
-                    ->sortable()
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.')),
+            return $formatted . $star;
+        })
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                BadgeColumn::make('status')
-                    ->label('Status')
-                    ->formatStateUsing(fn (string $state) => $state === 'locked' ? 'Zaključen' : 'Nacrt')
-                    ->colors([
-                        'gray' => 'draft',
-                        'success' => 'locked',
-                    ]),
+    TextColumn::make('ontoRecord.wasteType.name')
+        ->label('Naziv otpada')
+        ->searchable()
+        ->sortable()
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('locked_at')
-                    ->label('Zaključan')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable()
-                    ->toggleable(),
+    TextColumn::make('quantity_kg')
+        ->label('Količina (kg)')
+        ->sortable()
+        ->badge()
+        ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.'))
+        ->toggleable(),
 
-                TextColumn::make('deleted_at')
-                    ->label('Deaktivirano')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
+    BadgeColumn::make('status')
+        ->label('Status')
+        ->formatStateUsing(fn (string $state) => $state === 'locked' ? 'Zaključen' : 'Nacrt')
+        ->colors([
+            'gray' => 'draft',
+            'success' => 'locked',
+        ])
+        ->toggleable(),
+
+    TextColumn::make('locked_at')
+        ->label('Zaključan')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+
+    TextColumn::make('deleted_at')
+        ->label('Deaktivirano')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+])
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status')
@@ -633,20 +701,104 @@ class WasteTrackingFormResource extends Resource
                 ]),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Deaktiviraj označeno')
-                    ->modalHeading('Deaktiviraj odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?'),
+    BulkAction::make('copyToNew')
+        ->label('Kopiraj i napravi novi')
+        ->icon('heroicon-o-document-duplicate')
+        ->color('gray')
+        ->requiresConfirmation()
+        ->modalHeading('Kopiraj označeni prateći list')
+        ->modalDescription('Od označenog pratećeg lista napravit će se novi nacrt s kopiranim podacima.')
+        ->action(function (Collection $records, $livewire): void {
+            if ($records->count() !== 1) {
+                Notification::make()
+                    ->title('Označi točno jedan prateći list.')
+                    ->danger()
+                    ->send();
 
-                RestoreBulkAction::make()->label('Vrati označeno'),
+                return;
+            }
 
-                ForceDeleteBulkAction::make()
-                    ->label('Trajno izbriši označeno')
-                    ->modalHeading('Trajno izbriši odabrano')
-                    ->modalDescription('Jesi li siguran/a? Ova radnja je nepovratna.'),
+            /** @var \App\Models\WasteTrackingForm $source */
+            $source = $records->first();
+
+            $source->loadMissing([
+                'ontoRecord.wasteType',
+                // OVDJE stavi ISTU relaciju koja ti sada radi za OIB u afterStateUpdated()
+                'ontoRecord.organizationLocation.organization',
             ]);
+
+            $new = $source->replicate([
+                'document_number',
+                'status',
+                'locked_at',
+                'deleted_at',
+                'created_at',
+                'updated_at',
+            ]);
+
+            $new->document_number = static::generateDocumentNumberFromOnto($source->ontoRecord);
+            $new->status = 'draft';
+            $new->locked_at = null;
+            $new->deleted_at = null;
+
+            $new->save();
+
+            Notification::make()
+                ->title('Novi prateći list je napravljen iz kopije.')
+                ->success()
+                ->send();
+
+            $livewire->redirect(static::getUrl('edit', ['record' => $new]));
+        }),
+
+    DeleteBulkAction::make()
+        ->label('Deaktiviraj označeno')
+        ->modalHeading('Deaktiviraj odabrano')
+        ->modalDescription('Jesi li siguran/a da želiš to učiniti?'),
+
+    RestoreBulkAction::make()->label('Vrati označeno'),
+
+    ForceDeleteBulkAction::make()
+        ->label('Trajno izbriši označeno')
+        ->modalHeading('Trajno izbriši odabrano')
+        ->modalDescription('Jesi li siguran/a? Ova radnja je nepovratna.'),
+]);
     }
 
+    protected static function generateDocumentNumberFromOnto(?OntoRecord $ontoRecord): string
+{
+    if (! $ontoRecord) {
+        return '';
+    }
+
+    $ontoRecord->loadMissing([
+        'wasteType',
+        'organizationLocation.organization',
+    ]);
+
+    $rawWasteCode = (string) ($ontoRecord->wasteType?->waste_code ?? '');
+    $ploWasteCode = preg_replace('/\s+/', '', $rawWasteCode);
+
+    $oib = preg_replace('/\D/', '', (string) (
+        $ontoRecord->organizationLocation?->organization?->oib ?? ''
+    ));
+
+    $unitCode = str_pad((string) (
+        $ontoRecord->organizationLocation?->unit_code ?? '001'
+    ), 3, '0', STR_PAD_LEFT);
+
+    $internalCode = str_pad((string) (
+        $ontoRecord->organizationLocation?->internal_code ?? '001'
+    ), 3, '0', STR_PAD_LEFT);
+
+    $prefix = $ploWasteCode . '-' . $oib . '-' . $unitCode . $internalCode;
+
+    $nextOrdinal = static::getModel()::query()
+        ->where('document_number', 'like', $prefix . '-%')
+        ->count() + 1;
+
+    return $prefix . '-' . $nextOrdinal;
+}
     public static function getRelations(): array
     {
         return [];
