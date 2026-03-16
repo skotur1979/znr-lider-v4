@@ -2,34 +2,28 @@
 
 namespace App\Providers;
 
+use App\Filament\Widgets\DashboardCalendarWidget;
+use App\Filament\Widgets\DashboardDeadlinesGrid;
 use Illuminate\Support\ServiceProvider;
-use Filament\Support\Facades\FilamentView;
-
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
-        //
-    }
-    public function panel(\Filament\Panel $panel): \Filament\Panel
-{
-    FilamentView::registerRenderHook(
-        'panels::head.end',
-        fn () => \Illuminate\Support\Facades\Vite::withEntryPoints(['resources/js/app.js'])->toHtml()
-    );
+        Livewire::component(
+            'app.filament.widgets.dashboard-deadlines-grid',
+            DashboardDeadlinesGrid::class
+        );
 
-    return $panel;
-}
+        Livewire::component(
+            'app.filament.widgets.dashboard-calendar-widget',
+            DashboardCalendarWidget::class
+        );
+    }
 }

@@ -2,8 +2,9 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Pages\Dashboard as BaseDashboard;
+use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
+use Filament\Pages\Dashboard as BaseDashboard;
 
 class Dashboard extends BaseDashboard
 {
@@ -13,7 +14,13 @@ class Dashboard extends BaseDashboard
     {
         return [
             DashboardDeadlinesGrid::class,
+            DashboardCalendarWidget::class,
         ];
+    }
+
+    protected function getFooterWidgets(): array
+    {
+        return [];
     }
 
     public function getHeaderWidgetsColumns(): int|array
