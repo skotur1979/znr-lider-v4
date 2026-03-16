@@ -11,6 +11,8 @@ use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 // prilagodi ako su ti klase drugačije imenovane
 use App\Exports\EmployeesExport;
@@ -90,5 +92,30 @@ class ListEmployees extends ListRecords
                         ->send();
                 }),
         ];
+    }
+     protected function getTableQuery(): Builder
+    {
+        $query = parent::getTableQuery();
+        $pregled = request()->query('pregled');
+
+        return match ($pregled) {
+            'medical_expiring' => $query
+                ->whereDate('medical_examination_valid_until', '>=', Carbon::today())
+                ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30)),
+
+            'medical_expired' => $query
+                ->whereDate('medical_examination_valid_until', '<', Carbon::today()),
+
+            'certificates_expiring' => $query->whereHas('certificates', function (Builder $q) {
+                $q->whereDate('valid_until', '>=', Carbon::today())
+                    ->whereDate('valid_until', '<=', Carbon::today()->addDays(30));
+            }),
+
+            'certificates_expired' => $query->whereHas('certificates', function (Builder $q) {
+                $q->whereDate('valid_until', '<', Carbon::today());
+            }),
+
+            default => $query,
+        };
     }
 }

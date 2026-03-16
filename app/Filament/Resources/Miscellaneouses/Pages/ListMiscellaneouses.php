@@ -9,6 +9,8 @@ use Filament\Resources\Pages\ListRecords;
 use Filament\Forms\Components\FileUpload;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class ListMiscellaneouses extends ListRecords
 {
@@ -60,5 +62,21 @@ class ListMiscellaneouses extends ListRecords
                     $this->notify('success', 'Uvoz završen.');
                 }),
         ];
+    }
+    protected function getTableQuery(): Builder
+    {
+        $query = parent::getTableQuery();
+        $pregled = request()->query('pregled');
+
+        return match ($pregled) {
+            'uskoro' => $query
+                ->whereDate('examination_valid_until', '>=', Carbon::today())
+                ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30)),
+
+            'isteklo' => $query
+                ->whereDate('examination_valid_until', '<', Carbon::today()),
+
+            default => $query,
+        };
     }
 }

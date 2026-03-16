@@ -35,10 +35,12 @@ class ViewOntoRecord extends ViewRecord
                 ->color('success')
                 ->visible(fn () => ! $this->record->is_closed)
                 ->form([
-                    DatePicker::make('entry_date')
+                    DatePicker::make('date')
                         ->label('Datum')
-                        ->native(false)
                         ->required()
+                        ->displayFormat('d.m.Y.')
+                        ->format('Y-m-d')
+                        ->native(false)
                         ->default(now()),
 
                     TextInput::make('quantity_kg')
@@ -51,7 +53,7 @@ class ViewOntoRecord extends ViewRecord
                         ->label('Način')
                         ->default('UVL')
                         ->maxLength(100)
-                        ->helperText('Primjer: UVL, UP, K'),
+                        ->helperText('Primjer: UVL - Ulaz otpada, K - Korekcija stanja'),
 
                     Textarea::make('note')
                         ->label('Napomena')

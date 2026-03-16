@@ -14,6 +14,8 @@ use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class ListMachines extends ListRecords
 {
@@ -91,6 +93,22 @@ class ListMachines extends ListRecords
     
     }),
         ];
+    }
+    protected function getTableQuery(): Builder
+    {
+        $query = parent::getTableQuery();
+        $pregled = request()->query('pregled');
+
+        return match ($pregled) {
+            'uskoro' => $query
+                ->whereDate('examination_valid_until', '>=', Carbon::today())
+                ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30)),
+
+            'isteklo' => $query
+                ->whereDate('examination_valid_until', '<', Carbon::today()),
+
+            default => $query,
+        };
     }
 }
 
