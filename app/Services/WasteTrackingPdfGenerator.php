@@ -34,11 +34,27 @@ class WasteTrackingPdfGenerator
         |--------------------------------------------------------------------------
         | GLOBALNI OFFSET
         |--------------------------------------------------------------------------
-        | Sve ti je bilo pomaknuto ulijevo.
-        | Ovdje samo podešavaš cijeli obrazac.
         */
         $offsetX = 3.2;
         $offsetY = 0.0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | POSEBNI OFFSET ZA CHECKBOXOVE
+        |--------------------------------------------------------------------------
+        | Njega diraj ako treba samo X malo lijevo/desno/gore/dolje.
+        */
+        $boxOffsetX = 0.0;
+        $boxOffsetY = -0.2;
+
+        /*
+        |--------------------------------------------------------------------------
+        | VELIČINA X
+        |--------------------------------------------------------------------------
+        */
+        $boxFontSize = 6;     // prije 9
+        $boxCellW = 2.2;      // prije 3
+        $boxCellH = 2.2;      // prije 3
 
         $toArray = function ($value): array {
             if (is_array($value)) {
@@ -170,15 +186,25 @@ class WasteTrackingPdfGenerator
             bool $checked,
             float $x,
             float $y,
-            int $fontSize = 9
-        ) use ($pdf, $defaultFont, $offsetX, $offsetY) {
+            ?int $fontSize = null
+        ) use (
+            $pdf,
+            $defaultFont,
+            $offsetX,
+            $offsetY,
+            $boxOffsetX,
+            $boxOffsetY,
+            $boxFontSize,
+            $boxCellW,
+            $boxCellH
+        ) {
             if (! $checked) {
                 return;
             }
 
-            $pdf->SetFont($defaultFont, 'B', $fontSize);
-            $pdf->SetXY($x + $offsetX, $y + $offsetY);
-            $pdf->Cell(3, 3, 'X', 0, 0, 'C');
+            $pdf->SetFont($defaultFont, 'B', $fontSize ?? $boxFontSize);
+            $pdf->SetXY($x + $offsetX + $boxOffsetX, $y + $offsetY + $boxOffsetY);
+            $pdf->Cell($boxCellW, $boxCellH, 'X', 0, 0, 'C');
         };
 
         /*
@@ -187,60 +213,72 @@ class WasteTrackingPdfGenerator
         |--------------------------------------------------------------------------
         */
 
-        $writeLine(35, 35, 28, $record->waste_code_manual, 8, 'B', 'L');
-        $writeLine(120, 30, 43, $record->document_number, 8, 'B', 'C');
+        $writeLine(35.0, 35.0, 28, $record->waste_code_manual, 8, 'B', 'L');
+        $writeLine(120.0, 30.0, 43, $record->document_number, 8, 'B', 'C');
 
-        $box($has($record->waste_source_types, 'komunalni'), 114, 35);
-        $box($has($record->waste_source_types, 'proizvodni'), 136, 35);
-        $box($record->waste_kind === 'opasni', 155, 35);
-        $box($record->waste_kind === 'neopasni', 187, 35);
+        $box($has($record->waste_source_types, 'komunalni'), 114.5, 35.6);
+        $box($has($record->waste_source_types, 'proizvodni'), 136.5, 35.6);
+        $box($record->waste_kind === 'opasni', 155.0, 35.6);
+        $box($record->waste_kind === 'neopasni', 187.5, 35.6);
 
         $hpY = 40.0;
         $hpXs = [
-            'HP1'  => 31.7,
-            'HP2'  => 42.6,
-            'HP3'  => 53.5,
-            'HP4'  => 64.3,
-            'HP5'  => 75.2,
+            'HP1'  => 38,
+            'HP2'  => 47.8,
+            'HP3'  => 58.5,
+            'HP4'  => 68.8,
+            'HP5'  => 79.3,
             'HP6'  => 86.2,
-            'HP7'  => 97.1,
+            'HP7'  => 100.0,
             'HP8'  => 108.0,
-            'HP9'  => 118.9,
+            'HP9'  => 115.9,
             'HP10' => 130.0,
-            'HP11' => 141.6,
+            'HP11' => 142.6,
             'HP12' => 152.7,
+            'HP13' => 160.8,
+            'HP14' => 180.0,
+            'HP15' => 189.2,
         ];
 
         foreach ($hpXs as $hp => $x) {
             $box($has($record->hazard_properties, $hp), $x, $hpY);
         }
 
-        $box($has($record->hazard_properties, 'HP13'), 75.2, 40);
-        $box($has($record->hazard_properties, 'HP14'), 119.1, 40);
-        $box($has($record->hazard_properties, 'HP15'), 163.3, 40);
+        /*
+        |--------------------------------------------------------------------------
+        | FIZIKALNA SVOJSTVA
+        |--------------------------------------------------------------------------
+        */
 
-        $box($has($record->physical_properties, 'kruto'), 45, 45);
-        $box($has($record->physical_properties, 'muljevito'), 65, 45);
-        $box($has($record->physical_properties, 'prasina'), 40, 45);
-        $box($has($record->physical_properties, 'tekucina'), 110, 45);
-        $box($has($record->physical_properties, 'plinovito'), 120, 45);
-        $box($has($record->physical_properties, 'ostalo'), 140, 45);
+        $box($has($record->physical_properties, 'prasina'),    41.0, 44.6);
+        $box($has($record->physical_properties, 'kruto'),      54.5, 44.6);
+        $box($has($record->physical_properties, 'pastozno'),   70.0, 44.6);
+        $box($has($record->physical_properties, 'muljevito'),  88.0, 44.6);
+        $box($has($record->physical_properties, 'tekucina'),   101.0, 44.6);
+        $box($has($record->physical_properties, 'plinovito'),  117.0, 44.6);
+        $box($has($record->physical_properties, 'ostalo'),     130.0, 44.6);
 
         if ($has($record->physical_properties, 'ostalo')) {
-            $writeLine(188.8, 45, 12, $record->physical_properties_other, 8, '', 'L');
+            $writeLine(145, 44.0, 12, $record->physical_properties_other, 7, '', 'L');
         }
 
-        $packY = 48;
+        /*
+        |--------------------------------------------------------------------------
+        | PAKIRANJE OTPADA
+        |--------------------------------------------------------------------------
+        */
+
+        $packY = 48.8;
         $packXs = [
-            'rasuto'    => 40,
-            'posude'    => 50,
-            'kanta'     => 60,
-            'kutija'    => 70,
-            'kanister'  => 80,
-            'kontejner' => 90,
-            'bacva'     => 100,
-            'vreca'     => 110,
-            'ostalo'    => 120,
+            'rasuto'    => 42.0,
+            'posude'    => 56.5,
+            'kanta'     => 69.8,
+            'kutija'    => 144.0,
+            'kanister'  => 85.0,
+            'kontejner' => 113.0,
+            'bacva'     => 132.0,
+            'vreca'     => 140.0,
+            'ostalo'    => 153.0,
         ];
 
         foreach ($packXs as $pack => $x) {
@@ -248,13 +286,13 @@ class WasteTrackingPdfGenerator
         }
 
         if ($has($record->packaging_types, 'ostalo')) {
-            $writeLine(111.8, 48, 18, $record->packaging_other, 6, '', 'L');
+            $writeLine(126.0, 48.0, 20, $record->packaging_other, 6, '', 'L');
         }
 
-        $writeLine(176.8, 48, 14, $record->package_count, 7, 'B', 'C');
+        $writeLine(176.8, 48.0, 14, $record->package_count, 7, 'B', 'C');
 
-        $multiline(20, 52.1, 194, $record->waste_description, 10);
-        $multiline(120, 66, 194, $record->municipal_origin_note, 10);
+        $multiline(20.0, 52.1, 170, $record->waste_description, 10);
+        $multiline(120.0, 66.0, 60, $record->municipal_origin_note, 10);
 
         /*
         |--------------------------------------------------------------------------
@@ -262,11 +300,11 @@ class WasteTrackingPdfGenerator
         |--------------------------------------------------------------------------
         */
 
-        $writeLine(15, 79.5, 90, $record->sender_person_name, 9);
-        $writeLine(20, 85.2, 90, $record->sender_oib, 9);
-        $writeLine(32, 90.5, 90, $record->sender_nkd_code, 9);
-        $writeLine(30, 96, 90, $record->sender_contact_person, 9);
-        $multiline(30, 101.6, 90, $record->sender_contact_data, 9);
+        $writeLine(15.0, 79.5, 90, $record->sender_person_name, 9);
+        $writeLine(20.0, 85.2, 90, $record->sender_oib, 9);
+        $writeLine(32.0, 90.5, 90, $record->sender_nkd_code, 9);
+        $writeLine(30.0, 96.0, 90, $record->sender_contact_person, 9);
+        $multiline(30.0, 101.6, 90, $record->sender_contact_data, 9);
 
         /*
         |--------------------------------------------------------------------------
@@ -277,7 +315,7 @@ class WasteTrackingPdfGenerator
         $writeLine(112.2, 80.8, 83, $record->waste_owner_at_handover, 9);
 
         $box($record->report_choice === 'da', 135.0, 80.8);
-        $box($record->report_choice === 'ne', 145, 80.8);
+        $box($record->report_choice === 'ne', 145.0, 80.8);
         $box($record->purpose_choice === 'oporaba', 177.5, 85.8);
         $box($record->purpose_choice === 'zbrinjavanje', 196.4, 85.8);
 
