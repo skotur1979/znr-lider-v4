@@ -26,17 +26,18 @@ class ViewWasteTrackingForm extends ViewRecord
                         'ontoRecord.wasteType',
                     ]);
 
-                    $pdfContent = app(WasteTrackingPdfGenerator::class)->generate($record);
+                    $filePath = app(WasteTrackingPdfGenerator::class)->generate($record);
 
                     $doc = $record->document_number ?: $record->id;
-                    $doc = str_replace(['+', ' '], '', $doc);
+                    $doc = str_replace(['+', ' ', '/', '\\'], '-', $doc);
 
                     $fileName = 'PLO-' . $doc . '.pdf';
 
-                    return response()->streamDownload(
-                        fn () => print($pdfContent),
-                        $fileName
-                    );
+                    return response()->download(
+                        $filePath,
+                        $fileName,
+                        ['Content-Type' => 'application/pdf']
+                    )->deleteFileAfterSend(true);
                 }),
 
             Action::make('edit')
