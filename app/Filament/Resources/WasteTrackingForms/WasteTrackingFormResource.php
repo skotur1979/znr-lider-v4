@@ -194,14 +194,15 @@ class WasteTrackingFormResource extends Resource
         CheckboxList::make('physical_properties')
             ->label('Fizikalna svojstva')
             ->options([
-                'kruto' => 'Kruto',
+                'prasina' => 'Prah',
+                'kruto' => 'Krutina',
+                'pastozno' => 'Pastozno',
                 'muljevito' => 'Muljevito',
-                'prasina' => 'Prašina',
-                'tekucina' => 'Tekućina',
+                'tekucina' => 'Tekuće',
                 'plinovito' => 'Plinovito',
                 'ostalo' => 'Ostalo',
             ])
-            ->columns(6)
+            ->columns(7)
             ->live()
             ->columnSpan(8),
 
@@ -219,12 +220,12 @@ class WasteTrackingFormResource extends Resource
             ->label('Pakiranje otpada')
             ->options([
                 'rasuto' => 'Rasuto',
-                'posude' => 'Posude',
+                'posude' => 'Posuda',
                 'kanta' => 'Kanta',
-                'kutija' => 'Kutija',
-                'kanister' => 'Kanister',
+                'kanister' => 'Kanistar',
                 'kontejner' => 'Kontejner',
                 'bacva' => 'Bačva',
+                'kutija' => 'Kutija',
                 'vreca' => 'Vreća',
                 'ostalo' => 'Ostalo',
             ])
