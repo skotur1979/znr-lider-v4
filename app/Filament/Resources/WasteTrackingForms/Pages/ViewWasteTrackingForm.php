@@ -28,10 +28,10 @@ class ViewWasteTrackingForm extends ViewRecord
 
                     $filePath = app(WasteTrackingPdfGenerator::class)->generate($record);
 
-                    $doc = $record->document_number ?: $record->id;
-                    $doc = str_replace(['+', ' ', '/', '\\'], '-', $doc);
+                    $doc = trim((string) ($record->document_number ?: $record->id));
+$doc = str_replace(['*', '+', ' ', '/', '\\'], '-', $doc);
 
-                    $fileName = 'PLO-' . $doc . '.pdf';
+$fileName = 'PLO-' . $doc . '.pdf';
 
                     return response()->download(
                         $filePath,
