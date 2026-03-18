@@ -449,7 +449,7 @@ class WasteTrackingPdfGenerator
 
         $writeLine(119.0, 92.5, 83, $record->dispatch_point, 9);
         $writeLine(119.0, 97.9, 83, $record->destination_point, 9);
-        $writeLine(114.4, 103.8, 16, $fmtNum($record->quantity_m3, 3), 9, '', 'R');
+        $writeLine(114.5, 103.8, 16, $fmtNum($record->quantity_m3, 3), 9, '', 'R');
         $writeLine(133.7, 103.8, 16, $fmtNum($record->quantity_kg, 2), 9, '', 'R');
 
         $box($record->quantity_determination_choice === 'vaganje', 173.7, 104.8);
