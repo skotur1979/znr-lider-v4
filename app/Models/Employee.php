@@ -75,5 +75,9 @@ public function getOibAttribute(): ?string
 {
     return $this->attributes['OIB'] ?? null;
 }
+public function nightWorkReferrals()
+{
+    return $this->hasMany(\App\Models\NightWorkReferral::class);
+}
 }
 

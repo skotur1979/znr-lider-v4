@@ -1,15 +1,11 @@
 <?php
 
-namespace App\Filament\Resources\MedicalReferrals;
+namespace App\Filament\Resources\NightWorkReferrals;
 
-use App\Filament\Resources\MedicalReferrals\Pages\CreateMedicalReferral;
-use App\Filament\Resources\MedicalReferrals\Pages\EditMedicalReferral;
-use App\Filament\Resources\MedicalReferrals\Pages\ListMedicalReferrals;
-use App\Filament\Resources\MedicalReferrals\Pages\ViewMedicalReferral;
+use App\Filament\Resources\NightWorkReferrals\Pages;
 use App\Models\Employee;
-use App\Models\MedicalReferral;
+use App\Models\NightWorkReferral;
 use BackedEnum;
-use Closure;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -41,20 +37,25 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\HtmlString;
+use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\Str;
 use UnitEnum;
 
-class MedicalReferralResource extends Resource
+class NightWorkReferralResource extends Resource
 {
-    protected static ?string $model = MedicalReferral::class;
+    protected static ?string $model = NightWorkReferral::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
     protected static string|UnitEnum|null $navigationGroup = 'Zaposlenici';
-    protected static ?string $navigationLabel = 'RA-1 Uputnice';
-    protected static ?string $pluralModelLabel = 'RA-1 Uputnice';
-    protected static ?string $modelLabel = 'RA-1 Uputnica';
-    protected static ?int $navigationSort = 2;
+    protected static ?string $navigationLabel = 'NR-1 Uputnice';
+    protected static ?string $pluralModelLabel = 'NR-1 Uputnice';
+    protected static ?string $modelLabel = 'NR-1 Uputnica';
+    protected static ?int $navigationSort = 3;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return true;
+    }
 
     private static function isAdminUser($user): bool
     {
@@ -107,7 +108,7 @@ class MedicalReferralResource extends Resource
         }
 
         try {
-            if (method_exists($user, 'can') && $user->can('viewAny', \App\Models\MedicalReferral::class)) {
+            if (method_exists($user, 'can') && $user->can('viewAny', \App\Models\NightWorkReferral::class)) {
                 return true;
             }
         } catch (\Throwable $e) {
@@ -136,7 +137,7 @@ class MedicalReferralResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-           Section::make('Povezivanje sa zaposlenikom')
+            Section::make('Povezivanje sa zaposlenikom')
     ->columnSpanFull()
     ->columns(1)
     ->schema([
@@ -166,8 +167,8 @@ class MedicalReferralResource extends Resource
 
                 $set('full_name', $emp->name ?? '');
                 $set('oib', $emp->OIB ?? '');
-                $set('job_title', $emp->job_title ?? '');
-                $set('education', $emp->education ?? '');
+                $set('job_title', $emp->workplace ?? ''); // ✅ radno mjesto
+                $set('education', $emp->education ?? ''); // ✅ školska sprema
                 $set('name_of_parents', $emp->name_of_parents ?? '');
                 $set('place_of_birth', $emp->place_of_birth ?? '');
             }),
@@ -195,7 +196,7 @@ Section::make('Podaci o zaposleniku')
         TextInput::make('full_name')
             ->label('Ime i prezime')
             ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
                 if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
                     $set('full_name', $record->employee->name ?? '');
                 }
@@ -203,7 +204,7 @@ Section::make('Podaci o zaposleniku')
 
         TextInput::make('name_of_parents')
             ->label('Ime oca – majke')
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
                 if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
                     $set('name_of_parents', $record->employee->name_of_parents ?? '');
                 }
@@ -211,7 +212,7 @@ Section::make('Podaci o zaposleniku')
 
         TextInput::make('place_of_birth')
             ->label('Datum i mjesto rođenja')
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
                 if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
                     $set('place_of_birth', $record->employee->place_of_birth ?? '');
                 }
@@ -220,80 +221,33 @@ Section::make('Podaci o zaposleniku')
         TextInput::make('oib')
             ->label('OIB')
             ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
-            ->maxLength(11)
-            ->minLength(11)
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
                 if ($record?->employee && blank($state)) {
                     $set('oib', $record->employee->OIB ?? '');
                 }
             }),
 
         TextInput::make('job_title')
-            ->label('Zanimanje')
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+            ->label('Noćni rad za koje se utvrđuje radna sposobnost')
+            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
                 if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('job_title', $record->employee->job_title ?? '');
+                    $set('job_title', $record->employee->workplace ?? ''); // ✅ radno mjesto
                 }
-            }),
+            })
+            ->maxLength(110)
+            ->extraAttributes(['maxlength' => 110])
+            ->rule('max:110')
+            ->live(onBlur: true)
+            ->helperText(fn (Get $get) => mb_strlen((string) $get('job_title')) . '/110'),
 
         TextInput::make('education')
             ->label('Školska sprema')
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
                 if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('education', $record->employee->education ?? '');
+                    $set('education', $record->employee->education ?? ''); // ✅ školska sprema
                 }
             }),
     ]),
-
-            Section::make('Opis poslova i uvjeti')
-                ->columnSpanFull()
-                ->columns(2)
-                ->schema([
-                    TextInput::make('health_jobs_description')
-                        ->label('Poslovi za koje se utvrđuje zdravstvena sposobnost')
-                        ->maxLength(110)
-                        ->extraAttributes(['maxlength' => 110])
-                        ->rule('max:110')
-                        ->live(onBlur: true)
-                        ->helperText(fn (Get $get) => mb_strlen((string) $get('health_jobs_description')) . '/110'),
-
-                    TextInput::make('law_reference')
-                        ->label('Poslovi su prema članku'),
-
-                    TextInput::make('law_reference1')
-                        ->label('točka Pravilnika o poslovima s posebnim uvjetima rada')
-                        ->live()
-                        ->afterStateUpdated(function ($state, Set $set) {
-                            $s = (string) $state;
-                            $s = preg_replace('/[^0-9,()]/u', '', $s);
-                            $s = preg_replace('/\s*,\s*/u', ',', $s);
-                            $set('law_reference1', $s);
-                        })
-                        ->maxLength(28)
-                        ->extraAttributes(['maxlength' => 28])
-                        ->rule('max:28')
-                        ->rule('regex:/^[0-9(),]+$/u')
-                        ->helperText(fn (Get $get) => mb_strlen((string) $get('law_reference1')) . '/28'),
-
-                    TextInput::make('special_conditions')
-                        ->label('Poslovi prema drugim zakonima, propisima ili kolektivom')
-                        ->maxLength(110)
-                        ->extraAttributes(['maxlength' => 110])
-                        ->rule('max:110')
-                        ->live(onBlur: true)
-                        ->helperText(fn (Get $get) => mb_strlen((string) $get('special_conditions')) . '/110'),
-                ]),
-
-            Section::make('Radni staž')
-                ->columnSpanFull()
-                ->columns(2)
-                ->schema([
-                    TextInput::make('total_years')
-                        ->label('Ukupni radni staž'),
-
-                    TextInput::make('work_years_in_job')
-                        ->label('Radni staž na poslovima za koje se utvrđuje zdravstvena sposobnost'),
-                ]),
 
             Section::make('Zdravstveni pregled')
                 ->columnSpanFull()
@@ -306,40 +260,16 @@ Section::make('Podaci o zaposleniku')
                                 ->label('Vrsta pregleda')
                                 ->options([
                                     'prethodni' => 'Prethodni',
-                                    'periodični' => 'Periodički',
-                                    'izvanredni' => 'Izvanredni',
+                                    'kontrolni' => 'Kontrolni',
                                 ])
-                                ->columns(3),
+                                ->columns(2),
                         ]),
 
                     DatePicker::make('last_exam_date')
                         ->label('Posljednji zdravstveni pregled je učinjen'),
 
-                    TextInput::make('last_exam_reference')
-                        ->label('Prema članku'),
-
-                    TextInput::make('last_exam_reference1')
-                        ->label('točki Pravilnika o poslovima s posebnim uvjetima rada'),
-
-                    TextInput::make('last_exam_reference2')
-                        ->label('ili')
-                        ->maxLength(170)
-                        ->extraAttributes(['maxlength' => 170])
-                        ->rule('max:170')
-                        ->live(onBlur: true)
-                        ->helperText(function (Get $get) {
-                            $count = mb_strlen((string) $get('last_exam_reference2'));
-
-                            return new HtmlString(
-                                '<div class="text-xs space-y-1">'
-                                . '<div>(navesti zakon, propis ili kolektivni ugovor iz članka 2. stavka 1. podstavka 2. ili 3. Pravilnika)</div>'
-                                . '<div><strong>' . $count . '/170</strong></div>'
-                                . '</div>'
-                            );
-                        }),
-
                     TextInput::make('last_exam_reference3')
-                        ->label('sa ocjenom zdravstvene sposobnosti')
+                        ->label('S ocjenom zdravstvene sposobnosti')
                         ->columnSpanFull(),
                 ]),
 
@@ -348,7 +278,7 @@ Section::make('Podaci o zaposleniku')
                 ->columns(1)
                 ->schema([
                     Textarea::make('short_description')
-                        ->label('Kratak opis poslova')
+                        ->label('Kratak opis noćnog rada, poslova i trajanje noćnog rada')
                         ->rows(2)
                         ->maxLength(190)
                         ->extraAttributes(['maxlength' => 190])
@@ -357,7 +287,7 @@ Section::make('Podaci o zaposleniku')
                         ->helperText(fn (Get $get) => mb_strlen((string) $get('short_description')) . '/190'),
 
                     Textarea::make('tools')
-                        ->label('Strojevi, alati, aparati¹')
+                        ->label('Strojevi, alati, uređaji¹')
                         ->rows(1)
                         ->maxLength(95)
                         ->extraAttributes(['maxlength' => 95])
@@ -385,26 +315,24 @@ Section::make('Podaci o zaposleniku')
                             'zatvorenom' => 'u zatvorenom',
                             'otvorenom' => 'na otvorenom',
                             'na_visini' => 'na visini',
-                            'u_jami' => 'u jami',
+                            'u_dubini' => 'u dubini',
                             'u_vodi' => 'u vodi',
-                            'pod_vodom' => 'pod vodom',
                             'mokrim_uvjetima' => 'u mokrom',
                         ])
-                        ->columns(7),
+                        ->columns(6),
 
                     CheckboxList::make('organization')
-                        ->label('Organizacija')
+                        ->label('Organizacija rada')
                         ->options([
                             'smjena' => 'u smjenama',
-                            'rad_na_traci' => 'radi na traci',
-                            'noćni' => 'noćni rad',
-                            'brzi_tempo' => 'brzi tempo rada',
-                            'terenski' => 'terenski rad',
-                            'ritam_određen' => 'ritam određen',
+                            'terenski' => 'na terenu',
                             'samostalni' => 'radi sam',
+                            'rad_s_grupom' => 'radi u grupi',
                             'rad_sa_strankama' => 'radi sa strankama',
-                            'rad_s_grupom' => 'radi s grupom',
-                            'monotonija' => 'monotonija',
+                            'rad_na_traci' => 'rad na traci',
+                            'brzi_tempo' => 'brzi tempo rada',
+                            'ritam_određen' => 'rad sa nametnutim ritmom',
+                            'monotonija' => 'monoton rad',
                         ])
                         ->columns(5),
 
@@ -412,16 +340,16 @@ Section::make('Podaci o zaposleniku')
                         ->label('Položaj tijela i aktivnosti³:')
                         ->options([
                             'stojeći' => 'rad stojeći',
-                            'u_pokretu' => 'u pokretu',
                             'sagibanje' => 'učestalo sagibanje',
-                            'klečanje' => 'klečanje',
                             'podvlačenje' => 'podvlačenje',
-                            'uspinjanje' => 'uspinjanje ljestvama',
                             'sjedeći' => 'rad sjedeći',
-                            'kombinirano' => 'kombinirano',
-                            'zakretanje' => 'zakretanje trupa',
-                            'čučanje' => 'čučanje',
+                            'zakretanje' => 'zaokretanje trupa',
                             'balansiranje' => 'balansiranje',
+                            'u_pokretu' => 'u pokretu',
+                            'klečanje' => 'klečanje',
+                            'uspinjanje' => 'uspinjanje ljestvama',
+                            'kombinirano' => 'kombinirano',
+                            'čučanje' => 'čučanje',
                             'uspinjanje_stepenicama' => 'uspinjanje stepenicama',
                         ])
                         ->columns(6),
@@ -462,7 +390,7 @@ Section::make('Podaci o zaposleniku')
                     ]),
 
                     CheckboxList::make('job_characteristics')
-                        ->label('U poslu je važan⁴:')
+                        ->label('Pri radu je važan⁴:')
                         ->options([
                             'vid_na_daljinu' => 'vid na daljinu',
                             'vid_na_blizinu' => 'vid na blizinu',
@@ -476,16 +404,15 @@ Section::make('Podaci o zaposleniku')
                         ->label('Uvjeti rada:')
                         ->options([
                             'toplina' => 'visoka temperatura',
-                            'vibracije' => 'vibracije poda',
                             'vlažnost' => 'visoka vlažnost',
                             'hladnoća' => 'niska temperatura',
-                            'vibracije1' => 'vibracije stroja ili alata',
-                            'zračenja' => 'ionizirajuća zračenja',
                             'buka' => 'buka',
-                            'tlak' => 'povišeni atmosferski tlak',
+                            'vibracije' => 'vibracije',
                             'ozljede' => 'povećana izloženost ozljedama',
-                            'zračenja1' => 'neionizirajuća zračenja',
+                            'tlak' => 'povišeni atmosferski tlak',
                             'prašina' => 'prašina',
+                            'zračenja' => 'ionizacijska zračenja',
+                            'zračenja1' => 'neionizacijska zračenja',
                         ])
                         ->columns(5),
                 ]),
@@ -521,7 +448,7 @@ Section::make('Podaci o zaposleniku')
             ->columns([
                 TextColumn::make('display_name')
                     ->label('Zaposlenik')
-                    ->state(fn (MedicalReferral $record) => $record->employee->name ?? $record->full_name)
+                    ->state(fn (NightWorkReferral $record) => $record->employee->name ?? $record->full_name)
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->where(function (Builder $q) use ($search) {
                             $q->where('full_name', 'like', "%{$search}%")
@@ -544,11 +471,11 @@ Section::make('Podaci o zaposleniku')
                     ->sortable()
                     ->alignment(Alignment::Center),
 
-                TextColumn::make('health_jobs_description')
-                    ->label('Poslovi za koje se utvrđuje zdr. sposobnost')
+                TextColumn::make('job_title')
+                    ->label('Noćni rad za koji se utvrđuje zdr. sposobnost')
                     ->wrap()
                     ->limit(150)
-                    ->tooltip(fn (MedicalReferral $record) => $record->health_jobs_description),
+                    ->tooltip(fn (NightWorkReferral $record) => $record->job_title),
 
                 TextColumn::make('manual_entry')
                     ->label('Unos')
@@ -558,7 +485,7 @@ Section::make('Podaci o zaposleniku')
                     ->color(fn ($state) => $state ? 'warning' : 'success'),
             ])
             ->defaultSort('referral_date', 'desc')
-            ->recordUrl(fn (MedicalReferral $record): string => static::getUrl('view', ['record' => $record]))
+            ->recordUrl(fn (NightWorkReferral $record): string => static::getUrl('view', ['record' => $record]))
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status zapisa')
@@ -584,22 +511,22 @@ Section::make('Podaci o zaposleniku')
 
                     EditAction::make()
                         ->label('Uredi')
-                        ->visible(fn (MedicalReferral $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (NightWorkReferral $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (MedicalReferral $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (NightWorkReferral $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (MedicalReferral $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (NightWorkReferral $record) => method_exists($record, 'trashed') && $record->trashed()),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (MedicalReferral $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (NightWorkReferral $record) => method_exists($record, 'trashed') && $record->trashed()),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -636,10 +563,10 @@ Section::make('Podaci o zaposleniku')
     public static function getPages(): array
     {
         return [
-            'index' => ListMedicalReferrals::route('/'),
-            'create' => CreateMedicalReferral::route('/create'),
-            'edit' => EditMedicalReferral::route('/{record}/edit'),
-            'view' => ViewMedicalReferral::route('/{record}'),
+            'index' => Pages\ListNightWorkReferrals::route('/'),
+            'create' => Pages\CreateNightWorkReferral::route('/create'),
+            'edit' => Pages\EditNightWorkReferral::route('/{record}/edit'),
+            'view' => Pages\ViewNightWorkReferral::route('/{record}'),
         ];
     }
 
@@ -661,19 +588,27 @@ Section::make('Podaci o zaposleniku')
 
     public static function getNavigationBadge(): ?string
     {
-        $user = auth()->user();
+        try {
+            if (! DbSchema::hasTable('night_work_referrals')) {
+                return null;
+            }
 
-        if (! $user) {
-            return '0';
+            $user = auth()->user();
+
+            if (! $user) {
+                return '0';
+            }
+
+            $query = static::getModel()::query();
+
+            if (! self::isAdminUser($user)) {
+                $query->where('user_id', $user->id);
+            }
+
+            return (string) $query->count();
+        } catch (\Throwable $e) {
+            return null;
         }
-
-        $query = static::getModel()::query();
-
-        if (! self::isAdminUser($user)) {
-            $query->where('user_id', $user->id);
-        }
-
-        return (string) $query->count();
     }
 
     public static function getGlobalSearchEloquentQuery(): Builder
