@@ -280,29 +280,29 @@ Section::make('Podaci o zaposleniku')
                     Textarea::make('short_description')
                         ->label('Kratak opis noćnog rada, poslova i trajanje noćnog rada')
                         ->rows(2)
-                        ->maxLength(190)
-                        ->extraAttributes(['maxlength' => 190])
-                        ->rule('max:190')
+                        ->maxLength(250)
+                        ->extraAttributes(['maxlength' => 250])
+                        ->rule('max:250')
                         ->live(onBlur: true)
-                        ->helperText(fn (Get $get) => mb_strlen((string) $get('short_description')) . '/190'),
+                        ->helperText(fn (Get $get) => mb_strlen((string) $get('short_description')) . '/250'),
 
                     Textarea::make('tools')
                         ->label('Strojevi, alati, uređaji¹')
                         ->rows(1)
-                        ->maxLength(95)
-                        ->extraAttributes(['maxlength' => 95])
-                        ->rule('max:95')
+                        ->maxLength(150)
+                        ->extraAttributes(['maxlength' => 150])
+                        ->rule('max:150')
                         ->live(onBlur: true)
-                        ->helperText(fn (Get $get) => mb_strlen((string) $get('tools')) . '/95'),
+                        ->helperText(fn (Get $get) => mb_strlen((string) $get('tools')) . '/150'),
 
                     Textarea::make('job_tasks')
                         ->label('Predmet rada²')
                         ->rows(1)
-                        ->maxLength(95)
-                        ->extraAttributes(['maxlength' => 95])
-                        ->rule('max:95')
+                        ->maxLength(150)
+                        ->extraAttributes(['maxlength' => 150])
+                        ->rule('max:150')
                         ->live(onBlur: true)
-                        ->helperText(fn (Get $get) => mb_strlen((string) $get('job_tasks')) . '/95'),
+                        ->helperText(fn (Get $get) => mb_strlen((string) $get('job_tasks')) . '/150'),
                 ]),
 
             Section::make('Radni uvjeti – lokacija, organizacija i položaj')
@@ -355,39 +355,51 @@ Section::make('Podaci o zaposleniku')
                         ->columns(6),
 
                     Grid::make(3)->schema([
-                        Group::make([
-                            Checkbox::make('lifting_enabled')
-                                ->label('Dizanje tereta kg')
-                                ->live(),
+    Group::make([
+        Grid::make(2)
+            ->schema([
+                Checkbox::make('lifting_enabled')
+                    ->label('Dizanje tereta kg')
+                    ->live(),
 
-                            TextInput::make('lifting_weight')
-                                ->label('')
-                                ->placeholder('kg')
-                                ->visible(fn (Get $get): bool => (bool) $get('lifting_enabled')),
-                        ]),
+                TextInput::make('lifting_weight')
+                    ->hiddenLabel()
+                    ->placeholder('')
+                    ->numeric()
+                    ->visible(fn (Get $get): bool => (bool) $get('lifting_enabled')),
+            ]),
+    ]),
 
-                        Group::make([
-                            Checkbox::make('carrying_enabled')
-                                ->label('Prenošenje tereta kg')
-                                ->live(),
+    Group::make([
+        Grid::make(2)
+            ->schema([
+                Checkbox::make('carrying_enabled')
+                    ->label('Prenošenje tereta kg')
+                    ->live(),
 
-                            TextInput::make('carrying_weight')
-                                ->label('')
-                                ->placeholder('kg')
-                                ->visible(fn (Get $get): bool => (bool) $get('carrying_enabled')),
-                        ]),
+                TextInput::make('carrying_weight')
+                    ->hiddenLabel()
+                    ->placeholder('')
+                    ->numeric()
+                    ->visible(fn (Get $get): bool => (bool) $get('carrying_enabled')),
+            ]),
+    ]),
 
-                        Group::make([
-                            Checkbox::make('pushing_enabled')
-                                ->label('Guranje tereta kg')
-                                ->live(),
+    Group::make([
+        Grid::make(2)
+            ->schema([
+                Checkbox::make('pushing_enabled')
+                    ->label('Guranje tereta kg')
+                    ->live(),
 
-                            TextInput::make('pushing_weight')
-                                ->label('')
-                                ->placeholder('kg')
-                                ->visible(fn (Get $get): bool => (bool) $get('pushing_enabled')),
-                        ]),
-                    ]),
+                TextInput::make('pushing_weight')
+                    ->hiddenLabel()
+                    ->placeholder('')
+                    ->numeric()
+                    ->visible(fn (Get $get): bool => (bool) $get('pushing_enabled')),
+            ]),
+    ]),
+]),
 
                     CheckboxList::make('job_characteristics')
                         ->label('Pri radu je važan⁴:')
