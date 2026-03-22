@@ -41,6 +41,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class MachineResource extends Resource
 {
@@ -115,8 +116,19 @@ class MachineResource extends Resource
                         ->maxLength(255),
 
                     TextInput::make('report_number')
-                        ->label('Broj izvještaja')
-                        ->maxLength(255),
+    ->label('Broj izvještaja')
+    ->maxLength(255)
+    ->rule(function ($record) {
+        return Rule::unique('machines', 'report_number')
+            ->where(function ($query) {
+                $query->where('user_id', Auth::id())
+                    ->whereNull('deleted_at');
+            })
+            ->ignore($record?->id);
+    })
+    ->validationMessages([
+        'unique' => 'Već postoji zapis s istim brojem izvještaja.',
+    ]),
                 ]),
 
             Section::make('Ostalo')

@@ -43,6 +43,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class FireResource extends Resource
 {
@@ -76,13 +77,22 @@ class FireResource extends Resource
                         ->maxLength(255),
 
                     TextInput::make('factory_number_year_of_production')
-                        ->label('Tvornički broj/Godina proizvodnje')
-                        ->maxLength(255)
-                        // ako ti je u bazi stvarno čudan naziv stupca, ostavi ovo;
-                        // ako nije, makni formatStateUsing.
-                        ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
-                        ->dehydrateStateUsing(fn ($state) => $state)
-                        ->saveRelationshipsUsing(null),
+    ->label('Tvornički broj/Godina proizvodnje')
+    ->maxLength(255)
+    ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
+    ->dehydrateStateUsing(fn ($state) => $state)
+    ->saveRelationshipsUsing(null)
+    ->rule(function ($record) {
+        return \Illuminate\Validation\Rule::unique('fires', 'factory_number/year_of_production')
+            ->where(function ($query) {
+                $query->where('user_id', auth()->id())
+                    ->whereNull('deleted_at');
+            })
+            ->ignore($record?->id);
+    })
+    ->validationMessages([
+        'unique' => 'Već postoji vatrogasni aparat s istim tvorničkim brojem / godinom proizvodnje.',
+    ]),
 
                     TextInput::make('serial_label_number')
                         ->label('Serijski broj evidencijske naljepnice')

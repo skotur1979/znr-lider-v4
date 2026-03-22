@@ -35,6 +35,7 @@ use Filament\Tables\Contracts\HasTable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class MiscellaneousResource extends Resource
 {
@@ -107,9 +108,20 @@ class MiscellaneousResource extends Resource
                         ->nullable(),
 
                     TextInput::make('report_number')
-                        ->label('Broj izvještaja')
-                        ->maxLength(255)
-                        ->nullable(),
+    ->label('Broj izvještaja')
+    ->maxLength(255)
+    ->nullable()
+    ->rule(function ($record) {
+        return \Illuminate\Validation\Rule::unique('miscellaneouses', 'report_number')
+            ->where(function ($query) {
+                $query->where('user_id', auth()->id())
+                    ->whereNull('deleted_at');
+            })
+            ->ignore($record?->id);
+    })
+    ->validationMessages([
+        'unique' => 'Već postoji zapis s istim brojem izvještaja.',
+    ]),
                 ])
                 ->columns(2),
 

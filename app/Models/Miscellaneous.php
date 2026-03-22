@@ -11,6 +11,8 @@ class Miscellaneous extends Model
 {
     use SoftDeletes;
 
+    protected $table = 'miscellaneouses';
+
     protected $fillable = [
         'user_id',
         'category_id',
@@ -28,8 +30,9 @@ class Miscellaneous extends Model
         'examination_valid_until' => 'date',
         'pdf' => 'array',
     ];
+
     public function category(): BelongsTo
-{
-    return $this->belongsTo(Category::class);
-}
+    {
+        return $this->belongsTo(Category::class);
+    }
 }

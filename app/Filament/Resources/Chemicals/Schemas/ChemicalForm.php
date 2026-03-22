@@ -9,6 +9,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 
 class ChemicalForm
 {
@@ -26,9 +28,19 @@ class ChemicalForm
                     ->maxLength(50),
 
                 TextInput::make('ufi_number')
-                    ->label('UFI broj')
-                    ->maxLength(50),
-
+    ->label('UFI broj')
+    ->maxLength(255)
+    ->rule(function ($record) {
+        return \Illuminate\Validation\Rule::unique('chemicals', 'ufi_number')
+            ->where(function ($query) {
+                $query->where('user_id', auth()->id())
+                    ->whereNull('deleted_at');
+            })
+            ->ignore($record?->id);
+    })
+    ->validationMessages([
+        'unique' => 'Već postoji kemikalija s istim UFI brojem.',
+    ]),
                 TagsInput::make('hazard_pictograms')
                     ->label('Piktogrami opasnosti')
                     ->suggestions(['GHS01','GHS02','GHS03','GHS04','GHS05','GHS06','GHS07','GHS08','GHS09'])

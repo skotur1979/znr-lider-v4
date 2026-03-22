@@ -14,6 +14,7 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class EmployeeForm
 {
@@ -59,7 +60,20 @@ class EmployeeForm
                                         ->options(['M' => 'M', 'Ž' => 'Ž'])
                                         ->native(false),
 
-                                    TextInput::make('OIB')->label('OIB')->maxLength(32),
+                                    TextInput::make('OIB')
+    ->label('OIB')
+    ->maxLength(32)
+    ->rule(function ($record) {
+        return \Illuminate\Validation\Rule::unique('employees', 'OIB')
+            ->where(function ($query) {
+                $query->where('user_id', auth()->id())
+                    ->whereNull('deleted_at');
+            })
+            ->ignore($record?->id);
+    })
+    ->validationMessages([
+        'unique' => 'Već postoji zaposlenik s istim OIB-om.',
+    ]),
                                     TextInput::make('phone')->label('Telefon/Mobitel')->maxLength(50),
                                     TextInput::make('email')->label('Email')->email()->maxLength(255),
 

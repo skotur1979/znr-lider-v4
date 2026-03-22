@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Chemicals;
 use App\Filament\Resources\Chemicals\Pages;
 use App\Filament\Resources\Chemicals\Schemas\ChemicalForm;
 use App\Models\Chemical;
-
 use BackedEnum;
 use UnitEnum;
 
@@ -71,9 +70,9 @@ class ChemicalResource extends Resource
                     ->wrap(),
 
                 TextColumn::make('ufi_number')
-                    ->label('UFI')
-                    ->wrap(),
-
+                ->label('UFI')
+                ->wrap()
+                ->searchable(),
                 ViewColumn::make('hazard_pictograms')
                     ->label('Piktogrami')
                     ->alignCenter()
