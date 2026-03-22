@@ -10,8 +10,12 @@ class GlobalSearch extends Page
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-magnifying-glass';
     protected static ?string $navigationLabel = 'Globalna pretraga';
     protected static ?string $title = 'Globalna pretraga';
-    protected static string|\UnitEnum|null $navigationGroup = 'Upravljanje';
-    protected static ?int $navigationSort = 99;
+
+    // maknuto iz grupe da bude gore u glavnom meniju
+    protected static string|\UnitEnum|null $navigationGroup = null;
+
+    // odmah ispod Nadzorne ploče
+    protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.global-search';
 

@@ -4,39 +4,32 @@ namespace App\Filament\Resources\Machines;
 
 use App\Filament\Resources\Machines\Pages;
 use App\Models\Machine;
-
 use App\Support\ExpiryBadge;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
-use Filament\Actions\RestoreAction;
-use Filament\Actions\ViewAction;
-
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
-
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\FileUpload as FormFileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
-
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
-
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
@@ -72,6 +65,39 @@ class MachineResource extends Resource
                 ->default(fn () => Auth::id())
                 ->visible(fn () => ! Auth::user()?->isAdmin())
                 ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+
+            Section::make('OCR / Auto popunjavanje iz zapisnika')
+                ->description('Učitaj PDF ili sliku zapisnika pa zatim klikni OCR gumb gore desno.')
+                ->columns(2)
+                ->schema([
+                    FormFileUpload::make('ocr_source')
+    ->label('Zapisnik za OCR')
+    ->disk('local')
+    ->directory('tmp/machine-ocr')
+    ->visibility('private')
+    ->multiple(false)
+    ->acceptedFileTypes([
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/rtf',
+        'text/plain',
+        'application/vnd.oasis.opendocument.text',
+    ])
+    ->preserveFilenames()
+    ->openable()
+    ->downloadable()
+    ->live()
+    ->columnSpan(1),
+
+                    \Filament\Forms\Components\Placeholder::make('ocr_help')
+                        ->label('Kako radi')
+                        ->content('1. Učitaj PDF ili sliku. 2. Klikni gore desno "OCR analiza". 3. Sustav će pokušati popuniti prazna polja.')
+                        ->columnSpan(1),
+                ]),
 
             Section::make('Podatci o radnoj opremi')
                 ->columns(2)
@@ -116,19 +142,19 @@ class MachineResource extends Resource
                         ->maxLength(255),
 
                     TextInput::make('report_number')
-    ->label('Broj izvještaja')
-    ->maxLength(255)
-    ->rule(function ($record) {
-        return Rule::unique('machines', 'report_number')
-            ->where(function ($query) {
-                $query->where('user_id', Auth::id())
-                    ->whereNull('deleted_at');
-            })
-            ->ignore($record?->id);
-    })
-    ->validationMessages([
-        'unique' => 'Već postoji zapis s istim brojem izvještaja.',
-    ]),
+                        ->label('Broj izvještaja')
+                        ->maxLength(255)
+                        ->rule(function ($record) {
+                            return Rule::unique('machines', 'report_number')
+                                ->where(function ($query) {
+                                    $query->where('user_id', Auth::id())
+                                        ->whereNull('deleted_at');
+                                })
+                                ->ignore($record?->id);
+                        })
+                        ->validationMessages([
+                            'unique' => 'Već postoji zapis s istim brojem izvještaja.',
+                        ]),
                 ]),
 
             Section::make('Ostalo')
@@ -145,7 +171,7 @@ class MachineResource extends Resource
                         ->columnSpanFull(),
                 ]),
 
-            FileUpload::make('pdf')
+            FormFileUpload::make('pdf')
                 ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
                 ->disk('public')
                 ->directory('pdfs')
@@ -293,30 +319,29 @@ class MachineResource extends Resource
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
-            ->requiresConfirmation()
-            ->modalHeading('Deaktiviraj odabrano')
-            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-            ->modalSubmitActionLabel('Deaktiviraj')
-            ->modalCancelActionLabel('Odustani')
+                    ->requiresConfirmation()
+                    ->modalHeading('Deaktiviraj odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalSubmitActionLabel('Deaktiviraj')
+                    ->modalCancelActionLabel('Odustani')
                     ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
-            ->requiresConfirmation()
-            ->modalHeading('Vrati odabrano')
-            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-            ->modalSubmitActionLabel('Vrati')
-            ->modalCancelActionLabel('Odustani')
+                    ->requiresConfirmation()
+                    ->modalHeading('Vrati odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalSubmitActionLabel('Vrati')
+                    ->modalCancelActionLabel('Odustani')
                     ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
-            ->requiresConfirmation()
-            ->modalHeading('Trajno obriši odabrano')
-            ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
-            ->modalSubmitActionLabel('Trajno obriši')
-            ->modalCancelActionLabel('Odustani')
-            
+                    ->requiresConfirmation()
+                    ->modalHeading('Trajno obriši odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+                    ->modalSubmitActionLabel('Trajno obriši')
+                    ->modalCancelActionLabel('Odustani'),
             ]);
     }
 
@@ -372,4 +397,3 @@ class MachineResource extends Resource
         ];
     }
 }
-
