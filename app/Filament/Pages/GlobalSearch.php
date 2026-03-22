@@ -45,4 +45,19 @@ class GlobalSearch extends Page
     {
         return collect($this->results)->flatten(1)->count();
     }
+
+    public function highlight(string $text): string
+    {
+        $query = trim($this->query);
+
+        if ($query === '') {
+            return e($text);
+        }
+
+        return preg_replace(
+            '/' . preg_quote($query, '/') . '/iu',
+            '<mark class="znr-mark">$0</mark>',
+            e($text)
+        );
+    }
 }
