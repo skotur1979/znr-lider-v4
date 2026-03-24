@@ -293,53 +293,65 @@ class ObservationResource extends Resource
                     ->wrap(),
             ])
             ->filters([
-                SelectFilter::make('record_state')
-                    ->label('Status zapisa')
-                    ->placeholder('Odaberi status')
-                    ->options([
-                        'active'  => 'Aktivni zapisi',
-                        'trashed' => 'Deaktivirani zapisi',
-                        'all'     => 'Svi zapisi',
-                    ])
-                    ->query(function (Builder $query, array $data) {
-                        $value = $data['value'] ?? null;
+    SelectFilter::make('record_state')
+        ->label('Status zapisa')
+        ->placeholder('Odaberi status')
+        ->options([
+            'active'  => 'Aktivni zapisi',
+            'trashed' => 'Deaktivirani zapisi',
+            'all'     => 'Svi zapisi',
+        ])
+        ->query(function (Builder $query, array $data) {
+            $value = $data['value'] ?? null;
 
-                        return match ($value) {
-                            'trashed' => $query->onlyTrashed(),
-                            'all'     => $query->withTrashed(),
-                            default   => $query->withoutTrashed(),
-                        };
-                    }),
+            return match ($value) {
+                'trashed' => $query->onlyTrashed(),
+                'all'     => $query->withTrashed(),
+                default   => $query->withoutTrashed(),
+            };
+        }),
 
-                SelectFilter::make('observation_type')
-                    ->label('Vrsta zapažanja')
-                    ->placeholder('Sve')
-                    ->options([
-                        'Near Miss' => 'Near Miss - Skoro nezgoda',
-                        'Negative Observation' => 'Negativno zapažanje',
-                        'Positive Observation' => 'Pozitivno zapažanje',
-                    ])
-                    ->query(fn (Builder $query, array $data) =>
-                        filled($data['value'] ?? null)
-                            ? $query->where('observation_type', $data['value'])
-                            : $query
-                    ),
+    SelectFilter::make('status_action')
+        ->label('Zahtijeva radnju')
+        ->placeholder('Sve')
+        ->options([
+            'open_action' => 'Nije započeto i U tijeku',
+        ])
+        ->query(function (Builder $query, array $data) {
+            return match ($data['value'] ?? null) {
+                'open_action' => $query->whereIn('status', ['Not started', 'In progress']),
+                default => $query,
+            };
+        }),
 
-                SelectFilter::make('year')
-    ->label('Godina nastanka')
-    ->placeholder('Sve')
-    ->options(fn () => static::getYearOptions())
-    ->default((string) now()->year)
-    ->query(function (Builder $query, array $data) {
-        $year = $data['value'] ?? null;
+    SelectFilter::make('observation_type')
+        ->label('Vrsta zapažanja')
+        ->placeholder('Sve')
+        ->options([
+            'Near Miss' => 'Near Miss - Skoro nezgoda',
+            'Negative Observation' => 'Negativno zapažanje',
+            'Positive Observation' => 'Pozitivno zapažanje',
+        ])
+        ->query(fn (Builder $query, array $data) =>
+            filled($data['value'] ?? null)
+                ? $query->where('observation_type', $data['value'])
+                : $query
+        ),
 
-        if (filled($year)) {
-            $query->whereYear('incident_date', (int) $year);
-        }
+    SelectFilter::make('year')
+        ->label('Godina nastanka')
+        ->placeholder('Sve godine')
+        ->options(fn () => static::getYearOptions())
+        ->query(function (Builder $query, array $data) {
+            $year = $data['value'] ?? null;
 
-                        return $query;
-                    }),
-            ])
+            if (filled($year)) {
+                $query->whereYear('incident_date', (int) $year);
+            }
+
+            return $query;
+        }),
+])
             ->paginated([10, 25, 50, 'all'])
             ->actions([
                 ActionGroup::make([

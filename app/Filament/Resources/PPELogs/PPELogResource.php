@@ -209,26 +209,33 @@ class PPELogResource extends Resource
                 TrashedFilter::make(),
 
                 SelectFilter::make('pregled')
-                    ->label('Prikaz')
-                    ->options([
-                        'svi' => 'Svi zaposlenici',
-                        'istek' => 'Samo OZO s istekom u 30 dana',
-                        'deaktivirani' => 'Deaktivirani',
-                    ])
-                    ->placeholder('')
-                    ->query(function (Builder $query, array $data): Builder {
-                        return match ($data['value'] ?? 'svi') {
-                            'istek' => $query
-                                ->withoutTrashed()
-                                ->whereHas('items', function ($subQuery) {
-                                    $subQuery->whereNotNull('end_date')
-                                        ->whereBetween('end_date', [now(), now()->addDays(30)]);
-                                }),
-                            'deaktivirani' => $query->onlyTrashed(),
-                            'svi' => $query->withoutTrashed(),
-                            default => $query->whereRaw('0=1'),
-                        };
-                    }),
+    ->label('Prikaz')
+    ->options([
+        'svi' => 'Svi zaposlenici',
+        'isteklo' => 'Samo istekli OZO',
+        'istek' => 'Samo OZO s istekom u 30 dana',
+        'deaktivirani' => 'Deaktivirani',
+    ])
+    ->placeholder('')
+    ->query(function (Builder $query, array $data): Builder {
+        return match ($data['value'] ?? 'svi') {
+            'isteklo' => $query
+                ->withoutTrashed()
+                ->whereHas('items', function ($subQuery) {
+                    $subQuery->whereNotNull('end_date')
+                        ->whereDate('end_date', '<', now()->startOfDay());
+                }),
+            'istek' => $query
+                ->withoutTrashed()
+                ->whereHas('items', function ($subQuery) {
+                    $subQuery->whereNotNull('end_date')
+                        ->whereBetween('end_date', [now()->startOfDay(), now()->copy()->addDays(30)->endOfDay()]);
+                }),
+            'deaktivirani' => $query->onlyTrashed(),
+            'svi' => $query->withoutTrashed(),
+            default => $query->withoutTrashed(),
+        };
+    }),
             ])
             ->actions([
                 ActionGroup::make([

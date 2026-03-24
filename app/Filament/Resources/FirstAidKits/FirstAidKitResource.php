@@ -118,6 +118,23 @@ class FirstAidKitResource extends Resource
                     ->label('Rok ističe/istekao')
                     ->alignCenter()
                     ->view('filament.resources.first-aid-kits.items-summary'),
+                    ])
+    ->filters([
+        \Filament\Tables\Filters\SelectFilter::make('expired_items')
+            ->label('Stavke')
+            ->placeholder('Sve')
+            ->options([
+                'expired' => 'Samo istekle stavke',
+            ])
+            ->query(function (Builder $query, array $data): Builder {
+                return match ($data['value'] ?? null) {
+                    'expired' => $query->whereHas('items', function (Builder $subQuery) {
+                        $subQuery->whereNotNull('valid_until')
+                            ->whereDate('valid_until', '<', now()->startOfDay());
+                    }),
+                    default => $query,
+                };
+            }),
             ])
             ->actions([
                 ActionGroup::make([

@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
 use App\Filament\Widgets\QuickActionsWidget;
+use App\Filament\Widgets\SystemStatusWidget;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -35,6 +36,7 @@ class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->widgets([
                 QuickActionsWidget::class,
+                SystemStatusWidget::class,
                 DashboardDeadlinesGrid::class,
                 DashboardCalendarWidget::class,
             ])
