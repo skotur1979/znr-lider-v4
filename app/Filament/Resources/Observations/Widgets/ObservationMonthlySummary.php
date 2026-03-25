@@ -22,10 +22,9 @@ class ObservationMonthlySummary extends Widget
 
     public function getViewData(): array
     {
-        $year = $this->getSelectedYear();
+        $yearLabel = $this->resolveSelectedYearLabel();
 
         $rows = $this->getPageTableQuery()
-            ->whereYear('incident_date', $year)
             ->selectRaw('MONTH(incident_date) as month_number')
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("SUM(CASE WHEN observation_type = 'Near Miss' THEN 1 ELSE 0 END) as nm_total")
@@ -72,20 +71,51 @@ class ObservationMonthlySummary extends Widget
         }
 
         return [
-            'year' => $year,
+            'year' => $yearLabel,
             'rows' => $data,
         ];
     }
 
-    protected function getSelectedYear(): int
+    protected function resolveSelectedYearLabel(): string
+    {
+        // 1. prvo probaj widget state koji InteractsWithPageTable sinkronizira
+        $year =
+            data_get($this->tableFilters ?? [], 'year.value')
+            ?? data_get($this->mountedTableFilters ?? [], 'year.value')
+            ?? data_get($this->filters ?? [], 'year.value')
+
+            // 2. fallback na URL
+            ?? data_get(request()->query(), 'tableFilters.year.value')
+            ?? data_get(request()->query(), 'filters.year.value')
+
+            // 3. fallback na page instancu
+            ?? $this->resolveYearFromPage();
+
+        if (blank($year) || $year === 'all' || $year === 'SVE') {
+            return 'SVE';
+        }
+
+        return (string) $year;
+    }
+
+    protected function resolveYearFromPage(): ?string
     {
         $page = $this->getTablePageInstance();
 
-        $year = data_get($page, 'tableFilters.year.value')
-            ?? data_get($page, 'filters.year.value')
-            ?? data_get($page, 'mountedTableFilters.year.value')
-            ?? now()->year;
+        if (! $page) {
+            return null;
+        }
 
-        return (int) $year;
+        if (method_exists($page, 'getSelectedYearRaw')) {
+            return $page->getSelectedYearRaw();
+        }
+
+        if (method_exists($page, 'getSelectedYearLabel')) {
+            $label = $page->getSelectedYearLabel();
+
+            return $label === 'SVE' ? null : (string) $label;
+        }
+
+        return null;
     }
 }

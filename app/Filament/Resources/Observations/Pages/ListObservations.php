@@ -6,20 +6,14 @@ use App\Filament\Resources\Observations\ObservationResource;
 use App\Exports\ObservationsExport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
+use Filament\Pages\Concerns\ExposesTableToWidgets;
 use Filament\Resources\Pages\ListRecords;
 use Maatwebsite\Excel\Facades\Excel;
-use Filament\Pages\Concerns\ExposesTableToWidgets;
-
-// (Opcionalno) za import:
-// use Filament\Forms\Components\FileUpload;
-// use Filament\Notifications\Notification;
-// use Illuminate\Support\Facades\Storage;
-// use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
-// use App\Imports\ObservationsImport;
 
 class ListObservations extends ListRecords
 {
     use ExposesTableToWidgets;
+
     protected static string $resource = ObservationResource::class;
 
     protected function getHeaderActions(): array
@@ -33,7 +27,6 @@ class ListObservations extends ListRecords
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('warning')
                 ->action(function () {
-                    // ✅ koristi isti query kao tablica (user scope + soft delete scope uklonjen u resource)
                     $observations = ObservationResource::getEloquentQuery()
                         ->orderByDesc('incident_date')
                         ->get();
@@ -55,48 +48,32 @@ class ListObservations extends ListRecords
                     new ObservationsExport(),
                     'zapazanja-' . now()->format('Y-m-d') . '.xlsx'
                 )),
-
-            /*
-            // ✅ OPCIONALNO: uvoz iz Excela (ako ćeš raditi import kao Machines)
-            Actions\Action::make('import_excel')
-                ->label('Uvoz iz Excela')
-                ->icon('heroicon-o-document-arrow-up')
-                ->color('warning')
-                ->form([
-                    FileUpload::make('excel_file')
-                        ->label('Excel datoteka')
-                        ->disk('local')
-                        ->directory('imports')
-                        ->preserveFilenames()
-                        ->acceptedFileTypes([
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'application/vnd.ms-excel',
-                        ])
-                        ->required(),
-                ])
-                ->action(function (array $data) {
-                    $file = $data['excel_file'];
-
-                    if ($file instanceof TemporaryUploadedFile) {
-                        $path = $file->store('imports', 'local');
-                    } else {
-                        $path = (string) $file; // npr. "imports/ime.xlsx"
-                    }
-
-                    $fullPath = Storage::disk('local')->path($path);
-
-                    Excel::import(new ObservationsImport(), $fullPath);
-
-                    Notification::make()
-                        ->title('Uvoz uspješan!')
-                        ->success()
-                        ->send();
-                }),
-            */
         ];
     }
+
     protected function getHeaderWidgets(): array
     {
         return ObservationResource::getWidgets();
+    }
+
+    public function getSelectedYearRaw(): ?string
+    {
+        $year =
+            data_get($this->getTableFilterState('year'), 'value')
+            ?? data_get($this->tableFilters, 'year.value')
+            ?? data_get($this, 'filters.year.value')
+            ?? data_get(request()->query(), 'tableFilters.year.value')
+            ?? data_get(request()->query(), 'filters.year.value');
+
+        if (blank($year) || $year === 'all' || $year === 'SVE') {
+            return null;
+        }
+
+        return (string) $year;
+    }
+
+    public function getSelectedYearLabel(): string
+    {
+        return $this->getSelectedYearRaw() ?? 'SVE';
     }
 }

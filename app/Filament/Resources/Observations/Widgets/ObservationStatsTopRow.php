@@ -24,7 +24,7 @@ class ObservationStatsTopRow extends StatsOverviewWidget
     protected function getStats(): array
     {
         $baseQuery = $this->getPageTableQuery();
-        $year = $this->getSelectedYear();
+        $yearLabel = $this->getSelectedYearLabel();
 
         $nm = (clone $baseQuery)
             ->where('observation_type', 'Near Miss')
@@ -39,7 +39,7 @@ class ObservationStatsTopRow extends StatsOverviewWidget
             ->count();
 
         return [
-            Stat::make('GODINA', (string) $year)
+            Stat::make('GODINA', $yearLabel)
                 ->description('Odabrana godina'),
 
             Stat::make('NM', (string) $nm)
@@ -53,15 +53,14 @@ class ObservationStatsTopRow extends StatsOverviewWidget
         ];
     }
 
-    protected function getSelectedYear(): int
+    protected function getSelectedYearLabel(): string
     {
         $page = $this->getTablePageInstance();
 
-        $year = data_get($page, 'tableFilters.year.value')
-            ?? data_get($page, 'filters.year.value')
-            ?? data_get($page, 'mountedTableFilters.year.value')
-            ?? now()->year;
+        if (method_exists($page, 'getSelectedYearLabel')) {
+            return $page->getSelectedYearLabel();
+        }
 
-        return (int) $year;
+        return 'SVE';
     }
 }
