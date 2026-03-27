@@ -17,14 +17,6 @@ class FiveSScoreService
             'answers',
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Ako u bazi NEMAŠ kolone total_points, max_points, percentage,
-        | onda nemoj ništa spremati u bazu.
-        | Ovaj servis samo "osvježi" model u memoriji.
-        |--------------------------------------------------------------------------
-        */
-
         $zone->setAttribute('total_points', (int) $zone->answers->sum('score'));
         $zone->setAttribute('max_points', (int) $zone->questions->count() * 5);
 

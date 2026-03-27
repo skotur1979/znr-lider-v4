@@ -18,8 +18,8 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class AnswersRelationManager extends RelationManager
@@ -94,7 +94,7 @@ class AnswersRelationManager extends RelationManager
                 ->label('Pitanje')
                 ->disabled()
                 ->dehydrated(false)
-                ->rows(3)
+                ->rows(4)
                 ->columnSpanFull(),
 
             Select::make('score')
@@ -158,34 +158,97 @@ class AnswersRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with(['question', 'inspection', 'zone']))
-            ->defaultSort('inspection_question_id')
+            ->modifyQueryUsing(function (Builder $query) {
+                return $query
+                    ->with(['question', 'inspection', 'zone'])
+                    ->join('inspection_questions', 'inspection_questions.id', '=', 'inspection_answers.inspection_question_id')
+                    ->orderByRaw("
+                        FIELD(inspection_questions.section,
+                            'Sortiranje',
+                            'Slaganje',
+                            'Sjaj',
+                            'Standardiziranje',
+                            'Samoodržavanje'
+                        )
+                    ")
+                    ->orderBy('inspection_questions.id')
+                    ->select('inspection_answers.*');
+            })
             ->columns([
-                TextColumn::make('question.section_label')
+                Tables\Columns\TextColumn::make('question.section')
                     ->label('Sekcija')
-                    ->badge(),
+                    ->formatStateUsing(fn ($state) => match ($state) {
+                        'Sortiranje' => '1 - SORTIRANJE',
+                        'Slaganje' => '2 - SLAGANJE',
+                        'Sjaj' => '3 - SJAJ',
+                        'Standardiziranje' => '4 - STANDARDIZIRANJE',
+                        'Samoodržavanje' => '5 - SAMOODRŽAVANJE',
+                        default => $state,
+                    })
+                    ->badge()
+                    ->color(fn ($state) => match ($state) {
+                        'Sortiranje' => 'primary',
+                        'Slaganje' => 'info',
+                        'Sjaj' => 'success',
+                        'Standardiziranje' => 'warning',
+                        'Samoodržavanje' => 'danger',
+                        default => 'gray',
+                    })
+                    ->grow(false)
+                    ->width('170px'),
 
-                TextColumn::make('question.question')
+                Tables\Columns\TextColumn::make('question.question')
                     ->label('Pitanje')
                     ->wrap()
-                    ->limit(80),
+                    ->grow(true)
+                    ->extraAttributes([
+                        'style' => 'white-space: normal; line-height: 1.5; font-size: 15px; min-width: 560px; font-weight: 600;',
+                    ]),
 
                 Tables\Columns\ViewColumn::make('score_buttons')
                     ->label('Ocjena')
-                    ->view('filament.tables.columns.score-buttons'),
-
-                TextColumn::make('score')
-                    ->label('Trenutna ocjena')
-                    ->badge()
+                    ->view('filament.tables.columns.score-buttons')
                     ->alignment(Alignment::Center)
-                    ->color(fn ($state) => match (true) {
-                        $state === null => 'gray',
-                        (int) $state <= 1 => 'danger',
-                        (int) $state <= 3 => 'warning',
-                        default => 'success',
-                    }),
+                    ->grow(false),
 
-                TextColumn::make('due_date')
+                Tables\Columns\TextColumn::make('score')
+                    ->label('Trenutna ocjena')
+                    ->formatStateUsing(fn ($state) => filled($state) ? (string) $state : '-')
+                    ->alignment(Alignment::Center)
+                    ->html()
+                    ->state(function ($record) {
+                        $score = $record->score;
+
+                        $classes = match (true) {
+                            $score === null => 'background:#6b7280;color:#ffffff;',
+                            (int) $score === 0 => 'background:#991b1b;color:#ffffff;',
+                            (int) $score === 1 => 'background:#dc2626;color:#ffffff;',
+                            (int) $score === 2 => 'background:#f59e0b;color:#111827;',
+                            (int) $score === 3 => 'background:#fde047;color:#111827;',
+                            (int) $score === 4 => 'background:#84cc16;color:#111827;',
+                            (int) $score === 5 => 'background:#16a34a;color:#ffffff;',
+                            default => 'background:#6b7280;color:#ffffff;',
+                        };
+
+                        return '<div style="
+                            display:inline-flex;
+                            align-items:center;
+                            justify-content:center;
+                            min-width:48px;
+                            height:40px;
+                            padding:0 12px;
+                            border-radius:10px;
+                            font-weight:800;
+                            font-size:20px;
+                            line-height:1;
+                            box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
+                            ' . $classes . '
+                        ">' . e((string) $score) . '</div>';
+                    })
+                    ->grow(false)
+                    ->width('140px'),
+
+                Tables\Columns\TextColumn::make('due_date')
                     ->label('Rok')
                     ->date('d.m.Y.')
                     ->badge()
@@ -207,8 +270,24 @@ class AnswersRelationManager extends RelationManager
 
                         return 'success';
                     })
-                    ->alignment(Alignment::Center),
+                    ->alignment(Alignment::Center)
+                    ->grow(false)
+                    ->width('120px'),
             ])
+            ->groups([
+                Tables\Grouping\Group::make('question.section')
+                    ->label('Sekcija')
+                    ->getTitleFromRecordUsing(fn ($record) => match ($record->question?->section) {
+                        'Sortiranje' => '1 - SORTIRANJE',
+                        'Slaganje' => '2 - SLAGANJE',
+                        'Sjaj' => '3 - SJAJ',
+                        'Standardiziranje' => '4 - STANDARDIZIRANJE',
+                        'Samoodržavanje' => '5 - SAMOODRŽAVANJE',
+                        default => $record->question?->section ?? '-',
+                    }),
+            ])
+            ->defaultGroup('question.section')
+            ->striped()
             ->actions([
                 ActionGroup::make([
                     EditAction::make()->label('Detalji / uredi'),
@@ -221,6 +300,7 @@ class AnswersRelationManager extends RelationManager
                         ->url(fn ($record) => $this->getObservationCreateUrl($record)),
                 ]),
             ])
-            ->headerActions([]);
+            ->headerActions([])
+            ->paginated(false);
     }
 }
