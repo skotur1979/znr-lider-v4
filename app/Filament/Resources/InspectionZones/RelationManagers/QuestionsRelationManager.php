@@ -17,15 +17,18 @@ class QuestionsRelationManager extends RelationManager
     {
         return $table
             ->modifyQueryUsing(function (Builder $query) {
-                return $query->orderByRaw("
-                    FIELD(section,
-                        'Sortiranje',
-                        'Slaganje',
-                        'Sjaj',
-                        'Standardiziranje',
-                        'Samoodržavanje'
-                    )
-                ");
+                return $query
+                    ->with('answer')
+                    ->orderByRaw("
+                        FIELD(section,
+                            'Sortiranje',
+                            'Slaganje',
+                            'Sjaj',
+                            'Standardiziranje',
+                            'Samoodržavanje'
+                        )
+                    ")
+                    ->orderBy('id');
             })
             ->columns([
                 Tables\Columns\TextColumn::make('section')
@@ -46,36 +49,67 @@ class QuestionsRelationManager extends RelationManager
                         'Standardiziranje' => 'warning',
                         'Samoodržavanje' => 'danger',
                         default => 'gray',
-                    }),
+                    })
+                    ->grow(false)
+                    ->width('170px'),
 
                 Tables\Columns\TextColumn::make('question')
                     ->label('Pitanje')
-                    ->wrap(),
+                    ->wrap()
+                    ->grow(true)
+                    ->extraAttributes([
+                        'style' => 'white-space: normal; line-height: 1.5; font-size: 15px; min-width: 560px; font-weight: 600;',
+                    ]),
 
                 Tables\Columns\TextColumn::make('answer.score')
                     ->label('Ocjena')
-                    ->badge()
-                    ->color(fn ($state) => match (true) {
-                        $state >= 4 => 'success',
-                        $state >= 2 => 'warning',
-                        $state >= 1 => 'danger',
-                        default => 'gray',
-                    }),
+                    ->alignment(\Filament\Support\Enums\Alignment::Center)
+                    ->html()
+                    ->state(function ($record) {
+                        $score = $record->answer?->score;
+
+                        $classes = match (true) {
+                            $score === null => 'background:#6b7280;color:#ffffff;',
+                            (int) $score === 0 => 'background:#991b1b;color:#ffffff;',
+                            (int) $score === 1 => 'background:#dc2626;color:#ffffff;',
+                            (int) $score === 2 => 'background:#f59e0b;color:#111827;',
+                            (int) $score === 3 => 'background:#fde047;color:#111827;',
+                            (int) $score === 4 => 'background:#84cc16;color:#111827;',
+                            (int) $score === 5 => 'background:#16a34a;color:#ffffff;',
+                            default => 'background:#6b7280;color:#ffffff;',
+                        };
+
+                        return '<div style="
+                            display:inline-flex;
+                            align-items:center;
+                            justify-content:center;
+                            min-width:48px;
+                            height:40px;
+                            padding:0 12px;
+                            border-radius:10px;
+                            font-weight:800;
+                            font-size:20px;
+                            line-height:1;
+                            box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
+                            ' . $classes . '
+                        ">' . e(filled($score) ? (string) $score : '-') . '</div>';
+                    })
+                    ->grow(false)
+                    ->width('140px'),
             ])
             ->groups([
-    Tables\Grouping\Group::make('section')
-        ->label('Sekcija')
-        ->getTitleFromRecordUsing(fn ($record) => match ($record->section) {
-            'Sortiranje' => '🔵 1 - SORTIRANJE',
-            'Slaganje' => '🔷 2 - SLAGANJE',
-            'Sjaj' => '🟢 3 - SJAJ',
-            'Standardiziranje' => '🟡 4 - STANDARDIZIRANJE',
-            'Samoodržavanje' => '🔴 5 - SAMOODRŽAVANJE',
-            default => $record->section,
-        }),
-])
-->defaultGroup('section')
-            ->defaultSort('section')
+                Tables\Grouping\Group::make('section')
+                    ->label('Sekcija')
+                    ->getTitleFromRecordUsing(fn ($record) => match ($record->section) {
+                        'Sortiranje' => '🔵 1 - SORTIRANJE',
+                        'Slaganje' => '🔷 2 - SLAGANJE',
+                        'Sjaj' => '🟢 3 - SJAJ',
+                        'Standardiziranje' => '🟡 4 - STANDARDIZIRANJE',
+                        'Samoodržavanje' => '🔴 5 - SAMOODRŽAVANJE',
+                        default => $record->section,
+                    }),
+            ])
+            ->defaultGroup('section')
             ->striped()
             ->paginated(false);
     }
