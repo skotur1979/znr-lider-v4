@@ -40,7 +40,7 @@ class InspectionZone extends Model
         return $this->hasMany(InspectionZoneAnswer::class, 'inspection_zone_id');
     }
 
-    public function getTotalPointsAttribute(): int
+     public function getTotalPointsAttribute(): int
     {
         return (int) $this->answers()->sum('score');
     }

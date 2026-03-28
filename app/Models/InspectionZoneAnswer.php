@@ -37,19 +37,21 @@ class InspectionZoneAnswer extends Model
     ];
 
     protected static function booted(): void
-    {
-        static::saved(function (InspectionZoneAnswer $answer) {
-            if ($answer->zone) {
-                app(FiveSScoreService::class)->recalculateZone($answer->zone);
-            }
-        });
+{
+    static::saved(function (InspectionZoneAnswer $answer) {
+        if ($answer->zone) {
+            app(FiveSScoreService::class)->recalculateZone($answer->zone);
+            $answer->zone->inspection?->refreshFiveSScore();
+        }
+    });
 
-        static::deleted(function (InspectionZoneAnswer $answer) {
-            if ($answer->zone) {
-                app(FiveSScoreService::class)->recalculateZone($answer->zone);
-            }
-        });
-    }
+    static::deleted(function (InspectionZoneAnswer $answer) {
+        if ($answer->zone) {
+            app(FiveSScoreService::class)->recalculateZone($answer->zone);
+            $answer->zone->inspection?->refreshFiveSScore();
+        }
+    });
+}
 
     public function inspection(): BelongsTo
     {

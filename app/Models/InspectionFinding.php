@@ -15,8 +15,6 @@ class InspectionFinding extends Model
         'finding_status',
         'workflow_status',
         'action_required',
-        'five_s_section',
-        'score_value',
         'responsible_person',
         'due_date',
         'photo_path',
@@ -29,19 +27,7 @@ class InspectionFinding extends Model
         'action_required' => 'boolean',
         'due_date' => 'date',
         'resolved_at' => 'datetime',
-        'score_value' => 'integer',
     ];
-
-    protected static function booted(): void
-    {
-        static::saved(function (InspectionFinding $finding) {
-            $finding->inspection?->refreshFiveSScore();
-        });
-
-        static::deleted(function (InspectionFinding $finding) {
-            $finding->inspection?->refreshFiveSScore();
-        });
-    }
 
     public function inspection(): BelongsTo
     {

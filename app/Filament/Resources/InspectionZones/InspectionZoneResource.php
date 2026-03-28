@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Alignment;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -21,6 +22,10 @@ class InspectionZoneResource extends Resource
     protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $slug = 'inspection-zones';
+
+    protected static ?string $modelLabel = 'Zona nadzora';
+
+    protected static ?string $pluralModelLabel = 'Zone nadzora';
 
     public static function form(Schema $schema): Schema
     {
@@ -57,58 +62,57 @@ class InspectionZoneResource extends Resource
     }
 
     public static function table(Table $table): Table
-{
-    return $table->columns([
-        TextColumn::make('name')
-            ->label('Zona'),
+    {
+        return $table->columns([
+            TextColumn::make('name')
+                ->label('Zona'),
 
-        TextColumn::make('percentage')
-            ->label('Rezultat')
-            ->alignment(\Filament\Support\Enums\Alignment::Center)
-            ->html()
-            ->state(function ($record) {
-                $percentage = (float) $record->percentage;
+            TextColumn::make('percentage')
+                ->label('Rezultat')
+                ->alignment(Alignment::Center)
+                ->html()
+                ->state(function ($record) {
+                    $percentage = (float) $record->percentage;
 
-                $classes = match (true) {
-                    $percentage < 40 => 'background:#991b1b;color:#ffffff;',
-                    $percentage < 60 => 'background:#f59e0b;color:#111827;',
-                    $percentage < 80 => 'background:#fde047;color:#111827;',
-                    default => 'background:#16a34a;color:#ffffff;',
-                };
+                    $styles = match (true) {
+                        $percentage < 40 => 'background:#991b1b;color:#ffffff;',
+                        $percentage < 60 => 'background:#f59e0b;color:#111827;',
+                        $percentage < 80 => 'background:#fde047;color:#111827;',
+                        default => 'background:#16a34a;color:#ffffff;',
+                    };
 
-                return '<div style="
-                    display:inline-flex;
-                    align-items:center;
-                    justify-content:center;
-                    min-width:80px;
-                    height:40px;
-                    padding:0 14px;
-                    border-radius:10px;
-                    font-weight:800;
-                    font-size:18px;
-                    line-height:1;
-                    box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
-                    ' . $classes . '
-                ">' . e(number_format($percentage, 0)) . '%</div>';
-            }),
-    ]);
-}
+                    return '<div style="
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        min-width:80px;
+                        height:40px;
+                        padding:0 14px;
+                        border-radius:10px;
+                        font-weight:800;
+                        font-size:18px;
+                        line-height:1;
+                        box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
+                        ' . $styles . '
+                    ">' . e(number_format($percentage, 0)) . '%</div>';
+                }),
+        ]);
+    }
 
     public static function getRelations(): array
     {
         return [
             QuestionsRelationManager::class,
             AnswersRelationManager::class,
-
         ];
     }
 
     public static function getPages(): array
-{
-    return [
-        'index' => Pages\ListInspectionZones::route('/'),
-        'view' => Pages\ViewInspectionZone::route('/{record}'),
-        'edit' => Pages\EditInspectionZone::route('/{record}/edit'),
-    ];
-}
+    {
+        return [
+            'index' => Pages\ListInspectionZones::route('/'),
+            'view' => Pages\ViewInspectionZone::route('/{record}'),
+            'edit' => Pages\EditInspectionZone::route('/{record}/edit'),
+        ];
+    }
 }

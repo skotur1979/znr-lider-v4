@@ -88,7 +88,7 @@ class InspectionResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->withCount('findings'))
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount(['findings', 'zones']))
             ->columns([
                 TextColumn::make('number')
                     ->label('Broj')
@@ -117,10 +117,17 @@ class InspectionResource extends Resource
                     ->wrap(),
 
                 TextColumn::make('five_s_score')
-                    ->label('5S rezultat')
-                    ->formatStateUsing(fn ($state) => filled($state) ? $state . '%' : '-')
-                    ->badge()
-                    ->alignment(Alignment::Center),
+    ->label('5S rezultat')
+    ->state(fn (Inspection $record) => $record->calculateFiveSScore()) // Prikaz rezultata
+    ->formatStateUsing(fn ($state) => filled($state) ? $state . '%' : '-')  // Prikaz procenta
+    ->badge() // Omogućuje boje za badge
+    ->color(fn ($state) => match (true) { // Ovdje dodajemo boje
+        blank($state) => 'gray',  // Siva boja ako nema rezultata
+        $state < 40 => 'danger',  // Crvena boja za ispod 40%
+        $state < 60 => 'warning', // Žuta boja za između 40% i 60%
+        default => 'success',    // Zelena boja za iznad 60%
+    })
+    ->alignment(Alignment::Center), // Centriranje
 
                 TextColumn::make('findings_count')
                     ->label('Nalaza')

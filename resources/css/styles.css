@@ -1,0 +1,37 @@
+/* resources/css/styles.css */
+
+.graph {
+    margin: 20px;
+    padding: 20px;
+    background-color: #333;
+    color: white;
+    border-radius: 10px;
+}
+
+.bar-graph {
+    display: flex;
+    justify-content: space-around;
+}
+
+.bar {
+    width: 20%;
+    background-color: #f00;
+    margin: 5px;
+    text-align: center;
+    color: #fff;
+    border-radius: 5px;
+}
+
+.bar-graph div {
+    transition: height 0.3s ease;
+}
+
+.activity-status {
+    list-style-type: none;
+    padding: 0;
+}
+
+.activity-status li {
+    margin: 10px 0;
+    font-size: 16px;
+}

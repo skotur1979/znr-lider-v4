@@ -50,35 +50,35 @@ class FindingsRelationManager extends RelationManager
             ->all();
     }
 
-   protected function mutateFindingData(array $data): array
-{
-    $data['title'] = mb_substr(trim((string) ($data['description'] ?? '')), 0, 255);
+    protected function mutateFindingData(array $data): array
+    {
+        $data['title'] = mb_substr(trim((string) ($data['description'] ?? '')), 0, 255);
 
-    if (($data['category_select'] ?? null) === '__custom__') {
-        $data['category'] = filled($data['category_custom'] ?? null)
-            ? trim($data['category_custom'])
-            : 'Ostalo';
-    } else {
-        $data['category'] = $data['category_select'] ?? 'Ostalo';
+        if (($data['category_select'] ?? null) === '__custom__') {
+            $data['category'] = filled($data['category_custom'] ?? null)
+                ? trim($data['category_custom'])
+                : 'Ostalo';
+        } else {
+            $data['category'] = $data['category_select'] ?? 'Ostalo';
+        }
+
+        if (($data['finding_status_select'] ?? null) === '__custom__') {
+            $data['finding_status'] = filled($data['finding_status_custom'] ?? null)
+                ? trim($data['finding_status_custom'])
+                : 'recommendation';
+        } else {
+            $data['finding_status'] = $data['finding_status_select'] ?? 'recommendation';
+        }
+
+        unset(
+            $data['category_select'],
+            $data['category_custom'],
+            $data['finding_status_select'],
+            $data['finding_status_custom']
+        );
+
+        return $data;
     }
-
-    if (($data['finding_status_select'] ?? null) === '__custom__') {
-        $data['finding_status'] = filled($data['finding_status_custom'] ?? null)
-            ? trim($data['finding_status_custom'])
-            : 'recommendation';
-    } else {
-        $data['finding_status'] = $data['finding_status_select'] ?? 'recommendation';
-    }
-
-    unset(
-        $data['category_select'],
-        $data['category_custom'],
-        $data['finding_status_select'],
-        $data['finding_status_custom']
-    );
-
-    return $data;
-}
 
     protected function getObservationCreateUrl(InspectionFinding $record): string
     {
@@ -122,7 +122,6 @@ class FindingsRelationManager extends RelationManager
                     'Ostalo' => 'Ostalo',
                     '__custom__' => 'Ručno upiši...',
                 ])
-                ->label('Područje')
                 ->searchable()
                 ->live()
                 ->dehydrated(false)
@@ -239,8 +238,8 @@ class FindingsRelationManager extends RelationManager
                 ->columnSpan(1),
 
             Hidden::make('finding_status')
-    ->default('recommendation')
-    ->dehydrated(true),
+                ->default('recommendation')
+                ->dehydrated(true),
 
             Textarea::make('description')
                 ->label('Što je uočeno / pronađeno')
@@ -253,18 +252,18 @@ class FindingsRelationManager extends RelationManager
                 ->columnSpanFull(),
 
             Select::make('workflow_status')
-    ->label('Status postupanja')
-    ->options([
-        'open' => 'Nije započeto',
-        'in_progress' => 'U tijeku',
-        'closed' => 'Zatvoreno',
-        'resolved_no_action' => 'Riješeno bez akcija',
-        'converted_to_observation' => 'Pretvoreno u zapažanje',
-        'rejected' => 'Odbačeno',
-    ])
-    ->default('open')
-    ->required()
-    ->columnSpan(1),
+                ->label('Status postupanja')
+                ->options([
+                    'open' => 'Nije započeto',
+                    'in_progress' => 'U tijeku',
+                    'closed' => 'Zatvoreno',
+                    'resolved_no_action' => 'Riješeno bez akcija',
+                    'converted_to_observation' => 'Pretvoreno u zapažanje',
+                    'rejected' => 'Odbačeno',
+                ])
+                ->default('open')
+                ->required()
+                ->columnSpan(1),
 
             Select::make('action_required')
                 ->label('Treba akcija')
@@ -274,32 +273,6 @@ class FindingsRelationManager extends RelationManager
                 ])
                 ->default(0)
                 ->required()
-                ->columnSpan(1),
-
-            Select::make('five_s_section')
-                ->label('5S sekcija')
-                ->options([
-                    'sort' => 'Sortiranje',
-                    'set_in_order' => 'Uređenost',
-                    'shine' => 'Čistoća',
-                    'standardize' => 'Standardizacija',
-                    'sustain' => 'Održivost',
-                    'safety' => 'Sigurnost',
-                ])
-                ->placeholder('Nije 5S stavka')
-                ->columnSpan(1),
-
-            Select::make('score_value')
-                ->label('Ocjena (0-5)')
-                ->options([
-                    0 => '0',
-                    1 => '1',
-                    2 => '2',
-                    3 => '3',
-                    4 => '4',
-                    5 => '5',
-                ])
-                ->placeholder('Bez ocjene')
                 ->columnSpan(1),
 
             TextInput::make('responsible_person')
@@ -314,21 +287,21 @@ class FindingsRelationManager extends RelationManager
                 ->displayFormat('d.m.Y.')
                 ->columnSpan(1),
 
-           FileUpload::make('photo_path')
-    ->label('Slika')
-    ->image()
-    ->disk('public')
-    ->directory('inspection-findings')
-    ->acceptedFileTypes(['image/*'])
-    ->downloadable()
-    ->openable()
-    ->imageEditor()
-    ->extraInputAttributes([
-        'accept' => 'image/*',
-        'capture' => 'environment',
-    ])
-    ->helperText('Na mobitelu i tabletu možeš odmah slikati kamerom ili odabrati postojeću sliku.')
-    ->columnSpanFull(),
+            FileUpload::make('photo_path')
+                ->label('Slika')
+                ->image()
+                ->disk('public')
+                ->directory('inspection-findings')
+                ->acceptedFileTypes(['image/*'])
+                ->downloadable()
+                ->openable()
+                ->imageEditor()
+                ->extraInputAttributes([
+                    'accept' => 'image/*',
+                    'capture' => 'environment',
+                ])
+                ->helperText('Na mobitelu i tabletu možeš odmah slikati kamerom ili odabrati postojeću sliku.')
+                ->columnSpanFull(),
 
             Textarea::make('resolution_note')
                 ->label('Napomena / rješenje')
@@ -375,73 +348,55 @@ class FindingsRelationManager extends RelationManager
                     ->alignment(Alignment::Center),
 
                 TextColumn::make('workflow_status')
-    ->label('Status postupanja')
-    ->badge()
-    ->color(fn (?string $state) => match ($state) {
-        'open' => 'gray',
-        'in_progress' => 'warning',
-        'closed' => 'success',
-        'resolved_no_action' => 'success',
-        'converted_to_observation' => 'info',
-        'rejected' => 'danger',
-        default => 'gray',
-    })
-    ->formatStateUsing(fn (?string $state) => match ($state) {
-        'open' => 'Nije započeto',
-        'in_progress' => 'U tijeku',
-        'closed' => 'Zatvoreno',
-        'resolved_no_action' => 'Riješeno bez akcija',
-        'converted_to_observation' => 'Pretvoreno u zapažanje',
-        'rejected' => 'Odbačeno',
-        default => $state ?: '-',
-    })
-    ->alignment(Alignment::Center),
-
-                TextColumn::make('five_s_section')
-                    ->label('5S')
+                    ->label('Status postupanja')
+                    ->badge()
+                    ->color(fn (?string $state) => match ($state) {
+                        'open' => 'gray',
+                        'in_progress' => 'warning',
+                        'closed' => 'success',
+                        'resolved_no_action' => 'success',
+                        'converted_to_observation' => 'info',
+                        'rejected' => 'danger',
+                        default => 'gray',
+                    })
                     ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'sort' => 'Sortiranje',
-                        'set_in_order' => 'Uređenost',
-                        'shine' => 'Čistoća',
-                        'standardize' => 'Standardizacija',
-                        'sustain' => 'Održivost',
-                        'safety' => 'Sigurnost',
-                        default => '-',
+                        'open' => 'Nije započeto',
+                        'in_progress' => 'U tijeku',
+                        'closed' => 'Zatvoreno',
+                        'resolved_no_action' => 'Riješeno bez akcija',
+                        'converted_to_observation' => 'Pretvoreno u zapažanje',
+                        'rejected' => 'Odbačeno',
+                        default => $state ?: '-',
                     })
                     ->alignment(Alignment::Center),
 
-                TextColumn::make('score_value')
-                    ->label('Ocjena')
-                    ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn ($state) => filled($state) ? (string) $state : '-'),
-
                 TextColumn::make('due_date')
-    ->label('Rok')
-    ->date('d.m.Y.')
-    ->badge()
-    ->color(function ($state, InspectionFinding $record) {
-        if (in_array($record->workflow_status, ['closed', 'rejected', 'resolved_no_action'], true)) {
-            return 'success';
-        }
+                    ->label('Rok')
+                    ->date('d.m.Y.')
+                    ->badge()
+                    ->color(function ($state, InspectionFinding $record) {
+                        if (in_array($record->workflow_status, ['closed', 'rejected', 'resolved_no_action'], true)) {
+                            return 'success';
+                        }
 
-        if (blank($state)) {
-            return null;
-        }
+                        if (blank($state)) {
+                            return null;
+                        }
 
-        $date = Carbon::parse($state)->startOfDay();
-        $today = Carbon::today();
+                        $date = Carbon::parse($state)->startOfDay();
+                        $today = Carbon::today();
 
-        if ($date->lt($today)) {
-            return 'danger';
-        }
+                        if ($date->lt($today)) {
+                            return 'danger';
+                        }
 
-        if ($date->lte($today->copy()->addDays(14))) {
-            return 'warning';
-        }
+                        if ($date->lte($today->copy()->addDays(14))) {
+                            return 'warning';
+                        }
 
-        return null;
-    })
-    ->alignment(Alignment::Center),
+                        return null;
+                    })
+                    ->alignment(Alignment::Center),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -465,22 +420,22 @@ class FindingsRelationManager extends RelationManager
                         ->openUrlInNewTab(false),
 
                     Action::make('markResolvedNoAction')
-    ->label('Označi zatvoreno')
-    ->icon('heroicon-o-check-circle')
-    ->color('success')
-    ->visible(fn (InspectionFinding $record) => in_array($record->workflow_status, ['open', 'in_progress', 'rejected', 'resolved_no_action']))
-    ->requiresConfirmation()
-    ->action(function (InspectionFinding $record) {
-        $record->update([
-            'workflow_status' => 'closed',
-            'resolved_at' => now(),
-        ]);
+                        ->label('Označi zatvoreno')
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->visible(fn (InspectionFinding $record) => in_array($record->workflow_status, ['open', 'in_progress', 'rejected', 'resolved_no_action']))
+                        ->requiresConfirmation()
+                        ->action(function (InspectionFinding $record) {
+                            $record->update([
+                                'workflow_status' => 'closed',
+                                'resolved_at' => now(),
+                            ]);
 
-        Notification::make()
-            ->title('Nalaz je označen kao zatvoren.')
-            ->success()
-            ->send();
-    }),
+                            Notification::make()
+                                ->title('Nalaz je označen kao zatvoren.')
+                                ->success()
+                                ->send();
+                        }),
 
                     Action::make('markInProgress')
                         ->label('U tijeku')
