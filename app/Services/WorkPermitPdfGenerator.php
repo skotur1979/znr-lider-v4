@@ -193,209 +193,209 @@ class WorkPermitPdfGenerator
         | ZA POSLOVE
         |--------------------------------------------------------------------------
         */
-        $box(36.3, 27.6, $has($permit->work_types, 'hot_work'));
-        $box(95, 28.5, $has($permit->work_types, 'work_at_height'));
-        $box(150, 28.5, $has($permit->work_types, 'electrical_work'));
+        $box(36.3, 27.5, $has($permit->work_types, 'hot_work'));
+        $box(95.8, 27.5, $has($permit->work_types, 'work_at_height'));
+        $box(149.7, 27.5, $has($permit->work_types, 'electrical_work'));
 
-        $box(35, 32, $has($permit->work_types, 'hazardous_chemicals'));
-        $box(95, 36, $has($permit->work_types, 'other'));
-        $writeOneLineClamp(111, 36, $permit->other_work_type, 198, 10, 7);
+        $box(36.3, 31.4, $has($permit->work_types, 'hazardous_chemicals'));
+        $box(95.8, 31.4, $has($permit->work_types, 'other'));
+        $writeOneLineClamp(115.5, 32, $permit->other_work_type, 198, 10, 7);
 
         /*
         |--------------------------------------------------------------------------
         | ZAHTJEV / PROPIS
         |--------------------------------------------------------------------------
         */
-        $writeBlock(31, 43.0, $permit->request_or_regulation, 175, 5, 9);
+        $writeBlock(36, 37.5, $permit->request_or_regulation, 175, 5, 9);
 
         /*
         |--------------------------------------------------------------------------
         | RADOVE IZVODE
         |--------------------------------------------------------------------------
         */
-        $box(33.8, 49.0, $has($permit->executor_types, 'company_employees'));
-        $box(73.0, 49.0, $has($permit->executor_types, 'external_contractors'));
+        $box(36.3, 41.0, $has($permit->executor_types, 'company_employees'));
+        $box(73.0, 41.0, $has($permit->executor_types, 'external_contractors'));
 
         /*
         |--------------------------------------------------------------------------
         | POPIS RADNIKA
         |--------------------------------------------------------------------------
         */
-        $writeOneLineClamp(31.5, 53.7, $permit->worker_1, 84, 9, 7);
-        $writeOneLineClamp(89.3, 53.7, $permit->worker_2, 142, 9, 7);
-        $writeOneLineClamp(147.5, 53.7, $permit->worker_3, 201, 9, 7);
+        $writeOneLineClamp(40, 45.5, $permit->worker_1, 84, 9, 7);
+        $writeOneLineClamp(96, 45.5, $permit->worker_2, 142, 9, 7);
+        $writeOneLineClamp(151, 45.5, $permit->worker_3, 201, 9, 7);
 
-        $writeOneLineClamp(31.5, 58.3, $permit->worker_4, 84, 9, 7);
-        $writeOneLineClamp(89.3, 58.3, $permit->worker_5, 142, 9, 7);
-        $writeOneLineClamp(147.5, 58.3, $permit->worker_6, 201, 9, 7);
+        $writeOneLineClamp(40, 49.5, $permit->worker_4, 84, 9, 7);
+        $writeOneLineClamp(96, 49.5, $permit->worker_5, 142, 9, 7);
+        $writeOneLineClamp(151, 49.5, $permit->worker_6, 201, 9, 7);
 
-        $writeOneLineClamp(31.5, 62.9, $permit->worker_7, 84, 9, 7);
-        $writeOneLineClamp(89.3, 62.9, $permit->worker_8, 142, 9, 7);
-        $writeOneLineClamp(147.5, 62.9, $permit->worker_9, 201, 9, 7);
+        $writeOneLineClamp(40, 53.7, $permit->worker_7, 84, 9, 7);
+        $writeOneLineClamp(96, 53.7, $permit->worker_8, 142, 9, 7);
+        $writeOneLineClamp(151, 53.7, $permit->worker_9, 201, 9, 7);
 
         /*
         |--------------------------------------------------------------------------
         | OPIS POSLOVA
         |--------------------------------------------------------------------------
         */
-        $writeBlock(31, 69.0, $permit->work_description, 175, 16, 9);
+        $writeBlock(36, 60, $permit->work_description, 175, 16, 9);
 
         /*
         |--------------------------------------------------------------------------
         | KONTAKT
         |--------------------------------------------------------------------------
         */
-        $writeOneLineClamp(31.5, 88.0, $permit->contact_person, 106, 10, 8);
-        $writeOneLineClamp(109.5, 88.0, $permit->phone, 202, 10, 8);
+        $writeOneLineClamp(36, 72, $permit->contact_person, 106, 10, 8);
+        $writeOneLineClamp(145, 72, $permit->phone, 202, 10, 8);
 
         /*
         |--------------------------------------------------------------------------
         | MJERE LIJEVA KOLONA
         |--------------------------------------------------------------------------
         */
-        $box(6.2, 99.0, $has($permit->required_measures, 'remove_flammable_material'));
-        $box(6.2, 103.5, $has($permit->required_measures, 'place_fire_extinguishers'));
-        $box(6.2, 108.0, $has($permit->required_measures, 'check_welding_bottles'));
-        $box(6.2, 112.5, $has($permit->required_measures, 'check_welding_hoses'));
-        $box(6.2, 117.0, $has($permit->required_measures, 'cover_openings'));
-        $box(6.2, 121.5, $has($permit->required_measures, 'check_grounding_cable'));
-        $box(6.2, 126.0, $has($permit->required_measures, 'fire_blankets'));
-        $box(6.2, 130.5, $has($permit->required_measures, 'additional_lighting'));
+        $box(9.5, 82.2, $has($permit->required_measures, 'remove_flammable_material'));
+        $box(9.5, 86.1, $has($permit->required_measures, 'place_fire_extinguishers'));
+        $box(9.5, 89.9, $has($permit->required_measures, 'check_welding_bottles'));
+        $box(9.5, 93.8, $has($permit->required_measures, 'check_welding_hoses'));
+        $box(9.5, 97.6, $has($permit->required_measures, 'cover_openings'));
+        $box(9.5, 101.5, $has($permit->required_measures, 'check_grounding_cable'));
+        $box(9.5, 105.3, $has($permit->required_measures, 'fire_blankets'));
+        $box(9.5, 109.2, $has($permit->required_measures, 'additional_lighting'));
 
         /*
         |--------------------------------------------------------------------------
         | MJERE DESNA KOLONA
         |--------------------------------------------------------------------------
         */
-        $box(111.8, 99.0, $has($permit->required_measures, 'check_dangerous_gases'));
-        $box(111.8, 103.5, $has($permit->required_measures, 'mark_work_area'));
-        $box(111.8, 108.0, $has($permit->required_measures, 'lototo'));
-        $box(111.8, 112.5, $has($permit->required_measures, 'additional_risk_assessment'));
-        $box(111.8, 117.0, $has($permit->required_measures, 'mandatory_scaffold'));
-        $box(111.8, 121.5, $has($permit->required_measures, 'safety_rope'));
-        $box(111.8, 126.0, $has($permit->required_measures, 'additional_access_exit'));
-        $box(111.8, 130.5, $has($permit->required_measures, 'five_rules_electrical'));
+        $box(109.9, 82.2, $has($permit->required_measures, 'check_dangerous_gases'));
+        $box(109.9, 86.1, $has($permit->required_measures, 'mark_work_area'));
+        $box(109.9, 89.9, $has($permit->required_measures, 'lototo'));
+        $box(109.9, 93.8, $has($permit->required_measures, 'additional_risk_assessment'));
+        $box(109.9, 97.6, $has($permit->required_measures, 'mandatory_scaffold'));
+        $box(109.9, 101.5, $has($permit->required_measures, 'safety_rope'));
+        $box(109.9, 105.3, $has($permit->required_measures, 'additional_access_exit'));
+        $box(109.9, 109.2, $has($permit->required_measures, 'five_rules_electrical'));
 
         /*
         |--------------------------------------------------------------------------
         | DODATNE MJERE
         |--------------------------------------------------------------------------
         */
-        $writeBlock(31, 136.7, $permit->additional_measures, 175, 5, 9);
+        $writeBlock(41, 114.4, $permit->additional_measures, 175, 5, 9);
 
         /*
         |--------------------------------------------------------------------------
         | POTREBNA OPREMA
         |--------------------------------------------------------------------------
         */
-        $writeBlock(6, 147.2, $permit->required_equipment, 199, 5, 9);
+        $writeBlock(11, 127, $permit->required_equipment, 199, 5, 9);
 
         /*
         |--------------------------------------------------------------------------
         | OPASNOSTI RADA - LIJEVA
         |--------------------------------------------------------------------------
         */
-        $box(6.2, 158.8, $has($permit->work_hazards, 'fall_from_height'));
-        $box(6.2, 163.2, $has($permit->work_hazards, 'sharp_objects'));
-        $box(6.2, 167.7, $has($permit->work_hazards, 'mechanical_lifting'));
-        $box(6.2, 172.2, $has($permit->work_hazards, 'stored_energy'));
-        $box(6.2, 176.7, $has($permit->work_hazards, 'hot_cold_surfaces'));
-        $box(6.2, 181.2, $has($permit->work_hazards, 'acids_alkalis'));
-        $box(6.2, 185.7, $has($permit->work_hazards, 'heavy_loads'));
-        $box(6.2, 190.2, $has($permit->work_hazards, 'electrical_hazard'));
+        $box(9.5, 137.3, $has($permit->work_hazards, 'fall_from_height'));
+        $box(9.5, 141.2, $has($permit->work_hazards, 'sharp_objects'));
+        $box(9.5, 145.1, $has($permit->work_hazards, 'mechanical_lifting'));
+        $box(9.5, 148.9, $has($permit->work_hazards, 'stored_energy'));
+        $box(9.5, 152.8, $has($permit->work_hazards, 'hot_cold_surfaces'));
+        $box(9.5, 156.7, $has($permit->work_hazards, 'acids_alkalis'));
+        $box(9.5, 160.5, $has($permit->work_hazards, 'heavy_loads'));
+        $box(9.5, 164.4, $has($permit->work_hazards, 'electrical_hazard'));
 
         /*
         |--------------------------------------------------------------------------
         | OPASNOSTI RADA - SREDINA
         |--------------------------------------------------------------------------
         */
-        $box(76.0, 158.8, $has($permit->work_hazards, 'lack_of_oxygen'));
-        $box(76.0, 163.2, $has($permit->work_hazards, 'crushing'));
-        $box(76.0, 167.7, $has($permit->work_hazards, 'vehicle_impact'));
-        $box(76.0, 172.2, $has($permit->work_hazards, 'bad_weather'));
-        $box(76.0, 176.7, $has($permit->work_hazards, 'noise'));
-        $box(76.0, 181.2, $has($permit->work_hazards, 'explosive_flammable'));
-        $box(76.0, 185.7, $has($permit->work_hazards, 'outdoor_work'));
-        $box(76.0, 190.2, $has($permit->work_hazards, 'poor_lighting'));
+        $box(76.9, 137.3, $has($permit->work_hazards, 'lack_of_oxygen'));
+        $box(76.9, 141.2, $has($permit->work_hazards, 'crushing'));
+        $box(76.9, 145.1, $has($permit->work_hazards, 'vehicle_impact'));
+        $box(76.9, 148.9, $has($permit->work_hazards, 'bad_weather'));
+        $box(76.9, 152.8, $has($permit->work_hazards, 'noise'));
+        $box(76.9, 156.7, $has($permit->work_hazards, 'explosive_flammable'));
+        $box(76.9, 160.5, $has($permit->work_hazards, 'outdoor_work'));
+        $box(76.9, 164.4, $has($permit->work_hazards, 'poor_lighting'));
 
         /*
         |--------------------------------------------------------------------------
         | OPASNOSTI RADA - DESNA
         |--------------------------------------------------------------------------
         */
-        $box(140.6, 158.8, $has($permit->work_hazards, 'confined_space'));
-        $box(140.6, 163.2, $has($permit->work_hazards, 'repetitive_movements'));
-        $box(140.6, 167.7, $has($permit->work_hazards, 'walking_surfaces'));
-        $box(140.6, 172.2, $has($permit->work_hazards, 'high_pressure'));
-        $box(140.6, 176.7, $has($permit->work_hazards, 'prolonged_work'));
-        $box(140.6, 181.2, $has($permit->work_hazards, 'eye_strain'));
-        $box(140.6, 185.7, $has($permit->work_hazards, 'dangerous_vapors_gases'));
-        $box(140.6, 190.2, $has($permit->work_hazards, 'other'));
-        $writeOneLineClamp(154.2, 189.8, $permit->other_hazard, 201, 8, 6);
+        $box(138, 137.3, $has($permit->work_hazards, 'confined_space'));
+        $box(138, 141.2, $has($permit->work_hazards, 'repetitive_movements'));
+        $box(138, 145.1, $has($permit->work_hazards, 'walking_surfaces'));
+        $box(138, 148.9, $has($permit->work_hazards, 'high_pressure'));
+        $box(138, 152.8, $has($permit->work_hazards, 'prolonged_work'));
+        $box(138, 156.7, $has($permit->work_hazards, 'eye_strain'));
+        $box(138, 160.5, $has($permit->work_hazards, 'dangerous_vapors_gases'));
+        $box(138, 164.4, $has($permit->work_hazards, 'other'));
+        $writeOneLineClamp(157, 165.1, $permit->other_hazard, 201, 8, 6);
 
         /*
         |--------------------------------------------------------------------------
         | OZO
         |--------------------------------------------------------------------------
         */
-        $box(6.2, 202.4, $has($permit->required_ppe, 'safety_shoes'));
-        $box(63.0, 202.4, $has($permit->required_ppe, 'safety_glasses'));
-        $box(107.4, 202.4, $has($permit->required_ppe, 'hearing_protection'));
-        $box(161.7, 202.4, $has($permit->required_ppe, 'helmet'));
+        $box(9.5, 174.5, $has($permit->required_ppe, 'safety_shoes'));
+        $box(63.5, 174.5, $has($permit->required_ppe, 'safety_glasses'));
+        $box(106.9, 174.5, $has($permit->required_ppe, 'hearing_protection'));
+        $box(157.4, 174.5, $has($permit->required_ppe, 'helmet'));
 
-        $box(6.2, 207.1, $has($permit->required_ppe, 'work_clothes'));
-        $box(63.0, 207.1, $has($permit->required_ppe, 'protective_mask'));
-        $box(107.4, 207.1, $has($permit->required_ppe, 'respirator'));
-        $box(161.7, 207.1, $has($permit->required_ppe, 'welding_mask'));
+        $box(9.5, 180, $has($permit->required_ppe, 'work_clothes'));
+        $box(63.5, 180, $has($permit->required_ppe, 'protective_mask'));
+        $box(106.9, 180, $has($permit->required_ppe, 'respirator'));
+        $box(157.4, 180, $has($permit->required_ppe, 'welding_mask'));
 
-        $box(6.2, 211.9, $has($permit->required_ppe, 'rubber_boots'));
-        $box(63.0, 211.9, $has($permit->required_ppe, 'half_mask'));
-        $box(107.4, 211.9, $has($permit->required_ppe, 'reflective_vest'));
-        $box(161.7, 211.9, $has($permit->required_ppe, 'cap_with_protection'));
+        $box(9.5, 185.3, $has($permit->required_ppe, 'rubber_boots'));
+        $box(63.5, 185.3, $has($permit->required_ppe, 'half_mask'));
+        $box(106.9, 185.3, $has($permit->required_ppe, 'reflective_vest'));
+        $box(157.4, 185.3, $has($permit->required_ppe, 'cap_with_protection'));
 
-        $box(6.2, 216.7, $has($permit->required_ppe, 'protective_gloves'));
-        $box(63.0, 216.7, $has($permit->required_ppe, 'face_shield'));
-        $box(107.4, 216.7, $has($permit->required_ppe, 'fall_protection_belt'));
+        $box(9.5, 190.6, $has($permit->required_ppe, 'protective_gloves'));
+        $box(63.5, 190.6, $has($permit->required_ppe, 'face_shield'));
+        $box(106.9, 190.6, $has($permit->required_ppe, 'fall_protection_belt'));
 
         /*
         |--------------------------------------------------------------------------
         | ODOBRENJE
         |--------------------------------------------------------------------------
         */
-        $writeOneLineClamp(87.5, 229.0, $permit->requester_name, 139, 10, 8);
-        $writeOneLineClamp(145.0, 229.0, $permit->requester_signature, 199, 10, 8);
+        $writeOneLineClamp(74, 209, $permit->requester_name, 139, 10, 8);
+        $writeOneLineClamp(140.0, 209, $permit->requester_signature, 199, 10, 8);
 
-        $writeOneLineClamp(87.5, 233.9, $permit->approver_name, 139, 10, 8);
-        $writeOneLineClamp(145.0, 233.9, $permit->approver_signature, 199, 10, 8);
+        $writeOneLineClamp(74, 217.5, $permit->approver_name, 139, 10, 8);
+        $writeOneLineClamp(140, 217.5, $permit->approver_signature, 199, 10, 8);
 
         /*
         |--------------------------------------------------------------------------
         | PRODUŽENJE
         |--------------------------------------------------------------------------
         */
-        $writeOneLineClamp(16.0, 244.1, $fmtDateTimeCompact($permit->extension_valid_from), 94, 10, 7);
-        $writeOneLineClamp(102.0, 244.1, $fmtDateTimeCompact($permit->extension_valid_until), 180, 10, 7);
+        $writeOneLineClamp(35.0, 230, $fmtDateTimeCompact($permit->extension_valid_from), 94, 10, 7);
+        $writeOneLineClamp(140.0, 230, $fmtDateTimeCompact($permit->extension_valid_until), 180, 10, 7);
 
-        $writeOneLineClamp(87.5, 254.4, $permit->extension_approver_name, 139, 10, 8);
-        $writeOneLineClamp(145.0, 254.4, $permit->extension_approver_signature, 199, 10, 8);
+        $writeOneLineClamp(76, 240.3, $permit->extension_approver_name, 139, 10, 8);
+        $writeOneLineClamp(140.0, 240.3, $permit->extension_approver_signature, 199, 10, 8);
 
         /*
         |--------------------------------------------------------------------------
         | PROVJERA IZVRŠENIH RADOVA
         |--------------------------------------------------------------------------
         */
-        $box(63.0, 265.8, $permit->works_finished === true);
-        $box(81.4, 265.8, $permit->works_finished === false);
+        $box(64.6, 251.1, $permit->works_finished === true);
+        $box(82, 251.1, $permit->works_finished === false);
 
-        $box(63.0, 270.5, $permit->checked_after === '1h');
-        $box(81.4, 270.5, $permit->checked_after === '3h');
+        $box(64.6, 256.5, $permit->checked_after === '1h');
+        $box(81.7, 256.5, $permit->checked_after === '3h');
 
-        $writeBlock(101.0, 264.9, $permit->unfinished_reason, 99, 8, 9);
+        $writeBlock(138, 251, $permit->unfinished_reason, 99, 8, 9);
 
-        $writeOneLineClamp(17.0, 279.0, $permit->verification_name, 59, 10, 8);
-        $writeOneLineClamp(67.0, 279.0, $permit->verification_signature, 98, 10, 8);
-        $writeOneLineClamp(108.0, 279.0, $fmtDate($permit->verification_date), 138, 10, 8);
-        $writeOneLineClamp(160.0, 279.0, $fmtTime($permit->verification_time), 185, 10, 8);
+        $writeOneLineClamp(14.0, 271.0, $permit->verification_name, 59, 10, 8);
+        $writeOneLineClamp(67.0, 271.0, $permit->verification_signature, 98, 10, 8);
+        $writeOneLineClamp(108.0, 271.0, $fmtDate($permit->verification_date), 138, 10, 8);
+        $writeOneLineClamp(160.0, 271.0, $fmtTime($permit->verification_time), 185, 10, 8);
 
         $mpdf->Output($outputPath, \Mpdf\Output\Destination::FILE);
 
