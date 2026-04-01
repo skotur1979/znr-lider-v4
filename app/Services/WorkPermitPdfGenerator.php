@@ -32,6 +32,7 @@ class WorkPermitPdfGenerator
 
         $fitToWidth = function (?string $text, float $w) use ($mpdf): array {
             $t = trim((string) $text);
+
             if ($t === '') {
                 return ['', ''];
             }
@@ -89,13 +90,19 @@ class WorkPermitPdfGenerator
             ?string $text,
             float $maxX,
             int|float $maxPt = 10,
-            int|float $minPt = 8
+            int|float $minPt = 8,
+            ?int $maxChars = null
         ) use ($mpdf) {
             if ($text === null || trim((string) $text) === '') {
                 return;
             }
 
             $t = preg_replace('/\s+/u', ' ', trim((string) $text));
+
+            if ($maxChars !== null) {
+                $t = mb_substr($t, 0, $maxChars);
+            }
+
             $w = max(0, $maxX - $x);
 
             $prevPt = $mpdf->FontSizePt ?: $maxPt;
@@ -142,6 +149,156 @@ class WorkPermitPdfGenerator
             ">' . nl2br(htmlspecialchars((string) $text)) . '</div>';
 
             $mpdf->WriteFixedPosHTML($html, $x, $y, $w, $h);
+        };
+
+        $writeTwoLineClampWidths = function (
+            float $x1,
+            float $y1,
+            float $w1,
+            float $x2,
+            float $y2,
+            float $w2,
+            ?string $text,
+            int|float $maxPt = 9,
+            int|float $minPt = 7.5,
+            int $maxChars = 150
+        ) use ($mpdf, $fitToWidth) {
+            if (empty($text)) {
+                return;
+            }
+
+            $t = preg_replace('/\s+/u', ' ', trim((string) $text));
+            $t = mb_substr($t, 0, $maxChars);
+
+            $family = 'dejavusans';
+            $prevPt = $mpdf->FontSizePt ?: $maxPt;
+
+            for ($fs = $maxPt; $fs >= $minPt; $fs -= 0.5) {
+                $mpdf->SetFont($family, '', $fs);
+
+                [$line1, $rest1] = $fitToWidth($t, $w1);
+
+                if ($rest1 === '') {
+                    $line2 = '';
+                    $fits = true;
+                } else {
+                    [$line2, $rest2] = $fitToWidth($rest1, $w2);
+                    $fits = ($rest2 === '');
+                }
+
+                if ($fits) {
+                    $html1 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $fs . 'pt;">' . htmlspecialchars($line1) . '</div>';
+                    $mpdf->WriteFixedPosHTML($html1, $x1, $y1, $w1, 5);
+
+                    if ($line2 !== '') {
+                        $html2 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $fs . 'pt;">' . htmlspecialchars($line2) . '</div>';
+                        $mpdf->WriteFixedPosHTML($html2, $x2, $y2, $w2, 5);
+                    }
+
+                    $mpdf->SetFont($family, '', $prevPt);
+                    return;
+                }
+            }
+
+            $mpdf->SetFont($family, '', $minPt);
+
+            [$line1, $rest1] = $fitToWidth($t, $w1);
+            $html1 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $minPt . 'pt;">' . htmlspecialchars($line1) . '</div>';
+            $mpdf->WriteFixedPosHTML($html1, $x1, $y1, $w1, 5);
+
+            if ($rest1 !== '') {
+                [$line2, ] = $fitToWidth($rest1, $w2);
+                $html2 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $minPt . 'pt;">' . htmlspecialchars($line2) . '</div>';
+                $mpdf->WriteFixedPosHTML($html2, $x2, $y2, $w2, 5);
+            }
+
+            $mpdf->SetFont($family, '', $prevPt);
+        };
+
+        $writeThreeLineClampWidths = function (
+            float $x1,
+            float $y1,
+            float $w1,
+            float $x2,
+            float $y2,
+            float $w2,
+            float $x3,
+            float $y3,
+            float $w3,
+            ?string $text,
+            int|float $maxPt = 9,
+            int|float $minPt = 7.5,
+            int $maxChars = 100
+        ) use ($mpdf, $fitToWidth) {
+            if (empty($text)) {
+                return;
+            }
+
+            $t = preg_replace('/\s+/u', ' ', trim((string) $text));
+            $t = mb_substr($t, 0, $maxChars);
+
+            $family = 'dejavusans';
+            $prevPt = $mpdf->FontSizePt ?: $maxPt;
+
+            for ($fs = $maxPt; $fs >= $minPt; $fs -= 0.5) {
+                $mpdf->SetFont($family, '', $fs);
+
+                [$line1, $rest1] = $fitToWidth($t, $w1);
+
+                if ($rest1 === '') {
+                    $line2 = '';
+                    $line3 = '';
+                    $fits = true;
+                } else {
+                    [$line2, $rest2] = $fitToWidth($rest1, $w2);
+
+                    if ($rest2 === '') {
+                        $line3 = '';
+                        $fits = true;
+                    } else {
+                        [$line3, $rest3] = $fitToWidth($rest2, $w3);
+                        $fits = ($rest3 === '');
+                    }
+                }
+
+                if ($fits) {
+                    $html1 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $fs . 'pt;">' . htmlspecialchars($line1) . '</div>';
+                    $mpdf->WriteFixedPosHTML($html1, $x1, $y1, $w1, 5);
+
+                    if ($line2 !== '') {
+                        $html2 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $fs . 'pt;">' . htmlspecialchars($line2) . '</div>';
+                        $mpdf->WriteFixedPosHTML($html2, $x2, $y2, $w2, 5);
+                    }
+
+                    if ($line3 !== '') {
+                        $html3 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $fs . 'pt;">' . htmlspecialchars($line3) . '</div>';
+                        $mpdf->WriteFixedPosHTML($html3, $x3, $y3, $w3, 5);
+                    }
+
+                    $mpdf->SetFont($family, '', $prevPt);
+                    return;
+                }
+            }
+
+            $mpdf->SetFont($family, '', $minPt);
+
+            [$line1, $rest1] = $fitToWidth($t, $w1);
+            $html1 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $minPt . 'pt;">' . htmlspecialchars($line1) . '</div>';
+            $mpdf->WriteFixedPosHTML($html1, $x1, $y1, $w1, 5);
+
+            if ($rest1 !== '') {
+                [$line2, $rest2] = $fitToWidth($rest1, $w2);
+                $html2 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $minPt . 'pt;">' . htmlspecialchars($line2) . '</div>';
+                $mpdf->WriteFixedPosHTML($html2, $x2, $y2, $w2, 5);
+
+                if ($rest2 !== '') {
+                    [$line3, ] = $fitToWidth($rest2, $w3);
+                    $html3 = '<div style="white-space:nowrap; overflow:hidden; font-size:' . $minPt . 'pt;">' . htmlspecialchars($line3) . '</div>';
+                    $mpdf->WriteFixedPosHTML($html3, $x3, $y3, $w3, 5);
+                }
+            }
+
+            $mpdf->SetFont($family, '', $prevPt);
         };
 
         $box = function (float $x, float $y, bool $checked, float $w = 5, float $h = 5, int|float $fontSize = 9) use ($mpdf) {
@@ -199,14 +356,21 @@ class WorkPermitPdfGenerator
 
         $box(36.3, 31.4, $has($permit->work_types, 'hazardous_chemicals'));
         $box(95.8, 31.4, $has($permit->work_types, 'other'));
-        $writeOneLineClamp(115.5, 32, $permit->other_work_type, 198, 10, 7);
+        $writeOneLineClamp(115.5, 32, $permit->other_work_type, 198, 10, 7, 50);
 
         /*
         |--------------------------------------------------------------------------
         | ZAHTJEV / PROPIS
         |--------------------------------------------------------------------------
         */
-        $writeBlock(36, 37.5, $permit->request_or_regulation, 175, 5, 9);
+        $writeTwoLineClampWidths(
+        35.5, 35.5, 167.0,
+        35.5, 38, 167.0,
+        $permit->request_or_regulation,
+        8,
+        7,
+        150
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -235,17 +399,25 @@ class WorkPermitPdfGenerator
 
         /*
         |--------------------------------------------------------------------------
-        | OPIS POSLOVA
+        | OPIS POSLOVA - 3 RETKA / MAX 150
         |--------------------------------------------------------------------------
         */
-        $writeBlock(36, 60, $permit->work_description, 175, 16, 9);
+        $writeThreeLineClampWidths(
+            36.0, 59.0, 162.0,
+            36.0, 63.0, 162.0,
+            36.0, 67.0, 162.0,
+            $permit->work_description,
+            9,
+            7.5,
+            300
+        );
 
         /*
         |--------------------------------------------------------------------------
-        | KONTAKT
+        | KONTAKT OSOBA - 1 RED / MAX 35
         |--------------------------------------------------------------------------
         */
-        $writeOneLineClamp(36, 72, $permit->contact_person, 106, 10, 8);
+        $writeOneLineClamp(36, 72.2, $permit->contact_person, 106, 10, 8, 50);
         $writeOneLineClamp(145, 72, $permit->phone, 202, 10, 8);
 
         /*
@@ -278,10 +450,17 @@ class WorkPermitPdfGenerator
 
         /*
         |--------------------------------------------------------------------------
-        | DODATNE MJERE
+        | DODATNE MJERE - 2 RETKA / MAX 150
         |--------------------------------------------------------------------------
         */
-        $writeBlock(41, 114.4, $permit->additional_measures, 175, 5, 9);
+        $writeTwoLineClampWidths(
+            41.0, 114.4, 162.0,
+            41.0, 118.2, 162.0,
+            $permit->additional_measures,
+            9,
+            7.5,
+            200
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -331,7 +510,7 @@ class WorkPermitPdfGenerator
         $box(138, 156.7, $has($permit->work_hazards, 'eye_strain'));
         $box(138, 160.5, $has($permit->work_hazards, 'dangerous_vapors_gases'));
         $box(138, 164.4, $has($permit->work_hazards, 'other'));
-        $writeOneLineClamp(157, 165.1, $permit->other_hazard, 201, 8, 6);
+        $writeOneLineClamp(157, 165.1, $permit->other_hazard, 201, 8, 6, 30);
 
         /*
         |--------------------------------------------------------------------------
@@ -390,7 +569,15 @@ class WorkPermitPdfGenerator
         $box(64.6, 256.5, $permit->checked_after === '1h');
         $box(81.7, 256.5, $permit->checked_after === '3h');
 
-        $writeBlock(138, 251, $permit->unfinished_reason, 99, 8, 9);
+        $writeThreeLineClampWidths(
+            138.0, 251.0, 64.0,
+            138.0, 254.4, 64.0,
+            138.0, 257.8, 64.0,
+            $permit->unfinished_reason,
+            8.5,
+            7,
+            150
+        );
 
         $writeOneLineClamp(14.0, 271.0, $permit->verification_name, 59, 10, 8);
         $writeOneLineClamp(67.0, 271.0, $permit->verification_signature, 98, 10, 8);

@@ -166,12 +166,21 @@ class WorkPermitResource extends Resource
                         ->columns(5),
 
                     TextInput::make('other_work_type')
-                        ->label('Ostalo')
-                        ->maxLength(255),
+                    ->label('Ostalo')
+                    ->maxLength(50)
+                    ->rule('max:50')
+                    ->extraAttributes(['maxlength' => 50])
+                    ->live(onBlur: true)
+                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/50'),
 
                     Textarea::make('request_or_regulation')
-                        ->label('Zahtjev / propis')
-                        ->rows(2),
+                    ->label('Zahtjev / propis')
+                    ->rows(2)
+                    ->maxLength(150)
+                    ->rule('max:150')
+                    ->extraAttributes(['maxlength' => 150])
+                    ->live(onBlur: true)
+                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/150'),
                 ]),
 
             Section::make('Radove izvode')
@@ -196,12 +205,23 @@ class WorkPermitResource extends Resource
                         ]),
 
                     Textarea::make('work_description')
-                        ->label('Opis poslova - radova')
-                        ->rows(4),
+    ->label('Opis poslova - radova')
+    ->rows(3)
+    ->maxLength(300)
+    ->rule('max:300')
+    ->extraAttributes(['maxlength' => 300])
+    ->live(onBlur: true)
+    ->helperText(fn ($state) => mb_strlen((string) $state) . '/300'),
 
                     Grid::make(2)
                         ->schema([
-                            TextInput::make('contact_person')->label('Kontakt osoba'),
+                            TextInput::make('contact_person')
+                            ->label('Kontakt osoba')
+                            ->maxLength(50)
+                            ->rule('max:50')
+                            ->extraAttributes(['maxlength' => 50])
+                            ->live(onBlur: true)
+                            ->helperText(fn ($state) => mb_strlen((string) $state) . '/50'),
                             TextInput::make('phone')->label('Telefonski broj'),
                         ]),
                 ]),
@@ -215,8 +235,13 @@ class WorkPermitResource extends Resource
                         ->columns(2),
 
                     Textarea::make('additional_measures')
-                        ->label('Dodatne mjere')
-                        ->rows(2),
+                    ->label('Dodatne mjere')
+                    ->rows(2)
+                    ->maxLength(200)
+                    ->rule('max:200')
+                    ->extraAttributes(['maxlength' => 200])
+                    ->live(onBlur: true)
+                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/200'),
 
                     Textarea::make('required_equipment')
                         ->label('Potrebna oprema')
@@ -232,8 +257,12 @@ class WorkPermitResource extends Resource
                         ->columns(3),
 
                     TextInput::make('other_hazard')
-                        ->label('Ostalo')
-                        ->maxLength(255),
+                    ->label('Ostalo')
+                    ->maxLength(30)
+                    ->rule('max:30')
+                    ->extraAttributes(['maxlength' => 30])
+                    ->live(onBlur: true)
+                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/30'),
                 ]),
 
             Section::make('Osobna zaštitna oprema')
@@ -293,9 +322,14 @@ class WorkPermitResource extends Resource
                         ->inline(),
 
                     Textarea::make('unfinished_reason')
-                        ->label('Ako nisu završeni navesti razlog')
-                        ->rows(3)
-                        ->columnSpanFull(),
+                    ->label('Ako nisu završeni navesti razlog')
+                    ->rows(3)
+                    ->maxLength(150)
+                    ->rule('max:150')
+                    ->extraAttributes(['maxlength' => 150])
+                    ->live(onBlur: true)
+                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/150')
+                    ->columnSpanFull(),
 
                     TextInput::make('verification_name')->label('Ime i prezime'),
                     TextInput::make('verification_signature')->label('Potpis'),

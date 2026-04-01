@@ -233,7 +233,7 @@
                 <tr class="wp-green wp-bold wp-center">
                     <td style="width: 14%;">Broj:</td>
                     <td style="width: 11%;">{{ $record->permit_number ?: '' }}</td>
-                    <td style="width: 8%;">Datum<br>:</td>
+                    <td style="width: 8%; white-space: nowrap;">Datum:</td>
                     <td style="width: 12%;">{{ $fmtDate($record->issue_date) }}</td>
                     <td style="width: 11%;">Vrijedi od:</td>
                     <td style="width: 18%;">{{ $fmtDateTime($record->valid_from) }}</td>
