@@ -7,6 +7,7 @@ use App\Models\EmployeeCertificate;
 use App\Models\Fire;
 use App\Models\Machine;
 use App\Models\Miscellaneous;
+use App\Models\WorkTask;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Filament\Widgets\Widget;
@@ -26,6 +27,16 @@ class DashboardCalendarWidget extends Widget
 
     #[Url(as: 'calendar_year', history: true)]
     public int $calendar_year;
+
+    public bool $showTaskModal = false;
+
+    public ?int $editingTaskId = null;
+
+    public ?string $taskDate = null;
+
+    public string $taskTitle = '';
+
+    public ?string $taskDescription = null;
 
     public function mount(): void
     {
@@ -47,6 +58,167 @@ class DashboardCalendarWidget extends Widget
 
         $this->calendar_month = (int) $current->month;
         $this->calendar_year = (int) $current->year;
+    }
+
+    public function openTaskCreateModal(?string $date = null): void
+    {
+        $this->editingTaskId = null;
+        $this->taskDate = $date ?: now()->toDateString();
+        $this->taskTitle = '';
+        $this->taskDescription = null;
+        $this->showTaskModal = true;
+    }
+
+    public function openTaskEditModal(int $taskId): void
+    {
+        $query = WorkTask::query()->whereKey($taskId);
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        $task = $query->first();
+
+        if (! $task) {
+            return;
+        }
+
+        $this->editingTaskId = $task->id;
+        $this->taskDate = $task->due_date?->toDateString();
+        $this->taskTitle = $task->title;
+        $this->taskDescription = $task->description;
+        $this->showTaskModal = true;
+    }
+
+    public function closeTaskModal(): void
+    {
+        $this->editingTaskId = null;
+        $this->taskDate = null;
+        $this->taskTitle = '';
+        $this->taskDescription = null;
+        $this->showTaskModal = false;
+        $this->resetValidation();
+    }
+
+    public function saveTask(): void
+    {
+        $data = $this->validate([
+            'taskTitle' => ['required', 'string', 'max:120'],
+            'taskDescription' => ['nullable', 'string', 'max:1000'],
+            'taskDate' => ['required', 'date'],
+        ]);
+
+        if ($this->editingTaskId) {
+            $query = WorkTask::query()->whereKey($this->editingTaskId);
+
+            if (! Auth::user()?->isAdmin()) {
+                $query->where('user_id', Auth::id());
+            }
+
+            $task = $query->first();
+
+            if ($task) {
+                $task->update([
+                    'title' => $data['taskTitle'],
+                    'description' => $data['taskDescription'],
+                    'due_date' => $data['taskDate'],
+                ]);
+            }
+        } else {
+            WorkTask::create([
+                'user_id' => Auth::id(),
+                'title' => $data['taskTitle'],
+                'description' => $data['taskDescription'],
+                'due_date' => $data['taskDate'],
+                'is_done' => false,
+                'completed_at' => null,
+            ]);
+        }
+
+        $this->closeTaskModal();
+    }
+
+    public function completeTask(int $taskId): void
+    {
+        $query = WorkTask::query()->whereKey($taskId);
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        $task = $query->first();
+
+        if (! $task || $task->is_done) {
+            return;
+        }
+
+        $task->update([
+            'is_done' => true,
+            'completed_at' => now(),
+        ]);
+    }
+
+    public function reopenTask(int $taskId): void
+    {
+        $query = WorkTask::query()->whereKey($taskId);
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        $task = $query->first();
+
+        if (! $task || ! $task->is_done) {
+            return;
+        }
+
+        $task->update([
+            'is_done' => false,
+            'completed_at' => null,
+        ]);
+    }
+
+    public function deleteTask(int $taskId): void
+    {
+        $query = WorkTask::query()->whereKey($taskId);
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        $task = $query->first();
+
+        if (! $task) {
+            return;
+        }
+
+        $task->delete();
+
+        if ($this->editingTaskId === $taskId) {
+            $this->closeTaskModal();
+        }
+    }
+
+    public function getOpenWorkTasksCountProperty(): int
+    {
+        $query = WorkTask::query()->where('is_done', false);
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        return $query->count();
+    }
+
+    public function getClosedWorkTasksCountProperty(): int
+    {
+        $query = WorkTask::query()->where('is_done', true);
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        return $query->count();
     }
 
     public function getViewData(): array
@@ -73,8 +245,8 @@ class DashboardCalendarWidget extends Widget
             $key = $day['date']->format('Y-m-d');
             $collection = $itemsByDate->get($key, collect());
 
-            $day['items'] = $collection->take(5)->values()->all();
-            $day['extra_count'] = max(0, $collection->count() - 5);
+            $day['items'] = $collection->take(6)->values()->all();
+            $day['extra_count'] = max(0, $collection->count() - 6);
 
             return $day;
         });
@@ -94,8 +266,10 @@ class DashboardCalendarWidget extends Widget
             ->merge($this->machineItems($start, $end))
             ->merge($this->fireItems($start, $end))
             ->merge($this->miscellaneousItems($start, $end))
+            ->merge($this->workTaskItems($start, $end))
             ->sortBy([
                 fn ($a, $b) => strcmp($a['date']->format('Y-m-d'), $b['date']->format('Y-m-d')),
+                fn ($a, $b) => (($a['sort'] ?? 50) <=> ($b['sort'] ?? 50)),
                 fn ($a, $b) => strcmp($a['title'], $b['title']),
             ])
             ->values();
@@ -145,6 +319,17 @@ class DashboardCalendarWidget extends Widget
         return $query;
     }
 
+    protected function workTaskBaseQuery(): Builder
+    {
+        $query = WorkTask::query();
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        return $query;
+    }
+
     protected function employeeMedicalItems(Carbon $start, Carbon $end): Collection
     {
         return $this->employeeBaseQuery()
@@ -160,6 +345,8 @@ class DashboardCalendarWidget extends Widget
                         'record' => $employee,
                     ]),
                     'class' => 'medical',
+                    'type' => 'default',
+                    'sort' => 10,
                 ];
             });
     }
@@ -188,6 +375,8 @@ class DashboardCalendarWidget extends Widget
                         'record' => $certificate->employee,
                     ]),
                     'class' => 'certificate',
+                    'type' => 'default',
+                    'sort' => 20,
                 ];
             });
     }
@@ -207,6 +396,8 @@ class DashboardCalendarWidget extends Widget
                         'record' => $machine,
                     ]),
                     'class' => 'machine',
+                    'type' => 'default',
+                    'sort' => 30,
                 ];
             });
     }
@@ -226,6 +417,8 @@ class DashboardCalendarWidget extends Widget
                         'record' => $fire,
                     ]),
                     'class' => 'fire',
+                    'type' => 'default',
+                    'sort' => 40,
                 ];
             });
     }
@@ -245,6 +438,33 @@ class DashboardCalendarWidget extends Widget
                         'record' => $misc,
                     ]),
                     'class' => 'misc',
+                    'type' => 'default',
+                    'sort' => 50,
+                ];
+            });
+    }
+
+    protected function workTaskItems(Carbon $start, Carbon $end): Collection
+    {
+        return $this->workTaskBaseQuery()
+            ->whereBetween('due_date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('due_date')
+            ->orderBy('is_done')
+            ->orderBy('id')
+            ->get()
+            ->map(function (WorkTask $task) {
+                $class = $task->is_done ? 'task-done' : ($task->due_date->isPast() ? 'task-overdue' : 'task');
+
+                return [
+                    'id' => $task->id,
+                    'date' => Carbon::parse($task->due_date),
+                    'title' => $task->title,
+                    'description' => $task->description,
+                    'url' => null,
+                    'class' => $class,
+                    'type' => 'task',
+                    'is_done' => $task->is_done,
+                    'sort' => $task->is_done ? 65 : 60,
                 ];
             });
     }

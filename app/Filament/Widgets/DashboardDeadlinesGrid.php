@@ -4,9 +4,10 @@ namespace App\Filament\Widgets;
 
 use App\Models\Employee;
 use App\Models\EmployeeCertificate;
-use App\Models\Machine;
 use App\Models\Fire;
+use App\Models\Machine;
 use App\Models\Miscellaneous;
+use App\Models\WorkTask;
 use Carbon\Carbon;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
@@ -179,6 +180,37 @@ class DashboardDeadlinesGrid extends Widget
                         ],
                     ],
                 ],
+
+                [
+                    'title' => 'Radni zadaci',
+                    'items' => [
+                        [
+                            'value' => $this->countWorkTasks(),
+                            'label' => 'Ukupan broj',
+                            'color' => 'success',
+                            'icon' => 'heroicon-m-clipboard-document-check',
+                            'url' => \App\Filament\Resources\WorkTasks\WorkTaskResource::getUrl('index'),
+                        ],
+                        [
+                            'value' => $this->countWorkTasksOpen(),
+                            'label' => 'Otvoreni',
+                            'color' => 'warning',
+                            'icon' => 'heroicon-m-clipboard-document-check',
+                            'url' => \App\Filament\Resources\WorkTasks\WorkTaskResource::getUrl('index', [
+                                'status' => 'open',
+                            ]),
+                        ],
+                        [
+                            'value' => $this->countWorkTasksClosed(),
+                            'label' => 'Zatvoreni',
+                            'color' => 'danger',
+                            'icon' => 'heroicon-m-clipboard-document-check',
+                            'url' => \App\Filament\Resources\WorkTasks\WorkTaskResource::getUrl('index', [
+                                'status' => 'closed',
+                            ]),
+                        ],
+                    ],
+                ],
             ],
         ];
     }
@@ -219,6 +251,17 @@ class DashboardDeadlinesGrid extends Widget
     protected function miscellaneousBaseQuery(): Builder
     {
         $query = Miscellaneous::query();
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        return $query;
+    }
+
+    protected function workTaskBaseQuery(): Builder
+    {
+        $query = WorkTask::query();
 
         if (! Auth::user()?->isAdmin()) {
             $query->where('user_id', Auth::id());
@@ -343,6 +386,25 @@ class DashboardDeadlinesGrid extends Widget
         return $this->miscellaneousBaseQuery()
             ->whereNotNull('examination_valid_until')
             ->whereDate('examination_valid_until', '<', $today)
+            ->count();
+    }
+
+    protected function countWorkTasks(): int
+    {
+        return $this->workTaskBaseQuery()->count();
+    }
+
+    protected function countWorkTasksOpen(): int
+    {
+        return $this->workTaskBaseQuery()
+            ->where('is_done', false)
+            ->count();
+    }
+
+    protected function countWorkTasksClosed(): int
+    {
+        return $this->workTaskBaseQuery()
+            ->where('is_done', true)
             ->count();
     }
 }

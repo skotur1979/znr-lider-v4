@@ -2,7 +2,7 @@
     <style>
         .znr-dashboard-grid{
             display:grid;
-            grid-template-columns:repeat(5, minmax(0, 1fr));
+            grid-template-columns:repeat(6, minmax(0, 1fr));
             gap:16px;
         }
 
@@ -91,7 +91,7 @@
         .znr-warning{ color:#f59e0b; }
         .znr-danger{ color:#f43f5e; }
 
-        @media (max-width: 1535px){
+        @media (max-width: 1700px){
             .znr-dashboard-grid{
                 grid-template-columns:repeat(3, minmax(0, 1fr));
             }

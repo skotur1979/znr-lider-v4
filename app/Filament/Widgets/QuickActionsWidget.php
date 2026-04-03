@@ -13,6 +13,7 @@ use App\Filament\Resources\Miscellaneouses\MiscellaneousResource;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Filament\Resources\PersonalProtectiveEquipmentLogs\PersonalProtectiveEquipmentLogResource;
 use App\Filament\Resources\WasteTrackingForms\WasteTrackingFormResource;
+use App\Filament\Resources\WorkTasks\WorkTaskResource;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Auth;
 
@@ -89,6 +90,13 @@ class QuickActionsWidget extends Widget
                 'icon' => 'heroicon-o-wrench-screwdriver',
                 'url' => $this->resourceCreateUrl(MiscellaneousResource::class),
                 'color' => 'emerald',
+            ],
+            'work_task' => [
+                'label' => 'Novi radni zadatak',
+                'description' => 'Dodaj novi osobni zadatak / podsjetnik',
+                'icon' => 'heroicon-o-clipboard-document-check',
+                'url' => $this->resourceCreateUrl(WorkTaskResource::class),
+                'color' => 'violet',
             ],
             'expense' => [
                 'label' => 'Novi trošak',

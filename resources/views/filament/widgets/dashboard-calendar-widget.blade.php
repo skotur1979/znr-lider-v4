@@ -40,6 +40,7 @@
 
         .znr-cal-nav{
             display:flex;
+            align-items:center;
             gap:6px;
         }
 
@@ -67,6 +68,32 @@
             background:rgba(255,255,255,.04);
             border-color:rgba(255,255,255,.10);
             color:#fff;
+        }
+
+        .znr-cal-add-btn{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-width:32px;
+            height:32px;
+            border-radius:8px;
+            border:1px solid rgba(139,92,246,.30);
+            background:rgba(139,92,246,.10);
+            color:#7c3aed;
+            font-weight:800;
+            font-size:16px;
+            cursor:pointer;
+        }
+
+        .znr-cal-add-btn:hover{
+            transform:translateY(-1px);
+            background:rgba(139,92,246,.16);
+        }
+
+        .dark .znr-cal-add-btn{
+            color:#c4b5fd;
+            border-color:rgba(139,92,246,.34);
+            background:rgba(139,92,246,.14);
         }
 
         .znr-cal-legend{
@@ -131,12 +158,13 @@
         }
 
         .znr-cal-cell{
-            min-height:84px;
+            position:relative;
+            min-height:98px;
             padding:4px;
             border-right:1px solid #eef2f7;
             border-bottom:1px solid #eef2f7;
             background:#fff;
-            transition:background .15s ease, box-shadow .15s ease;
+            transition:background .15s ease, box-shadow .15s ease, border-color .15s ease;
         }
 
         .znr-cal-cell:nth-child(7n){
@@ -157,20 +185,39 @@
         }
 
         .znr-cal-cell.today{
-            background:#eff6ff;
-            box-shadow: inset 0 0 0 2px rgba(59,130,246,.25);
+            background: linear-gradient(180deg, #eef6ff 0%, #e0eeff 100%);
+            box-shadow:
+                inset 0 0 0 2px rgba(59,130,246,.35),
+                inset 0 0 24px rgba(59,130,246,.08);
+            border-color: rgba(59,130,246,.30);
         }
 
         .dark .znr-cal-cell.today{
-            background:rgba(37,99,235,.10);
-            box-shadow: inset 0 0 0 2px rgba(96,165,250,.30);
+            background: linear-gradient(180deg, rgba(37,99,235,.18) 0%, rgba(30,64,175,.14) 100%);
+            box-shadow:
+                inset 0 0 0 2px rgba(96,165,250,.38),
+                inset 0 0 28px rgba(96,165,250,.10);
+            border-color: rgba(96,165,250,.22);
+        }
+
+        .znr-cal-cell-top{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:6px;
+            margin-bottom:4px;
         }
 
         .znr-cal-day{
             font-size:15px;
             font-weight:800;
             color:#0f172a;
-            margin-bottom:4px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-width:24px;
+            height:24px;
+            border-radius:999px;
         }
 
         .dark .znr-cal-day{
@@ -182,11 +229,42 @@
         }
 
         .today .znr-cal-day{
-            color:#2563eb;
+            color:#1d4ed8;
+            background: rgba(255,255,255,.82);
+            box-shadow: 0 0 0 1px rgba(59,130,246,.18);
         }
 
         .dark .today .znr-cal-day{
-            color:#93c5fd;
+            color:#dbeafe;
+            background: rgba(255,255,255,.10);
+            box-shadow: 0 0 0 1px rgba(147,197,253,.22);
+        }
+
+        .znr-day-plus{
+            width:20px;
+            height:20px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:999px;
+            border:1px solid rgba(139,92,246,.30);
+            background:rgba(139,92,246,.08);
+            color:#7c3aed;
+            font-size:13px;
+            font-weight:800;
+            cursor:pointer;
+            padding:0;
+            line-height:1;
+        }
+
+        .znr-day-plus:hover{
+            background:rgba(139,92,246,.16);
+        }
+
+        .dark .znr-day-plus{
+            color:#c4b5fd;
+            border-color:rgba(139,92,246,.34);
+            background:rgba(139,92,246,.14);
         }
 
         .znr-event{
@@ -210,6 +288,166 @@
             filter:brightness(1.05);
         }
 
+        .znr-task-row{
+            display:flex;
+            align-items:center;
+            gap:4px;
+            width:100%;
+            margin-bottom:2px;
+            padding:2px 5px;
+            border-radius:5px;
+            font-size:9px;
+            line-height:1.1;
+            overflow:hidden;
+            border-left:3px solid transparent;
+            box-shadow:0 0 0 1px transparent;
+            transition:transform .12s ease, filter .12s ease;
+        }
+
+        .znr-task-row:hover{
+            transform:translateY(-1px);
+            filter:brightness(1.04);
+        }
+
+        .znr-task-main{
+            flex:1;
+            min-width:0;
+            text-align:left;
+            background:transparent;
+            border:none;
+            padding:0;
+            margin:0;
+            cursor:pointer;
+            overflow:hidden;
+            white-space:nowrap;
+            text-overflow:ellipsis;
+            font-size:9px;
+            line-height:1.1;
+            color:inherit;
+        }
+
+        .znr-task-toggle{
+            position: relative;
+            width:16px;
+            height:16px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:999px;
+            border:1.5px solid rgba(255,255,255,.72);
+            background:rgba(255,255,255,.08);
+            cursor:pointer;
+            padding:0;
+            flex-shrink:0;
+            transition:all .14s ease;
+        }
+
+        .znr-task-toggle:hover{
+            transform:scale(1.08);
+            background:rgba(255,255,255,.18);
+            border-color:rgba(255,255,255,.90);
+        }
+
+        .znr-task-toggle::after{
+            content:'';
+            width:6px;
+            height:6px;
+            border-radius:999px;
+            background:transparent;
+            transform:scale(0);
+            transition:all .14s ease;
+        }
+
+        .znr-task-row.znr-task-done .znr-task-toggle{
+            background:#ffffff;
+            border-color:#dcfce7;
+            box-shadow:0 0 0 1px rgba(255,255,255,.18);
+        }
+
+        .znr-task-row.znr-task-done .znr-task-toggle::after{
+            width:8px;
+            height:8px;
+            background:#16a34a;
+            transform:scale(1);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m5 13 4 4L19 7'/%3E%3C/svg%3E") center / contain no-repeat;
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m5 13 4 4L19 7'/%3E%3C/svg%3E") center / contain no-repeat;
+        }
+
+        .znr-task-row:not(.znr-task-done) .znr-task-toggle:hover::after{
+            transform:scale(1);
+            background:rgba(255,255,255,.88);
+        }
+
+        .znr-task-delete{
+            width:16px;
+            height:16px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border:none;
+            background:transparent;
+            color:inherit;
+            font-size:11px;
+            font-weight:900;
+            line-height:1;
+            cursor:pointer;
+            padding:0;
+            flex-shrink:0;
+            opacity:.95;
+            transition:all .14s ease;
+        }
+
+        .znr-task-delete:hover{
+            transform:scale(1.08);
+            opacity:1;
+        }
+
+        .znr-task{
+            background:#8b5cf6;
+            color:#ffffff;
+            border-left-color:#c4b5fd;
+            box-shadow:0 0 0 1px rgba(139,92,246,.28);
+        }
+
+        .dark .znr-task{
+            background:#7c3aed;
+            color:#f5f3ff;
+            border-left-color:#ddd6fe;
+            box-shadow:0 0 0 1px rgba(167,139,250,.28);
+        }
+
+        .znr-task-overdue{
+            background:#ef4444;
+            color:#ffffff;
+            border-left-color:#fecaca;
+            box-shadow:0 0 0 1px rgba(239,68,68,.28);
+        }
+
+        .dark .znr-task-overdue{
+            background:#dc2626;
+            color:#fff1f2;
+            border-left-color:#fecdd3;
+            box-shadow:0 0 0 1px rgba(251,113,133,.28);
+        }
+
+        .znr-task-done{
+            background:#22c55e;
+            color:#ffffff;
+            border-left-color:#bbf7d0;
+            box-shadow:0 0 0 1px rgba(34,197,94,.28);
+        }
+
+        .dark .znr-task-done{
+            background:#16a34a;
+            color:#f0fdf4;
+            border-left-color:#dcfce7;
+            box-shadow:0 0 0 1px rgba(74,222,128,.28);
+        }
+
+        .znr-task-done .znr-task-main{
+            text-decoration:line-through;
+        }
+
         .znr-more{
             font-size:9px;
             color:#64748b;
@@ -221,84 +459,242 @@
             color:#cbd5e1;
         }
 
-        /* LIJEČNIČKI - plava */
         .medical{
             background:#2563eb;
             border-left:3px solid #93c5fd;
             box-shadow:0 0 0 1px rgba(37,99,235,.30);
         }
+
         .medical-soon{
             background:#3b82f6;
             border-left:3px solid #bfdbfe;
         }
+
         .medical-expired{
             background:#1d4ed8;
             border-left:3px solid #dbeafe;
         }
 
-        /* OSTALI ROKOVI ZAPOSLENIKA - narančasta */
         .certificate{
             background:#f97316;
             border-left:3px solid #fdba74;
         }
+
         .certificate-soon{
             background:#fb923c;
             border-left:3px solid #fed7aa;
         }
+
         .certificate-expired{
             background:#c2410c;
             border-left:3px solid #fdba74;
         }
 
-        /* STROJEVI - žuta */
         .machine{
             background:#facc15;
             color:#111827;
             border-left:3px solid #fde047;
         }
+
         .machine-soon{
             background:#fde047;
             color:#111827;
             border-left:3px solid #fef08a;
         }
+
         .machine-expired{
             background:#eab308;
             color:#111827;
             border-left:3px solid #fde047;
         }
 
-        /* VATROGASNI APARATI - crvena */
         .fire{
             background:#ef4444;
             border-left:3px solid #fca5a5;
         }
+
         .fire-soon{
             background:#f87171;
             border-left:3px solid #fecaca;
         }
+
         .fire-expired{
             background:#b91c1c;
             border-left:3px solid #fca5a5;
         }
 
-        /* OSTALA ISPITIVANJA - zelena */
         .misc{
             background:#22c55e;
             border-left:3px solid #86efac;
         }
+
         .misc-soon{
             background:#4ade80;
             color:#052e16;
             border-left:3px solid #bbf7d0;
         }
+
         .misc-expired{
             background:#15803d;
             border-left:3px solid #86efac;
         }
 
+        .znr-task-modal{
+            position:fixed;
+            inset:0;
+            z-index:9998;
+            background:rgba(2, 6, 23, .58);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:20px;
+        }
+
+        .znr-task-modal-box{
+            width:min(680px, 100%);
+            border-radius:18px;
+            border:1px solid #dbe3f0;
+            background:#ffffff;
+            box-shadow:0 20px 40px rgba(15, 23, 42, .16);
+            overflow:hidden;
+        }
+
+        .dark .znr-task-modal-box{
+            border:1px solid rgba(148,163,184,.16);
+            background:linear-gradient(180deg, rgba(10, 24, 52, .98), rgba(4, 10, 24, .98));
+            box-shadow:0 20px 40px rgba(0,0,0,.28);
+        }
+
+        .znr-task-modal-head{
+            padding:16px 18px 10px 18px;
+            border-bottom:1px solid #e6edf7;
+        }
+
+        .dark .znr-task-modal-head{
+            border-bottom:1px solid rgba(148,163,184,.12);
+        }
+
+        .znr-task-modal-title{
+            margin:0;
+            font-size:1.05rem;
+            font-weight:800;
+            color:#111827;
+        }
+
+        .dark .znr-task-modal-title{
+            color:#fff;
+        }
+
+        .znr-task-modal-subtitle{
+            margin-top:4px;
+            font-size:.82rem;
+            color:#64748b;
+        }
+
+        .dark .znr-task-modal-subtitle{
+            color:#93c5fd;
+        }
+
+        .znr-task-modal-body{
+            padding:16px 18px;
+            display:grid;
+            gap:14px;
+        }
+
+        .znr-task-field label{
+            display:block;
+            margin-bottom:6px;
+            font-size:.84rem;
+            font-weight:700;
+            color:#334155;
+        }
+
+        .dark .znr-task-field label{
+            color:#e2e8f0;
+        }
+
+        .znr-task-input,
+        .znr-task-textarea{
+            width:100%;
+            border-radius:12px;
+            border:1px solid #dbe3f0;
+            background:#ffffff;
+            color:#0f172a;
+            padding:10px 12px;
+            font-size:.9rem;
+            outline:none;
+        }
+
+        .dark .znr-task-input,
+        .dark .znr-task-textarea{
+            border:1px solid rgba(148,163,184,.18);
+            background:rgba(2, 6, 23, .72);
+            color:#ffffff;
+        }
+
+        .znr-task-textarea{
+            min-height:110px;
+            resize:vertical;
+        }
+
+        .znr-task-error{
+            margin-top:6px;
+            color:#dc2626;
+            font-size:.78rem;
+            font-weight:600;
+        }
+
+        .dark .znr-task-error{
+            color:#fda4af;
+        }
+
+        .znr-task-modal-footer{
+            padding:14px 18px 18px 18px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:10px;
+        }
+
+        .znr-task-btns-right{
+            display:flex;
+            gap:10px;
+        }
+
+        .znr-btn{
+            border-radius:10px;
+            padding:8px 12px;
+            font-size:.82rem;
+            font-weight:700;
+            cursor:pointer;
+            border:1px solid transparent;
+        }
+
+        .znr-btn-secondary{
+            background:#f8fafc;
+            color:#334155;
+            border-color:#dbe3f0;
+        }
+
+        .dark .znr-btn-secondary{
+            background:rgba(15,23,42,.9);
+            color:#cbd5e1;
+            border-color:rgba(148,163,184,.18);
+        }
+
+        .znr-btn-primary{
+            background:#8b5cf6;
+            color:#ffffff;
+        }
+
+        .znr-btn-danger{
+            background:#ef4444;
+            color:#ffffff;
+        }
+
         @media (max-width: 1024px){
             .znr-cal-cell{
-                min-height:72px;
+                min-height:84px;
                 padding:3px;
             }
 
@@ -310,7 +706,9 @@
                 font-size:13px;
             }
 
-            .znr-event{
+            .znr-event,
+            .znr-task-main,
+            .znr-task-row{
                 font-size:8px;
             }
         }
@@ -325,7 +723,7 @@
             }
 
             .znr-cal-cell{
-                min-height:60px;
+                min-height:70px;
                 padding:3px;
             }
 
@@ -353,6 +751,10 @@
             <div class="znr-cal-title">{{ \Illuminate\Support\Str::ucfirst($monthLabel) }}</div>
 
             <div class="znr-cal-nav">
+                <button type="button" class="znr-cal-add-btn" wire:click="openTaskCreateModal">
+                    +
+                </button>
+
                 <button type="button" class="znr-cal-btn" wire:click="previousMonth">‹</button>
                 <button type="button" class="znr-cal-btn" wire:click="nextMonth">›</button>
             </div>
@@ -388,6 +790,12 @@
                 @svg('heroicon-m-wrench-screwdriver', 'znr-legend-icon')
                 <span>Ostala ispitivanja</span>
             </div>
+
+            <div class="znr-legend-item">
+                <span class="znr-legend-dot task"></span>
+                @svg('heroicon-m-clipboard-document-check', 'znr-legend-icon')
+                <span>Radni zadaci</span>
+            </div>
         </div>
 
         <div class="znr-cal-grid">
@@ -400,16 +808,62 @@
             <div class="znr-cal-grid">
                 @foreach($week as $day)
                     <div class="znr-cal-cell {{ $day['in_month'] ? '' : 'muted' }} {{ $day['date']->isToday() ? 'today' : '' }}">
-                        <div class="znr-cal-day">{{ $day['date']->day }}</div>
+                        <div class="znr-cal-cell-top">
+                            <div class="znr-cal-day">{{ $day['date']->day }}</div>
+
+                            <button
+                                type="button"
+                                class="znr-day-plus"
+                                wire:click="openTaskCreateModal('{{ $day['date']->format('Y-m-d') }}')"
+                                title="Dodaj radni zadatak"
+                            >
+                                +
+                            </button>
+                        </div>
 
                         @foreach($day['items'] as $item)
-                            <a
-                                href="{{ $item['url'] }}"
-                                class="znr-event {{ $item['class'] }}"
-                                title="{{ $item['title'] }}"
-                            >
-                                {{ $item['title'] }}
-                            </a>
+                            @if(($item['type'] ?? 'default') === 'task')
+                                <div
+                                    class="znr-task-row {{ $item['class'] }}"
+                                    wire:key="task-{{ $item['id'] }}-{{ !empty($item['is_done']) ? 'done' : 'open' }}"
+                                >
+                                    <button
+                                        type="button"
+                                        class="znr-task-toggle"
+                                        wire:click.stop="{{ !empty($item['is_done']) ? 'reopenTask' : 'completeTask' }}({{ $item['id'] }})"
+                                        title="{{ !empty($item['is_done']) ? 'Vrati u otvorene' : 'Zatvori zadatak' }}"
+                                        aria-label="{{ !empty($item['is_done']) ? 'Vrati u otvorene' : 'Zatvori zadatak' }}"
+                                    ></button>
+
+                                    <button
+                                        type="button"
+                                        class="znr-task-main"
+                                        wire:click.stop="openTaskEditModal({{ $item['id'] }})"
+                                        title="Uredi zadatak: {{ $item['title'] }}"
+                                    >
+                                        {{ $item['title'] }}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        class="znr-task-delete"
+                                        wire:click.stop="deleteTask({{ $item['id'] }})"
+                                        wire:confirm="Obrisati radni zadatak?"
+                                        title="Obriši zadatak"
+                                        aria-label="Obriši zadatak"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            @else
+                                <a
+                                    href="{{ $item['url'] }}"
+                                    class="znr-event {{ $item['class'] }}"
+                                    title="{{ $item['title'] }}"
+                                >
+                                    {{ $item['title'] }}
+                                </a>
+                            @endif
                         @endforeach
 
                         @if($day['extra_count'] > 0)
@@ -420,4 +874,86 @@
             </div>
         @endforeach
     </div>
+
+    @if ($showTaskModal)
+        <div class="znr-task-modal">
+            <div class="znr-task-modal-box">
+                <div class="znr-task-modal-head">
+                    <h3 class="znr-task-modal-title">
+                        {{ $editingTaskId ? 'Uredi radni zadatak' : 'Novi radni zadatak' }}
+                    </h3>
+
+                    <div class="znr-task-modal-subtitle">
+                        Zadatak će biti prikazan u glavnom kalendaru.
+                    </div>
+                </div>
+
+                <div class="znr-task-modal-body">
+                    <div class="znr-task-field">
+                        <label>Naziv zadatka</label>
+                        <input
+                            type="text"
+                            wire:model.defer="taskTitle"
+                            maxlength="120"
+                            class="znr-task-input"
+                            placeholder="Npr. Pošalji uputnicu dr. medicine rada"
+                        >
+                        @error('taskTitle')
+                            <div class="znr-task-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="znr-task-field">
+                        <label>Opis</label>
+                        <textarea
+                            wire:model.defer="taskDescription"
+                            maxlength="1000"
+                            class="znr-task-textarea"
+                            placeholder="Dodatna napomena..."
+                        ></textarea>
+                        @error('taskDescription')
+                            <div class="znr-task-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="znr-task-field">
+                        <label>Datum</label>
+                        <input
+                            type="date"
+                            wire:model.defer="taskDate"
+                            class="znr-task-input"
+                        >
+                        @error('taskDate')
+                            <div class="znr-task-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="znr-task-modal-footer">
+                    <div>
+                        @if ($editingTaskId)
+                            <button
+                                type="button"
+                                class="znr-btn znr-btn-danger"
+                                wire:click="deleteTask({{ $editingTaskId }})"
+                                wire:confirm="Obrisati radni zadatak?"
+                            >
+                                Obriši
+                            </button>
+                        @endif
+                    </div>
+
+                    <div class="znr-task-btns-right">
+                        <button type="button" class="znr-btn znr-btn-secondary" wire:click="closeTaskModal">
+                            Odustani
+                        </button>
+
+                        <button type="button" class="znr-btn znr-btn-primary" wire:click="saveTask">
+                            Spremi
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </x-filament-widgets::widget>
