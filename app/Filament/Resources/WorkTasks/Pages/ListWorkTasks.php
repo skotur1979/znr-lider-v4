@@ -16,9 +16,17 @@ class ListWorkTasks extends ListRecords
 
         $status = request()->query('status');
 
-        if (in_array($status, ['open', 'closed'], true)) {
-            $this->tableFilters['status']['value'] = $status;
+        if ($status === 'open') {
+            $this->tableFilters['status']['value'] = 'open';
+            return;
         }
+
+        if ($status === 'closed') {
+            $this->tableFilters['status']['value'] = 'closed';
+            return;
+        }
+
+        unset($this->tableFilters['status']);
     }
 
     protected function getHeaderActions(): array

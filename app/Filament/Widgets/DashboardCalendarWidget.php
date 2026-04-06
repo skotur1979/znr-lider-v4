@@ -135,6 +135,7 @@ class DashboardCalendarWidget extends Widget
             ]);
         }
 
+        $this->dispatch('work-task-updated');
         $this->closeTaskModal();
     }
 
@@ -148,7 +149,11 @@ class DashboardCalendarWidget extends Widget
 
         $task = $query->first();
 
-        if (! $task || $task->is_done) {
+        if (! $task) {
+            return;
+        }
+
+        if ($task->is_done) {
             return;
         }
 
@@ -156,6 +161,8 @@ class DashboardCalendarWidget extends Widget
             'is_done' => true,
             'completed_at' => now(),
         ]);
+
+        $this->dispatch('work-task-updated');
     }
 
     public function reopenTask(int $taskId): void
@@ -168,7 +175,11 @@ class DashboardCalendarWidget extends Widget
 
         $task = $query->first();
 
-        if (! $task || ! $task->is_done) {
+        if (! $task) {
+            return;
+        }
+
+        if (! $task->is_done) {
             return;
         }
 
@@ -176,6 +187,8 @@ class DashboardCalendarWidget extends Widget
             'is_done' => false,
             'completed_at' => null,
         ]);
+
+        $this->dispatch('work-task-updated');
     }
 
     public function deleteTask(int $taskId): void
@@ -197,6 +210,8 @@ class DashboardCalendarWidget extends Widget
         if ($this->editingTaskId === $taskId) {
             $this->closeTaskModal();
         }
+
+        $this->dispatch('work-task-updated');
     }
 
     public function getOpenWorkTasksCountProperty(): int
@@ -453,7 +468,9 @@ class DashboardCalendarWidget extends Widget
             ->orderBy('id')
             ->get()
             ->map(function (WorkTask $task) {
-                $class = $task->is_done ? 'task-done' : ($task->due_date->isPast() ? 'task-overdue' : 'task');
+                $class = $task->is_done
+                    ? 'znr-task-done'
+                    : ($task->due_date->isPast() ? 'znr-task-overdue' : 'znr-task');
 
                 return [
                     'id' => $task->id,
@@ -463,7 +480,7 @@ class DashboardCalendarWidget extends Widget
                     'url' => null,
                     'class' => $class,
                     'type' => 'task',
-                    'is_done' => $task->is_done,
+                    'is_done' => (bool) $task->is_done,
                     'sort' => $task->is_done ? 65 : 60,
                 ];
             });

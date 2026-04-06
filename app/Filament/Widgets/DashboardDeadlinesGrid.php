@@ -12,12 +12,19 @@ use Carbon\Carbon;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 
 class DashboardDeadlinesGrid extends Widget
 {
     protected string $view = 'filament.widgets.dashboard-deadlines-grid';
 
     protected int|string|array $columnSpan = 'full';
+
+    #[On('work-task-updated')]
+    public function refreshWorkTaskCards(): void
+    {
+        //
+    }
 
     public function getViewData(): array
     {
@@ -189,7 +196,9 @@ class DashboardDeadlinesGrid extends Widget
                             'label' => 'Ukupan broj',
                             'color' => 'success',
                             'icon' => 'heroicon-m-clipboard-document-check',
-                            'url' => \App\Filament\Resources\WorkTasks\WorkTaskResource::getUrl('index'),
+                            'url' => \App\Filament\Resources\WorkTasks\WorkTaskResource::getUrl('index', [
+                                'status' => 'all',
+                            ]),
                         ],
                         [
                             'value' => $this->countWorkTasksOpen(),

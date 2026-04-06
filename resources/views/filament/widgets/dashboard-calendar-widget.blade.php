@@ -299,8 +299,6 @@
             font-size:9px;
             line-height:1.1;
             overflow:hidden;
-            border-left:3px solid transparent;
-            box-shadow:0 0 0 1px transparent;
             transition:transform .12s ease, filter .12s ease;
         }
 
@@ -327,7 +325,6 @@
         }
 
         .znr-task-toggle{
-            position: relative;
             width:16px;
             height:16px;
             display:inline-flex;
@@ -358,26 +355,6 @@
             transition:all .14s ease;
         }
 
-        .znr-task-row.znr-task-done .znr-task-toggle{
-            background:#ffffff;
-            border-color:#dcfce7;
-            box-shadow:0 0 0 1px rgba(255,255,255,.18);
-        }
-
-        .znr-task-row.znr-task-done .znr-task-toggle::after{
-            width:8px;
-            height:8px;
-            background:#16a34a;
-            transform:scale(1);
-            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m5 13 4 4L19 7'/%3E%3C/svg%3E") center / contain no-repeat;
-            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m5 13 4 4L19 7'/%3E%3C/svg%3E") center / contain no-repeat;
-        }
-
-        .znr-task-row:not(.znr-task-done) .znr-task-toggle:hover::after{
-            transform:scale(1);
-            background:rgba(255,255,255,.88);
-        }
-
         .znr-task-delete{
             width:16px;
             height:16px;
@@ -405,7 +382,7 @@
         .znr-task{
             background:#8b5cf6;
             color:#ffffff;
-            border-left-color:#c4b5fd;
+            border-left:3px solid #c4b5fd;
             box-shadow:0 0 0 1px rgba(139,92,246,.28);
         }
 
@@ -419,7 +396,7 @@
         .znr-task-overdue{
             background:#ef4444;
             color:#ffffff;
-            border-left-color:#fecaca;
+            border-left:3px solid #fecaca;
             box-shadow:0 0 0 1px rgba(239,68,68,.28);
         }
 
@@ -433,7 +410,7 @@
         .znr-task-done{
             background:#22c55e;
             color:#ffffff;
-            border-left-color:#bbf7d0;
+            border-left:3px solid #bbf7d0;
             box-shadow:0 0 0 1px rgba(34,197,94,.28);
         }
 
@@ -446,6 +423,26 @@
 
         .znr-task-done .znr-task-main{
             text-decoration:line-through;
+        }
+
+        .znr-task-done .znr-task-toggle{
+            background:#ffffff;
+            border-color:#dcfce7;
+        }
+
+        .znr-task-done .znr-task-toggle::after{
+            width:8px;
+            height:8px;
+            background:#16a34a;
+            transform:scale(1);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m5 13 4 4L19 7'/%3E%3C/svg%3E") center / contain no-repeat;
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m5 13 4 4L19 7'/%3E%3C/svg%3E") center / contain no-repeat;
+        }
+
+        .znr-task:not(.znr-task-done) .znr-task-toggle:hover::after,
+        .znr-task-overdue:not(.znr-task-done) .znr-task-toggle:hover::after{
+            transform:scale(1);
+            background:rgba(255,255,255,.88);
         }
 
         .znr-more{
@@ -465,28 +462,8 @@
             box-shadow:0 0 0 1px rgba(37,99,235,.30);
         }
 
-        .medical-soon{
-            background:#3b82f6;
-            border-left:3px solid #bfdbfe;
-        }
-
-        .medical-expired{
-            background:#1d4ed8;
-            border-left:3px solid #dbeafe;
-        }
-
         .certificate{
             background:#f97316;
-            border-left:3px solid #fdba74;
-        }
-
-        .certificate-soon{
-            background:#fb923c;
-            border-left:3px solid #fed7aa;
-        }
-
-        .certificate-expired{
-            background:#c2410c;
             border-left:3px solid #fdba74;
         }
 
@@ -496,46 +473,13 @@
             border-left:3px solid #fde047;
         }
 
-        .machine-soon{
-            background:#fde047;
-            color:#111827;
-            border-left:3px solid #fef08a;
-        }
-
-        .machine-expired{
-            background:#eab308;
-            color:#111827;
-            border-left:3px solid #fde047;
-        }
-
         .fire{
             background:#ef4444;
             border-left:3px solid #fca5a5;
         }
 
-        .fire-soon{
-            background:#f87171;
-            border-left:3px solid #fecaca;
-        }
-
-        .fire-expired{
-            background:#b91c1c;
-            border-left:3px solid #fca5a5;
-        }
-
         .misc{
             background:#22c55e;
-            border-left:3px solid #86efac;
-        }
-
-        .misc-soon{
-            background:#4ade80;
-            color:#052e16;
-            border-left:3px solid #bbf7d0;
-        }
-
-        .misc-expired{
-            background:#15803d;
             border-left:3px solid #86efac;
         }
 
@@ -827,13 +771,23 @@
                                     class="znr-task-row {{ $item['class'] }}"
                                     wire:key="task-{{ $item['id'] }}-{{ !empty($item['is_done']) ? 'done' : 'open' }}"
                                 >
-                                    <button
-                                        type="button"
-                                        class="znr-task-toggle"
-                                        wire:click.stop="{{ !empty($item['is_done']) ? 'reopenTask' : 'completeTask' }}({{ $item['id'] }})"
-                                        title="{{ !empty($item['is_done']) ? 'Vrati u otvorene' : 'Zatvori zadatak' }}"
-                                        aria-label="{{ !empty($item['is_done']) ? 'Vrati u otvorene' : 'Zatvori zadatak' }}"
-                                    ></button>
+                                    @if (!empty($item['is_done']))
+                                        <button
+                                            type="button"
+                                            class="znr-task-toggle"
+                                            wire:click.stop="reopenTask({{ $item['id'] }})"
+                                            title="Vrati u otvorene"
+                                            aria-label="Vrati u otvorene"
+                                        ></button>
+                                    @else
+                                        <button
+                                            type="button"
+                                            class="znr-task-toggle"
+                                            wire:click.stop="completeTask({{ $item['id'] }})"
+                                            title="Zatvori zadatak"
+                                            aria-label="Zatvori zadatak"
+                                        ></button>
+                                    @endif
 
                                     <button
                                         type="button"
