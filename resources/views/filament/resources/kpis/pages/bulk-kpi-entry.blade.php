@@ -152,10 +152,9 @@
                 <thead>
                     <tr>
                         <th class="kpi-left" style="width: 260px;">KPI</th>
-                        <th class="kpi-center" style="width: 120px;">Kategorija</th>
+                        <th class="kpi-center" style="width: 110px;">Kategorija</th>
                         <th class="kpi-center" style="width: 90px;">Jedinica</th>
                         <th class="kpi-center" style="width: 140px;">Vrijednost</th>
-                        <th class="kpi-center" style="width: 140px;">Izvor</th>
                         <th class="kpi-left">Komentar</th>
                     </tr>
                 </thead>
@@ -169,15 +168,12 @@
                                 <input type="number" step="0.0001" wire:model.defer="rows.{{ $index }}.value" class="kpi-input">
                             </td>
                             <td>
-                                <input type="text" wire:model.defer="rows.{{ $index }}.source_label" class="kpi-input">
-                            </td>
-                            <td>
                                 <input type="text" wire:model.defer="rows.{{ $index }}.note" class="kpi-input">
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="padding: 24px; text-align:center; color:#6b7280;">
+                            <td colspan="5" style="padding: 24px; text-align:center; color:#6b7280;">
                                 Nema ručnih KPI-eva za bulk unos.
                             </td>
                         </tr>

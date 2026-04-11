@@ -3,12 +3,12 @@
 namespace App\Services;
 
 use App\Models\Incident;
+use App\Models\Inspection;
+use App\Models\InspectionFinding;
 use App\Models\Kpi;
 use App\Models\KpiValue;
 use App\Models\Observation;
 use App\Models\OntoEntry;
-use App\Models\Inspection;
-use App\Models\InspectionFinding;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -17,11 +17,35 @@ use Illuminate\Support\Facades\Schema;
 
 class KpiCalculationService
 {
+    public static function automaticSourceKeys(): array
+    {
+        return [
+            'days_without_lta',
+            'lta_count',
+            'lta_lost_days',
+            'near_miss_count',
+            'negative_observation_count',
+            'inspection_count',
+            'corrective_actions_open',
+            'corrective_actions_closed',
+            'corrective_actions_in_progress',
+            'corrective_actions_delay_days',
+            'non_hazardous_waste_kg',
+            'hazardous_waste_kg',
+            'municipal_waste_kg',
+            'afr',
+            'asr',
+        ];
+    }
+
     public function generateForMonth(int $month, int $year): void
     {
-        Kpi::query()
+        $this->baseKpiQuery()
             ->where('is_active', true)
-            ->whereIn('calculation_type', ['automatic', 'formula'])
+            ->where(function (Builder $q) {
+                $q->whereIn('calculation_type', ['automatic', 'formula'])
+                    ->orWhereIn('source_key', self::automaticSourceKeys());
+            })
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
@@ -42,6 +66,7 @@ class KpiCalculationService
                         'value' => $value,
                         'auto_generated' => true,
                         'source_label' => $this->sourceLabel($kpi),
+                        'note' => null,
                     ]
                 );
             });
@@ -51,6 +76,8 @@ class KpiCalculationService
     {
         return match ($kpi->source_key) {
             'days_without_lta' => $this->daysWithoutLta($month, $year),
+            'lta_count' => $this->ltaCount($month, $year),
+            'lta_lost_days' => $this->ltaLostDays($month, $year),
             'near_miss_count' => $this->nearMissCount($month, $year),
             'negative_observation_count' => $this->negativeObservationCount($month, $year),
             'inspection_count' => $this->inspectionCount($month, $year),
@@ -61,9 +88,6 @@ class KpiCalculationService
             'non_hazardous_waste_kg' => $this->nonHazardousWasteKg($month, $year),
             'hazardous_waste_kg' => $this->hazardousWasteKg($month, $year),
             'municipal_waste_kg' => $this->municipalWasteKg($month, $year),
-            'total_work_hours' => $this->manualLinkedValue('Ukupan broj odrađenih radnih sati', $month, $year),
-            'lta_count' => $this->ltaCount($month, $year),
-            'lta_lost_days' => $this->ltaLostDays($month, $year),
             'afr' => $this->calculateAfr($month, $year),
             'asr' => $this->calculateAsr($month, $year),
             default => null,
@@ -73,27 +97,23 @@ class KpiCalculationService
     public function sourceLabel(Kpi $kpi): string
     {
         return match ($kpi->source_key) {
-            'days_without_lta' => 'Incidenti',
-            'near_miss_count' => 'Zapažanja',
-            'negative_observation_count' => 'Zapažanja',
+            'days_without_lta', 'lta_count', 'lta_lost_days' => 'Incidenti',
+            'near_miss_count', 'negative_observation_count' => 'Zapažanja',
             'inspection_count' => 'Nadzori',
-            'corrective_actions_open' => 'Nalazi nadzora',
-            'corrective_actions_closed' => 'Nalazi nadzora',
-            'corrective_actions_in_progress' => 'Nalazi nadzora',
-            'corrective_actions_delay_days' => 'Nalazi nadzora',
-            'non_hazardous_waste_kg' => 'ONTO',
-            'hazardous_waste_kg' => 'ONTO',
-            'municipal_waste_kg' => 'ONTO',
-            'lta_count' => 'Incidenti',
-            'lta_lost_days' => 'Incidenti',
+            'corrective_actions_open', 'corrective_actions_closed', 'corrective_actions_in_progress', 'corrective_actions_delay_days' => 'Nalazi nadzora',
+            'non_hazardous_waste_kg', 'hazardous_waste_kg', 'municipal_waste_kg' => 'ONTO',
             'afr' => 'Formula AFR',
             'asr' => 'Formula ASR',
-            default => 'Ručno / povezano',
+            default => 'Ručno',
         };
     }
 
-    public function dashboardGroups(int $month, int $year): Collection
-    {
+    public function dashboardGroups(
+        int $month,
+        int $year,
+        ?int $compareMonth = null,
+        ?int $compareYear = null
+    ): Collection {
         return $this->baseKpiQuery()
             ->where('is_active', true)
             ->where('show_on_dashboard', true)
@@ -101,25 +121,75 @@ class KpiCalculationService
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(function (Kpi $kpi) use ($month, $year) {
+            ->map(function (Kpi $kpi) use ($month, $year, $compareMonth, $compareYear) {
                 $current = $kpi->valueFor($month, $year);
-                $previous = $kpi->previousMonthValue($month, $year);
-                $lastYear = $kpi->sameMonthLastYearValue($month, $year);
+
+                $compare = null;
+                if ($compareMonth !== null && $compareYear !== null) {
+                    $compare = $kpi->valueFor($compareMonth, $compareYear);
+                }
 
                 return [
                     'id' => $kpi->id,
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
-                    'target' => $kpi->target_value,
-                    'value' => $current?->value,
-                    'formatted_value' => $kpi->formatNumberOnly($current?->value),
+                    'current_value' => $current?->value,
+                    'compare_value' => $compare?->value,
+                    'formatted_current' => $kpi->formatNumberOnly($current?->value),
+                    'formatted_compare' => $kpi->formatNumberOnly($compare?->value),
                     'formatted_target' => $kpi->formatNumberOnly($kpi->target_value),
                     'status' => $kpi->evaluateStatus($current?->value),
-                    'previous_value' => $previous?->value,
-                    'last_year_value' => $lastYear?->value,
-                    'trend_month' => $this->trend($current?->value, $previous?->value),
-                    'trend_year' => $this->trend($current?->value, $lastYear?->value),
+                    'delta' => $this->delta($current?->value, $compare?->value),
+                ];
+            })
+            ->groupBy('category');
+    }
+
+    public function dashboardGroupsYearly(
+        int $year,
+        ?int $compareYear = null
+    ): Collection {
+        return $this->baseKpiQuery()
+            ->where('is_active', true)
+            ->where('show_on_dashboard', true)
+            ->orderBy('category')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(function (Kpi $kpi) use ($year, $compareYear) {
+                $currentValues = collect(range(1, 12))
+                    ->map(fn (int $month) => $kpi->valueFor($month, $year)?->value)
+                    ->filter(fn ($value) => $value !== null);
+
+                $current = $currentValues->isNotEmpty()
+                    ? round((float) $currentValues->sum(), 2)
+                    : null;
+
+                $compare = null;
+
+                if ($compareYear !== null) {
+                    $compareValues = collect(range(1, 12))
+                        ->map(fn (int $month) => $kpi->valueFor($month, $compareYear)?->value)
+                        ->filter(fn ($value) => $value !== null);
+
+                    $compare = $compareValues->isNotEmpty()
+                        ? round((float) $compareValues->sum(), 2)
+                        : null;
+                }
+
+                return [
+                    'id' => $kpi->id,
+                    'name' => $kpi->name,
+                    'category' => $kpi->category,
+                    'unit' => $kpi->unit,
+                    'current_value' => $current,
+                    'compare_value' => $compare,
+                    'formatted_current' => $kpi->formatNumberOnly($current),
+                    'formatted_compare' => $kpi->formatNumberOnly($compare),
+                    'formatted_target' => $kpi->formatNumberOnly($kpi->target_value),
+                    'status' => $kpi->evaluateStatus($current),
+                    'delta' => $this->delta($current, $compare),
                 ];
             })
             ->groupBy('category');
@@ -137,6 +207,9 @@ class KpiCalculationService
                 $values = collect(range(1, 12))
                     ->mapWithKeys(fn (int $month) => [$month => $kpi->valueFor($month, $year)?->value]);
 
+                $statuses = collect(range(1, 12))
+                    ->mapWithKeys(fn (int $month) => [$month => $kpi->evaluateStatus($kpi->valueFor($month, $year)?->value)]);
+
                 $total = $values->filter(fn ($value) => $value !== null)->sum();
                 $average = $values->filter(fn ($value) => $value !== null)->avg();
 
@@ -145,9 +218,9 @@ class KpiCalculationService
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
-                    'target' => $kpi->target_value,
                     'formatted_target' => $kpi->formatNumberOnly($kpi->target_value),
                     'values' => $values,
+                    'statuses' => $statuses,
                     'total' => $total,
                     'average' => $average,
                 ];
@@ -155,10 +228,18 @@ class KpiCalculationService
             ->groupBy('category');
     }
 
+    protected function delta(?float $current, ?float $compare): ?float
+    {
+        if ($current === null || $compare === null) {
+            return null;
+        }
+
+        return round($current - $compare, 2);
+    }
+
     protected function baseKpiQuery(): Builder
     {
         $query = Kpi::query();
-
         $user = Auth::user();
 
         if (! $user) {
@@ -173,31 +254,6 @@ class KpiCalculationService
             $q->where('user_id', $user->id)
                 ->orWhereNull('user_id');
         });
-    }
-
-    protected function trend(?float $current, ?float $compare): string
-    {
-        if ($current === null || $compare === null) {
-            return 'neutral';
-        }
-
-        if ($current > $compare) {
-            return 'up';
-        }
-
-        if ($current < $compare) {
-            return 'down';
-        }
-
-        return 'same';
-    }
-
-    protected function dateRange(int $month, int $year): array
-    {
-        $start = Carbon::create($year, $month, 1)->startOfMonth();
-        $end = Carbon::create($year, $month, 1)->endOfMonth();
-
-        return [$start, $end];
     }
 
     protected function userScopedQuery(Builder $query): Builder
@@ -217,6 +273,14 @@ class KpiCalculationService
         }
 
         return $query;
+    }
+
+    protected function dateRange(int $month, int $year): array
+    {
+        $start = Carbon::create($year, $month, 1)->startOfMonth();
+        $end = Carbon::create($year, $month, 1)->endOfMonth();
+
+        return [$start, $end];
     }
 
     protected function daysWithoutLta(int $month, int $year): ?float
@@ -355,26 +419,26 @@ class KpiCalculationService
 
     protected function nonHazardousWasteKg(int $month, int $year): ?float
     {
-        return $this->sumOntoWaste($month, $year, function (string $normalizedCode, bool $hasStar) {
+        return $this->sumOntoWasteOutput($month, $year, function (string $normalizedCode, bool $hasStar) {
             return ! $hasStar && $normalizedCode !== '200301';
         });
     }
 
     protected function hazardousWasteKg(int $month, int $year): ?float
     {
-        return $this->sumOntoWaste($month, $year, function (string $normalizedCode, bool $hasStar) {
+        return $this->sumOntoWasteOutput($month, $year, function (string $normalizedCode, bool $hasStar) {
             return $hasStar;
         });
     }
 
     protected function municipalWasteKg(int $month, int $year): ?float
     {
-        return $this->sumOntoWaste($month, $year, function (string $normalizedCode, bool $hasStar) {
+        return $this->sumOntoWasteOutput($month, $year, function (string $normalizedCode, bool $hasStar) {
             return $normalizedCode === '200301';
         });
     }
 
-    protected function sumOntoWaste(int $month, int $year, callable $filter): ?float
+    protected function sumOntoWasteOutput(int $month, int $year, callable $filter): ?float
     {
         if (! class_exists(OntoEntry::class) || ! Schema::hasTable('onto_entries')) {
             return null;
@@ -397,7 +461,7 @@ class KpiCalculationService
             $hasStar = str_contains($code, '*');
 
             if ($filter($normalizedCode, $hasStar)) {
-                $sum += (float) ($entry->output_kg ?: $entry->input_kg ?: 0);
+                $sum += (float) ($entry->output_kg ?: 0);
             }
         }
 

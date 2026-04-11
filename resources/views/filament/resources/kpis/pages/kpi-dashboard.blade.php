@@ -1,6 +1,25 @@
 <x-filament-panels::page>
 @php
-    $formatNumber = fn ($value) => $value !== null ? number_format((float) $value, 2, ',', '.') : '-';
+    $chartData = collect($chartRows ?? [])
+        ->filter(fn ($row) => $row['current_value'] !== null || $row['compare_value'] !== null)
+        ->values();
+
+    $barMax = $chartData->flatMap(function ($row) {
+        return array_filter([
+            $row['current_value'],
+            $row['compare_value'],
+        ], fn ($v) => $v !== null);
+    })->max();
+
+    $barMax = ($barMax && $barMax > 0) ? $barMax : 1;
+
+    $hasCompare = filled($compareYear) && ($viewMode === 'year' || filled($compareMonth));
+
+    $categories = collect($availableKpis ?? [])
+        ->pluck('category')
+        ->filter()
+        ->unique()
+        ->values();
 @endphp
 
 <style>
@@ -50,16 +69,27 @@
         line-height: 1.15;
     }
 
-    .kpi-filters {
+    .kpi-filter-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(4, 1fr);
         gap: 14px;
         padding: 16px;
         border-bottom: 1px solid #d1d5db;
     }
 
-    .dark .kpi-filters {
+    .dark .kpi-filter-grid {
         border-bottom-color: rgba(255,255,255,.10);
+    }
+
+    .kpi-chart-filter-wrap {
+        padding: 16px;
+        border-top: 1px solid #d1d5db;
+        border-bottom: 1px solid #d1d5db;
+        background: rgba(255,255,255,.02);
+    }
+
+    .dark .kpi-chart-filter-wrap {
+        border-color: rgba(255,255,255,.10);
     }
 
     .kpi-label {
@@ -72,7 +102,7 @@
         margin-bottom: 6px;
     }
 
-    .kpi-select {
+    .kpi-input {
         width: 100%;
         border-radius: 12px;
         border: 1px solid #d1d5db;
@@ -83,7 +113,7 @@
         font-weight: 600;
     }
 
-    .dark .kpi-select {
+    .dark .kpi-input {
         background: #0f172a;
         color: #f8fafc;
         border-color: rgba(255,255,255,.10);
@@ -95,86 +125,54 @@
         font-weight: 800;
         text-transform: uppercase;
         padding: 10px 16px;
+        border-top: 1px solid #d1d5db;
         border-bottom: 1px solid #d1d5db;
         background: #f9fafb;
     }
 
     .dark .kpi-section-title {
         background: rgba(255,255,255,.03);
-        border-bottom-color: rgba(255,255,255,.10);
-    }
-
-    .kpi-cards {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        padding: 16px;
-    }
-
-    .kpi-card {
-        border: 1px solid #d1d5db;
-        border-radius: 14px;
-        padding: 14px;
-        background: #ffffff;
-    }
-
-    .dark .kpi-card {
-        background: rgba(255,255,255,.02);
         border-color: rgba(255,255,255,.10);
     }
 
-    .kpi-card.success {
-        background: rgba(34, 197, 94, .08);
-        border-color: rgba(34, 197, 94, .25);
+    .kpi-table-wrap {
+        overflow-x: auto;
     }
 
-    .kpi-card.warning {
-        background: rgba(245, 158, 11, .08);
-        border-color: rgba(245, 158, 11, .25);
+    .kpi-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
     }
 
-    .kpi-card.danger {
-        background: rgba(239, 68, 68, .08);
-        border-color: rgba(239, 68, 68, .25);
-    }
-
-    .kpi-card-title {
-        font-size: 14px;
-        font-weight: 800;
-        margin-bottom: 4px;
-    }
-
-    .kpi-card-unit {
-        font-size: 12px;
-        opacity: .75;
-        margin-bottom: 8px;
-    }
-
-    .kpi-card-value {
-        font-size: 30px;
-        font-weight: 900;
-        line-height: 1;
-        margin-bottom: 10px;
-    }
-
-    .kpi-meta {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
-
-    .kpi-mini {
+    .kpi-table th,
+    .kpi-table td {
         border: 1px solid #d1d5db;
-        border-radius: 10px;
         padding: 8px 10px;
-        background: rgba(255,255,255,.55);
-        font-size: 12px;
+        font-size: 13px;
+        vertical-align: middle;
     }
 
-    .dark .kpi-mini {
-        border-color: rgba(255,255,255,.08);
-        background: rgba(0,0,0,.18);
+    .dark .kpi-table th,
+    .dark .kpi-table td {
+        border-color: rgba(255,255,255,.10);
     }
+
+    .kpi-table thead th {
+        background: #f3f4f6;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+        text-align: center;
+    }
+
+    .dark .kpi-table thead th {
+        background: rgba(255,255,255,.04);
+    }
+
+    .kpi-left { text-align: left; }
+    .kpi-center { text-align: center; }
+    .kpi-right { text-align: right; font-variant-numeric: tabular-nums; }
 
     .kpi-badge {
         display: inline-flex;
@@ -183,7 +181,6 @@
         border-radius: 999px;
         font-size: 12px;
         font-weight: 700;
-        margin-top: 8px;
     }
 
     .kpi-badge.success {
@@ -211,15 +208,201 @@
     .dark .kpi-badge.danger { color: #fca5a5; }
     .dark .kpi-badge.neutral { color: #d1d5db; }
 
-    @media (max-width: 1200px) {
-        .kpi-cards {
+    .kpi-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .kpi-toolbar-btn {
+        appearance: none;
+        border: 1px solid rgba(255,255,255,.10);
+        background: #0f172a;
+        color: #f8fafc;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: .15s ease;
+    }
+
+    .kpi-toolbar-btn:hover {
+        transform: translateY(-1px);
+        border-color: rgba(96, 165, 250, .45);
+    }
+
+    .kpi-checkbox-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .kpi-checkbox-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #0f172a;
+        cursor: pointer;
+        transition: all .15s ease;
+    }
+
+    .kpi-checkbox-card:hover {
+        border-color: rgba(96, 165, 250, .45);
+        box-shadow: 0 0 0 1px rgba(96, 165, 250, .10);
+    }
+
+    .kpi-checkbox-input {
+        width: 16px;
+        height: 16px;
+        accent-color: #2563eb;
+        flex: 0 0 auto;
+    }
+
+    .kpi-checkbox-text {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+
+    .kpi-chart-wrap {
+        padding: 16px;
+    }
+
+    .kpi-chart-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+
+    .kpi-chart-title {
+        font-size: 15px;
+        font-weight: 800;
+    }
+
+    .kpi-chart-subtitle {
+        font-size: 13px;
+        opacity: .75;
+        margin-top: 4px;
+    }
+
+    .kpi-legend {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .kpi-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .kpi-legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        display: inline-block;
+    }
+
+    .kpi-legend-dot.current {
+        background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    }
+
+    .kpi-legend-dot.compare {
+        background: linear-gradient(90deg, #22c55e, #84cc16);
+    }
+
+    .kpi-bars {
+        display: grid;
+        gap: 16px;
+    }
+
+    .kpi-bar-row {
+        display: grid;
+        grid-template-columns: 260px 1fr 110px 110px;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .kpi-bar-label {
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .kpi-bar-stack {
+        display: grid;
+        gap: 7px;
+    }
+
+    .kpi-bar-track {
+        width: 100%;
+        height: 16px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, .16);
+        overflow: hidden;
+        position: relative;
+    }
+
+    .kpi-bar-fill-current {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #3b82f6, #06b6d4);
+        box-shadow: 0 0 10px rgba(59, 130, 246, .25);
+    }
+
+    .kpi-bar-fill-compare {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #22c55e, #84cc16);
+        box-shadow: 0 0 10px rgba(34, 197, 94, .20);
+    }
+
+    .kpi-bar-value {
+        text-align: right;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .kpi-bar-muted {
+        opacity: .8;
+    }
+
+    @media (max-width: 1150px) {
+        .kpi-filter-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .kpi-bar-row {
+            grid-template-columns: 1fr;
+        }
+
+        .kpi-bar-value {
+            text-align: left;
+        }
+
+        .kpi-checkbox-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
 
-    @media (max-width: 900px) {
-        .kpi-filters,
-        .kpi-cards {
+    @media (max-width: 700px) {
+        .kpi-filter-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .kpi-checkbox-grid {
             grid-template-columns: 1fr;
         }
     }
@@ -232,73 +415,223 @@
             <div class="kpi-title-main">KPI Dashboard</div>
         </div>
 
-        <div class="kpi-filters">
+        <div class="kpi-filter-grid">
             <div>
-                <label class="kpi-label">Mjesec</label>
-                <select wire:model.live="month" class="kpi-select">
-                    @for ($m = 1; $m <= 12; $m++)
-                        <option value="{{ $m }}">{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
-                    @endfor
+                <label class="kpi-label">Način pregleda</label>
+                <select wire:model.live="viewMode" class="kpi-input">
+                    <option value="month">Po mjesecu</option>
+                    <option value="year">Cijela godina</option>
                 </select>
             </div>
 
             <div>
                 <label class="kpi-label">Godina</label>
-                <select wire:model.live="year" class="kpi-select">
+                <select wire:model.live="year" class="kpi-input">
                     @for ($y = now()->year - 5; $y <= now()->year + 2; $y++)
                         <option value="{{ $y }}">{{ $y }}</option>
                     @endfor
                 </select>
             </div>
+
+            @if($viewMode === 'month')
+                <div>
+                    <label class="kpi-label">Mjesec</label>
+                    <select wire:model.live="month" class="kpi-input">
+                        @for ($m = 1; $m <= 12; $m++)
+                            <option value="{{ $m }}">{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                        @endfor
+                    </select>
+                </div>
+
+                <div>
+                    <label class="kpi-label">Usporedni mjesec</label>
+                    <select wire:model.live="compareMonth" class="kpi-input">
+                        <option value="">— bez usporedbe —</option>
+                        @for ($m = 1; $m <= 12; $m++)
+                            <option value="{{ $m }}">{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                        @endfor
+                    </select>
+                </div>
+
+                <div>
+                    <label class="kpi-label">Usporedna godina</label>
+                    <select wire:model.live="compareYear" class="kpi-input">
+                        <option value="">— bez usporedbe —</option>
+                        @for ($y = now()->year - 5; $y <= now()->year + 2; $y++)
+                            <option value="{{ $y }}">{{ $y }}</option>
+                        @endfor
+                    </select>
+                </div>
+            @else
+                <div>
+                    <label class="kpi-label">Usporedna godina</label>
+                    <select wire:model.live="compareYear" class="kpi-input">
+                        <option value="">— bez usporedbe —</option>
+                        @for ($y = now()->year - 5; $y <= now()->year + 2; $y++)
+                            <option value="{{ $y }}">{{ $y }}</option>
+                        @endfor
+                    </select>
+                </div>
+
+                <div></div>
+            @endif
         </div>
 
-        @forelse ($groups as $category => $cards)
+        @forelse ($groups as $category => $rows)
             <div class="kpi-section-title">{{ $category }}</div>
 
-            <div class="kpi-cards">
-                @foreach ($cards as $card)
-                    @php
-                        $statusText = match($card['status']) {
-                            'success' => 'U cilju',
-                            'warning' => 'Upozorenje',
-                            'danger' => 'Izvan cilja',
-                            default => 'Bez cilja',
-                        };
-                    @endphp
+            <div class="kpi-table-wrap">
+                <table class="kpi-table">
+                    <thead>
+                        <tr>
+                            <th class="kpi-left" style="width: 260px;">KPI</th>
+                            <th class="kpi-center" style="width: 90px;">Jedinica</th>
+                            <th class="kpi-right" style="width: 120px;">Odabrani period</th>
+                            <th class="kpi-right" style="width: 120px;">Usporedni period</th>
+                            <th class="kpi-right" style="width: 90px;">Razlika</th>
+                            <th class="kpi-right" style="width: 90px;">Cilj</th>
+                            <th class="kpi-center" style="width: 120px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($rows as $row)
+                            @php
+                                $statusText = match($row['status']) {
+                                    'success' => 'U cilju',
+                                    'warning' => 'Upozorenje',
+                                    'danger' => 'Izvan cilja',
+                                    default => 'Bez cilja',
+                                };
 
-                    <div class="kpi-card {{ $card['status'] }}">
-                        <div class="kpi-card-title">{{ $card['name'] }}</div>
-                        <div class="kpi-card-unit">{{ $card['unit'] ?: 'bez jedinice' }}</div>
-                        <div class="kpi-card-value">{{ $card['formatted_value'] }}</div>
-
-                        <div class="kpi-meta">
-                            <div class="kpi-mini">
-                                <strong>Cilj:</strong><br>{{ $card['formatted_target'] }}
-                            </div>
-                            <div class="kpi-mini">
-                                <strong>Preth. mj.:</strong><br>{{ $formatNumber($card['previous_value']) }}
-                            </div>
-                            <div class="kpi-mini">
-                                <strong>Isti mj. lani:</strong><br>{{ $formatNumber($card['last_year_value']) }}
-                            </div>
-                            <div class="kpi-mini">
-                                <strong>Trend:</strong><br>
-                                Mj: {{ match($card['trend_month']) { 'up' => '▲', 'down' => '▼', 'same' => '•', default => '—' } }}
-                                &nbsp; God: {{ match($card['trend_year']) { 'up' => '▲', 'down' => '▼', 'same' => '•', default => '—' } }}
-                            </div>
-                        </div>
-
-                        <div class="kpi-badge {{ $card['status'] }}">
-                            {{ $statusText }}
-                        </div>
-                    </div>
-                @endforeach
+                                $statusClass = match($row['status']) {
+                                    'success' => 'success',
+                                    'warning' => 'warning',
+                                    'danger' => 'danger',
+                                    default => 'neutral',
+                                };
+                            @endphp
+                            <tr>
+                                <td class="kpi-left">{{ $row['name'] }}</td>
+                                <td class="kpi-center">{{ $row['unit'] ?: '-' }}</td>
+                                <td class="kpi-right">{{ $row['formatted_current'] }}</td>
+                                <td class="kpi-right">{{ $row['formatted_compare'] }}</td>
+                                <td class="kpi-right">{{ $row['delta'] !== null ? number_format($row['delta'], 2, ',', '.') : '-' }}</td>
+                                <td class="kpi-right">{{ $row['formatted_target'] }}</td>
+                                <td class="kpi-center">
+                                    <span class="kpi-badge {{ $statusClass }}">{{ $statusText }}</span>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
         @empty
             <div style="padding: 24px; text-align:center; color:#6b7280;">
                 Nema KPI podataka za prikaz.
             </div>
         @endforelse
+
+        <div class="kpi-chart-filter-wrap">
+            <label class="kpi-label">KPI-evi za graf</label>
+
+            <div class="kpi-toolbar">
+                <button type="button" wire:click="selectAllKpis" class="kpi-toolbar-btn">Odaberi sve</button>
+                <button type="button" wire:click="clearSelectedKpis" class="kpi-toolbar-btn">Makni sve</button>
+
+                @foreach($categories as $category)
+                    <button type="button" wire:click="selectCategory('{{ $category }}')" class="kpi-toolbar-btn">
+                        Samo {{ $category }}
+                    </button>
+                @endforeach
+            </div>
+
+            <div class="kpi-checkbox-grid">
+                @foreach($availableKpis as $item)
+                    <label class="kpi-checkbox-card">
+                        <input
+                            type="checkbox"
+                            value="{{ $item['id'] }}"
+                            wire:model.live="selectedChartKpis"
+                            class="kpi-checkbox-input"
+                        >
+                        <span class="kpi-checkbox-text">{{ $item['name'] }}</span>
+                    </label>
+                @endforeach
+            </div>
+        </div>
+
+        <div class="kpi-chart-wrap">
+            <div class="kpi-chart-head">
+                <div>
+                    <div class="kpi-chart-title">Graf usporedbe KPI-eva</div>
+                    <div class="kpi-chart-subtitle">
+                        @if($viewMode === 'year')
+                            Godišnji pregled odabranih KPI-eva
+                        @else
+                            Mjesečni pregled odabranih KPI-eva
+                        @endif
+                    </div>
+                </div>
+
+                <div class="kpi-legend">
+                    <span class="kpi-legend-item">
+                        <span class="kpi-legend-dot current"></span>
+                        Odabrani period
+                    </span>
+
+                    @if($hasCompare)
+                        <span class="kpi-legend-item">
+                            <span class="kpi-legend-dot compare"></span>
+                            Usporedni period
+                        </span>
+                    @endif
+                </div>
+            </div>
+
+            <div class="kpi-bars">
+                @forelse ($chartData as $row)
+                    @php
+                        $currentWidth = $row['current_value'] !== null
+                            ? max((($row['current_value'] / $barMax) * 100), 2)
+                            : 0;
+
+                        $compareWidth = $row['compare_value'] !== null
+                            ? max((($row['compare_value'] / $barMax) * 100), 2)
+                            : 0;
+                    @endphp
+
+                    <div class="kpi-bar-row">
+                        <div class="kpi-bar-label">{{ $row['name'] }}</div>
+
+                        <div class="kpi-bar-stack">
+                            <div class="kpi-bar-track">
+                                <div class="kpi-bar-fill-current" style="width: {{ $currentWidth }}%;"></div>
+                            </div>
+
+                            @if($hasCompare)
+                                <div class="kpi-bar-track">
+                                    <div class="kpi-bar-fill-compare" style="width: {{ $compareWidth }}%;"></div>
+                                </div>
+                            @endif
+                        </div>
+
+                        <div class="kpi-bar-value">
+                            {{ $row['formatted_current'] }}
+                        </div>
+
+                        <div class="kpi-bar-value kpi-bar-muted">
+                            @if($hasCompare)
+                                {{ $row['formatted_compare'] }}
+                            @else
+                                -
+                            @endif
+                        </div>
+                    </div>
+                @empty
+                    <div style="color:#6b7280;">Nema podataka za graf.</div>
+                @endforelse
+            </div>
+        </div>
     </div>
 </div>
 </x-filament-panels::page>

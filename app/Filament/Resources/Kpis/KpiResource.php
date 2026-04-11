@@ -6,7 +6,6 @@ use App\Filament\Resources\Kpis\Pages;
 use App\Filament\Resources\Kpis\RelationManagers\KpiValuesRelationManager;
 use App\Models\Kpi;
 use BackedEnum;
-use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -16,11 +15,11 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -65,36 +64,8 @@ class KpiResource extends Resource
         }
 
         try {
-            if (method_exists($user, 'getRoleNames')) {
-                $roles = $user->getRoleNames()->toArray();
-
-                foreach ($roles as $role) {
-                    $name = trim((string) $role);
-
-                    if (
-                        Str::contains(Str::lower($name), 'admin') ||
-                        in_array(Str::lower($name), ['administrator', 'super-admin', 'super admin', 'owner', 'root'])
-                    ) {
-                        return true;
-                    }
-                }
-            }
-
-            if (method_exists($user, 'hasAnyRole')) {
-                if ($user->hasAnyRole([
-                    'admin', 'Admin', 'administrator', 'Administrator',
-                    'super-admin', 'Super Admin', 'owner', 'Owner', 'root', 'Root',
-                ])) {
-                    return true;
-                }
-            }
-
-            if (method_exists($user, 'hasRole')) {
-                foreach (['admin', 'Admin', 'administrator', 'Administrator', 'super-admin', 'Super Admin', 'owner', 'Owner', 'root', 'Root'] as $role) {
-                    if ($user->hasRole($role)) {
-                        return true;
-                    }
-                }
+            if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+                return true;
             }
         } catch (\Throwable $e) {
         }
@@ -103,19 +74,15 @@ class KpiResource extends Resource
             return true;
         }
 
-        try {
-            if (method_exists($user, 'can') && $user->can('viewAny', \App\Models\Kpi::class)) {
-                return true;
-            }
-        } catch (\Throwable $e) {
-        }
-
         return false;
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Hidden::make('slug')
+                ->dehydrateStateUsing(fn ($state, callable $get) => filled($state) ? $state : Str::slug((string) $get('name'))),
+
             Section::make('Osnovni podaci')
                 ->columnSpanFull()
                 ->columns(3)
@@ -123,18 +90,6 @@ class KpiResource extends Resource
                     TextInput::make('name')
                         ->label('Naziv KPI-a')
                         ->required()
-                        ->maxLength(255)
-                        ->live(onBlur: true)
-                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
-                            if (blank($get('slug'))) {
-                                $set('slug', Str::slug((string) $state));
-                            }
-                        }),
-
-                    TextInput::make('slug')
-                        ->label('Slug')
-                        ->required()
-                        ->unique(ignoreRecord: true)
                         ->maxLength(255),
 
                     Select::make('category')
@@ -151,8 +106,8 @@ class KpiResource extends Resource
                         ->required(),
 
                     TextInput::make('unit')
-                        ->label('Mjerna jedinica')
-                        ->placeholder('broj, kg, kWh, sati, index...')
+                        ->label('Jedinica')
+                        ->placeholder('broj, kg, kWh, sati...')
                         ->maxLength(50),
 
                     TextInput::make('sort_order')
@@ -163,9 +118,13 @@ class KpiResource extends Resource
                     Toggle::make('is_active')
                         ->label('Aktivan')
                         ->default(true),
+
+                    Toggle::make('show_on_dashboard')
+                        ->label('Prikazuj na KPI dashboardu')
+                        ->default(true),
                 ]),
 
-            Section::make('Cilj i logika')
+            Section::make('Cilj i izračun')
                 ->columnSpanFull()
                 ->columns(3)
                 ->schema([
@@ -176,12 +135,12 @@ class KpiResource extends Resource
 
                     TextInput::make('warning_offset')
                         ->label('Tolerancija upozorenja')
-                        ->helperText('Za upozorenje prije prelaska cilja.')
                         ->numeric()
-                        ->step('0.0001'),
+                        ->step('0.0001')
+                        ->helperText('Za upozorenje prije prelaska cilja.'),
 
                     Select::make('direction')
-                        ->label('Smjer ocjene')
+                        ->label('Ocjena')
                         ->options([
                             'lower_better' => 'Manje je bolje',
                             'higher_better' => 'Više je bolje',
@@ -190,7 +149,7 @@ class KpiResource extends Resource
                         ->required(),
 
                     Select::make('calculation_type')
-                        ->label('Način izračuna')
+                        ->label('Tip')
                         ->options([
                             'manual' => 'Ručno',
                             'automatic' => 'Automatski',
@@ -202,37 +161,36 @@ class KpiResource extends Resource
                     Select::make('source_key')
                         ->label('Automatski izvor / formula')
                         ->options([
-                            'near_miss_count' => 'Near Miss (zapažanja)',
+                            'days_without_lta' => 'Broj dana bez LTA',
+                            'lta_count' => 'Broj ozljeda LTA',
+                            'lta_lost_days' => 'Dani izgubljeni zbog LTA',
+                            'near_miss_count' => 'Near Miss',
                             'negative_observation_count' => 'Negativna zapažanja',
                             'inspection_count' => 'Interni nadzori',
                             'corrective_actions_open' => 'Otvorene korektivne radnje',
                             'corrective_actions_closed' => 'Zatvorene korektivne radnje',
                             'corrective_actions_in_progress' => 'Korektivne radnje u tijeku',
-                            'corrective_actions_delay_days' => 'Dani kašnjenja zatvaranja korektivnih radnji',
-                            'total_work_hours' => 'Ukupan broj radnih sati (povezan KPI)',
-                            'lta_count' => 'Broj ozljeda LTA (povezan KPI)',
-                            'lta_lost_days' => 'Dani izgubljeni zbog LTA (povezan KPI)',
+                            'corrective_actions_delay_days' => 'Dani kašnjenja korektivnih radnji',
+                            'non_hazardous_waste_kg' => 'Neopasni otpad',
+                            'hazardous_waste_kg' => 'Opasni otpad',
+                            'municipal_waste_kg' => 'Miješani komunalni otpad',
                             'afr' => 'AFR formula',
                             'asr' => 'ASR formula',
                         ])
                         ->searchable()
                         ->visible(fn (callable $get) => in_array($get('calculation_type'), ['automatic', 'formula'], true)),
 
-                    Toggle::make('show_on_dashboard')
-                        ->label('Prikazuj u KPI dashboardu')
-                        ->default(true),
+                    Textarea::make('formula_text')
+                        ->label('Opis formule / napomena')
+                        ->rows(3)
+                        ->columnSpanFull(),
                 ]),
 
             Section::make('Opis')
                 ->columnSpanFull()
                 ->schema([
-                    Textarea::make('formula_text')
-                        ->label('Opis formule')
-                        ->rows(3)
-                        ->visible(fn (callable $get) => $get('calculation_type') === 'formula'),
-
                     Textarea::make('description')
-                        ->label('Opis / napomena')
+                        ->label('Opis')
                         ->rows(4),
                 ]),
         ]);
@@ -361,90 +319,14 @@ class KpiResource extends Resource
             ])
             ->actions([
                 ActionGroup::make([
-                    Action::make('add_value')
-                        ->label('Unesi vrijednost')
-                        ->icon('heroicon-o-plus-circle')
-                        ->color('success')
-                        ->form([
-                            Select::make('month')
-                                ->label('Mjesec')
-                                ->options([
-                                    1 => '01',
-                                    2 => '02',
-                                    3 => '03',
-                                    4 => '04',
-                                    5 => '05',
-                                    6 => '06',
-                                    7 => '07',
-                                    8 => '08',
-                                    9 => '09',
-                                    10 => '10',
-                                    11 => '11',
-                                    12 => '12',
-                                ])
-                                ->default(now()->month)
-                                ->required(),
-
-                            TextInput::make('year')
-                                ->label('Godina')
-                                ->numeric()
-                                ->default(now()->year)
-                                ->required(),
-
-                            TextInput::make('value')
-                                ->label('Vrijednost')
-                                ->numeric()
-                                ->required(),
-
-                            TextInput::make('source_label')
-                                ->label('Izvor')
-                                ->default('Ručno')
-                                ->maxLength(255),
-
-                            Textarea::make('note')
-                                ->label('Komentar')
-                                ->rows(3),
-                        ])
-                        ->action(function (array $data, Kpi $record) {
-                            $record->values()->updateOrCreate(
-                                [
-                                    'month' => (int) $data['month'],
-                                    'year' => (int) $data['year'],
-                                ],
-                                [
-                                    'value' => (float) $data['value'],
-                                    'auto_generated' => false,
-                                    'source_label' => $data['source_label'] ?? 'Ručno',
-                                    'note' => $data['note'] ?? null,
-                                ]
-                            );
-
-                            Notification::make()
-                                ->title('Vrijednost KPI-a je spremljena.')
-                                ->success()
-                                ->send();
-                        }),
-
                     ViewAction::make()->label('Prikaži'),
 
                     EditAction::make()
                         ->label('Uredi')
                         ->visible(fn (Kpi $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
 
-                    Action::make('toggle_active')
-                        ->label(fn (Kpi $record) => $record->is_active ? 'Deaktiviraj KPI' : 'Aktiviraj KPI')
-                        ->icon('heroicon-o-power')
-                        ->color(fn (Kpi $record) => $record->is_active ? 'danger' : 'success')
-                        ->requiresConfirmation()
-                        ->action(function (Kpi $record) {
-                            $record->update([
-                                'is_active' => ! $record->is_active,
-                            ]);
-                        })
-                        ->visible(fn (Kpi $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
-
                     DeleteAction::make()
-                        ->label('Deaktiviraj zapis')
+                        ->label('Deaktiviraj')
                         ->requiresConfirmation()
                         ->visible(fn (Kpi $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
 

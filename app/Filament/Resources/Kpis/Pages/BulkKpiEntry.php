@@ -49,7 +49,7 @@ class BulkKpiEntry extends Page
             ->orderBy('sort_order')
             ->orderBy('name');
 
-        if ($user && (int) $user->id !== 1) {
+        if ($user && (! method_exists($user, 'isAdmin') || ! $user->isAdmin()) && (int) $user->id !== 1) {
             $query->where(function (Builder $q) use ($user) {
                 $q->where('user_id', $user->id)
                     ->orWhereNull('user_id');
@@ -65,7 +65,7 @@ class BulkKpiEntry extends Page
                 'category' => $kpi->category,
                 'unit' => $kpi->unit,
                 'value' => $existing?->value,
-                'source_label' => $existing?->source_label ?? 'Ručno',
+                'source_label' => 'Ručno',
                 'note' => $existing?->note,
             ];
         })->values()->all();
@@ -92,14 +92,14 @@ class BulkKpiEntry extends Page
                 [
                     'value' => (float) $row['value'],
                     'auto_generated' => false,
-                    'source_label' => $row['source_label'] ?? 'Ručno',
+                    'source_label' => 'Ručno',
                     'note' => $row['note'] ?? null,
                 ]
             );
         }
 
         Notification::make()
-            ->title('Bulk unos KPI vrijednosti je spremljen.')
+            ->title('Bulk unos ručnih KPI-eva je spremljen.')
             ->success()
             ->send();
 

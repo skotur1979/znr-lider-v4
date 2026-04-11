@@ -65,7 +65,7 @@
         margin-bottom: 6px;
     }
 
-    .kpi-select {
+    .kpi-input {
         width: 260px;
         border-radius: 12px;
         border: 1px solid #d1d5db;
@@ -76,7 +76,7 @@
         font-weight: 600;
     }
 
-    .dark .kpi-select {
+    .dark .kpi-input {
         background: #0f172a;
         color: #f8fafc;
         border-color: rgba(255,255,255,.10);
@@ -133,18 +133,31 @@
         background: rgba(255,255,255,.04);
     }
 
-    .kpi-left {
-        text-align: left;
+    .kpi-left { text-align: left; }
+    .kpi-center { text-align: center; }
+    .kpi-right { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .cell-success {
+        background: rgba(34, 197, 94, .10);
+        color: #166534;
+        font-weight: 700;
     }
 
-    .kpi-center {
-        text-align: center;
+    .cell-danger {
+        background: rgba(239, 68, 68, .10);
+        color: #991b1b;
+        font-weight: 700;
     }
 
-    .kpi-right {
-        text-align: right;
-        font-variant-numeric: tabular-nums;
+    .cell-warning {
+        background: rgba(245, 158, 11, .10);
+        color: #92400e;
+        font-weight: 700;
     }
+
+    .dark .cell-success { color: #86efac; }
+    .dark .cell-danger { color: #fca5a5; }
+    .dark .cell-warning { color: #fcd34d; }
 </style>
 
 <div class="kpi-wrap">
@@ -156,7 +169,7 @@
 
         <div class="kpi-filter-bar">
             <label class="kpi-label">Godina</label>
-            <select wire:model.live="year" class="kpi-select">
+            <select wire:model.live="year" class="kpi-input">
                 @for ($y = now()->year - 5; $y <= now()->year + 2; $y++)
                     <option value="{{ $y }}">{{ $y }}</option>
                 @endfor
@@ -171,7 +184,7 @@
                     <thead>
                         <tr>
                             <th class="kpi-left" style="width: 260px;">KPI</th>
-                            <th class="kpi-center" style="width: 80px;">Jedinica</th>
+                            <th class="kpi-center" style="width: 90px;">Jedinica</th>
                             <th class="kpi-right" style="width: 90px;">Cilj</th>
                             @for ($m = 1; $m <= 12; $m++)
                                 <th class="kpi-center" style="width: 72px;">{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</th>
@@ -188,14 +201,27 @@
                                 <td class="kpi-right">{{ $row['formatted_target'] }}</td>
 
                                 @for ($m = 1; $m <= 12; $m++)
-                                    <td class="kpi-center">
-                                        {{ $row['values'][$m] !== null ? number_format($row['values'][$m], 2, ',', '.') : '-' }}
+                                    @php
+                                        $value = $row['values'][$m];
+                                        $status = $row['statuses'][$m] ?? 'neutral';
+
+                                        $class = match($status) {
+                                            'success' => 'cell-success',
+                                            'warning' => 'cell-warning',
+                                            'danger' => 'cell-danger',
+                                            default => '',
+                                        };
+                                    @endphp
+
+                                    <td class="kpi-center {{ $class }}">
+                                        {{ $value !== null ? number_format($value, 2, ',', '.') : '-' }}
                                     </td>
                                 @endfor
 
                                 <td class="kpi-right">
                                     {{ $row['average'] !== null ? number_format($row['average'], 2, ',', '.') : '-' }}
                                 </td>
+
                                 <td class="kpi-right">
                                     {{ $row['total'] !== null ? number_format($row['total'], 2, ',', '.') : '-' }}
                                 </td>
