@@ -21,10 +21,6 @@
                             {{ $title }}
                         </span>
                     </div>
-
-                    <div class="tsb-message">
-                        {{ $message }}
-                    </div>
                 </div>
             </div>
 
@@ -43,29 +39,31 @@
             <div class="tsb-modules">
                 @foreach ($rows as $row)
                     <div class="tsb-module {{ $row['expired_count'] > 0 ? 'tsb-module-expired-active' : '' }}">
-                        <span class="tsb-module-icon">{{ $row['icon'] }}</span>
-                        <span class="tsb-module-label">{{ $row['label'] }}</span>
+                        <div class="tsb-module-top">
+                            <span class="tsb-module-icon">{{ $row['icon'] }}</span>
+                            <span class="tsb-module-label">{{ $row['label'] }}</span>
+                        </div>
 
-                        <span class="tsb-module-divider"></span>
+                        <div class="tsb-module-bottom">
+                            @if (($row['expired_count'] ?? 0) > 0 && ! empty($row['expired_url']))
+                                <a
+                                    href="{{ $row['expired_url'] }}"
+                                    class="tsb-module-stat tsb-module-stat-expired tsb-module-link {{ $row['expired_count'] > 0 ? 'tsb-stat-blink' : '' }}"
+                                >
+                                    Isteklo {{ $row['expired_count'] }}
+                                </a>
+                            @else
+                                <span class="tsb-module-stat tsb-module-stat-expired">
+                                    Isteklo {{ $row['expired_count'] }}
+                                </span>
+                            @endif
 
-                        @if (($row['expired_count'] ?? 0) > 0 && ! empty($row['expired_url']))
-    <a
-        href="{{ $row['expired_url'] }}"
-        class="tsb-module-stat tsb-module-stat-expired tsb-module-link {{ $row['expired_count'] > 0 ? 'tsb-stat-blink' : '' }}"
-    >
-        Isteklo {{ $row['expired_count'] }}
-    </a>
-@else
-    <span class="tsb-module-stat tsb-module-stat-expired">
-        Isteklo {{ $row['expired_count'] }}
-    </span>
-@endif
+                            <span class="tsb-module-sep">/</span>
 
-                        <span class="tsb-module-sep">/</span>
-
-                        <span class="tsb-module-stat tsb-module-stat-soon">
-                            Uskoro {{ $row['soon_count'] }}
-                        </span>
+                            <span class="tsb-module-stat tsb-module-stat-soon">
+                                Uskoro {{ $row['soon_count'] }}
+                            </span>
+                        </div>
                     </div>
                 @endforeach
             </div>
@@ -77,7 +75,7 @@
             position:relative;
             overflow:hidden;
             border-radius:18px;
-            padding:14px 16px 12px 16px;
+            padding:14px 16px 14px 16px;
             margin-bottom:16px;
             border:1px solid #dbe3f0;
             background:#ffffff;
@@ -86,8 +84,7 @@
 
         .dark .tsb-wrap{
             border:1px solid rgba(148,163,184,.12);
-            background:
-                linear-gradient(180deg, rgba(8,18,40,.96), rgba(4,10,24,.96));
+            background:linear-gradient(180deg, rgba(8,18,40,.96), rgba(4,10,24,.96));
             box-shadow:0 10px 22px rgba(0,0,0,.14);
         }
 
@@ -111,7 +108,7 @@
 
         .tsb-main{
             display:flex;
-            align-items:flex-start;
+            align-items:center;
             justify-content:space-between;
             gap:14px;
             flex-wrap:wrap;
@@ -119,7 +116,7 @@
 
         .tsb-left{
             display:flex;
-            align-items:flex-start;
+            align-items:center;
             gap:12px;
             min-width:0;
             flex:1;
@@ -128,7 +125,6 @@
         .tsb-dot{
             width:12px;
             height:12px;
-            margin-top:4px;
             border-radius:999px;
             flex-shrink:0;
             background:#22c55e;
@@ -216,18 +212,6 @@
             border-color:rgba(239,68,68,.24);
         }
 
-        .tsb-message{
-            margin-top:4px;
-            font-size:.86rem;
-            font-weight:700;
-            color:#0f172a;
-            line-height:1.2;
-        }
-
-        .dark .tsb-message{
-            color:#ffffff;
-        }
-
         .tsb-right{
             display:flex;
             align-items:center;
@@ -273,25 +257,24 @@
 
         .tsb-modules{
             margin-top:12px;
-            display:flex;
-            flex-wrap:wrap;
-            gap:8px;
             padding-top:12px;
             border-top:1px solid rgba(148,163,184,.12);
+            display:grid;
+            grid-template-columns:repeat(4, minmax(0, 1fr));
+            gap:8px;
         }
 
         .tsb-module{
-            display:inline-flex;
-            align-items:center;
-            gap:7px;
-            flex-wrap:wrap;
-            min-height:34px;
-            padding:6px 10px;
-            border-radius:999px;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+            gap:6px;
+            min-height:54px;
+            padding:8px 10px;
+            border-radius:14px;
             background:rgba(255,255,255,.03);
             border:1px solid rgba(148,163,184,.14);
             font-size:.75rem;
-            line-height:1;
         }
 
         .dark .tsb-module{
@@ -309,37 +292,51 @@
             background:rgba(239,68,68,.06);
         }
 
+        .tsb-module-top{
+            display:flex;
+            align-items:center;
+            gap:7px;
+            min-width:0;
+        }
+
         .tsb-module-icon{
             font-size:.84rem;
             line-height:1;
+            flex-shrink:0;
         }
 
         .tsb-module-label{
             color:#0f172a;
             font-weight:800;
+            line-height:1.1;
+            min-width:0;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
         }
 
         .dark .tsb-module-label{
             color:#ffffff;
         }
 
-        .tsb-module-divider{
-            width:1px;
-            height:12px;
-            background:rgba(148,163,184,.28);
-            margin:0 1px;
+        .tsb-module-bottom{
+            display:flex;
+            align-items:center;
+            gap:6px;
+            flex-wrap:wrap;
         }
 
         .tsb-module-stat{
             font-weight:800;
+            line-height:1;
         }
 
         .tsb-module-stat-expired{
-    color:#ef4444;
-    font-weight:900;
-    background:transparent !important;
-    padding:0 !important;
-    border:none !important;
+            color:#ef4444;
+            font-weight:900;
+            background:transparent !important;
+            padding:0 !important;
+            border:none !important;
         }
 
         .tsb-module-stat-soon{
@@ -351,66 +348,81 @@
             font-weight:700;
         }
 
+        .tsb-module-link{
+            text-decoration:none;
+            cursor:pointer;
+            transition:opacity .15s ease, transform .15s ease;
+        }
+
+        .tsb-module-link:hover{
+            opacity:.9;
+            transform:translateY(-1px);
+            text-decoration:none;
+        }
+
+        .tsb-module-link:focus{
+            outline:none;
+            text-decoration:none;
+        }
+
+        .tsb-badge-blink{
+            animation: tsbSoftBlink 1.8s ease-in-out infinite;
+        }
+
         .tsb-stat-blink{
-    animation: tsbTextPulse 2.2s ease-in-out infinite;
-}
-.tsb-module-link{
-    text-decoration:none;
-    cursor:pointer;
-    transition:opacity .15s ease, transform .15s ease;
-}
+            animation: tsbTextPulse 2.2s ease-in-out infinite;
+        }
 
-.tsb-module-link:hover{
-    opacity:.9;
-    transform:translateY(-1px);
-    text-decoration:none;
-}
+        @keyframes tsbTextPulse{
+            0%{
+                opacity:1;
+                text-shadow:0 0 0 rgba(239,68,68,0);
+            }
+            50%{
+                opacity:1;
+                text-shadow:0 0 8px rgba(239,68,68,.55);
+            }
+            100%{
+                opacity:1;
+                text-shadow:0 0 0 rgba(239,68,68,0);
+            }
+        }
 
-.tsb-module-link:focus{
-    outline:none;
-    text-decoration:none;
-}
+        @keyframes tsbSoftBlink{
+            0%{
+                opacity:1;
+                transform:scale(1);
+                box-shadow:0 0 0 0 rgba(239,68,68,0);
+                filter:brightness(1);
+            }
+            50%{
+                opacity:1;
+                transform:scale(1.04);
+                box-shadow:0 0 0 6px rgba(239,68,68,.14);
+                filter:brightness(1.08);
+            }
+            100%{
+                opacity:1;
+                transform:scale(1);
+                box-shadow:0 0 0 0 rgba(239,68,68,0);
+                filter:brightness(1);
+            }
+        }
 
-@keyframes tsbTextPulse{
-    0%{
-        opacity:1;
-        text-shadow:0 0 0 rgba(239,68,68,0);
-    }
-    50%{
-        opacity:1;
-        text-shadow:0 0 8px rgba(239,68,68,.55);
-    }
-    100%{
-        opacity:1;
-        text-shadow:0 0 0 rgba(239,68,68,0);
-    }
-}
-
-@keyframes tsbSoftBlink{
-    0%{
-        opacity:1;
-        transform:scale(1);
-        box-shadow:0 0 0 0 rgba(239,68,68,0);
-        filter:brightness(1);
-    }
-    50%{
-        opacity:1;
-        transform:scale(1.06);
-        box-shadow:0 0 0 6px rgba(239,68,68,.14);
-        filter:brightness(1.12);
-    }
-    100%{
-        opacity:1;
-        transform:scale(1);
-        box-shadow:0 0 0 0 rgba(239,68,68,0);
-        filter:brightness(1);
-    }
-}
+        @media (max-width: 1280px){
+            .tsb-modules{
+                grid-template-columns:repeat(3, minmax(0, 1fr));
+            }
+        }
 
         @media (max-width: 900px){
             .tsb-main{
                 flex-direction:column;
                 align-items:flex-start;
+            }
+
+            .tsb-modules{
+                grid-template-columns:repeat(2, minmax(0, 1fr));
             }
         }
 
@@ -420,11 +432,12 @@
             }
 
             .tsb-modules{
-                gap:7px;
+                grid-template-columns:1fr;
             }
 
             .tsb-module{
-                padding:6px 9px;
+                min-height:50px;
+                padding:8px 9px;
             }
         }
 
