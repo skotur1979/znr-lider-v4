@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\Observations\Pages;
 
-use App\Filament\Resources\Observations\ObservationResource;
 use App\Exports\ObservationsExport;
+use App\Filament\Resources\Observations\ObservationResource;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Pages\Concerns\ExposesTableToWidgets;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ListObservations extends ListRecords
@@ -54,6 +56,31 @@ class ListObservations extends ListRecords
     protected function getHeaderWidgets(): array
     {
         return ObservationResource::getWidgets();
+    }
+
+    protected function getTableQuery(): Builder
+    {
+        $query = parent::getTableQuery();
+
+        $pregled =
+            request()->query('pregled')
+            ?? data_get(request()->query(), 'tableFilters.pregled.value')
+            ?? data_get(request()->query(), 'filters.pregled.value');
+
+        return match ($pregled) {
+            'uskoro' => $query
+                ->whereNotNull('target_date')
+                ->whereIn('status', ['Not started', 'In progress'])
+                ->whereDate('target_date', '>=', Carbon::today())
+                ->whereDate('target_date', '<=', Carbon::today()->addDays(30)),
+
+            'isteklo' => $query
+                ->whereNotNull('target_date')
+                ->whereIn('status', ['Not started', 'In progress'])
+                ->whereDate('target_date', '<', Carbon::today()),
+
+            default => $query,
+        };
     }
 
     public function getSelectedYearRaw(): ?string

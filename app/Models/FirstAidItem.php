@@ -22,8 +22,5 @@ class FirstAidItem extends Model
     {
         return $this->belongsTo(FirstAidKit::class, 'first_aid_kit_id');
     }
-    public function items(): HasMany
-{
-    return $this->hasMany(FirstAidItem::class, 'first_aid_kit_id');
-}
+    
 }
