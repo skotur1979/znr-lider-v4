@@ -22,11 +22,16 @@ class DashboardCalendarWidget extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
+    protected static ?int $sort = 50;
+
     #[Url(as: 'calendar_month', history: true)]
     public int $calendar_month;
 
     #[Url(as: 'calendar_year', history: true)]
     public int $calendar_year;
+
+    #[Url(as: 'selected_date', history: true)]
+    public ?string $selected_date = null;
 
     public bool $showTaskModal = false;
 
@@ -42,6 +47,7 @@ class DashboardCalendarWidget extends Widget
     {
         $this->calendar_month = (int) request()->query('calendar_month', now()->month);
         $this->calendar_year = (int) request()->query('calendar_year', now()->year);
+        $this->selected_date = request()->query('selected_date');
     }
 
     public function previousMonth(): void
@@ -149,11 +155,7 @@ class DashboardCalendarWidget extends Widget
 
         $task = $query->first();
 
-        if (! $task) {
-            return;
-        }
-
-        if ($task->is_done) {
+        if (! $task || $task->is_done) {
             return;
         }
 
@@ -175,11 +177,7 @@ class DashboardCalendarWidget extends Widget
 
         $task = $query->first();
 
-        if (! $task) {
-            return;
-        }
-
-        if (! $task->is_done) {
+        if (! $task || ! $task->is_done) {
             return;
         }
 
@@ -237,41 +235,55 @@ class DashboardCalendarWidget extends Widget
     }
 
     public function getViewData(): array
-    {
-        $current = Carbon::create($this->calendar_year, $this->calendar_month, 1)->startOfMonth();
+{
+    $current = Carbon::create($this->calendar_year, $this->calendar_month, 1)->startOfMonth();
 
-        $start = $current->copy()->startOfWeek(Carbon::MONDAY);
-        $end = $current->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
+    $start = $current->copy()->startOfWeek(Carbon::MONDAY);
+    $end = $current->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
 
-        $days = collect(CarbonPeriod::create($start, $end))
-            ->map(function (Carbon $day) use ($current) {
-                return [
-                    'date' => $day->copy(),
-                    'in_month' => $day->month === $current->month,
-                    'items' => [],
-                ];
-            })
-            ->values();
+    $selectedDate = $this->selected_date
+        ? Carbon::parse($this->selected_date)->toDateString()
+        : null;
 
-        $itemsByDate = $this->buildItems($start, $end)
-            ->groupBy(fn (array $item) => $item['date']->format('Y-m-d'));
+    $days = collect(CarbonPeriod::create($start, $end))
+        ->map(function (Carbon $day) use ($current, $selectedDate) {
+            return [
+                'date' => $day->copy(),
+                'in_month' => $day->month === $current->month,
+                'is_selected' => $selectedDate === $day->toDateString(),
+                'items' => [],
+                'all_items' => [],
+                'extra_count' => 0,
+                'total_count' => 0,
+                'day_url' => url('/admin?calendar_month=' . $this->calendar_month
+                    . '&calendar_year=' . $this->calendar_year
+                    . '&selected_date=' . $day->toDateString()),
+            ];
+        })
+        ->values();
 
-        $days = $days->map(function (array $day) use ($itemsByDate) {
-            $key = $day['date']->format('Y-m-d');
-            $collection = $itemsByDate->get($key, collect());
+    $itemsByDate = $this->buildItems($start, $end)
+        ->groupBy(fn (array $item) => $item['date']->format('Y-m-d'));
 
-            $day['items'] = $collection->take(6)->values()->all();
-            $day['extra_count'] = max(0, $collection->count() - 6);
+    $days = $days->map(function (array $day) use ($itemsByDate) {
+        $key = $day['date']->format('Y-m-d');
+        $collection = $itemsByDate->get($key, collect());
 
-            return $day;
-        });
+        $day['all_items'] = $collection->values()->all();
+        $day['items'] = $collection->take(5)->values()->all();
+        $day['total_count'] = $collection->count();
+        $day['extra_count'] = max(0, $collection->count() - 5);
 
-        return [
-            'monthLabel' => $current->translatedFormat('F Y'),
-            'days' => $days->chunk(7),
-            'weekdays' => ['pon.', 'uto.', 'sri.', 'čet.', 'pet.', 'sub.', 'ned.'],
-        ];
-    }
+        return $day;
+    });
+
+    return [
+        'monthLabel' => $current->translatedFormat('F Y'),
+        'days' => $days->chunk(7),
+        'weekdays' => ['pon.', 'uto.', 'sri.', 'čet.', 'pet.', 'sub.', 'ned.'],
+        'selectedDate' => $selectedDate,
+    ];
+}
 
     protected function buildItems(Carbon $start, Carbon $end): Collection
     {

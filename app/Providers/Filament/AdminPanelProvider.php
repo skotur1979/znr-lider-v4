@@ -20,6 +20,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Widgets\TopSystemStatusBarWidget;
+use App\Filament\Widgets\TodayMiniBlockWidget;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -40,6 +41,7 @@ class AdminPanelProvider extends PanelProvider
                 QuickActionsWidget::class,
                 SystemStatusWidget::class,
                 DashboardDeadlinesGrid::class,
+                TodayMiniBlockWidget::class,
                 DashboardCalendarWidget::class,
             ])
             ->middleware([

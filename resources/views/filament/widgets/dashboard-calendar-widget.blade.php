@@ -1,9 +1,9 @@
 <x-filament-widgets::widget>
     <style>
         .znr-cal-wrap{
-            margin-top: 2px;
+            margin-top: 0px;
             border-radius: 16px;
-            overflow: hidden;
+            overflow: visible;
             border: 1px solid #d8dde6;
             background: #ffffff;
             box-shadow: 0 1px 2px rgba(15,23,42,.05);
@@ -165,6 +165,7 @@
             border-bottom:1px solid #eef2f7;
             background:#fff;
             transition:background .15s ease, box-shadow .15s ease, border-color .15s ease;
+            overflow:visible;
         }
 
         .znr-cal-cell:nth-child(7n){
@@ -198,6 +199,14 @@
                 inset 0 0 0 2px rgba(96,165,250,.38),
                 inset 0 0 28px rgba(96,165,250,.10);
             border-color: rgba(96,165,250,.22);
+        }
+
+        .znr-cal-cell-top,
+        .znr-event,
+        .znr-task-row,
+        .znr-more-wrap{
+            position:relative;
+            z-index:2;
         }
 
         .znr-cal-cell-top{
@@ -268,7 +277,9 @@
         }
 
         .znr-event{
-            display:block;
+            display:flex;
+            align-items:center;
+            gap:4px;
             width:100%;
             margin-bottom:2px;
             padding:2px 5px;
@@ -286,6 +297,20 @@
         .znr-event:hover{
             transform:translateY(-1px);
             filter:brightness(1.05);
+        }
+
+        .znr-event-icon{
+            font-size:9px;
+            line-height:1;
+            flex-shrink:0;
+            opacity:.95;
+        }
+
+        .znr-event-text{
+            min-width:0;
+            overflow:hidden;
+            white-space:nowrap;
+            text-overflow:ellipsis;
         }
 
         .znr-task-row{
@@ -445,15 +470,162 @@
             background:rgba(255,255,255,.88);
         }
 
+        .znr-more-wrap{
+            position:relative;
+            display:inline-block;
+            z-index:70;
+        }
+
         .znr-more{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            margin-top:3px;
+            padding:2px 6px;
+            border-radius:999px;
             font-size:9px;
-            color:#64748b;
-            margin-top:2px;
-            font-weight:600;
+            font-weight:700;
+            color:#1d4ed8;
+            background:rgba(59,130,246,.10);
+            border:1px solid rgba(59,130,246,.20);
+            text-decoration:none;
+            cursor:pointer;
+        }
+
+        .znr-more:hover{
+            background:rgba(59,130,246,.16);
+            transform:translateY(-1px);
         }
 
         .dark .znr-more{
-            color:#cbd5e1;
+            color:#93c5fd;
+            background:rgba(59,130,246,.12);
+            border-color:rgba(96,165,250,.24);
+        }
+
+        .znr-hover-pop{
+            position:absolute;
+            top:calc(100% + 8px);
+            left:0;
+            width:220px;
+            max-width:220px;
+            max-height:240px;
+            overflow:hidden;
+            border-radius:14px;
+            border:1px solid rgba(59,130,246,.22);
+            background:rgba(7,16,36,.985);
+            box-shadow:0 18px 35px rgba(0,0,0,.30);
+            padding:10px;
+            z-index:999;
+            opacity:0;
+            visibility:hidden;
+            pointer-events:none;
+            transform:translateY(6px);
+            transition:opacity .16s ease, transform .16s ease, visibility .16s ease;
+        }
+
+        .znr-more-wrap:hover .znr-hover-pop,
+        .znr-hover-pop:hover{
+            opacity:1;
+            visibility:visible;
+            pointer-events:auto;
+            transform:translateY(0);
+        }
+
+        .znr-hover-pop-left{
+            left:0;
+            right:auto;
+        }
+
+        .znr-hover-pop-right{
+            left:auto;
+            right:0;
+        }
+
+        .znr-hover-pop-up{
+            top:auto;
+            bottom:calc(100% + 8px);
+            transform:translateY(-6px);
+        }
+
+        .znr-hover-pop-head{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:8px;
+            margin-bottom:8px;
+            padding-bottom:6px;
+            border-bottom:1px solid rgba(148,163,184,.14);
+        }
+
+        .znr-hover-pop-title{
+            display:flex;
+            flex-direction:column;
+            gap:2px;
+            min-width:0;
+        }
+
+        .znr-hover-pop-title-main{
+            font-size:.88rem;
+            font-weight:900;
+            color:#ffffff;
+            line-height:1.1;
+        }
+
+        .znr-hover-pop-title-date{
+            font-size:.76rem;
+            font-weight:700;
+            color:#93c5fd;
+            line-height:1.1;
+        }
+
+        .znr-hover-pop-count{
+            min-width:24px;
+            height:24px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:999px;
+            background:rgba(255,255,255,.08);
+            color:#ffffff;
+            font-size:.72rem;
+            font-weight:900;
+            flex-shrink:0;
+        }
+
+        .znr-hover-pop-list{
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+            max-height:190px;
+            overflow-y:auto;
+            padding-right:2px;
+        }
+
+        .znr-hover-pop-list::-webkit-scrollbar{
+            width:6px;
+        }
+
+        .znr-hover-pop-list::-webkit-scrollbar-thumb{
+            background:rgba(148,163,184,.35);
+            border-radius:999px;
+        }
+
+        .znr-hover-item{
+            width:100%;
+            margin:0;
+        }
+
+        .znr-hover-item.znr-event{
+            font-size:10px;
+            padding:7px 9px;
+            border-radius:10px;
+        }
+
+        .znr-hover-item.znr-task-row{
+            font-size:10px;
+            padding:7px 9px;
+            border-radius:10px;
         }
 
         .medical{
@@ -481,6 +653,11 @@
         .misc{
             background:#22c55e;
             border-left:3px solid #86efac;
+        }
+
+        .task{
+            background:#8b5cf6;
+            border-left:3px solid #c4b5fd;
         }
 
         .znr-task-modal{
@@ -655,6 +832,11 @@
             .znr-task-row{
                 font-size:8px;
             }
+
+            .znr-hover-pop{
+                width:200px;
+                max-width:200px;
+            }
         }
 
         @media (max-width: 768px){
@@ -687,10 +869,15 @@
                 width:13px;
                 height:13px;
             }
+
+            .znr-hover-pop{
+                width:180px;
+                max-width:180px;
+            }
         }
     </style>
 
-    <div class="znr-cal-wrap">
+    <div id="dashboard-calendar-block" class="znr-cal-wrap">
         <div class="znr-cal-head">
             <div class="znr-cal-title">{{ \Illuminate\Support\Str::ucfirst($monthLabel) }}</div>
 
@@ -748,17 +935,26 @@
             @endforeach
         </div>
 
-        @foreach($days as $week)
+        @foreach($days as $weekIndex => $week)
             <div class="znr-cal-grid">
-                @foreach($week as $day)
-                    <div class="znr-cal-cell {{ $day['in_month'] ? '' : 'muted' }} {{ $day['date']->isToday() ? 'today' : '' }}">
+                @foreach($week as $index => $day)
+                    @php
+                        $dayDate = $day['date']->toDateString();
+                        $isRightSide = $index >= 5;
+                        $isBottomWeek = $weekIndex >= (count($days) - 2);
+                    @endphp
+
+                    <div
+                        id="calendar-day-{{ $dayDate }}"
+                        class="znr-cal-cell {{ $day['in_month'] ? '' : 'muted' }} {{ $day['date']->isToday() ? 'today' : '' }}"
+                    >
                         <div class="znr-cal-cell-top">
                             <div class="znr-cal-day">{{ $day['date']->day }}</div>
 
                             <button
                                 type="button"
                                 class="znr-day-plus"
-                                wire:click="openTaskCreateModal('{{ $day['date']->format('Y-m-d') }}')"
+                                wire:click.stop="openTaskCreateModal('{{ $day['date']->format('Y-m-d') }}')"
                                 title="Dodaj radni zadatak"
                             >
                                 +
@@ -789,6 +985,8 @@
                                         ></button>
                                     @endif
 
+                                    <span class="znr-event-icon">🗂️</span>
+
                                     <button
                                         type="button"
                                         class="znr-task-main"
@@ -815,13 +1013,117 @@
                                     class="znr-event {{ $item['class'] }}"
                                     title="{{ $item['title'] }}"
                                 >
-                                    {{ $item['title'] }}
+                                    <span class="znr-event-icon">
+                                        @switch($item['class'])
+                                            @case('medical') 👨‍⚕️ @break
+                                            @case('certificate') 🎓 @break
+                                            @case('machine') ⚙️ @break
+                                            @case('fire') 🧯 @break
+                                            @case('misc') 🛠️ @break
+                                            @default •
+                                        @endswitch
+                                    </span>
+                                    <span class="znr-event-text">{{ $item['title'] }}</span>
                                 </a>
                             @endif
                         @endforeach
 
-                        @if($day['extra_count'] > 0)
-                            <div class="znr-more">+{{ $day['extra_count'] }} više</div>
+                        @if(($day['extra_count'] ?? 0) > 0)
+                            @php
+                                $popupClass = 'znr-hover-pop-left';
+
+                                if ($isRightSide) {
+                                    $popupClass = 'znr-hover-pop-right';
+                                }
+
+                                if ($isBottomWeek) {
+                                    $popupClass .= ' znr-hover-pop-up';
+                                }
+                            @endphp
+
+                            <div class="znr-more-wrap">
+                                <span class="znr-more">+{{ $day['extra_count'] }} više</span>
+
+                                <div class="znr-hover-pop {{ $popupClass }}">
+                                    <div class="znr-hover-pop-head">
+                                        <div class="znr-hover-pop-title">
+                                            <div class="znr-hover-pop-title-main">Dodatne stavke</div>
+                                            <div class="znr-hover-pop-title-date">{{ $day['date']->format('d.m.Y.') }}</div>
+                                        </div>
+
+                                        <div class="znr-hover-pop-count">{{ $day['extra_count'] }}</div>
+                                    </div>
+
+                                    <div class="znr-hover-pop-list">
+                                        @foreach(array_slice($day['all_items'] ?? [], 5) as $extraItem)
+                                            @if(($extraItem['type'] ?? 'default') === 'task')
+                                                <div
+                                                    class="znr-task-row znr-hover-item {{ $extraItem['class'] }}"
+                                                    wire:key="hover-task-{{ $extraItem['id'] }}-{{ !empty($extraItem['is_done']) ? 'done' : 'open' }}"
+                                                >
+                                                    @if (!empty($extraItem['is_done']))
+                                                        <button
+                                                            type="button"
+                                                            class="znr-task-toggle"
+                                                            wire:click.stop="reopenTask({{ $extraItem['id'] }})"
+                                                            title="Vrati u otvorene"
+                                                            aria-label="Vrati u otvorene"
+                                                        ></button>
+                                                    @else
+                                                        <button
+                                                            type="button"
+                                                            class="znr-task-toggle"
+                                                            wire:click.stop="completeTask({{ $extraItem['id'] }})"
+                                                            title="Zatvori zadatak"
+                                                            aria-label="Zatvori zadatak"
+                                                        ></button>
+                                                    @endif
+
+                                                    <span class="znr-event-icon">🗂️</span>
+
+                                                    <button
+                                                        type="button"
+                                                        class="znr-task-main"
+                                                        wire:click.stop="openTaskEditModal({{ $extraItem['id'] }})"
+                                                        title="Uredi zadatak: {{ $extraItem['title'] }}"
+                                                    >
+                                                        {{ $extraItem['title'] }}
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        class="znr-task-delete"
+                                                        wire:click.stop="deleteTask({{ $extraItem['id'] }})"
+                                                        wire:confirm="Obrisati radni zadatak?"
+                                                        title="Obriši zadatak"
+                                                        aria-label="Obriši zadatak"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            @else
+                                                <a
+                                                    href="{{ $extraItem['url'] }}"
+                                                    class="znr-event znr-hover-item {{ $extraItem['class'] }}"
+                                                    title="{{ $extraItem['title'] }}"
+                                                >
+                                                    <span class="znr-event-icon">
+                                                        @switch($extraItem['class'])
+                                                            @case('medical') 👨‍⚕️ @break
+                                                            @case('certificate') 🎓 @break
+                                                            @case('machine') ⚙️ @break
+                                                            @case('fire') 🧯 @break
+                                                            @case('misc') 🛠️ @break
+                                                            @default •
+                                                        @endswitch
+                                                    </span>
+                                                    <span class="znr-event-text">{{ $extraItem['title'] }}</span>
+                                                </a>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </div>
                         @endif
                     </div>
                 @endforeach

@@ -3,22 +3,24 @@
         .znr-dashboard-grid{
             display:grid;
             grid-template-columns:repeat(6, minmax(0, 1fr));
-            gap:16px;
+            gap:8px;
+            margin-top:0;
+            margin-bottom:0;
         }
 
         .znr-dashboard-column{
             display:flex;
             flex-direction:column;
-            gap:16px;
+            gap:8px;
         }
 
         .znr-card{
             display:block;
             border-radius:18px;
-            padding:16px 16px 14px;
+            padding:14px 14px 12px;
             text-decoration:none;
             transition:all .18s ease;
-            min-height:122px;
+            min-height:108px;
             border:1px solid #d8dde6;
             background:#ffffff;
             box-shadow:0 1px 2px rgba(15,23,42,.05);
@@ -38,10 +40,10 @@
 
         .znr-title{
             font-size:12px;
-            line-height:1.2;
+            line-height:1.15;
             font-weight:600;
             color:#64748b;
-            margin-bottom:8px;
+            margin-bottom:6px;
         }
 
         .dark .znr-title{
@@ -52,18 +54,18 @@
             display:flex;
             align-items:center;
             justify-content:space-between;
-            gap:12px;
+            gap:10px;
         }
 
         .znr-left{
             display:flex;
             flex-direction:column;
-            gap:8px;
+            gap:6px;
             min-width:0;
         }
 
         .znr-value{
-            font-size:22px;
+            font-size:20px;
             line-height:1;
             font-weight:800;
             color:#0f172a;
@@ -74,15 +76,15 @@
         }
 
         .znr-meta{
-            font-size:12px;
-            line-height:1.2;
+            font-size:11px;
+            line-height:1.15;
             font-weight:700;
             max-width:115px;
         }
 
         .znr-icon{
-            width:30px;
-            height:30px;
+            width:28px;
+            height:28px;
             flex-shrink:0;
             opacity:.95;
         }
