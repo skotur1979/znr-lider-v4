@@ -47,8 +47,8 @@ class FirstAidKitResource extends Resource
     {
         return $schema->schema([
             Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->dehydrated(true),
+    ->default(fn () => Auth::user()?->ownerId())
+    ->dehydrated(true),
 
             Section::make('Sanitetski materijal za prvu pomoć')
                 ->schema([
@@ -160,41 +160,54 @@ class FirstAidKitResource extends Resource
 
     /** Admin vidi sve, user samo svoje */
     public static function getEloquentQuery(): Builder
-    {
-        $q = parent::getEloquentQuery();
+{
+    $q = parent::getEloquentQuery();
 
-        return Auth::user()?->isAdmin()
-            ? $q
-            : $q->where('user_id', Auth::id());
-    }
+    return Auth::user()?->isSuperAdmin()
+        ? $q
+        : $q->where('user_id', Auth::user()->ownerId());
+}
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
         return static::getEloquentQuery();
     }
 
-    public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
+   public static function getNavigationBadge(): ?string
+{
+    $q = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
+    if (! Auth::user()?->isSuperAdmin()) {
+        $q->where('user_id', Auth::user()->ownerId());
     }
+
+    return (string) $q->count();
+}
 
     public static function mutateFormDataBeforeCreate(array $data): array
-    {
-        $data['user_id'] = Auth::id();
-        return $data;
-    }
+{
+    $data['user_id'] = Auth::user()->ownerId();
+
+    return $data;
+}
 
     public static function mutateFormDataBeforeSave(array $data): array
-    {
-        $data['user_id'] = $data['user_id'] ?? Auth::id();
-        return $data;
-    }
+{
+    $data['user_id'] = $data['user_id'] ?? Auth::user()->ownerId();
+
+    return $data;
+}
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('first_aid');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 
     public static function getPages(): array
     {

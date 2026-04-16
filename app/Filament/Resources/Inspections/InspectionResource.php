@@ -164,6 +164,17 @@ class InspectionResource extends Resource
     {
         return (string) static::getModel()::count();
     }
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('inspections');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 
     public static function getPages(): array
     {

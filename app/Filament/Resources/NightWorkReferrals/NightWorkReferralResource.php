@@ -53,9 +53,16 @@ class NightWorkReferralResource extends Resource
     protected static ?int $navigationSort = 3;
 
     public static function shouldRegisterNavigation(): bool
-    {
-        return true;
-    }
+{
+    $user = auth()->user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('medical_referrals_nr1');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 
     private static function isAdminUser($user): bool
     {

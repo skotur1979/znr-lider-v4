@@ -280,4 +280,15 @@ class WasteTypeResource extends Resource
 {
     return (string) static::getModel()::query()->count();
 }
+public static function shouldRegisterNavigation(): bool
+{
+    $user = auth()->user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('waste_types');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 }

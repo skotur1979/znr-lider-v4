@@ -108,6 +108,17 @@ class QuestionResource extends Resource
            ->orWhere('user_id', Auth::id());
     });
 }
+public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('questions');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
     public static function getPages(): array
     {
         return [

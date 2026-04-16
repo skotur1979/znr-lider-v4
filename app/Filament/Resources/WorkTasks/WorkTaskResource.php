@@ -38,8 +38,10 @@ class WorkTaskResource extends Resource
 
     protected static ?string $modelLabel = 'radni zadatak';
     protected static ?string $pluralModelLabel = 'radni zadaci';
+    protected static \UnitEnum|string|null $navigationGroup = 'Upravljanje';
+    protected static ?int $navigationSort = 50;
 
-    protected static bool $shouldRegisterNavigation = false;
+    /*protected static bool $shouldRegisterNavigation = false;*/
 
     public static function form(Schema $schema): Schema
     {
@@ -244,7 +246,28 @@ class WorkTaskResource extends Resource
             ])
             ->defaultSort('due_date', 'asc');
     }
+public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
 
+    return $user?->isSuperAdmin() || $user?->canAccessModule('work_tasks');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
+public static function getNavigationBadge(): ?string
+    {
+        $q = static::getModel()::query();
+
+        if (! Auth::user()?->isAdmin()) {
+            $q->where('user_id', Auth::id());
+        }
+
+        return (string) $q->count();
+    }
+    
     public static function getPages(): array
     {
         return [

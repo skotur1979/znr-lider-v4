@@ -49,9 +49,16 @@ class WorkPermitResource extends Resource
     protected static ?int $navigationSort = 8;
 
     public static function shouldRegisterNavigation(): bool
-    {
-        return true;
-    }
+{
+    $user = auth()->user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('work_permits');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 
     private static function isAdminUser($user): bool
     {

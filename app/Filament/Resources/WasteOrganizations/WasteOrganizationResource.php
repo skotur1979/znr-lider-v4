@@ -307,4 +307,15 @@ class WasteOrganizationResource extends Resource
 
         return (string) $q->count();
     }
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('waste_organizations');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 }

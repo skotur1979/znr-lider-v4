@@ -243,6 +243,17 @@ class ChemicalResource extends Resource
     {
         return static::getEloquentQuery();
     }
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('chemicals');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 
     public static function getNavigationBadge(): ?string
     {

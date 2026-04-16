@@ -102,6 +102,17 @@ class CategoryResource extends Resource
         return (string) $q->count();
     }
 
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('categories');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
     public static function mutateFormDataBeforeCreate(array $data): array
     {
         $data['user_id'] = $data['user_id'] ?? Auth::id();

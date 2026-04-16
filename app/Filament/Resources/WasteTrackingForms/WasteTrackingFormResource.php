@@ -834,6 +834,17 @@ class WasteTrackingFormResource extends Resource
             'edit' => EditWasteTrackingForm::route('/{record}/edit'),
         ];
     }
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('waste_tracking_forms');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 
     public static function getNavigationBadge(): ?string
     {

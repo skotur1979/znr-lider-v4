@@ -49,9 +49,16 @@ class KpiResource extends Resource
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function shouldRegisterNavigation(): bool
-    {
-        return true;
-    }
+{
+    $user = auth()->user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('kpis');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 
     private static function isAdminUser($user): bool
     {

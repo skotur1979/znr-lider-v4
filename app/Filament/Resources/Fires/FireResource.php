@@ -62,8 +62,8 @@ class FireResource extends Resource
     {
         return $schema->components([
             Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->dehydrated(),
+    ->default(fn () => Auth::user()?->ownerId())
+    ->dehydrated(),
 
             Section::make('Podatci o vatrogasnom aparatu')
                 ->schema([
@@ -85,7 +85,7 @@ class FireResource extends Resource
     ->rule(function ($record) {
         return \Illuminate\Validation\Rule::unique('fires', 'factory_number/year_of_production')
             ->where(function ($query) {
-                $query->where('user_id', auth()->id())
+                $query->where('user_id', auth()->user()?->ownerId())
                     ->whereNull('deleted_at');
             })
             ->ignore($record?->id);
@@ -341,29 +341,39 @@ class FireResource extends Resource
         return $value === 'trashed';
     }
 
-    public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
+   public static function getEloquentQuery(): Builder
+{
+    $query = parent::getEloquentQuery()
+        ->withoutGlobalScopes([SoftDeletingScope::class]);
 
-        if (Auth::user()?->isAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::id());
+    if (Auth::user()?->isSuperAdmin()) {
+        return $query;
     }
+
+    return $query->where('user_id', Auth::user()->ownerId());
+}
 
     public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
+{
+    $q = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
+    if (! Auth::user()?->isSuperAdmin()) {
+        $q->where('user_id', Auth::user()->ownerId());
     }
 
+    return (string) $q->count();
+}
+public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('fires');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
     public static function getPages(): array
     {
         return [

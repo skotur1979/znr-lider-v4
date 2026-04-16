@@ -62,9 +62,9 @@ class MachineResource extends Resource
                 ->dehydrated(fn () => Auth::user()?->isAdmin()),
 
             Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->visible(fn () => ! Auth::user()?->isAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+    ->default(fn () => Auth::user()?->ownerId())
+    ->visible(fn () => ! Auth::user()?->isAdmin())
+    ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
 
             Section::make('OCR / Auto popunjavanje iz zapisnika')
                 ->description('Učitaj PDF ili sliku zapisnika pa zatim klikni OCR gumb gore desno.')
@@ -147,7 +147,7 @@ class MachineResource extends Resource
                         ->rule(function ($record) {
                             return Rule::unique('machines', 'report_number')
                                 ->where(function ($query) {
-                                    $query->where('user_id', Auth::id())
+                                    $query->where('user_id', Auth::user()?->ownerId())
                                         ->whereNull('deleted_at');
                                 })
                                 ->ignore($record?->id);
@@ -365,27 +365,37 @@ class MachineResource extends Resource
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
+{
+    $query = parent::getEloquentQuery()
+        ->withoutGlobalScopes([SoftDeletingScope::class]);
 
-        if (Auth::user()?->isAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::id());
+    if (Auth::user()?->isSuperAdmin()) {
+        return $query;
     }
 
+    return $query->where('user_id', Auth::user()->ownerId());
+}
+public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('machines');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
     public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
+{
+    $q = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
+    if (! Auth::user()?->isSuperAdmin()) {
+        $q->where('user_id', Auth::user()->ownerId());
     }
+
+    return (string) $q->count();
+}
 
     public static function getPages(): array
     {

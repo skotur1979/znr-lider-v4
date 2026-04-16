@@ -74,9 +74,9 @@ class IncidentResource extends Resource
                 ->dehydrated(fn () => Auth::user()?->isAdmin()),
 
             Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->visible(fn () => ! Auth::user()?->isAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+    ->default(fn () => Auth::user()?->ownerId())
+    ->visible(fn () => ! Auth::user()?->isAdmin())
+    ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
 
             Section::make('Osnovno')
                 ->columns(2)
@@ -390,28 +390,38 @@ class IncidentResource extends Resource
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
+{
+    $query = parent::getEloquentQuery()
+        ->withoutGlobalScopes([SoftDeletingScope::class]);
 
-        if (Auth::user()?->isAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::id());
+    if (Auth::user()?->isSuperAdmin()) {
+        return $query;
     }
+
+    return $query->where('user_id', Auth::user()->ownerId());
+}
 
     public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
+{
+    $q = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
+    if (! Auth::user()?->isSuperAdmin()) {
+        $q->where('user_id', Auth::user()->ownerId());
     }
 
+    return (string) $q->count();
+}
+public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('incidents');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
     public static function getPages(): array
     {
         return [

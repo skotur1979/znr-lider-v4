@@ -203,7 +203,17 @@ class DocumentationItemResource extends Resource
 
         return (string) $q->count();
     }
+public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
 
+    return $user?->isSuperAdmin() || $user?->canAccessModule('documentation');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
     public static function getPages(): array
     {
         return [

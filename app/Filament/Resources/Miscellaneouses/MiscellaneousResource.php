@@ -67,8 +67,8 @@ class MiscellaneousResource extends Resource
                             $q = Category::query();
 
                             if (! Auth::user()?->isAdmin()) {
-                                $q->where('user_id', Auth::id());
-                            }
+    $q->where('user_id', Auth::user()->ownerId());
+}
 
                             return $q->orderBy('name')->pluck('name', 'id')->toArray();
                         })
@@ -79,8 +79,8 @@ class MiscellaneousResource extends Resource
                                 ->limit(50);
 
                             if (! Auth::user()?->isAdmin()) {
-                                $q->where('user_id', Auth::id());
-                            }
+    $q->where('user_id', Auth::user()->ownerId());
+}
 
                             return $q->pluck('name', 'id')->toArray();
                         })
@@ -95,9 +95,9 @@ class MiscellaneousResource extends Resource
                         ])
                         ->createOptionUsing(function (array $data): int {
                             $category = Category::create([
-                                'name' => $data['name'],
-                                'user_id' => Auth::id(),
-                            ]);
+    'name' => $data['name'],
+    'user_id' => Auth::user()->ownerId(),
+]);
 
                             return $category->id;
                         }),
@@ -114,7 +114,7 @@ class MiscellaneousResource extends Resource
     ->rule(function ($record) {
         return \Illuminate\Validation\Rule::unique('miscellaneouses', 'report_number')
             ->where(function ($query) {
-                $query->where('user_id', auth()->id())
+              $query->where('user_id', auth()->user()?->ownerId())
                     ->whereNull('deleted_at');
             })
             ->ignore($record?->id);
@@ -350,14 +350,14 @@ class MiscellaneousResource extends Resource
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
+{
+    $query = parent::getEloquentQuery()
+        ->withoutGlobalScopes([SoftDeletingScope::class]);
 
-        return Auth::user()?->isAdmin()
-            ? $query
-            : $query->where('user_id', Auth::id());
-    }
+    return Auth::user()?->isSuperAdmin()
+        ? $query
+        : $query->where('user_id', Auth::user()->ownerId());
+}
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
@@ -365,15 +365,15 @@ class MiscellaneousResource extends Resource
     }
 
     public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
+{
+    $q = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
+    if (! Auth::user()?->isSuperAdmin()) {
+        $q->where('user_id', Auth::user()->ownerId());
     }
+
+    return (string) $q->count();
+}
 
     private static function isOnlyTrashed(HasTable $livewire): bool
     {
@@ -382,7 +382,17 @@ class MiscellaneousResource extends Resource
 
         return $value === 'trashed';
     }
+public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
 
+    return $user?->isSuperAdmin() || $user?->canAccessModule('miscellaneous');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
     private static function expiryColor($state): string
     {
         if (! $state) return 'gray';

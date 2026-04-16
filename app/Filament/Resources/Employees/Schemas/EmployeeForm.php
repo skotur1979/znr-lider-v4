@@ -39,9 +39,9 @@ class EmployeeForm
                 ->dehydrated(fn () => Auth::user()?->isAdmin()),
 
             Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->visible(fn () => ! Auth::user()?->isAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+    ->default(fn () => Auth::user()?->ownerId())
+    ->visible(fn () => ! Auth::user()?->isAdmin())
+    ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
 
             Tabs::make('EmployeeTabs')
                 ->columnSpanFull()
@@ -66,7 +66,7 @@ class EmployeeForm
     ->rule(function ($record) {
         return \Illuminate\Validation\Rule::unique('employees', 'OIB')
             ->where(function ($query) {
-                $query->where('user_id', auth()->id())
+                $query->where('user_id', auth()->user()?->ownerId())
                     ->whereNull('deleted_at');
             })
             ->ignore($record?->id);

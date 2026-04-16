@@ -300,5 +300,15 @@ class PPELogResource extends Resource
             return null;
         }
     }
-    
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('ppe_logs');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 }

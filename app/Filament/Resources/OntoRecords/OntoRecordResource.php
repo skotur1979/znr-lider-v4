@@ -7,7 +7,6 @@ use App\Filament\Resources\OntoRecords\Pages\EditOntoRecord;
 use App\Filament\Resources\OntoRecords\Pages\ListOntoRecords;
 use App\Filament\Resources\OntoRecords\Pages\ViewOntoRecord;
 use App\Models\OntoRecord;
-use App\Models\WasteOrganization;
 use App\Models\WasteTrackingForm;
 use App\Models\WasteType;
 use App\Services\OntoService;
@@ -38,7 +37,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use RuntimeException;
@@ -256,7 +254,13 @@ class OntoRecordResource extends Resource
 
                 SelectFilter::make('waste_organization_location_id')
     ->label('Lokacija')
-    ->relationship('organizationLocation', 'name')
+    ->relationship(
+    'organizationLocation',
+    'name',
+    fn (Builder $query) => ! Auth::user()?->isAdmin()
+        ? $query->whereHas('organization', fn (Builder $q) => $q->where('user_id', Auth::id()))
+        : $query
+)
     ->searchable()
     ->preload(),
 
@@ -534,6 +538,23 @@ class OntoRecordResource extends Resource
             'edit' => EditOntoRecord::route('/{record}/edit'),
         ];
     }
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    if (! $user) {
+        return false;
+    }
+
+    return
+        (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) ||
+        (method_exists($user, 'canAccessModule') && $user->canAccessModule('onto_records'));
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
     public static function getNavigationBadge(): ?string
     {
         $q = static::getModel()::query();

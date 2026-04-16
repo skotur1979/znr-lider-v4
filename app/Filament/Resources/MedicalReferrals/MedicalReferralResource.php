@@ -680,6 +680,17 @@ Section::make('Podaci o zaposleniku')
     {
         return static::getEloquentQuery();
     }
+    public static function shouldRegisterNavigation(): bool
+{
+    $user = auth()->user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('medical_referrals_ra1');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
+}
 
     private static function isOnlyTrashed(HasTable $livewire): bool
     {

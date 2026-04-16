@@ -70,11 +70,11 @@ class EmployeeResource extends Resource
     $query = parent::getEloquentQuery()
         ->withoutGlobalScopes([SoftDeletingScope::class]);
 
-    if (Auth::user()?->isAdmin()) {
+    if (Auth::user()?->isSuperAdmin()) {
         return $query;
     }
 
-    return $query->where('user_id', Auth::id());
+    return $query->where('user_id', Auth::user()->ownerId());
 }
 
     public static function getRecordRouteBindingEloquentQuery(): Builder
@@ -85,12 +85,23 @@ class EmployeeResource extends Resource
 
     public static function getNavigationBadge(): ?string
 {
-    $q = static::getModel()::query(); // samo aktivni
+    $q = static::getModel()::query();
 
-    if (! Auth::user()?->isAdmin()) {
-        $q->where('user_id', Auth::id());
+    if (! Auth::user()?->isSuperAdmin()) {
+        $q->where('user_id', Auth::user()->ownerId());
     }
 
     return (string) $q->count();
+}
+public static function shouldRegisterNavigation(): bool
+{
+    $user = Auth::user();
+
+    return $user?->isSuperAdmin() || $user?->canAccessModule('employees');
+}
+
+public static function canViewAny(): bool
+{
+    return static::shouldRegisterNavigation();
 }
 }
