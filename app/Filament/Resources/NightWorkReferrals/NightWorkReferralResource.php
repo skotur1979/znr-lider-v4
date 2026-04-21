@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\NightWorkReferrals;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\NightWorkReferrals\Pages;
 use App\Models\Employee;
 use App\Models\NightWorkReferral;
@@ -18,11 +19,11 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
@@ -37,224 +38,164 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Schema as DbSchema;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 
-class NightWorkReferralResource extends Resource
+class NightWorkReferralResource extends BaseResource
 {
     protected static ?string $model = NightWorkReferral::class;
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::DocumentText;
     protected static string|UnitEnum|null $navigationGroup = 'Zaposlenici';
     protected static ?string $navigationLabel = 'NR-1 Uputnice';
     protected static ?string $pluralModelLabel = 'NR-1 Uputnice';
     protected static ?string $modelLabel = 'NR-1 Uputnica';
     protected static ?int $navigationSort = 3;
 
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = auth()->user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('medical_referrals_nr1');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
-
-    private static function isAdminUser($user): bool
+    protected static function getModuleKey(): ?string
     {
-        if (! $user) {
-            return false;
-        }
+        return 'medical_referrals_nr1';
+    }
 
-        if ((int) $user->id === 1) {
-            return true;
-        }
+    protected static function ownerId(): ?int
+    {
+        return Auth::user()?->ownerId();
+    }
 
-        try {
-            if (method_exists($user, 'getRoleNames')) {
-                $roles = $user->getRoleNames()->toArray();
-
-                foreach ($roles as $role) {
-                    $name = trim((string) $role);
-
-                    if (
-                        Str::contains(Str::lower($name), 'admin') ||
-                        in_array(Str::lower($name), ['administrator', 'super-admin', 'super admin', 'owner', 'root'])
-                    ) {
-                        return true;
-                    }
-                }
-            }
-
-            if (method_exists($user, 'hasAnyRole')) {
-                if ($user->hasAnyRole([
-                    'admin', 'Admin', 'administrator', 'Administrator',
-                    'super-admin', 'Super Admin', 'owner', 'Owner', 'root', 'Root',
-                ])) {
-                    return true;
-                }
-            }
-
-            if (method_exists($user, 'hasRole')) {
-                foreach (['admin', 'Admin', 'administrator', 'Administrator', 'super-admin', 'Super Admin', 'owner', 'Owner', 'root', 'Root'] as $role) {
-                    if ($user->hasRole($role)) {
-                        return true;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            // ignore
-        }
-
-        if (isset($user->is_admin) && (bool) $user->is_admin) {
-            return true;
-        }
-
-        try {
-            if (method_exists($user, 'can') && $user->can('viewAny', \App\Models\NightWorkReferral::class)) {
-                return true;
-            }
-        } catch (\Throwable $e) {
-            // ignore
-        }
-
-        return false;
+    protected static function isSuperAdmin(): bool
+    {
+        return Auth::user()?->isSuperAdmin() ?? false;
     }
 
     protected static function getEmployeeOptions(): array
     {
-        $user = auth()->user();
+        $query = Employee::query()->orderBy('name');
 
-        $query = Employee::query();
-
-        if (! self::isAdminUser($user)) {
-            $query->where('user_id', $user?->id);
+        if (! static::isSuperAdmin()) {
+            $query->where('user_id', static::ownerId());
         }
 
-        return $query
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->toArray();
+        return $query->pluck('name', 'id')->toArray();
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Hidden::make('user_id')
+                ->default(fn () => static::ownerId())
+                ->dehydrated(),
+
             Section::make('Povezivanje sa zaposlenikom')
-    ->columnSpanFull()
-    ->columns(1)
-    ->schema([
-        Toggle::make('manual_entry')
-            ->label('Novi radnik (još nije u bazi)')
-            ->helperText('Ako uključiš, podatke upiši ručno')
-            ->live(),
+                ->columnSpanFull()
+                ->columns(1)
+                ->schema([
+                    Toggle::make('manual_entry')
+                        ->label('Novi radnik (još nije u bazi)')
+                        ->helperText('Ako uključiš, podatke upiši ručno.')
+                        ->live(),
 
-        Select::make('employee_id')
-            ->label('Zaposlenik')
-            ->options(fn () => self::getEmployeeOptions())
-            ->searchable()
-            ->preload()
-            ->live()
-            ->required(fn (Get $get): bool => ! $get('manual_entry'))
-            ->hidden(fn (Get $get): bool => (bool) $get('manual_entry'))
-            ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                if ($get('manual_entry')) {
-                    return;
-                }
+                    Select::make('employee_id')
+                        ->label('Zaposlenik')
+                        ->options(fn () => static::getEmployeeOptions())
+                        ->searchable()
+                        ->preload()
+                        ->live()
+                        ->required(fn (Get $get): bool => ! $get('manual_entry'))
+                        ->hidden(fn (Get $get): bool => (bool) $get('manual_entry'))
+                        ->afterStateUpdated(function ($state, Set $set, Get $get) {
+                            if ($get('manual_entry') || ! $state) {
+                                return;
+                            }
 
-                $emp = Employee::find($state);
+                            $employee = Employee::find($state);
 
-                if (! $emp) {
-                    return;
-                }
+                            if (! $employee) {
+                                return;
+                            }
 
-                $set('full_name', $emp->name ?? '');
-                $set('oib', $emp->OIB ?? '');
-                $set('job_title', $emp->workplace ?? ''); // ✅ radno mjesto
-                $set('education', $emp->education ?? ''); // ✅ školska sprema
-                $set('name_of_parents', $emp->name_of_parents ?? '');
-                $set('place_of_birth', $emp->place_of_birth ?? '');
-            }),
-    ]),
+                            $set('full_name', $employee->name ?? '');
+                            $set('oib', $employee->OIB ?? '');
+                            $set('job_title', $employee->workplace ?? '');
+                            $set('education', $employee->education ?? '');
+                            $set('name_of_parents', $employee->name_of_parents ?? '');
+                            $set('place_of_birth', $employee->place_of_birth ?? '');
+                        }),
+                ]),
 
-Section::make('Podaci o zaposleniku')
-    ->columnSpanFull()
-    ->columns(2)
-    ->schema([
-        TextInput::make('referral_number')
-            ->label('Broj'),
+            Section::make('Podaci o zaposleniku')
+                ->columnSpanFull()
+                ->columns(2)
+                ->schema([
+                    TextInput::make('referral_number')
+                        ->label('Broj'),
 
-        DatePicker::make('referral_date')
-            ->label('Datum'),
+                    DatePicker::make('referral_date')
+                        ->label('Datum'),
 
-        TextInput::make('employer_name')
-            ->label('Naziv poslodavca'),
+                    TextInput::make('employer_name')
+                        ->label('Naziv poslodavca'),
 
-        TextInput::make('employer_address')
-            ->label('Adresa poslodavca'),
+                    TextInput::make('employer_address')
+                        ->label('Adresa poslodavca'),
 
-        TextInput::make('employer_oib')
-            ->label('OIB poslodavca'),
+                    TextInput::make('employer_oib')
+                        ->label('OIB poslodavca'),
 
-        TextInput::make('full_name')
-            ->label('Ime i prezime')
-            ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
-            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('full_name', $record->employee->name ?? '');
-                }
-            }),
+                    TextInput::make('full_name')
+                        ->label('Ime i prezime')
+                        ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
+                        ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('full_name', $record->employee->name ?? '');
+                            }
+                        }),
 
-        TextInput::make('name_of_parents')
-            ->label('Ime oca – majke')
-            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('name_of_parents', $record->employee->name_of_parents ?? '');
-                }
-            }),
+                    TextInput::make('name_of_parents')
+                        ->label('Ime oca – majke')
+                        ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('name_of_parents', $record->employee->name_of_parents ?? '');
+                            }
+                        }),
 
-        TextInput::make('place_of_birth')
-            ->label('Datum i mjesto rođenja')
-            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('place_of_birth', $record->employee->place_of_birth ?? '');
-                }
-            }),
+                    TextInput::make('place_of_birth')
+                        ->label('Datum i mjesto rođenja')
+                        ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('place_of_birth', $record->employee->place_of_birth ?? '');
+                            }
+                        }),
 
-        TextInput::make('oib')
-            ->label('OIB')
-            ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
-            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
-                if ($record?->employee && blank($state)) {
-                    $set('oib', $record->employee->OIB ?? '');
-                }
-            }),
+                    TextInput::make('oib')
+                        ->label('OIB')
+                        ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
+                        ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
+                            if ($record?->employee && blank($state)) {
+                                $set('oib', $record->employee->OIB ?? '');
+                            }
+                        }),
 
-        TextInput::make('job_title')
-            ->label('Noćni rad za koje se utvrđuje radna sposobnost')
-            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('job_title', $record->employee->workplace ?? ''); // ✅ radno mjesto
-                }
-            })
-            ->maxLength(110)
-            ->extraAttributes(['maxlength' => 110])
-            ->rule('max:110')
-            ->live(onBlur: true)
-            ->helperText(fn (Get $get) => mb_strlen((string) $get('job_title')) . '/110'),
+                    TextInput::make('job_title')
+                        ->label('Noćni rad za koje se utvrđuje radna sposobnost')
+                        ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('job_title', $record->employee->workplace ?? '');
+                            }
+                        })
+                        ->maxLength(110)
+                        ->extraAttributes(['maxlength' => 110])
+                        ->rule('max:110')
+                        ->live(onBlur: true)
+                        ->helperText(fn (Get $get) => mb_strlen((string) $get('job_title')) . '/110'),
 
-        TextInput::make('education')
-            ->label('Školska sprema')
-            ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('education', $record->employee->education ?? ''); // ✅ školska sprema
-                }
-            }),
-    ]),
+                    TextInput::make('education')
+                        ->label('Školska sprema')
+                        ->afterStateHydrated(function (Set $set, $state, ?NightWorkReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('education', $record->employee->education ?? '');
+                            }
+                        }),
+                ]),
 
             Section::make('Zdravstveni pregled')
                 ->columnSpanFull()
@@ -362,51 +303,51 @@ Section::make('Podaci o zaposleniku')
                         ->columns(6),
 
                     Grid::make(3)->schema([
-    Group::make([
-        Grid::make(2)
-            ->schema([
-                Checkbox::make('lifting_enabled')
-                    ->label('Dizanje tereta kg')
-                    ->live(),
+                        Group::make([
+                            Grid::make(2)
+                                ->schema([
+                                    Checkbox::make('lifting_enabled')
+                                        ->label('Dizanje tereta kg')
+                                        ->live(),
 
-                TextInput::make('lifting_weight')
-                    ->hiddenLabel()
-                    ->placeholder('')
-                    ->numeric()
-                    ->visible(fn (Get $get): bool => (bool) $get('lifting_enabled')),
-            ]),
-    ]),
+                                    TextInput::make('lifting_weight')
+                                        ->hiddenLabel()
+                                        ->placeholder('')
+                                        ->numeric()
+                                        ->visible(fn (Get $get): bool => (bool) $get('lifting_enabled')),
+                                ]),
+                        ]),
 
-    Group::make([
-        Grid::make(2)
-            ->schema([
-                Checkbox::make('carrying_enabled')
-                    ->label('Prenošenje tereta kg')
-                    ->live(),
+                        Group::make([
+                            Grid::make(2)
+                                ->schema([
+                                    Checkbox::make('carrying_enabled')
+                                        ->label('Prenošenje tereta kg')
+                                        ->live(),
 
-                TextInput::make('carrying_weight')
-                    ->hiddenLabel()
-                    ->placeholder('')
-                    ->numeric()
-                    ->visible(fn (Get $get): bool => (bool) $get('carrying_enabled')),
-            ]),
-    ]),
+                                    TextInput::make('carrying_weight')
+                                        ->hiddenLabel()
+                                        ->placeholder('')
+                                        ->numeric()
+                                        ->visible(fn (Get $get): bool => (bool) $get('carrying_enabled')),
+                                ]),
+                        ]),
 
-    Group::make([
-        Grid::make(2)
-            ->schema([
-                Checkbox::make('pushing_enabled')
-                    ->label('Guranje tereta kg')
-                    ->live(),
+                        Group::make([
+                            Grid::make(2)
+                                ->schema([
+                                    Checkbox::make('pushing_enabled')
+                                        ->label('Guranje tereta kg')
+                                        ->live(),
 
-                TextInput::make('pushing_weight')
-                    ->hiddenLabel()
-                    ->placeholder('')
-                    ->numeric()
-                    ->visible(fn (Get $get): bool => (bool) $get('pushing_enabled')),
-            ]),
-    ]),
-]),
+                                    TextInput::make('pushing_weight')
+                                        ->hiddenLabel()
+                                        ->placeholder('')
+                                        ->numeric()
+                                        ->visible(fn (Get $get): bool => (bool) $get('pushing_enabled')),
+                                ]),
+                        ]),
+                    ]),
 
                     CheckboxList::make('job_characteristics')
                         ->label('Pri radu je važan⁴:')
@@ -558,7 +499,7 @@ Section::make('Podaci o zaposleniku')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Deaktiviraj')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+                    ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire)),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
@@ -567,7 +508,7 @@ Section::make('Podaci o zaposleniku')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Vrati')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+                    ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
@@ -592,47 +533,45 @@ Section::make('Podaci o zaposleniku')
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
 
-        $user = auth()->user();
-
-        if (! $user) {
-            return $query->whereRaw('1=0');
+        if (static::isSuperAdmin()) {
+            return $query;
         }
 
-        return self::isAdminUser($user)
-            ? $query
-            : $query->where('user_id', $user->id);
+        return $query->where('user_id', static::ownerId());
     }
 
-    public static function getNavigationBadge(): ?string
+    public static function getRecordRouteBindingEloquentQuery(): Builder
     {
-        try {
-            if (! DbSchema::hasTable('night_work_referrals')) {
-                return null;
-            }
+        $query = parent::getRecordRouteBindingEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
 
-            $user = auth()->user();
-
-            if (! $user) {
-                return '0';
-            }
-
-            $query = static::getModel()::query();
-
-            if (! self::isAdminUser($user)) {
-                $query->where('user_id', $user->id);
-            }
-
-            return (string) $query->count();
-        } catch (\Throwable $e) {
-            return null;
+        if (static::isSuperAdmin()) {
+            return $query;
         }
+
+        return $query->where('user_id', static::ownerId());
     }
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
         return static::getEloquentQuery();
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $query = static::getModel()::query();
+
+        if (! static::isSuperAdmin()) {
+            $query->where('user_id', static::ownerId());
+        }
+
+        return (string) $query->count();
     }
 
     private static function isOnlyTrashed(HasTable $livewire): bool

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MedicalReferrals;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\MedicalReferrals\Pages\CreateMedicalReferral;
 use App\Filament\Resources\MedicalReferrals\Pages\EditMedicalReferral;
 use App\Filament\Resources\MedicalReferrals\Pages\ListMedicalReferrals;
@@ -9,7 +10,6 @@ use App\Filament\Resources\MedicalReferrals\Pages\ViewMedicalReferral;
 use App\Models\Employee;
 use App\Models\MedicalReferral;
 use BackedEnum;
-use Closure;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -22,11 +22,11 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
@@ -41,209 +41,162 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
-use Illuminate\Support\Str;
 use UnitEnum;
 
-class MedicalReferralResource extends Resource
+class MedicalReferralResource extends BaseResource
 {
     protected static ?string $model = MedicalReferral::class;
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::DocumentText;
     protected static string|UnitEnum|null $navigationGroup = 'Zaposlenici';
     protected static ?string $navigationLabel = 'RA-1 Uputnice';
     protected static ?string $pluralModelLabel = 'RA-1 Uputnice';
     protected static ?string $modelLabel = 'RA-1 Uputnica';
     protected static ?int $navigationSort = 2;
 
-    private static function isAdminUser($user): bool
+    protected static function getModuleKey(): ?string
     {
-        if (! $user) {
-            return false;
-        }
+        return 'medical_referrals_ra1';
+    }
 
-        if ((int) $user->id === 1) {
-            return true;
-        }
+    protected static function ownerId(): ?int
+    {
+        return Auth::user()?->ownerId();
+    }
 
-        try {
-            if (method_exists($user, 'getRoleNames')) {
-                $roles = $user->getRoleNames()->toArray();
-
-                foreach ($roles as $role) {
-                    $name = trim((string) $role);
-
-                    if (
-                        Str::contains(Str::lower($name), 'admin') ||
-                        in_array(Str::lower($name), ['administrator', 'super-admin', 'super admin', 'owner', 'root'])
-                    ) {
-                        return true;
-                    }
-                }
-            }
-
-            if (method_exists($user, 'hasAnyRole')) {
-                if ($user->hasAnyRole([
-                    'admin', 'Admin', 'administrator', 'Administrator',
-                    'super-admin', 'Super Admin', 'owner', 'Owner', 'root', 'Root',
-                ])) {
-                    return true;
-                }
-            }
-
-            if (method_exists($user, 'hasRole')) {
-                foreach (['admin', 'Admin', 'administrator', 'Administrator', 'super-admin', 'Super Admin', 'owner', 'Owner', 'root', 'Root'] as $role) {
-                    if ($user->hasRole($role)) {
-                        return true;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            // ignore
-        }
-
-        if (isset($user->is_admin) && (bool) $user->is_admin) {
-            return true;
-        }
-
-        try {
-            if (method_exists($user, 'can') && $user->can('viewAny', \App\Models\MedicalReferral::class)) {
-                return true;
-            }
-        } catch (\Throwable $e) {
-            // ignore
-        }
-
-        return false;
+    protected static function isSuperAdmin(): bool
+    {
+        return Auth::user()?->isSuperAdmin() ?? false;
     }
 
     protected static function getEmployeeOptions(): array
     {
-        $user = auth()->user();
+        $query = Employee::query()->orderBy('name');
 
-        $query = Employee::query();
-
-        if (! self::isAdminUser($user)) {
-            $query->where('user_id', $user?->id);
+        if (! static::isSuperAdmin()) {
+            $query->where('user_id', static::ownerId());
         }
 
-        return $query
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->toArray();
+        return $query->pluck('name', 'id')->toArray();
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-           Section::make('Povezivanje sa zaposlenikom')
-    ->columnSpanFull()
-    ->columns(1)
-    ->schema([
-        Toggle::make('manual_entry')
-            ->label('Novi radnik (još nije u bazi)')
-            ->helperText('Ako uključiš, podatke upiši ručno')
-            ->live(),
+            Hidden::make('user_id')
+                ->default(fn () => static::ownerId())
+                ->dehydrated(),
 
-        Select::make('employee_id')
-            ->label('Zaposlenik')
-            ->options(fn () => self::getEmployeeOptions())
-            ->searchable()
-            ->preload()
-            ->live()
-            ->required(fn (Get $get): bool => ! $get('manual_entry'))
-            ->hidden(fn (Get $get): bool => (bool) $get('manual_entry'))
-            ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                if ($get('manual_entry')) {
-                    return;
-                }
+            Section::make('Povezivanje sa zaposlenikom')
+                ->columnSpanFull()
+                ->columns(1)
+                ->schema([
+                    Toggle::make('manual_entry')
+                        ->label('Novi radnik (još nije u bazi)')
+                        ->helperText('Ako uključiš, podatke upiši ručno.')
+                        ->live(),
 
-                $emp = Employee::find($state);
+                    Select::make('employee_id')
+                        ->label('Zaposlenik')
+                        ->options(fn () => static::getEmployeeOptions())
+                        ->searchable()
+                        ->preload()
+                        ->live()
+                        ->required(fn (Get $get): bool => ! $get('manual_entry'))
+                        ->hidden(fn (Get $get): bool => (bool) $get('manual_entry'))
+                        ->afterStateUpdated(function ($state, Set $set, Get $get) {
+                            if ($get('manual_entry') || ! $state) {
+                                return;
+                            }
 
-                if (! $emp) {
-                    return;
-                }
+                            $employee = Employee::find($state);
 
-                $set('full_name', $emp->name ?? '');
-                $set('oib', $emp->OIB ?? '');
-                $set('job_title', $emp->job_title ?? '');
-                $set('education', $emp->education ?? '');
-                $set('name_of_parents', $emp->name_of_parents ?? '');
-                $set('place_of_birth', $emp->place_of_birth ?? '');
-            }),
-    ]),
+                            if (! $employee) {
+                                return;
+                            }
 
-Section::make('Podaci o zaposleniku')
-    ->columnSpanFull()
-    ->columns(2)
-    ->schema([
-        TextInput::make('referral_number')
-            ->label('Broj'),
+                            $set('full_name', $employee->name ?? '');
+                            $set('oib', $employee->OIB ?? '');
+                            $set('job_title', $employee->job_title ?? '');
+                            $set('education', $employee->education ?? '');
+                            $set('name_of_parents', $employee->name_of_parents ?? '');
+                            $set('place_of_birth', $employee->place_of_birth ?? '');
+                        }),
+                ]),
 
-        DatePicker::make('referral_date')
-            ->label('Datum'),
+            Section::make('Podaci o zaposleniku')
+                ->columnSpanFull()
+                ->columns(2)
+                ->schema([
+                    TextInput::make('referral_number')
+                        ->label('Broj'),
 
-        TextInput::make('employer_name')
-            ->label('Naziv poslodavca'),
+                    DatePicker::make('referral_date')
+                        ->label('Datum'),
 
-        TextInput::make('employer_address')
-            ->label('Adresa poslodavca'),
+                    TextInput::make('employer_name')
+                        ->label('Naziv poslodavca'),
 
-        TextInput::make('employer_oib')
-            ->label('OIB poslodavca'),
+                    TextInput::make('employer_address')
+                        ->label('Adresa poslodavca'),
 
-        TextInput::make('full_name')
-            ->label('Ime i prezime')
-            ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('full_name', $record->employee->name ?? '');
-                }
-            }),
+                    TextInput::make('employer_oib')
+                        ->label('OIB poslodavca'),
 
-        TextInput::make('name_of_parents')
-            ->label('Ime oca – majke')
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('name_of_parents', $record->employee->name_of_parents ?? '');
-                }
-            }),
+                    TextInput::make('full_name')
+                        ->label('Ime i prezime')
+                        ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
+                        ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('full_name', $record->employee->name ?? '');
+                            }
+                        }),
 
-        TextInput::make('place_of_birth')
-            ->label('Datum i mjesto rođenja')
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('place_of_birth', $record->employee->place_of_birth ?? '');
-                }
-            }),
+                    TextInput::make('name_of_parents')
+                        ->label('Ime oca – majke')
+                        ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('name_of_parents', $record->employee->name_of_parents ?? '');
+                            }
+                        }),
 
-        TextInput::make('oib')
-            ->label('OIB')
-            ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
-            ->maxLength(11)
-            ->minLength(11)
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
-                if ($record?->employee && blank($state)) {
-                    $set('oib', $record->employee->OIB ?? '');
-                }
-            }),
+                    TextInput::make('place_of_birth')
+                        ->label('Datum i mjesto rođenja')
+                        ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('place_of_birth', $record->employee->place_of_birth ?? '');
+                            }
+                        }),
 
-        TextInput::make('job_title')
-            ->label('Zanimanje')
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('job_title', $record->employee->job_title ?? '');
-                }
-            }),
+                    TextInput::make('oib')
+                        ->label('OIB')
+                        ->required(fn (Get $get): bool => (bool) $get('manual_entry'))
+                        ->minLength(11)
+                        ->maxLength(11)
+                        ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+                            if ($record?->employee && blank($state)) {
+                                $set('oib', $record->employee->OIB ?? '');
+                            }
+                        }),
 
-        TextInput::make('education')
-            ->label('Školska sprema')
-            ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
-                if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
-                    $set('education', $record->employee->education ?? '');
-                }
-            }),
-    ]),
+                    TextInput::make('job_title')
+                        ->label('Zanimanje')
+                        ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('job_title', $record->employee->job_title ?? '');
+                            }
+                        }),
+
+                    TextInput::make('education')
+                        ->label('Školska sprema')
+                        ->afterStateHydrated(function (Set $set, $state, ?MedicalReferral $record) {
+                            if ($record?->employee && blank($state) && ! ($record->manual_entry ?? false)) {
+                                $set('education', $record->employee->education ?? '');
+                            }
+                        }),
+                ]),
 
             Section::make('Opis poslova i uvjeti')
                 ->columnSpanFull()
@@ -264,10 +217,9 @@ Section::make('Podaci o zaposleniku')
                         ->label('točka Pravilnika o poslovima s posebnim uvjetima rada')
                         ->live()
                         ->afterStateUpdated(function ($state, Set $set) {
-                            $s = (string) $state;
-                            $s = preg_replace('/[^0-9,()]/u', '', $s);
-                            $s = preg_replace('/\s*,\s*/u', ',', $s);
-                            $set('law_reference1', $s);
+                            $state = preg_replace('/[^0-9,()]/u', '', (string) $state);
+                            $state = preg_replace('/\s*,\s*/u', ',', $state);
+                            $set('law_reference1', $state);
                         })
                         ->maxLength(28)
                         ->extraAttributes(['maxlength' => 28])
@@ -612,7 +564,7 @@ Section::make('Podaci o zaposleniku')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Deaktiviraj')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+                    ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire)),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
@@ -621,7 +573,7 @@ Section::make('Podaci o zaposleniku')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Vrati')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+                    ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
@@ -646,31 +598,37 @@ Section::make('Podaci o zaposleniku')
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
 
-        $user = auth()->user();
-
-        if (! $user) {
-            return $query->whereRaw('1=0');
+        if (static::isSuperAdmin()) {
+            return $query;
         }
 
-        return self::isAdminUser($user)
-            ? $query
-            : $query->where('user_id', $user->id);
+        return $query->where('user_id', static::ownerId());
+    }
+
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        $query = parent::getRecordRouteBindingEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
+
+        if (static::isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where('user_id', static::ownerId());
     }
 
     public static function getNavigationBadge(): ?string
     {
-        $user = auth()->user();
-
-        if (! $user) {
-            return '0';
-        }
-
         $query = static::getModel()::query();
 
-        if (! self::isAdminUser($user)) {
-            $query->where('user_id', $user->id);
+        if (! static::isSuperAdmin()) {
+            $query->where('user_id', static::ownerId());
         }
 
         return (string) $query->count();
@@ -680,17 +638,6 @@ Section::make('Podaci o zaposleniku')
     {
         return static::getEloquentQuery();
     }
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = auth()->user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('medical_referrals_ra1');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
 
     private static function isOnlyTrashed(HasTable $livewire): bool
     {

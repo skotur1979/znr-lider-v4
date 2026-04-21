@@ -96,6 +96,11 @@ class UserResource extends Resource
     protected static function groupedSelectedModules(?User $record): array
     {
         $selected = $record?->quick_actions ?? [];
+
+        if (! is_array($selected)) {
+            $selected = [];
+        }
+
         $groups = static::getModuleGroups();
 
         return [
@@ -108,7 +113,7 @@ class UserResource extends Resource
         ];
     }
 
-    protected static function mergeQuickActions(array $data): array
+    public static function mergeQuickActions(array $data): array
     {
         $merged = array_merge(
             $data['quick_actions_upravljanje'] ?? [],
@@ -131,6 +136,24 @@ class UserResource extends Resource
         );
 
         return $data;
+    }
+
+    protected static function moduleCheckboxList(
+        string $field,
+        array $options,
+        string $groupKey,
+        int $columns
+    ): CheckboxList {
+        return CheckboxList::make($field)
+            ->label('')
+            ->options($options)
+            ->afterStateHydrated(function ($component, ?User $record) use ($groupKey) {
+                $grouped = static::groupedSelectedModules($record);
+                $component->state($grouped[$groupKey] ?? []);
+            })
+            ->dehydrated(true)
+            ->columns($columns)
+            ->bulkToggleable();
     }
 
     public static function form(Schema $schema): Schema
@@ -183,8 +206,9 @@ class UserResource extends Resource
                 ->options(function () {
                     return User::query()
                         ->whereIn('role', ['org_admin'])
-                        ->orWhere(function ($q) {
-                            $q->whereNull('role')->where('is_admin', false);
+                        ->orWhere(function ($query) {
+                            $query->whereNull('role')
+                                ->where('is_admin', false);
                         })
                         ->orderBy('name')
                         ->pluck('name', 'id')
@@ -228,13 +252,12 @@ class UserResource extends Resource
             Section::make('Uključeni moduli')
                 ->visible(fn () => Auth::user()?->isSuperAdmin())
                 ->schema([
-
                     Section::make('Upravljanje')
                         ->compact()
                         ->schema([
-                            CheckboxList::make('quick_actions_upravljanje')
-                                ->label('')
-                                ->options([
+                            static::moduleCheckboxList(
+                                'quick_actions_upravljanje',
+                                [
                                     'risk_assessments' => 'Procjene rizika',
                                     'documentation' => 'Dokumentacija',
                                     'chemicals' => 'Kemikalije',
@@ -245,89 +268,89 @@ class UserResource extends Resource
                                     'work_permits' => 'Dozvole za rad',
                                     'inspections' => 'Nadzori',
                                     'kpis' => 'KPI',
-                                ])
-                                ->default(fn (?User $record) => static::groupedSelectedModules($record)['upravljanje'])
-                                ->columns(5)
-                                ->bulkToggleable(),
+                                ],
+                                'upravljanje',
+                                5
+                            ),
                         ]),
 
                     Section::make('Zaposlenici')
                         ->compact()
                         ->schema([
-                            CheckboxList::make('quick_actions_zaposlenici')
-                                ->label('')
-                                ->options([
+                            static::moduleCheckboxList(
+                                'quick_actions_zaposlenici',
+                                [
                                     'employees' => 'Zaposlenici',
                                     'medical_referrals_ra1' => 'RA-1 uputnice',
                                     'medical_referrals_nr1' => 'NR-1 uputnice',
                                     'ppe_logs' => 'Upisnik OZO',
-                                ])
-                                ->default(fn (?User $record) => static::groupedSelectedModules($record)['zaposlenici'])
-                                ->columns(4)
-                                ->bulkToggleable(),
+                                ],
+                                'zaposlenici',
+                                4
+                            ),
                         ]),
 
                     Section::make('Ispitivanja')
                         ->compact()
                         ->schema([
-                            CheckboxList::make('quick_actions_ispitivanja')
-                                ->label('')
-                                ->options([
+                            static::moduleCheckboxList(
+                                'quick_actions_ispitivanja',
+                                [
                                     'machines' => 'Radna oprema',
                                     'fires' => 'Vatrogasni aparati',
                                     'first_aid' => 'Prva pomoć - ormarići',
                                     'miscellaneous' => 'Ostala ispitivanja',
                                     'categories' => 'Kategorije ispitivanja',
-                                ])
-                                ->default(fn (?User $record) => static::groupedSelectedModules($record)['ispitivanja'])
-                                ->columns(5)
-                                ->bulkToggleable(),
+                                ],
+                                'ispitivanja',
+                                5
+                            ),
                         ]),
 
                     Section::make('Zaštita okoliša')
                         ->compact()
                         ->schema([
-                            CheckboxList::make('quick_actions_okolis')
-                                ->label('')
-                                ->options([
+                            static::moduleCheckboxList(
+                                'quick_actions_okolis',
+                                [
                                     'waste_organizations' => 'Organizacije otpada',
                                     'waste_types' => 'Vrste otpada',
                                     'onto_records' => 'ONTO obrasci',
                                     'waste_tracking_forms' => 'Prateći listovi',
                                     'monthly_reports' => 'Mjesečni izvještaj',
-                                ])
-                                ->default(fn (?User $record) => static::groupedSelectedModules($record)['okolis'])
-                                ->columns(5)
-                                ->bulkToggleable(),
+                                ],
+                                'okolis',
+                                5
+                            ),
                         ]),
 
                     Section::make('Testiranje')
                         ->compact()
                         ->schema([
-                            CheckboxList::make('quick_actions_testiranje')
-                                ->label('')
-                                ->options([
+                            static::moduleCheckboxList(
+                                'quick_actions_testiranje',
+                                [
                                     'tests' => 'Testovi',
                                     'questions' => 'Pitanja',
                                     'answers' => 'Odgovori',
                                     'test_attempts' => 'Riješeni testovi',
-                                ])
-                                ->default(fn (?User $record) => static::groupedSelectedModules($record)['testiranje'])
-                                ->columns(4)
-                                ->bulkToggleable(),
+                                ],
+                                'testiranje',
+                                4
+                            ),
                         ]),
 
                     Section::make('Radni zadaci')
                         ->compact()
                         ->schema([
-                            CheckboxList::make('quick_actions_zadaci')
-                                ->label('')
-                                ->options([
+                            static::moduleCheckboxList(
+                                'quick_actions_zadaci',
+                                [
                                     'work_tasks' => 'Radni zadaci',
-                                ])
-                                ->default(fn (?User $record) => static::groupedSelectedModules($record)['zadaci'])
-                                ->columns(1)
-                                ->bulkToggleable(),
+                                ],
+                                'zadaci',
+                                1
+                            ),
                         ]),
                 ])
                 ->columns(1)
@@ -358,8 +381,7 @@ class UserResource extends Resource
                     ->label('Uloga')
                     ->badge()
                     ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'super_admin' => 'Super admin',
-                        'admin' => 'Super admin',
+                        'super_admin', 'admin' => 'Super admin',
                         'org_admin' => 'Glavni korisnik',
                         'org_user' => 'Podkorisnik',
                         default => 'Korisnik',
@@ -409,8 +431,8 @@ class UserResource extends Resource
         }
 
         if ($authUser?->canCreateSubusers()) {
-            return $query->where(function (Builder $q) use ($authUser) {
-                $q->where('id', $authUser->id)
+            return $query->where(function (Builder $query) use ($authUser) {
+                $query->where('id', $authUser->id)
                     ->orWhere('parent_user_id', $authUser->ownerId());
             });
         }
@@ -437,7 +459,7 @@ class UserResource extends Resource
         }
 
         $data['parent_user_id'] = $authUser->ownerId();
-        $data['organization_name'] = $authUser->owner()->organization_name;
+        $data['organization_name'] = $authUser->owner()?->organization_name;
         $data['role'] = 'org_user';
         $data['is_admin'] = false;
         $data['can_manage_subusers'] = false;

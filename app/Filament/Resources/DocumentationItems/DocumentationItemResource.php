@@ -2,68 +2,61 @@
 
 namespace App\Filament\Resources\DocumentationItems;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\DocumentationItems\Pages;
 use App\Models\DocumentationItem;
-
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-
-use Filament\Actions\DeleteBulkAction;
-
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
-
-use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
-
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
-class DocumentationItemResource extends Resource
+class DocumentationItemResource extends BaseResource
 {
     protected static ?string $model = DocumentationItem::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-rectangle-stack';
-
     protected static ?string $navigationLabel = 'Dokumentacija';
     protected static ?string $modelLabel = 'Dokumentacija';
     protected static ?string $pluralModelLabel = 'Dokumentacija';
-
     protected static \UnitEnum|string|null $navigationGroup = 'Upravljanje';
     protected static ?int $navigationSort = 2;
-
     protected static ?string $recordTitleAttribute = 'naziv';
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'documentation';
+    }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            // ADMIN može birati usera
             Select::make('user_id')
                 ->label('Korisnik')
                 ->relationship('user', 'name')
                 ->searchable()
                 ->preload()
                 ->required()
-                ->visible(fn () => Auth::user()?->isAdmin())
-                ->dehydrated(fn () => Auth::user()?->isAdmin()),
+                ->visible(fn () => Auth::user()?->isSuperAdmin())
+                ->dehydrated(fn () => Auth::user()?->isSuperAdmin()),
 
-            // OSTALI dobiju svoj user_id automatski
             Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->visible(fn () => ! Auth::user()?->isAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+                ->default(fn () => Auth::user()?->ownerId())
+                ->visible(fn () => ! Auth::user()?->isSuperAdmin())
+                ->dehydrated(fn () => ! Auth::user()?->isSuperAdmin()),
 
             Section::make('Dokument')
                 ->columns(2)
@@ -84,7 +77,7 @@ class DocumentationItemResource extends Resource
                         ->timezone('Europe/Zagreb'),
 
                     TextInput::make('status_napomena')
-                        ->label('Status/Napomena')
+                        ->label('Status / napomena')
                         ->maxLength(255),
                 ]),
 
@@ -117,6 +110,7 @@ class DocumentationItemResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort('datum_izrade', 'desc')
             ->columns([
                 TextColumn::make('naziv')
                     ->label('Naziv')
@@ -127,8 +121,8 @@ class DocumentationItemResource extends Resource
 
                 TextColumn::make('tvrtka')
                     ->label('Tvrtka')
-                    ->sortable()
                     ->searchable()
+                    ->sortable()
                     ->alignment(Alignment::Center),
 
                 TextColumn::make('datum_izrade')
@@ -138,7 +132,7 @@ class DocumentationItemResource extends Resource
                     ->alignment(Alignment::Center),
 
                 TextColumn::make('status_napomena')
-                    ->label('Status/Napomena')
+                    ->label('Status / napomena')
                     ->wrap()
                     ->alignment(Alignment::Center),
 
@@ -146,20 +140,22 @@ class DocumentationItemResource extends Resource
                     ->label('Prilozi')
                     ->badge()
                     ->alignment(Alignment::Center)
-                    ->icon(fn (DocumentationItem $record) => is_array($record->prilozi) && count($record->prilozi) ? Heroicon::PaperClip : null)
-                    ->color(fn (DocumentationItem $record) => is_array($record->prilozi) && count($record->prilozi) ? 'info' : 'gray')
+                    ->icon(fn (DocumentationItem $record) => is_array($record->prilozi) && count($record->prilozi) > 0 ? Heroicon::PaperClip : null)
+                    ->color(fn (DocumentationItem $record) => is_array($record->prilozi) && count($record->prilozi) > 0 ? 'info' : 'gray')
                     ->formatStateUsing(fn ($state, DocumentationItem $record) => is_array($record->prilozi) ? (string) count($record->prilozi) : '0')
-                    ->tooltip(fn (DocumentationItem $record) => is_array($record->prilozi) && count($record->prilozi)
-                        ? implode("\n", $record->prilozi)
-                        : 'Nema priloga'),
+                    ->tooltip(function (DocumentationItem $record): string {
+                        if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
+                            return 'Nema priloga';
+                        }
+
+                        return implode("\n", $record->prilozi);
+                    }),
             ])
             ->paginated([10, 25, 50, 'all'])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaži'),
-
                     EditAction::make()->label('Uredi'),
-
                     DeleteAction::make()
                         ->label('Obriši')
                         ->requiresConfirmation()
@@ -186,41 +182,49 @@ class DocumentationItemResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        if (Auth::user()?->isAdmin()) {
+        if (Auth::user()?->isSuperAdmin()) {
             return $query;
         }
 
-        return $query->where('user_id', Auth::id());
+        return $query->where('user_id', Auth::user()?->ownerId());
     }
 
     public static function getNavigationBadge(): ?string
     {
-        $q = static::getModel()::query();
+        $query = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where('user_id', Auth::user()?->ownerId());
         }
 
-        return (string) $q->count();
+        return (string) $query->count();
     }
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
 
-    return $user?->isSuperAdmin() || $user?->canAccessModule('documentation');
-}
+    public static function mutateFormDataBeforeCreate(array $data): array
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
 
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
+        return $data;
+    }
+
+    public static function mutateFormDataBeforeSave(array $data): array
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
+
+        return $data;
+    }
+
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListDocumentationItems::route('/'),
+            'index' => Pages\ListDocumentationItems::route('/'),
             'create' => Pages\CreateDocumentationItem::route('/create'),
-            'edit'   => Pages\EditDocumentationItem::route('/{record}/edit'),
-            'view'   => Pages\ViewDocumentationItem::route('/{record}'),
+            'edit' => Pages\EditDocumentationItem::route('/{record}/edit'),
+            'view' => Pages\ViewDocumentationItem::route('/{record}'),
         ];
     }
 }

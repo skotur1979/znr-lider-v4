@@ -63,7 +63,7 @@ class ItemsRelationManager extends RelationManager
                 ->minValue(0)
                 ->maxValue(120)
                 ->live()
-                ->afterStateUpdated(fn ($state, $set, $get) => self::recalcEndDate($set, $get)),
+                ->afterStateUpdated(fn ($state, $set, $get) => static::recalcEndDate($set, $get)),
 
             DatePicker::make('issue_date')
                 ->label('Datum izdavanja')
@@ -73,7 +73,7 @@ class ItemsRelationManager extends RelationManager
                 ->format('Y-m-d')
                 ->closeOnDateSelection()
                 ->live()
-                ->afterStateUpdated(fn ($state, $set, $get) => self::recalcEndDate($set, $get)),
+                ->afterStateUpdated(fn ($state, $set, $get) => static::recalcEndDate($set, $get)),
 
             DatePicker::make('end_date')
                 ->label('Datum isteka')
@@ -104,6 +104,7 @@ class ItemsRelationManager extends RelationManager
 
         if (blank($issue) || $months <= 0) {
             $set('end_date', null);
+
             return;
         }
 
@@ -140,13 +141,12 @@ class ItemsRelationManager extends RelationManager
     }
 
     public function table(Table $table): Table
-{
-    return $table
-        ->emptyStateIcon('heroicon-o-shield-check')
-        ->emptyStateHeading('Nema Osobne zaštitne opreme')
-        ->emptyStateDescription('Stvori OZO kako bi započeo')
-
-        ->columns([
+    {
+        return $table
+            ->emptyStateIcon('heroicon-o-shield-check')
+            ->emptyStateHeading('Nema Osobne zaštitne opreme')
+            ->emptyStateDescription('Stvori OZO kako bi započeo')
+            ->columns([
                 TextColumn::make('equipment_name')
                     ->label('Naziv OZO')
                     ->searchable()
@@ -223,24 +223,27 @@ class ItemsRelationManager extends RelationManager
             ->filters([
                 Filter::make('isteklo')
                     ->label('Isteklo')
-                    ->query(fn (Builder $q) => $q->whereNotNull('end_date')->where('end_date', '<', today())),
+                    ->query(fn (Builder $query) => $query
+                        ->whereNotNull('end_date')
+                        ->where('end_date', '<', today())),
 
                 Filter::make('uskoro')
                     ->label('Uskoro ističe (≤30d)')
-                    ->query(fn (Builder $q) => $q->whereBetween('end_date', [today(), today()->addDays(30)])),
+                    ->query(fn (Builder $query) => $query
+                        ->whereBetween('end_date', [today(), today()->addDays(30)])),
 
                 Filter::make('vraceno')
                     ->label('Vraćeno')
-                    ->query(fn (Builder $q) => $q->whereNotNull('return_date')),
+                    ->query(fn (Builder $query) => $query->whereNotNull('return_date')),
             ])
             ->headerActions([
                 CreateAction::make()
                     ->label('Dodaj OZO')
-                    ->mutateFormDataUsing(fn (array $data) => self::prepareFormData($data)),
+                    ->mutateFormDataUsing(fn (array $data) => static::prepareFormData($data)),
             ])
             ->actions([
                 EditAction::make()
-                    ->mutateFormDataUsing(fn (array $data) => self::prepareFormData($data)),
+                    ->mutateFormDataUsing(fn (array $data) => static::prepareFormData($data)),
 
                 Action::make('extend3')
                     ->label('Produži +3 mj')

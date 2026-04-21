@@ -2,25 +2,23 @@
 
 namespace App\Filament\Resources\Categories;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Categories\Pages;
 use App\Models\Category;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\TextInput;
-use Filament\Resources\Resource;
-use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Section;
-use Filament\Tables;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use Filament\Actions\DeleteBulkAction;
 
-
-class CategoryResource extends Resource
+class CategoryResource extends BaseResource
 {
     protected static ?string $model = Category::class;
 
@@ -30,6 +28,11 @@ class CategoryResource extends Resource
     protected static ?string $pluralModelLabel = 'Kategorije ispitivanja';
     protected static ?int $navigationSort = 5;
     protected static \UnitEnum|string|null $navigationGroup = 'Ispitivanja';
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'categories';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -47,7 +50,7 @@ class CategoryResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('name', 'asc')
+            ->defaultSort('name')
             ->columns([
                 TextColumn::make('name')
                     ->label('Naziv')
@@ -56,66 +59,59 @@ class CategoryResource extends Resource
 
                 TextColumn::make('user.name')
                     ->label('Vlasnik')
-                    ->visible(fn () => Auth::user()?->isAdmin()),
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
             ])
-            ->paginated([10, 25, 50, 'all']) // ✅ dodano "all"
+            ->paginated([10, 25, 50, 'all'])
             ->actions([
                 ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make(),
-                    DeleteAction::make()->requiresConfirmation(),
+                    ViewAction::make()->label('Prikaži'),
+                    EditAction::make()->label('Uredi'),
+                    DeleteAction::make()
+                        ->label('Obriši')
+                        ->requiresConfirmation(),
                 ]),
             ])
             ->bulkActions([
-                DeleteBulkAction::make(),
+                DeleteBulkAction::make()->label('Obriši označeno'),
             ]);
-            
-    }
-
-    public static function getPages(): array
-    {
-        return [
-            'index'  => Pages\ListCategories::route('/'),
-            'create' => Pages\CreateCategory::route('/create'),
-            'view'   => Pages\ViewCategory::route('/{record}'),
-            'edit'   => Pages\EditCategory::route('/{record}/edit'),
-        ];
     }
 
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
 
-        return Auth::user()?->isAdmin()
-            ? $query
-            : $query->where('user_id', Auth::id());
+        if (Auth::user()?->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where('user_id', Auth::user()?->ownerId());
     }
 
     public static function getNavigationBadge(): ?string
     {
-        $q = static::getModel()::query();
+        $query = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where('user_id', Auth::user()?->ownerId());
         }
 
-        return (string) $q->count();
+        return (string) $query->count();
     }
 
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('categories');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
     public static function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['user_id'] = $data['user_id'] ?? Auth::id();
+        $data['user_id'] = $data['user_id'] ?? Auth::user()?->ownerId();
+
         return $data;
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListCategories::route('/'),
+            'create' => Pages\CreateCategory::route('/create'),
+            'view' => Pages\ViewCategory::route('/{record}'),
+            'edit' => Pages\EditCategory::route('/{record}/edit'),
+        ];
     }
 }

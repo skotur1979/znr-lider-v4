@@ -20,14 +20,13 @@ class AvailableTestsPage extends Page
 
     protected static ?string $title = 'Dostupni testovi';
 
-    /**
-     * ✅ Badge u navigaciji (broj dostupnih testova za usera)
-     */
     public static function getNavigationBadge(): ?string
     {
+        abort_unless(Auth::check(), 401);
+
         $q = Test::query();
 
-        if (! Auth::user()?->isAdmin()) {
+        if (! Auth::user()?->isSuperAdmin()) {
             $q->where(function (Builder $qq) {
                 $qq->whereNull('user_id')
                     ->orWhere('user_id', Auth::id());
@@ -42,15 +41,12 @@ class AvailableTestsPage extends Page
         return 'warning';
     }
 
-    /**
-     * ✅ Filament view data
-     */
     protected function getViewData(): array
     {
         abort_unless(Auth::check(), 401);
 
         $tests = $this->getTestsQuery()
-            ->withCount('questions') // ✅ questions_count
+            ->withCount('questions')
             ->orderBy('naziv')
             ->get();
 
@@ -61,14 +57,10 @@ class AvailableTestsPage extends Page
     {
         $q = Test::query();
 
-        // Admin vidi sve
-        if (Auth::user()?->isAdmin()) {
+        if (Auth::user()?->isSuperAdmin()) {
             return $q;
         }
 
-        // User vidi:
-        // - globalne testove (user_id NULL)
-        // - svoje privatne testove (user_id = Auth::id())
         return $q->where(function (Builder $qq) {
             $qq->whereNull('user_id')
                 ->orWhere('user_id', Auth::id());

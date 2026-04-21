@@ -3,26 +3,19 @@
 namespace App\Filament\Resources\WasteTypes\Pages;
 
 use App\Filament\Resources\WasteTypes\WasteTypeResource;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\ForceDeleteAction;
-use Filament\Actions\RestoreAction;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Facades\Auth;
 
 class EditWasteType extends EditRecord
 {
     protected static string $resource = WasteTypeResource::class;
 
-    protected function getHeaderActions(): array
+    protected function mutateFormDataBeforeSave(array $data): array
     {
-        return [
-            DeleteAction::make(),
-            RestoreAction::make(),
-            ForceDeleteAction::make(),
-        ];
-    }
+        if (blank($this->record->user_id)) {
+            $data['user_id'] = WasteTypeResource::resolveOwnerId() ?: Auth::id();
+        }
 
-    protected function getRedirectUrl(): string
-    {
-        return $this->getResource()::getUrl('index');
+        return $data;
     }
 }

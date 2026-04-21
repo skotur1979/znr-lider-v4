@@ -2,25 +2,21 @@
 
 namespace App\Filament\Resources\Tests;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Tests\Pages;
 use App\Filament\Resources\Tests\Schemas\TestForm;
 use App\Models\Test;
-use Filament\Resources\Resource;
+use BackedEnum;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
-use Filament\Tables\Table;
-use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use UnitEnum;
-use BackedEnum;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\ViewAction;
 
-use Filament\Actions\DeleteBulkAction;
-
-class TestResource extends Resource
+class TestResource extends BaseResource
 {
     protected static ?string $model = Test::class;
 
@@ -28,8 +24,13 @@ class TestResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'Testiranje';
     protected static ?string $navigationLabel = 'Testovi';
     protected static ?string $modelLabel = 'Test';
-     protected static ?string $pluralModelLabel = 'Testovi';
+    protected static ?string $pluralModelLabel = 'Testovi';
     protected static ?int $navigationSort = 97;
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'tests';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -40,67 +41,67 @@ class TestResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('naziv')->label('Naziv')->searchable(),
-                TextColumn::make('sifra')->label('Šifra'),
-                TextColumn::make('minimalni_prolaz')->label('Prolaz (%)'),
-                TextColumn::make('created_at')->label('Dodano')->date('d.m.Y.'),
+                TextColumn::make('naziv')
+                    ->label('Naziv')
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('sifra')
+                    ->label('Šifra')
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('minimalni_prolaz')
+                    ->label('Prolaz (%)')
+                    ->sortable(),
+
+                TextColumn::make('created_at')
+                    ->label('Dodano')
+                    ->date('d.m.Y.')
+                    ->sortable(),
             ])
             ->actions([
-    EditAction::make(),
-
+                EditAction::make()->label('Uredi'),
             ])
             ->bulkActions([
-    DeleteBulkAction::make(),
-
+                DeleteBulkAction::make()->label('Obriši označeno'),
             ]);
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (Auth::user()?->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) {
+            $q->whereNull('user_id')
+                ->orWhere('user_id', Auth::id());
+        });
+    }
 
     public static function getNavigationBadge(): ?string
-{
-    $q = static::getModel()::query();
+    {
+        $query = static::getModel()::query();
 
-    if (Auth::user()?->isAdmin()) {
-        return (string) $q->count();
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where(function (Builder $q) {
+                $q->whereNull('user_id')
+                    ->orWhere('user_id', Auth::id());
+            });
+        }
+
+        return (string) $query->count();
     }
 
-    $q->where(function (Builder $qq) {
-        $qq->whereNull('user_id')
-           ->orWhere('user_id', Auth::id());
-    });
-
-    return (string) $q->count();
-}
-    public static function getEloquentQuery(): Builder
-{
-    $q = parent::getEloquentQuery();
-
-    if (Auth::user()?->isAdmin()) {
-        return $q;
-    }
-
-    return $q->where(function (Builder $qq) {
-        $qq->whereNull('user_id')
-           ->orWhere('user_id', Auth::id());
-    });
-}
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('tests');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
     public static function getPages(): array
-{
-    return [
-        'index'  => Pages\ListTests::route('/'),
-        'create' => Pages\CreateTest::route('/create'),
-        'edit'   => Pages\EditTest::route('/{record}/edit'),
-    ];
-}
+    {
+        return [
+            'index' => Pages\ListTests::route('/'),
+            'create' => Pages\CreateTest::route('/create'),
+            'edit' => Pages\EditTest::route('/{record}/edit'),
+        ];
+    }
 }

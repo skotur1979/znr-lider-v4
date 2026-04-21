@@ -4,22 +4,22 @@ namespace App\Filament\Resources\Answers;
 
 use App\Filament\Resources\Answers\Pages;
 use App\Filament\Resources\Answers\Schemas\AnswerForm;
+use App\Filament\Resources\BaseResource;
 use App\Models\Answer;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Tables\Table;
-use Filament\Tables;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use BackedEnum;
 use UnitEnum;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 
-class AnswerResource extends Resource
+class AnswerResource extends BaseResource
 {
     protected static ?string $model = Answer::class;
 
@@ -31,6 +31,11 @@ class AnswerResource extends Resource
     protected static ?string $pluralModelLabel = 'Odgovori';
     protected static ?int $navigationSort = 99;
 
+    protected static function getModuleKey(): ?string
+    {
+        return 'answers';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return AnswerForm::configure($schema);
@@ -40,65 +45,65 @@ class AnswerResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('question.tekst')->label('Pitanje')->limit(60),
-                TextColumn::make('tekst')->label('Odgovor')->wrap(),
-                IconColumn::make('is_correct')->label('Točno?')->boolean(),
+                TextColumn::make('question.tekst')
+                    ->label('Pitanje')
+                    ->limit(60)
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('tekst')
+                    ->label('Odgovor')
+                    ->wrap()
+                    ->searchable(),
+
+                IconColumn::make('is_correct')
+                    ->label('Točno?')
+                    ->boolean()
+                    ->alignCenter(),
             ])
             ->actions([
-    EditAction::make(),
-    DeleteAction::make(),
-])
-->bulkActions([
-    DeleteBulkAction::make(),
-]);
+                EditAction::make()->label('Uredi'),
+                DeleteAction::make()->label('Obriši'),
+            ])
+            ->bulkActions([
+                DeleteBulkAction::make()->label('Obriši označeno'),
+            ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (Auth::user()?->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) {
+            $q->whereNull('user_id')
+                ->orWhere('user_id', Auth::id());
+        });
     }
 
     public static function getNavigationBadge(): ?string
-{
-    $q = static::getModel()::query();
+    {
+        $query = static::getModel()::query();
 
-    if (Auth::user()?->isAdmin()) {
-        return (string) $q->count();
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where(function (Builder $q) {
+                $q->whereNull('user_id')
+                    ->orWhere('user_id', Auth::id());
+            });
+        }
+
+        return (string) $query->count();
     }
-
-    $q->where(function (Builder $qq) {
-        $qq->whereNull('user_id')
-           ->orWhere('user_id', Auth::id());
-    });
-
-    return (string) $q->count();
-}
-    public static function getEloquentQuery(): Builder
-{
-    $q = parent::getEloquentQuery();
-
-    if (Auth::user()?->isAdmin()) {
-        return $q;
-    }
-
-    return $q->where(function (Builder $qq) {
-        $qq->whereNull('user_id')
-           ->orWhere('user_id', Auth::id());
-    });
-}
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('answers');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
 
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListAnswers::route('/'),
+            'index' => Pages\ListAnswers::route('/'),
             'create' => Pages\CreateAnswer::route('/create'),
-            'edit'   => Pages\EditAnswer::route('/{record}/edit'),
+            'edit' => Pages\EditAnswer::route('/{record}/edit'),
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Employees;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Employees\Pages\CreateEmployee;
 use App\Filament\Resources\Employees\Pages\EditEmployee;
 use App\Filament\Resources\Employees\Pages\ListEmployees;
@@ -11,16 +12,15 @@ use App\Filament\Resources\Employees\Schemas\EmployeeInfolist;
 use App\Filament\Resources\Employees\Tables\EmployeesTable;
 use App\Models\Employee;
 use BackedEnum;
-use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\MaxWidth;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
-use Filament\Support\Enums\MaxWidth;
 
-class EmployeeResource extends Resource
+class EmployeeResource extends BaseResource
 {
     protected static ?string $model = Employee::class;
 
@@ -34,6 +34,11 @@ class EmployeeResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Zaposlenici';
     protected static ?int $navigationSort = 1;
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'employees';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -49,59 +54,58 @@ class EmployeeResource extends Resource
     {
         return EmployeesTable::configure($table);
     }
+
     public static function getMaxContentWidth(): MaxWidth|string|null
-{
-    return MaxWidth::Full;
-}
+    {
+        return MaxWidth::Full;
+    }
 
     public static function getPages(): array
     {
         return [
-            'index'  => ListEmployees::route('/'),
+            'index' => ListEmployees::route('/'),
             'create' => CreateEmployee::route('/create'),
-            'view'   => ViewEmployee::route('/{record}'),
-            'edit'   => EditEmployee::route('/{record}/edit'),
+            'view' => ViewEmployee::route('/{record}'),
+            'edit' => EditEmployee::route('/{record}/edit'),
         ];
     }
 
-    // ✅ Admin vidi sve, user vidi svoje (kao u v2)
     public static function getEloquentQuery(): Builder
-{
-    $query = parent::getEloquentQuery()
-        ->withoutGlobalScopes([SoftDeletingScope::class]);
+    {
+        $query = parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
 
-    if (Auth::user()?->isSuperAdmin()) {
-        return $query;
+        if (Auth::user()?->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where('user_id', Auth::user()?->ownerId());
     }
-
-    return $query->where('user_id', Auth::user()->ownerId());
-}
 
     public static function getRecordRouteBindingEloquentQuery(): Builder
-    {
-        return parent::getRecordRouteBindingEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
-    }
+{
+$query = parent::getRecordRouteBindingEloquentQuery()
+->withoutGlobalScopes([
+SoftDeletingScope::class,
+]);
 
+if (Auth::user()?->isSuperAdmin()) {
+return $query;
+}
+
+return $query->where('user_id', Auth::user()?->ownerId());
+}
     public static function getNavigationBadge(): ?string
-{
-    $q = static::getModel()::query();
+    {
+        $query = static::getModel()::query();
 
-    if (! Auth::user()?->isSuperAdmin()) {
-        $q->where('user_id', Auth::user()->ownerId());
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where('user_id', Auth::user()?->ownerId());
+        }
+
+        return (string) $query->count();
     }
-
-    return (string) $q->count();
-}
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('employees');
 }
 
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
-}

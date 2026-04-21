@@ -2,53 +2,51 @@
 
 namespace App\Filament\Resources\FirstAidKits;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\FirstAidKits\Pages;
 use App\Models\FirstAidKit;
+use BackedEnum;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Tables\Actions\BulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Resources\Resource;
-use Filament\Tables\Actions\BulkActionGroup;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
-use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
-use Filament\Actions\ViewAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use Barryvdh\DomPDF\Facade\Pdf;
 use UnitEnum;
-use BackedEnum;
 
-class FirstAidKitResource extends Resource
+class FirstAidKitResource extends BaseResource
 {
     protected static ?string $model = FirstAidKit::class;
 
-    // icon = BackedEnum|string|null
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-plus-circle';
-
-    // group = UnitEnum|string|null
     protected static string|UnitEnum|null $navigationGroup = 'Ispitivanja';
-
     protected static ?string $pluralModelLabel = 'Prva pomoć';
-    protected static ?string $navigationLabel  = 'Prva pomoć - ormarići';
+    protected static ?string $navigationLabel = 'Prva pomoć - ormarići';
     protected static ?int $navigationSort = 3;
 
-     public static function form(Schema $schema): Schema
+    protected static function getModuleKey(): ?string
+    {
+        return 'first_aid';
+    }
+
+    public static function form(Schema $schema): Schema
     {
         return $schema->schema([
             Hidden::make('user_id')
-    ->default(fn () => Auth::user()?->ownerId())
-    ->dehydrated(true),
+                ->default(fn () => Auth::user()?->ownerId())
+                ->dehydrated(),
 
             Section::make('Sanitetski materijal za prvu pomoć')
                 ->schema([
@@ -59,7 +57,8 @@ class FirstAidKitResource extends Resource
 
                     DatePicker::make('inspected_at')
                         ->label('Pregled obavljen dana')
-                        ->required(),
+                        ->required()
+                        ->displayFormat('d.m.Y.'),
 
                     Textarea::make('note')
                         ->label('Napomena')
@@ -84,11 +83,12 @@ class FirstAidKitResource extends Resource
                                 ->maxLength(255),
 
                             DatePicker::make('valid_until')
-                                ->label('Vrijedi do'),
+                                ->label('Vrijedi do')
+                                ->displayFormat('d.m.Y.'),
                         ])
                         ->columns(3)
                         ->defaultItems(1)
-                        ->createItemButtonLabel('Dodaj stavku'),
+                        ->addActionLabel('Dodaj stavku'),
                 ]),
         ]);
     }
@@ -105,46 +105,48 @@ class FirstAidKitResource extends Resource
 
                 TextColumn::make('inspected_at')
                     ->label('Pregled obavljen')
+                    ->date('d.m.Y.')
                     ->alignCenter()
-                    ->date('d.m.Y')
                     ->sortable(),
 
                 TextColumn::make('items_count')
                     ->label('Ukupan broj stavki')
-                    ->alignCenter()
-                    ->counts('items'),
+                    ->counts('items')
+                    ->alignCenter(),
 
                 ViewColumn::make('items_summary')
                     ->label('Rok ističe/istekao')
                     ->alignCenter()
                     ->view('filament.resources.first-aid-kits.items-summary'),
-                    ])
-    ->filters([
-        \Filament\Tables\Filters\SelectFilter::make('expired_items')
-            ->label('Stavke')
-            ->placeholder('Sve')
-            ->options([
-                'expired' => 'Samo istekle stavke',
             ])
-            ->query(function (Builder $query, array $data): Builder {
-                return match ($data['value'] ?? null) {
-                    'expired' => $query->whereHas('items', function (Builder $subQuery) {
-                        $subQuery->whereNotNull('valid_until')
-                            ->whereDate('valid_until', '<', now()->startOfDay());
+            ->filters([
+                SelectFilter::make('expired_items')
+                    ->label('Stavke')
+                    ->placeholder('Sve')
+                    ->options([
+                        'expired' => 'Samo istekle stavke',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'expired' => $query->whereHas('items', function (Builder $subQuery) {
+                                $subQuery
+                                    ->whereNotNull('valid_until')
+                                    ->whereDate('valid_until', '<', now()->startOfDay());
+                            }),
+                            default => $query,
+                        };
                     }),
-                    default => $query,
-                };
-            }),
             ])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaz'),
+
                     EditAction::make()->label('Uredi'),
 
                     DeleteAction::make()
                         ->label('Obriši')
                         ->modalHeading('Obriši Prvu pomoć')
-                        ->modalSubheading('Jeste li sigurni da želite obrisati ovu Prvu pomoć?')
+                        ->modalDescription('Jeste li sigurni da želite obrisati ovu Prvu pomoć?')
                         ->successNotificationTitle('Prva pomoć je obrisana.'),
                 ]),
             ])
@@ -152,70 +154,64 @@ class FirstAidKitResource extends Resource
                 DeleteBulkAction::make()
                     ->label('Obriši označeno')
                     ->modalHeading('Obriši Prve pomoći')
-                    ->modalSubheading('Jeste li sigurni da želite obrisati odabrane zapise?')
+                    ->modalDescription('Jeste li sigurni da želite obrisati odabrane zapise?')
                     ->successNotificationTitle('Prve pomoći su obrisane.'),
             ])
             ->defaultSort('inspected_at', 'desc');
     }
 
-    /** Admin vidi sve, user samo svoje */
     public static function getEloquentQuery(): Builder
-{
-    $q = parent::getEloquentQuery();
+    {
+        $query = parent::getEloquentQuery();
 
-    return Auth::user()?->isSuperAdmin()
-        ? $q
-        : $q->where('user_id', Auth::user()->ownerId());
-}
+        if (Auth::user()?->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where('user_id', Auth::user()?->ownerId());
+    }
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
         return static::getEloquentQuery();
     }
 
-   public static function getNavigationBadge(): ?string
-{
-    $q = static::getModel()::query();
+    public static function getNavigationBadge(): ?string
+    {
+        $query = static::getModel()::query();
 
-    if (! Auth::user()?->isSuperAdmin()) {
-        $q->where('user_id', Auth::user()->ownerId());
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where('user_id', Auth::user()?->ownerId());
+        }
+
+        return (string) $query->count();
     }
 
-    return (string) $q->count();
-}
-
     public static function mutateFormDataBeforeCreate(array $data): array
-{
-    $data['user_id'] = Auth::user()->ownerId();
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
 
-    return $data;
-}
+        return $data;
+    }
 
     public static function mutateFormDataBeforeSave(array $data): array
-{
-    $data['user_id'] = $data['user_id'] ?? Auth::user()->ownerId();
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = $data['user_id'] ?? Auth::user()?->ownerId();
+        }
 
-    return $data;
-}
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('first_aid');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
+        return $data;
+    }
 
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListFirstAidKits::route('/'),
+            'index' => Pages\ListFirstAidKits::route('/'),
             'create' => Pages\CreateFirstAidKit::route('/create'),
-            'edit'   => Pages\EditFirstAidKit::route('/{record}/edit'),
-            'view'   => Pages\ViewFirstAidKit::route('/{record}'),
+            'edit' => Pages\EditFirstAidKit::route('/{record}/edit'),
+            'view' => Pages\ViewFirstAidKit::route('/{record}'),
         ];
     }
 }

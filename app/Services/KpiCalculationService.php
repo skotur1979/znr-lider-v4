@@ -38,6 +38,41 @@ class KpiCalculationService
         ];
     }
 
+    protected function currentUser()
+    {
+        return Auth::user();
+    }
+
+    protected function isSuperAdmin(): bool
+    {
+        $user = $this->currentUser();
+
+        return $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+    }
+
+    protected function resolveOwnerId(): ?int
+    {
+        $user = $this->currentUser();
+
+        if (! $user) {
+            return null;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return (int) $user->id;
+        }
+
+        if (method_exists($user, 'ownerId')) {
+            return $user->ownerId() ?: (int) $user->id;
+        }
+
+        if (method_exists($user, 'isOwner') && $user->isOwner()) {
+            return (int) $user->id;
+        }
+
+        return (int) $user->id;
+    }
+
     public function generateForMonth(int $month, int $year): void
     {
         $this->baseKpiQuery()
@@ -114,6 +149,8 @@ class KpiCalculationService
         ?int $compareMonth = null,
         ?int $compareYear = null
     ): Collection {
+        $ownerId = $this->resolveOwnerId();
+
         return $this->baseKpiQuery()
             ->where('is_active', true)
             ->where('show_on_dashboard', true)
@@ -121,7 +158,7 @@ class KpiCalculationService
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(function (Kpi $kpi) use ($month, $year, $compareMonth, $compareYear) {
+            ->map(function (Kpi $kpi) use ($month, $year, $compareMonth, $compareYear, $ownerId) {
                 $current = $kpi->valueFor($month, $year);
 
                 $compare = null;
@@ -134,12 +171,13 @@ class KpiCalculationService
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
+                    'is_global' => is_null($kpi->user_id),
                     'current_value' => $current?->value,
                     'compare_value' => $compare?->value,
                     'formatted_current' => $kpi->formatNumberOnly($current?->value),
                     'formatted_compare' => $kpi->formatNumberOnly($compare?->value),
-                    'formatted_target' => $kpi->formatNumberOnly($kpi->target_value),
-                    'status' => $kpi->evaluateStatus($current?->value),
+                    'formatted_target' => $kpi->formatNumberOnly($kpi->effectiveTargetValue($ownerId)),
+                    'status' => $kpi->evaluateStatus($current?->value, $ownerId),
                     'delta' => $this->delta($current?->value, $compare?->value),
                 ];
             })
@@ -150,6 +188,8 @@ class KpiCalculationService
         int $year,
         ?int $compareYear = null
     ): Collection {
+        $ownerId = $this->resolveOwnerId();
+
         return $this->baseKpiQuery()
             ->where('is_active', true)
             ->where('show_on_dashboard', true)
@@ -157,7 +197,7 @@ class KpiCalculationService
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(function (Kpi $kpi) use ($year, $compareYear) {
+            ->map(function (Kpi $kpi) use ($year, $compareYear, $ownerId) {
                 $currentValues = collect(range(1, 12))
                     ->map(fn (int $month) => $kpi->valueFor($month, $year)?->value)
                     ->filter(fn ($value) => $value !== null);
@@ -183,12 +223,13 @@ class KpiCalculationService
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
+                    'is_global' => is_null($kpi->user_id),
                     'current_value' => $current,
                     'compare_value' => $compare,
                     'formatted_current' => $kpi->formatNumberOnly($current),
                     'formatted_compare' => $kpi->formatNumberOnly($compare),
-                    'formatted_target' => $kpi->formatNumberOnly($kpi->target_value),
-                    'status' => $kpi->evaluateStatus($current),
+                    'formatted_target' => $kpi->formatNumberOnly($kpi->effectiveTargetValue($ownerId)),
+                    'status' => $kpi->evaluateStatus($current, $ownerId),
                     'delta' => $this->delta($current, $compare),
                 ];
             })
@@ -197,18 +238,22 @@ class KpiCalculationService
 
     public function yearlyReportGrouped(int $year): Collection
     {
+        $ownerId = $this->resolveOwnerId();
+
         return $this->baseKpiQuery()
             ->where('is_active', true)
             ->orderBy('category')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(function (Kpi $kpi) use ($year) {
+            ->map(function (Kpi $kpi) use ($year, $ownerId) {
                 $values = collect(range(1, 12))
                     ->mapWithKeys(fn (int $month) => [$month => $kpi->valueFor($month, $year)?->value]);
 
                 $statuses = collect(range(1, 12))
-                    ->mapWithKeys(fn (int $month) => [$month => $kpi->evaluateStatus($kpi->valueFor($month, $year)?->value)]);
+                    ->mapWithKeys(fn (int $month) => [
+                        $month => $kpi->evaluateStatus($kpi->valueFor($month, $year)?->value, $ownerId),
+                    ]);
 
                 $total = $values->filter(fn ($value) => $value !== null)->sum();
                 $average = $values->filter(fn ($value) => $value !== null)->avg();
@@ -218,7 +263,7 @@ class KpiCalculationService
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
-                    'formatted_target' => $kpi->formatNumberOnly($kpi->target_value),
+                    'formatted_target' => $kpi->formatNumberOnly($kpi->effectiveTargetValue($ownerId)),
                     'values' => $values,
                     'statuses' => $statuses,
                     'total' => $total,
@@ -240,36 +285,45 @@ class KpiCalculationService
     protected function baseKpiQuery(): Builder
     {
         $query = Kpi::query();
-        $user = Auth::user();
 
-        if (! $user) {
-            return $query->whereRaw('1=0');
+        if (! $this->currentUser()) {
+            return $query->whereRaw('1 = 0');
         }
 
-        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+        if ($this->isSuperAdmin()) {
             return $query;
         }
 
-        return $query->where(function (Builder $q) use ($user) {
-            $q->where('user_id', $user->id)
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $q) use ($ownerId) {
+            $q->where('user_id', $ownerId)
                 ->orWhereNull('user_id');
         });
     }
 
     protected function userScopedQuery(Builder $query): Builder
     {
-        $user = Auth::user();
-
-        if (! $user) {
-            return $query->whereRaw('1=0');
+        if (! $this->currentUser()) {
+            return $query->whereRaw('1 = 0');
         }
 
-        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+        if ($this->isSuperAdmin()) {
             return $query;
         }
 
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
+        }
+
         if (Schema::hasColumn($query->getModel()->getTable(), 'user_id')) {
-            return $query->where('user_id', $user->id);
+            return $query->where('user_id', $ownerId);
         }
 
         return $query;

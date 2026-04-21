@@ -2,52 +2,43 @@
 
 namespace App\Filament\Resources\Observations;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Observations\Pages;
-use App\Filament\Resources\Observations\Widgets\ObservationMonthlySummary;
-use App\Filament\Resources\Observations\Widgets\ObservationStatsOverview;
 use App\Models\Employee;
 use App\Models\Observation;
-
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
-use Filament\Actions\RestoreAction;
-use Filament\Actions\ViewAction;
-
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
-use Filament\Tables\Contracts\HasTable;
-
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
-
-use Filament\Tables\Table;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
-
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
-class ObservationResource extends Resource
+class ObservationResource extends BaseResource
 {
     protected static ?string $model = Observation::class;
+
+    protected static bool $usesSoftDeletes = true;
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedExclamationCircle;
 
@@ -58,22 +49,94 @@ class ObservationResource extends Resource
     protected static \UnitEnum|string|null $navigationGroup = 'Upravljanje';
     protected static ?int $navigationSort = 4;
 
+    protected static function getModuleKey(): ?string
+    {
+        return 'observations';
+    }
+
+    protected static function observationTypeOptions(): array
+    {
+        return [
+            'Near Miss' => 'Near Miss - Skoro nezgoda',
+            'Negative Observation' => 'Negativno zapažanje',
+            'Positive Observation' => 'Pozitivno zapažanje',
+        ];
+    }
+
+    protected static function observationTypeLabel(?string $state): ?string
+    {
+        return match ($state) {
+            'Near Miss' => 'NM - Skoro nezgoda',
+            'Negative Observation' => 'Negativno zapažanje',
+            'Positive Observation' => 'Pozitivno zapažanje',
+            default => $state,
+        };
+    }
+
+    protected static function statusOptions(): array
+    {
+        return [
+            'Not started' => 'Nije započeto',
+            'In progress' => 'U tijeku',
+            'Complete' => 'Završeno',
+        ];
+    }
+
+    protected static function statusColor(?string $state): string
+    {
+        return match ($state) {
+            'Not started' => 'danger',
+            'In progress' => 'warning',
+            'Complete' => 'success',
+            default => 'gray',
+        };
+    }
+
+    protected static function potentialIncidentTypes(): array
+    {
+        return [
+            'Kontakt s pokretnim dijelovima strojeva',
+            'Utapanje ili gušenje',
+            'Izloženost struji',
+            'Izloženost ekstremnim temperaturama',
+            'Izloženost vatri',
+            'Pad s visine',
+            'Pad na istoj razini',
+            'Udarac pokretnim vozilom',
+            'Udarac pokretnim, letećim ili padajućim predmetom',
+            'Udarac u nešto nepomično',
+            'Ručno rukovanje, podizanje ili nošenje',
+            'Profesionalna bolest/bolest',
+            'Fizički napad',
+            'Padovi, spoticanje ili pokliznuće',
+            'Incident s trećom stranom',
+            'Zarobljenost nečim što se ruši',
+            'Ostalo',
+            'Porezotine, ogrebotine ili abrazije',
+            'Blokirana protupožarna oprema',
+            'Blokirani evakuacijski putevi',
+            'Nedostatak odgovarajuće rasvjete',
+            'Nedostatak čistoće',
+            'Nepravilno skladištenje',
+        ];
+    }
+
+    protected static function responsiblePersonOptions(): array
+    {
+        return static::getScopedQuery(Employee::query())
+            ->orderBy('name')
+            ->pluck('name')
+            ->unique()
+            ->values()
+            ->toArray();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => Auth::user()?->isAdmin())
-                ->dehydrated(fn () => Auth::user()?->isAdmin()),
-
             Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->visible(fn () => ! Auth::user()?->isAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+                ->default(fn () => static::defaultUserId())
+                ->dehydrated(),
 
             Section::make('Zapažanje')
                 ->columns(2)
@@ -87,11 +150,7 @@ class ObservationResource extends Resource
 
                     Select::make('observation_type')
                         ->label('Vrsta zapažanja')
-                        ->options([
-                            'Near Miss' => 'Near Miss - Skoro nezgoda',
-                            'Negative Observation' => 'Negativno zapažanje',
-                            'Positive Observation' => 'Pozitivno zapažanje',
-                        ])
+                        ->options(static::observationTypeOptions())
                         ->required(),
 
                     TextInput::make('location')
@@ -106,31 +165,7 @@ class ObservationResource extends Resource
 
                     TextInput::make('potential_incident_type')
                         ->label('Vrsta opasnosti')
-                        ->datalist([
-                            'Kontakt s pokretnim dijelovima strojeva',
-                            'Utapanje ili gušenje',
-                            'Izloženost struji',
-                            'Izloženost ekstremnim temperaturama',
-                            'Izloženost vatri',
-                            'Pad s visine',
-                            'Pad na istoj razini',
-                            'Udarac pokretnim vozilom',
-                            'Udarac pokretnim, letećim ili padajućim predmetom',
-                            'Udarac u nešto nepomično',
-                            'Ručno rukovanje, podizanje ili nošenje',
-                            'Profesionalna bolest/bolest',
-                            'Fizički napad',
-                            'Padovi, spoticanje ili pokliznuće',
-                            'Incident s trećom stranom',
-                            'Zarobljenost nečim što se ruši',
-                            'Ostalo',
-                            'Porezotine, ogrebotine ili abrazije',
-                            'Blokirana protupožarna oprema',
-                            'Blokirani evakuacijski putevi',
-                            'Nedostatak odgovarajuće rasvjete',
-                            'Nedostatak čistoće',
-                            'Nepravilno skladištenje',
-                        ])
+                        ->datalist(static::potentialIncidentTypes())
                         ->required()
                         ->maxLength(255)
                         ->columnSpanFull(),
@@ -153,12 +188,7 @@ class ObservationResource extends Resource
 
                     TextInput::make('responsible')
                         ->label('Odgovorna osoba')
-                        ->datalist(fn () => Employee::query()
-                            ->orderBy('name')
-                            ->pluck('name')
-                            ->unique()
-                            ->toArray()
-                        )
+                        ->datalist(fn () => static::responsiblePersonOptions())
                         ->placeholder('Upiši ime')
                         ->maxLength(255),
 
@@ -170,11 +200,7 @@ class ObservationResource extends Resource
 
                     Select::make('status')
                         ->label('Status')
-                        ->options([
-                            'Not started' => 'Nije započeto',
-                            'In progress' => 'U tijeku',
-                            'Complete' => 'Završeno',
-                        ])
+                        ->options(static::statusOptions())
                         ->required(),
 
                     Textarea::make('comments')
@@ -200,12 +226,7 @@ class ObservationResource extends Resource
                     ->label('Vrsta zapažanja')
                     ->alignment(Alignment::Center)
                     ->wrap()
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'Near Miss' => 'NM - Skoro nezgoda',
-                        'Negative Observation' => 'Negativno zapažanje',
-                        'Positive Observation' => 'Pozitivno zapažanje',
-                        default => $state,
-                    }),
+                    ->formatStateUsing(fn (?string $state) => static::observationTypeLabel($state)),
 
                 TextColumn::make('location')
                     ->label('Lokacija')
@@ -229,11 +250,10 @@ class ObservationResource extends Resource
                     ->height(50)
                     ->width(80)
                     ->extraImgAttributes(['style' => 'object-fit: cover; border-radius: 6px;'])
-                    ->getStateUsing(fn ($record) => $record->picture_path ?: null)
-                    ->url(fn ($record) => $record->picture_path
+                    ->getStateUsing(fn (Observation $record) => $record->picture_path ?: null)
+                    ->url(fn (Observation $record) => $record->picture_path
                         ? Storage::disk('public')->url($record->picture_path)
-                        : null
-                    )
+                        : null)
                     ->openUrlInNewTab(),
 
                 TextColumn::make('action')
@@ -274,18 +294,8 @@ class ObservationResource extends Resource
                     ->label('Status')
                     ->alignment(Alignment::Center)
                     ->badge()
-                    ->color(fn (?string $state) => match ($state) {
-                        'Not started' => 'danger',
-                        'In progress' => 'warning',
-                        'Complete' => 'success',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'Not started' => 'Nije započeto',
-                        'In progress' => 'U tijeku',
-                        'Complete' => 'Završeno',
-                        default => $state,
-                    }),
+                    ->color(fn (?string $state) => static::statusColor($state))
+                    ->formatStateUsing(fn (?string $state) => static::statusOptions()[$state] ?? $state),
 
                 TextColumn::make('comments')
                     ->label('Komentar')
@@ -293,65 +303,61 @@ class ObservationResource extends Resource
                     ->wrap(),
             ])
             ->filters([
-    SelectFilter::make('record_state')
-        ->label('Status zapisa')
-        ->placeholder('Odaberi status')
-        ->options([
-            'active'  => 'Aktivni zapisi',
-            'trashed' => 'Deaktivirani zapisi',
-            'all'     => 'Svi zapisi',
-        ])
-        ->query(function (Builder $query, array $data) {
-            $value = $data['value'] ?? null;
+                SelectFilter::make('record_state')
+                    ->label('Status zapisa')
+                    ->placeholder('Odaberi status')
+                    ->options([
+                        'active'  => 'Aktivni zapisi',
+                        'trashed' => 'Deaktivirani zapisi',
+                        'all'     => 'Svi zapisi',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
 
-            return match ($value) {
-                'trashed' => $query->onlyTrashed(),
-                'all'     => $query->withTrashed(),
-                default   => $query->withoutTrashed(),
-            };
-        }),
+                        return match ($value) {
+                            'trashed' => $query->onlyTrashed(),
+                            'all'     => $query->withTrashed(),
+                            default   => $query->withoutTrashed(),
+                        };
+                    }),
 
-    SelectFilter::make('status_action')
-        ->label('Zahtijeva radnju')
-        ->placeholder('Sve')
-        ->options([
-            'open_action' => 'Nije započeto i U tijeku',
-        ])
-        ->query(function (Builder $query, array $data) {
-            return match ($data['value'] ?? null) {
-                'open_action' => $query->whereIn('status', ['Not started', 'In progress']),
-                default => $query,
-            };
-        }),
+                SelectFilter::make('status_action')
+                    ->label('Zahtijeva radnju')
+                    ->placeholder('Sve')
+                    ->options([
+                        'open_action' => 'Nije započeto i U tijeku',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        return match ($data['value'] ?? null) {
+                            'open_action' => $query->whereIn('status', ['Not started', 'In progress']),
+                            default => $query,
+                        };
+                    }),
 
-    SelectFilter::make('observation_type')
-        ->label('Vrsta zapažanja')
-        ->placeholder('Sve')
-        ->options([
-            'Near Miss' => 'Near Miss - Skoro nezgoda',
-            'Negative Observation' => 'Negativno zapažanje',
-            'Positive Observation' => 'Pozitivno zapažanje',
-        ])
-        ->query(fn (Builder $query, array $data) =>
-            filled($data['value'] ?? null)
-                ? $query->where('observation_type', $data['value'])
-                : $query
-        ),
+                SelectFilter::make('observation_type')
+                    ->label('Vrsta zapažanja')
+                    ->placeholder('Sve')
+                    ->options(static::observationTypeOptions())
+                    ->query(fn (Builder $query, array $data) =>
+                        filled($data['value'] ?? null)
+                            ? $query->where('observation_type', $data['value'])
+                            : $query
+                    ),
 
-    SelectFilter::make('year')
-        ->label('Godina nastanka')
-        ->placeholder('Sve godine')
-        ->options(fn () => static::getYearOptions())
-        ->query(function (Builder $query, array $data) {
-            $year = $data['value'] ?? null;
+                SelectFilter::make('year')
+                    ->label('Godina nastanka')
+                    ->placeholder('Sve godine')
+                    ->options(fn () => static::getYearOptions())
+                    ->query(function (Builder $query, array $data) {
+                        $year = $data['value'] ?? null;
 
-            if (filled($year)) {
-                $query->whereYear('incident_date', (int) $year);
-            }
+                        if (filled($year)) {
+                            $query->whereYear('incident_date', (int) $year);
+                        }
 
-            return $query;
-        }),
-])
+                        return $query;
+                    }),
+            ])
             ->paginated([10, 25, 50, 'all'])
             ->actions([
                 ActionGroup::make([
@@ -359,22 +365,22 @@ class ObservationResource extends Resource
 
                     EditAction::make()
                         ->label('Uredi')
-                        ->visible(fn (Observation $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (Observation $record) => ! $record->trashed()),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (Observation $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (Observation $record) => ! $record->trashed()),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (Observation $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (Observation $record) => $record->trashed()),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (Observation $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (Observation $record) => $record->trashed()),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -429,52 +435,13 @@ class ObservationResource extends Resource
     }
 
     public static function getWidgets(): array
-{
-    return [
-        \App\Filament\Resources\Observations\Widgets\ObservationStatsTopRow::class,
-        \App\Filament\Resources\Observations\Widgets\ObservationStatsBottomRow::class,
-        \App\Filament\Resources\Observations\Widgets\ObservationMonthlySummary::class,
-    ];
-}
-
-    public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
-
-        if (Auth::user()?->isAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::id());
+        return [
+            \App\Filament\Resources\Observations\Widgets\ObservationStatsTopRow::class,
+            \App\Filament\Resources\Observations\Widgets\ObservationStatsBottomRow::class,
+            \App\Filament\Resources\Observations\Widgets\ObservationMonthlySummary::class,
+        ];
     }
-
-    public static function getGlobalSearchEloquentQuery(): Builder
-    {
-        return static::getEloquentQuery();
-    }
-
-    public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
-    }
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('observations');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
 
     public static function getPages(): array
     {

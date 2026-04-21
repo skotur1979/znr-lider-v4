@@ -27,8 +27,11 @@ class QuestionForm
                             name: 'test',
                             titleAttribute: 'naziv',
                             modifyQueryUsing: function (Builder $q) {
-                                if (! Auth::user()?->isAdmin()) {
-                                    $q->where('user_id', Auth::id());
+                                if (! Auth::user()?->isSuperAdmin()) {
+                                    $q->where(function (Builder $qq) {
+                                        $qq->whereNull('user_id')
+                                            ->orWhere('user_id', Auth::id());
+                                    });
                                 }
                             }
                         )

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\WorkTasks;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\WorkTasks\Pages\CreateWorkTask;
 use App\Filament\Resources\WorkTasks\Pages\EditWorkTask;
 use App\Filament\Resources\WorkTasks\Pages\ListWorkTasks;
@@ -13,10 +14,10 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -28,24 +29,29 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Auth;
 
-class WorkTaskResource extends Resource
+class WorkTaskResource extends BaseResource
 {
     protected static ?string $model = WorkTask::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
-
     protected static ?string $slug = 'radni-zadaci';
-
     protected static ?string $modelLabel = 'radni zadatak';
     protected static ?string $pluralModelLabel = 'radni zadaci';
     protected static \UnitEnum|string|null $navigationGroup = 'Upravljanje';
     protected static ?int $navigationSort = 50;
 
-    /*protected static bool $shouldRegisterNavigation = false;*/
+    protected static function getModuleKey(): ?string
+    {
+        return 'work_tasks';
+    }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Hidden::make('user_id')
+                ->default(fn () => Auth::user()?->ownerId())
+                ->dehydrated(),
+
             Section::make('Radni zadatak')
                 ->schema([
                     TextInput::make('title')
@@ -73,13 +79,7 @@ class WorkTaskResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(function (Builder $query) {
-                if (! Auth::user()?->isAdmin()) {
-                    $query->where('user_id', Auth::id());
-                }
-
-                return $query->latest('due_date')->latest('id');
-            })
+            ->modifyQueryUsing(fn (Builder $query) => $query->latest('due_date')->latest('id'))
             ->columns([
                 TextColumn::make('title')
                     ->label('Zadatak')
@@ -163,7 +163,7 @@ class WorkTaskResource extends Resource
                     ->label('Vrati u otvorene')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
-                    ->visible(fn (WorkTask $record): bool => $record->is_done)
+                    ->visible(fn (WorkTask $record): bool => (bool) $record->is_done)
                     ->requiresConfirmation()
                     ->action(function (WorkTask $record): void {
                         $record->update([
@@ -178,6 +178,7 @@ class WorkTaskResource extends Resource
                     }),
 
                 EditAction::make()->label('Uredi'),
+
                 DeleteAction::make()->label('Obriši'),
             ])
             ->bulkActions([
@@ -246,28 +247,47 @@ class WorkTaskResource extends Resource
             ])
             ->defaultSort('due_date', 'asc');
     }
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
 
-    return $user?->isSuperAdmin() || $user?->canAccessModule('work_tasks');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
-public static function getNavigationBadge(): ?string
+    public static function getEloquentQuery(): Builder
     {
-        $q = static::getModel()::query();
+        $query = parent::getEloquentQuery();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
+        if (Auth::user()?->isSuperAdmin()) {
+            return $query;
         }
 
-        return (string) $q->count();
+        return $query->where('user_id', Auth::user()?->ownerId());
     }
-    
+
+    public static function getNavigationBadge(): ?string
+    {
+        $query = static::getModel()::query();
+
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where('user_id', Auth::user()?->ownerId());
+        }
+
+        return (string) $query->count();
+    }
+
+    public static function mutateFormDataBeforeCreate(array $data): array
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
+
+        return $data;
+    }
+
+    public static function mutateFormDataBeforeSave(array $data): array
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
+
+        return $data;
+    }
+
     public static function getPages(): array
     {
         return [

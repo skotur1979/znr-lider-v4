@@ -22,9 +22,7 @@ class InspectionZoneResource extends Resource
     protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $slug = 'inspection-zones';
-
     protected static ?string $modelLabel = 'Zona nadzora';
-
     protected static ?string $pluralModelLabel = 'Zone nadzora';
 
     public static function form(Schema $schema): Schema
@@ -71,7 +69,7 @@ class InspectionZoneResource extends Resource
                 ->label('Rezultat')
                 ->alignment(Alignment::Center)
                 ->html()
-                ->state(function ($record) {
+                ->state(function (InspectionZone $record) {
                     $percentage = (float) $record->percentage;
 
                     $styles = match (true) {

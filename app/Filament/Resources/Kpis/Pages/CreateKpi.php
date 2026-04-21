@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Kpis\Pages;
 
 use App\Filament\Resources\Kpis\KpiResource;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Facades\Auth;
 
 class CreateKpi extends CreateRecord
 {
@@ -12,7 +11,11 @@ class CreateKpi extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['user_id'] = Auth::id();
+        if (auth()->user()?->isSuperAdmin()) {
+            $data['user_id'] = null;
+        } else {
+            $data['user_id'] = KpiResource::defaultUserId();
+        }
 
         return $data;
     }

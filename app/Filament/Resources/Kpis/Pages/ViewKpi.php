@@ -3,32 +3,22 @@
 namespace App\Filament\Resources\Kpis\Pages;
 
 use App\Filament\Resources\Kpis\KpiResource;
-use Filament\Actions\EditAction;
-use Filament\Infolists\Components\ViewEntry;
 use Filament\Resources\Pages\ViewRecord;
-use Filament\Schemas\Schema;
 
 class ViewKpi extends ViewRecord
 {
     protected static string $resource = KpiResource::class;
 
-    protected function getHeaderActions(): array
-    {
-        return [
-            EditAction::make()->label('Uredi KPI'),
-        ];
-    }
+    protected string $view = 'filament.resources.kpis.pages.view-kpi';
 
-    public function infolist(Schema $schema): Schema
+    protected function getViewData(): array
     {
-        return $schema->components([
-            ViewEntry::make('kpi_overview')
-                ->label('')
-                ->view('filament.resources.kpis.infolists.simple-kpi-overview')
-                ->viewData([
-                    'record' => $this->record,
-                    'trend' => $this->record->monthlyTrendForYear(now()->year),
-                ]),
-        ]);
+        $record = $this->record->load('values');
+
+        return [
+            'record' => $record,
+            'trend' => $record->monthlyTrendForYear(now()->year),
+            'ownerId' => KpiResource::resolveOwnerId(),
+        ];
     }
 }

@@ -2,16 +2,15 @@
 
 namespace App\Filament\Resources\RiskAssessments;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\RiskAssessments\Pages;
 use App\Filament\Resources\RiskAssessments\Schemas\RiskAssessmentInfolist;
 use App\Models\RiskAssessment;
-
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
@@ -19,55 +18,49 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-
-use Filament\Resources\Resource;
-
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
-
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
-class RiskAssessmentResource extends Resource
+class RiskAssessmentResource extends BaseResource
 {
     protected static ?string $model = RiskAssessment::class;
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedClipboard;
-
     protected static ?string $navigationLabel = 'Procjene rizika';
     protected static ?string $modelLabel = 'Procjena rizika';
     protected static ?string $pluralModelLabel = 'Procjene rizika';
-
     protected static \UnitEnum|string|null $navigationGroup = 'Upravljanje';
     protected static ?int $navigationSort = 1;
-
     protected static ?string $recordTitleAttribute = 'tvrtka';
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'risk_assessments';
+    }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-
             Select::make('user_id')
                 ->label('Korisnik')
                 ->relationship('user', 'name')
                 ->searchable()
                 ->preload()
                 ->required()
-                ->visible(fn () => Auth::user()?->isAdmin())
-                ->dehydrated(fn () => Auth::user()?->isAdmin()),
+                ->visible(fn () => Auth::user()?->isSuperAdmin())
+                ->dehydrated(fn () => Auth::user()?->isSuperAdmin()),
 
             Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->visible(fn () => ! Auth::user()?->isAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+                ->default(fn () => Auth::user()?->ownerId())
+                ->visible(fn () => ! Auth::user()?->isSuperAdmin())
+                ->dehydrated(fn () => ! Auth::user()?->isSuperAdmin()),
 
-            // 🔷 PODACI O PROCJENI
             Section::make('Podaci o procjeni rizika')
                 ->columns(3)
                 ->collapsible()
@@ -105,7 +98,6 @@ class RiskAssessmentResource extends Resource
                         ->required(),
                 ]),
 
-            // 👷 SUDIONICI
             Section::make('Sudionici izrade')
                 ->collapsible()
                 ->schema([
@@ -127,8 +119,7 @@ class RiskAssessmentResource extends Resource
                         ->collapsible(),
                 ]),
 
-            // 🔁 REVIZIJE
-            Section::make('Revizije Procjene Rizika')
+            Section::make('Revizije procjene rizika')
                 ->collapsible()
                 ->schema([
                     Repeater::make('revisions')
@@ -148,7 +139,6 @@ class RiskAssessmentResource extends Resource
                         ->collapsible(),
                 ]),
 
-            // 📎 PRILOZI
             Section::make('Prilozi')
                 ->collapsible()
                 ->schema([
@@ -177,9 +167,6 @@ class RiskAssessmentResource extends Resource
         ]);
     }
 
-    /**
-     * ✅ VIEW (Pregled) - koristi Schemas/RiskAssessmentInfolist.php
-     */
     public static function infolist(Schema $schema): Schema
     {
         return RiskAssessmentInfolist::configure($schema);
@@ -188,6 +175,7 @@ class RiskAssessmentResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort('datum_izrade', 'desc')
             ->columns([
                 TextColumn::make('tvrtka')
                     ->label('Tvrtka')
@@ -222,12 +210,11 @@ class RiskAssessmentResource extends Resource
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaži'),
                     EditAction::make()->label('Uredi'),
-
                     DeleteAction::make()
                         ->label('Obriši')
                         ->requiresConfirmation()
-                        ->modalHeading('Obriši Procjenu rizika')
-                        ->modalDescription('Jeste li sigurni da želite obrisati ovu Procjenu rizika?')
+                        ->modalHeading('Obriši procjenu rizika')
+                        ->modalDescription('Jeste li sigurni da želite obrisati ovu procjenu rizika?')
                         ->modalSubmitActionLabel('Obriši')
                         ->modalCancelActionLabel('Odustani'),
                 ])
@@ -250,41 +237,49 @@ class RiskAssessmentResource extends Resource
         $query = parent::getEloquentQuery()
             ->with(['participants', 'revisions', 'attachments']);
 
-        if (Auth::user()?->isAdmin()) {
+        if (Auth::user()?->isSuperAdmin()) {
             return $query;
         }
 
-        return $query->where('user_id', Auth::id());
+        return $query->where('user_id', Auth::user()?->ownerId());
     }
 
     public static function getNavigationBadge(): ?string
     {
-        $q = static::getModel()::query();
+        $query = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where('user_id', Auth::user()?->ownerId());
         }
 
-        return (string) $q->count();
+        return (string) $query->count();
     }
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
 
-    return $user?->isSuperAdmin() || $user?->canAccessModule('risk_assessments');
-}
+    public static function mutateFormDataBeforeCreate(array $data): array
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
 
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
+        return $data;
+    }
+
+    public static function mutateFormDataBeforeSave(array $data): array
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
+
+        return $data;
+    }
+
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListRiskAssessments::route('/'),
+            'index' => Pages\ListRiskAssessments::route('/'),
             'create' => Pages\CreateRiskAssessment::route('/create'),
-            'edit'   => Pages\EditRiskAssessment::route('/{record}/edit'),
-            'view'   => Pages\ViewRiskAssessment::route('/{record}'),
+            'edit' => Pages\EditRiskAssessment::route('/{record}/edit'),
+            'view' => Pages\ViewRiskAssessment::route('/{record}'),
         ];
     }
 }

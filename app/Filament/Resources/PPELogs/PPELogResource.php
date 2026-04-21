@@ -2,69 +2,56 @@
 
 namespace App\Filament\Resources\PpeLogs;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\PpeLogs\PPELogResource\Pages;
 use App\Filament\Resources\PpeLogs\PPELogResource\RelationManagers\ItemsRelationManager;
 use App\Models\Employee;
 use App\Models\PPELog;
-
+use BackedEnum;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-
-use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TrashedFilter;
-
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as DbSchema;
-
 use UnitEnum;
-use BackedEnum;
 
-// ✅ ACTIONS (kao u tvom TestResource stilu)
-use Filament\Actions\ActionGroup;
-use Filament\Actions\ViewAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\RestoreAction;
-use Filament\Actions\ForceDeleteAction;
-
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Schemas\Components\Utilities\Set;
-
-class PPELogResource extends Resource
+class PPELogResource extends BaseResource
 {
     protected static ?string $model = PPELog::class;
+
+    protected static bool $usesSoftDeletes = true;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-shield-check';
     protected static string|UnitEnum|null $navigationGroup = 'Zaposlenici';
     protected static ?string $navigationLabel = 'Upisnik OZO';
-
     protected static ?string $modelLabel = 'OZO';
     protected static ?string $pluralModelLabel = 'Osobna zaštitna oprema';
-
     protected static ?int $navigationSort = 3;
 
-    public static function getEloquentQuery(): Builder
-{
-    $q = parent::getEloquentQuery()->with(['items']);
-
-    if (Auth::user()?->isAdmin()) return $q;
-
-    if (DbSchema::hasColumn((new PPELog)->getTable(), 'user_id')) {
-        $q->where('user_id', Auth::id());
+    protected static function getModuleKey(): ?string
+    {
+        return 'ppe_logs';
     }
 
-    return $q;
-}
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['items']);
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -72,57 +59,62 @@ class PPELogResource extends Resource
             Section::make('Podaci o zaposleniku')
                 ->schema([
                     Select::make('employee_lookup')
-    ->label('Zaposlenik')
-    ->searchable()
-    ->live()
-    ->getSearchResultsUsing(function (string $search): array {
-        return Employee::query()
-            ->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('OIB', 'like', "%{$search}%");
-            })
-            ->orderBy('name')
-            ->limit(50)
-            ->get()
-            ->mapWithKeys(fn (Employee $e) => [
-                $e->id => "{$e->name} ({$e->oib})",
-            ])
-            ->toArray();
-    })
-    ->getOptionLabelUsing(function ($value): ?string {
-        if (! $value) {
-            return null;
-        }
+                        ->label('Zaposlenik')
+                        ->searchable()
+                        ->live()
+                        ->getSearchResultsUsing(function (string $search): array {
+                            $query = Employee::query()
+                                ->where(function ($q) use ($search) {
+                                    $q->where('name', 'like', "%{$search}%")
+                                        ->orWhere('OIB', 'like', "%{$search}%")
+                                        ->orWhere('oib', 'like', "%{$search}%");
+                                })
+                                ->orderBy('name')
+                                ->limit(50);
 
-        $e = Employee::find($value);
+                            if (! static::isSuperAdmin()) {
+                                $query->where('user_id', static::ownerId());
+                            }
 
-        return $e ? "{$e->name} ({$e->oib})" : null;
-    })
-    ->afterStateUpdated(function ($state, $set) {
-        if (! $state) {
-            // očisti polja kad makneš zaposlenika
-            $set('user_id', null);
-            $set('user_last_name', null);
-            $set('user_oib', null);
-            $set('workplace', null);
-            $set('organization_unit', null);
-            return;
-        }
+                            return $query->get()
+                                ->mapWithKeys(fn (Employee $employee) => [
+                                    $employee->id => "{$employee->name} ({$employee->oib})",
+                                ])
+                                ->toArray();
+                        })
+                        ->getOptionLabelUsing(function ($value): ?string {
+                            if (! $value) {
+                                return null;
+                            }
 
-        $employee = Employee::find($state);
+                            $employee = Employee::find($value);
 
-        if (! $employee) {
-            return;
-        }
+                            return $employee ? "{$employee->name} ({$employee->oib})" : null;
+                        })
+                        ->afterStateUpdated(function ($state, $set) {
+                            if (! $state) {
+                                $set('user_id', null);
+                                $set('user_last_name', null);
+                                $set('user_oib', null);
+                                $set('workplace', null);
+                                $set('organization_unit', null);
 
-        // upiši sve u log
-        $set('user_id', $employee->id);
-        $set('user_last_name', $employee->name);
-        $set('user_oib', $employee->oib); // radi zbog accessor-a iznad
-        $set('workplace', $employee->workplace);
-        $set('organization_unit', $employee->organization_unit);
-    })
-    ->dehydrated(false),
+                                return;
+                            }
+
+                            $employee = Employee::find($state);
+
+                            if (! $employee) {
+                                return;
+                            }
+
+                            $set('user_id', $employee->id);
+                            $set('user_last_name', $employee->name);
+                            $set('user_oib', $employee->oib);
+                            $set('workplace', $employee->workplace);
+                            $set('organization_unit', $employee->organization_unit);
+                        })
+                        ->dehydrated(false),
 
                     TextInput::make('user_last_name')
                         ->label('Prezime i ime')
@@ -135,22 +127,34 @@ class PPELogResource extends Resource
                         ->maxLength(11)
                         ->reactive()
                         ->afterStateUpdated(function ($state, callable $set, callable $get) {
-                            if (! $state || strlen($state) < 3) return;
+                            if (! $state || strlen($state) < 3) {
+                                return;
+                            }
 
-                            $table = (new Employee)->getTable();
+                            $table = (new Employee())->getTable();
                             $hasOIBUpper = DbSchema::hasColumn($table, 'OIB');
                             $hasOIBLower = DbSchema::hasColumn($table, 'oib');
 
-                            $emp = Employee::query()
-                                ->when($hasOIBUpper, fn ($q) => $q->orWhere('OIB', $state))
-                                ->when($hasOIBLower, fn ($q) => $q->orWhere('oib', $state))
+                            $employee = Employee::query()
+                                ->when($hasOIBUpper, fn ($query) => $query->orWhere('OIB', $state))
+                                ->when($hasOIBLower, fn ($query) => $query->orWhere('oib', $state))
                                 ->first();
 
-                            if (! $emp) return;
+                            if (! $employee) {
+                                return;
+                            }
 
-                            if (! $get('user_last_name')) $set('user_last_name', $emp->name ?? '');
-                            if (! $get('workplace')) $set('workplace', $emp->workplace ?? null);
-                            if (! $get('organization_unit')) $set('organization_unit', $emp->organization_unit ?? null);
+                            if (! $get('user_last_name')) {
+                                $set('user_last_name', $employee->name ?? '');
+                            }
+
+                            if (! $get('workplace')) {
+                                $set('workplace', $employee->workplace ?? null);
+                            }
+
+                            if (! $get('organization_unit')) {
+                                $set('organization_unit', $employee->organization_unit ?? null);
+                            }
                         }),
 
                     TextInput::make('workplace')
@@ -166,81 +170,81 @@ class PPELogResource extends Resource
     }
 
     public static function table(Table $table): Table
-{
-    return $table
-        ->modifyQueryUsing(fn (Builder $query) => $query->with('items'))
-        ->columns([
-    TextColumn::make('user_last_name')
-        ->label('Ime i prezime')
-        ->searchable()
-        ->extraAttributes([
-            'style' => 'vertical-align: top;',
-        ]),
+    {
+        return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('items'))
+            ->columns([
+                TextColumn::make('user_last_name')
+                    ->label('Ime i prezime')
+                    ->searchable()
+                    ->extraAttributes([
+                        'style' => 'vertical-align: top;',
+                    ]),
 
-    TextColumn::make('user_oib')
-        ->label('OIB')
-        ->alignCenter()
-        ->extraAttributes([
-            'style' => 'vertical-align: top;',
-        ]),
+                TextColumn::make('user_oib')
+                    ->label('OIB')
+                    ->alignCenter()
+                    ->extraAttributes([
+                        'style' => 'vertical-align: top;',
+                    ]),
 
-    ViewColumn::make('nazivi')
-        ->label('Naziv OZO')
-        ->view('filament.columns.ozo-nazivi')
-        ->extraAttributes([
-            'style' => 'vertical-align: top; min-width: 260px;',
-        ]),
+                ViewColumn::make('nazivi')
+                    ->label('Naziv OZO')
+                    ->view('filament.columns.ozo-nazivi')
+                    ->extraAttributes([
+                        'style' => 'vertical-align: top; min-width: 260px;',
+                    ]),
 
-    ViewColumn::make('izdano')
-        ->label('Izdano')
-        ->view('filament.columns.ozo-izdano')
-        ->extraAttributes([
-            'style' => 'vertical-align: top; min-width: 120px;',
-        ]),
+                ViewColumn::make('izdano')
+                    ->label('Izdano')
+                    ->view('filament.columns.ozo-izdano')
+                    ->extraAttributes([
+                        'style' => 'vertical-align: top; min-width: 120px;',
+                    ]),
 
-    ViewColumn::make('istek')
-        ->label('Istek')
-        ->view('filament.columns.ozo-items-expiring')
-        ->extraAttributes([
-            'style' => 'vertical-align: top; min-width: 150px;',
-        ]),
-])
+                ViewColumn::make('istek')
+                    ->label('Istek')
+                    ->view('filament.columns.ozo-items-expiring')
+                    ->extraAttributes([
+                        'style' => 'vertical-align: top; min-width: 150px;',
+                    ]),
+            ])
             ->filters([
-                TrashedFilter::make(),
-
                 SelectFilter::make('pregled')
-    ->label('Prikaz')
-    ->options([
-        'svi' => 'Svi zaposlenici',
-        'isteklo' => 'Samo istekli OZO',
-        'istek' => 'Samo OZO s istekom u 30 dana',
-        'deaktivirani' => 'Deaktivirani',
-    ])
-    ->placeholder('')
-    ->query(function (Builder $query, array $data): Builder {
-        return match ($data['value'] ?? 'svi') {
-            'isteklo' => $query
-                ->withoutTrashed()
-                ->whereHas('items', function ($subQuery) {
-                    $subQuery->whereNotNull('end_date')
-                        ->whereDate('end_date', '<', now()->startOfDay());
-                }),
-            'istek' => $query
-                ->withoutTrashed()
-                ->whereHas('items', function ($subQuery) {
-                    $subQuery->whereNotNull('end_date')
-                        ->whereBetween('end_date', [now()->startOfDay(), now()->copy()->addDays(30)->endOfDay()]);
-                }),
-            'deaktivirani' => $query->onlyTrashed(),
-            'svi' => $query->withoutTrashed(),
-            default => $query->withoutTrashed(),
-        };
-    }),
+                    ->label('Prikaz')
+                    ->options([
+                        'svi' => 'Svi zaposlenici',
+                        'isteklo' => 'Samo istekli OZO',
+                        'istek' => 'Samo OZO s istekom u 30 dana',
+                        'deaktivirani' => 'Deaktivirani',
+                    ])
+                    ->placeholder('')
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? 'svi') {
+                            'isteklo' => $query
+                                ->withoutTrashed()
+                                ->whereHas('items', function ($subQuery) {
+                                    $subQuery->whereNotNull('end_date')
+                                        ->whereDate('end_date', '<', now()->startOfDay());
+                                }),
+                            'istek' => $query
+                                ->withoutTrashed()
+                                ->whereHas('items', function ($subQuery) {
+                                    $subQuery->whereNotNull('end_date')
+                                        ->whereBetween('end_date', [now()->startOfDay(), now()->copy()->addDays(30)->endOfDay()]);
+                                }),
+                            'deaktivirani' => $query->onlyTrashed(),
+                            default => $query->withoutTrashed(),
+                        };
+                    }),
             ])
             ->actions([
                 ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make(),
+                    ViewAction::make()->label('Prikaži'),
+
+                    EditAction::make()
+                        ->label('Uredi')
+                        ->visible(fn ($record) => ! $record->trashed()),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
@@ -264,9 +268,14 @@ class PPELogResource extends Resource
                 ]),
             ])
             ->bulkActions([
-                DeleteBulkAction::make(),
-                RestoreBulkAction::make(),
-                ForceDeleteBulkAction::make(),
+                DeleteBulkAction::make()
+                    ->label('Deaktiviraj označeno'),
+
+                RestoreBulkAction::make()
+                    ->label('Vrati označeno'),
+
+                ForceDeleteBulkAction::make()
+                    ->label('Trajno izbriši označeno'),
             ]);
     }
 
@@ -285,30 +294,4 @@ class PPELogResource extends Resource
             'edit' => Pages\EditPPELog::route('/{record}/edit'),
         ];
     }
-
-    public static function getNavigationBadge(): ?string
-    {
-        try {
-            $q = static::getModel()::query();
-
-            if (! Auth::user()?->isAdmin() && DbSchema::hasColumn((new PPELog)->getTable(), 'user_id')) {
-                $q->where('user_id', Auth::id());
-            }
-
-            return (string) $q->count();
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('ppe_logs');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
 }

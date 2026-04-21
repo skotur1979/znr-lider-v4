@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Machines;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Machines\Pages;
 use App\Models\Machine;
 use App\Support\ExpiryBadge;
@@ -17,28 +18,28 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload as FormFileUpload;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
-class MachineResource extends Resource
+class MachineResource extends BaseResource
 {
     protected static ?string $model = Machine::class;
+
+    protected static bool $usesSoftDeletes = true;
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedCog;
 
@@ -49,6 +50,11 @@ class MachineResource extends Resource
     protected static \UnitEnum|string|null $navigationGroup = 'Ispitivanja';
     protected static ?int $navigationSort = 1;
 
+    protected static function getModuleKey(): ?string
+    {
+        return 'machines';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
@@ -58,42 +64,42 @@ class MachineResource extends Resource
                 ->searchable()
                 ->preload()
                 ->required()
-                ->visible(fn () => Auth::user()?->isAdmin())
-                ->dehydrated(fn () => Auth::user()?->isAdmin()),
+                ->visible(fn () => static::isSuperAdmin())
+                ->dehydrated(fn () => static::isSuperAdmin()),
 
             Hidden::make('user_id')
-    ->default(fn () => Auth::user()?->ownerId())
-    ->visible(fn () => ! Auth::user()?->isAdmin())
-    ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+                ->default(fn () => static::defaultUserId())
+                ->visible(fn () => ! static::isSuperAdmin())
+                ->dehydrated(fn () => ! static::isSuperAdmin()),
 
             Section::make('OCR / Auto popunjavanje iz zapisnika')
                 ->description('Učitaj PDF ili sliku zapisnika pa zatim klikni OCR gumb gore desno.')
                 ->columns(2)
                 ->schema([
                     FormFileUpload::make('ocr_source')
-    ->label('Zapisnik za OCR')
-    ->disk('local')
-    ->directory('tmp/machine-ocr')
-    ->visibility('private')
-    ->multiple(false)
-    ->acceptedFileTypes([
-        'application/pdf',
-        'image/jpeg',
-        'image/png',
-        'image/webp',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/rtf',
-        'text/plain',
-        'application/vnd.oasis.opendocument.text',
-    ])
-    ->preserveFilenames()
-    ->openable()
-    ->downloadable()
-    ->live()
-    ->columnSpan(1),
+                        ->label('Zapisnik za OCR')
+                        ->disk('local')
+                        ->directory('tmp/machine-ocr')
+                        ->visibility('private')
+                        ->multiple(false)
+                        ->acceptedFileTypes([
+                            'application/pdf',
+                            'image/jpeg',
+                            'image/png',
+                            'image/webp',
+                            'application/msword',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            'application/rtf',
+                            'text/plain',
+                            'application/vnd.oasis.opendocument.text',
+                        ])
+                        ->preserveFilenames()
+                        ->openable()
+                        ->downloadable()
+                        ->live()
+                        ->columnSpan(1),
 
-                    \Filament\Forms\Components\Placeholder::make('ocr_help')
+                    Placeholder::make('ocr_help')
                         ->label('Kako radi')
                         ->content('1. Učitaj PDF ili sliku. 2. Klikni gore desno "OCR analiza". 3. Sustav će pokušati popuniti prazna polja.')
                         ->columnSpan(1),
@@ -147,8 +153,13 @@ class MachineResource extends Resource
                         ->rule(function ($record) {
                             return Rule::unique('machines', 'report_number')
                                 ->where(function ($query) {
-                                    $query->where('user_id', Auth::user()?->ownerId())
-                                        ->whereNull('deleted_at');
+                                    $ownerId = static::ownerId();
+
+                                    if ($ownerId) {
+                                        $query->where('user_id', $ownerId);
+                                    }
+
+                                    $query->whereNull('deleted_at');
                                 })
                                 ->ignore($record?->id);
                         })
@@ -296,22 +307,22 @@ class MachineResource extends Resource
 
                     EditAction::make()
                         ->label('Uredi')
-                        ->visible(fn (Machine $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (Machine $record) => ! $record->trashed()),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (Machine $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (Machine $record) => ! $record->trashed()),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (Machine $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (Machine $record) => $record->trashed()),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (Machine $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (Machine $record) => $record->trashed()),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -363,39 +374,6 @@ class MachineResource extends Resource
             ->pluck('location', 'location')
             ->toArray();
     }
-
-    public static function getEloquentQuery(): Builder
-{
-    $query = parent::getEloquentQuery()
-        ->withoutGlobalScopes([SoftDeletingScope::class]);
-
-    if (Auth::user()?->isSuperAdmin()) {
-        return $query;
-    }
-
-    return $query->where('user_id', Auth::user()->ownerId());
-}
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('machines');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
-    public static function getNavigationBadge(): ?string
-{
-    $q = static::getModel()::query();
-
-    if (! Auth::user()?->isSuperAdmin()) {
-        $q->where('user_id', Auth::user()->ownerId());
-    }
-
-    return (string) $q->count();
-}
 
     public static function getPages(): array
     {

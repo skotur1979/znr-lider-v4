@@ -12,7 +12,14 @@ class CreateTest extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['user_id'] ??= Auth::id();
+        // Super admin kreira globalni test koji vide svi korisnici
+        if (Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = null;
+        } else {
+            // Obični korisnik/admin kreira svoj privatni test
+            $data['user_id'] = Auth::id();
+        }
+
         return $data;
     }
 

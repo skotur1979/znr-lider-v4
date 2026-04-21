@@ -3,8 +3,11 @@
 namespace App\Filament\Resources\Kpis\Pages;
 
 use App\Filament\Resources\Kpis\KpiResource;
+use App\Models\Kpi;
+use App\Models\KpiTargetOverride;
 use App\Services\KpiCalculationService;
 use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Illuminate\Support\Collection;
 
@@ -26,6 +29,16 @@ class KpiDashboard extends Page
     public array $chartRows = [];
     public array $availableKpis = [];
     public array $selectedChartKpis = [];
+
+    public bool $showTargetModal = false;
+    public ?int $targetKpiId = null;
+    public string $targetKpiName = '';
+    public $targetValue = null;
+    public $warningOffset = null;
+
+    public bool $targetUsesOverride = false;
+    public $globalTargetValue = null;
+    public $globalWarningOffset = null;
 
     public function mount(): void
     {
@@ -105,6 +118,106 @@ class KpiDashboard extends Page
             ->all();
 
         $this->buildChartRows();
+    }
+
+    public function openTargetModal(int $kpiId): void
+    {
+        if (auth()->user()?->isSuperAdmin()) {
+            return;
+        }
+
+        $kpi = Kpi::query()->findOrFail($kpiId);
+
+        if (filled($kpi->user_id)) {
+            return;
+        }
+
+        $override = $kpi->targetOverrideFor(KpiResource::resolveOwnerId());
+
+        $this->targetKpiId = $kpi->id;
+        $this->targetKpiName = $kpi->name;
+        $this->targetValue = $override?->target_value ?? $kpi->target_value;
+        $this->warningOffset = $override?->warning_offset ?? $kpi->warning_offset;
+
+        $this->targetUsesOverride = (bool) $override;
+        $this->globalTargetValue = $kpi->target_value;
+        $this->globalWarningOffset = $kpi->warning_offset;
+
+        $this->showTargetModal = true;
+    }
+
+    public function closeTargetModal(): void
+    {
+        $this->showTargetModal = false;
+        $this->targetKpiId = null;
+        $this->targetKpiName = '';
+        $this->targetValue = null;
+        $this->warningOffset = null;
+        $this->targetUsesOverride = false;
+        $this->globalTargetValue = null;
+        $this->globalWarningOffset = null;
+    }
+
+    public function saveTargetOverride(): void
+    {
+        $this->validate([
+            'targetKpiId' => ['required', 'integer', 'exists:kpis,id'],
+            'targetValue' => ['nullable', 'numeric'],
+            'warningOffset' => ['nullable', 'numeric'],
+        ]);
+
+        $kpi = Kpi::query()->findOrFail($this->targetKpiId);
+
+        if (auth()->user()?->isSuperAdmin()) {
+            abort(403);
+        }
+
+        if (filled($kpi->user_id)) {
+            abort(403);
+        }
+
+        KpiTargetOverride::updateOrCreate(
+            [
+                'kpi_id' => $kpi->id,
+                'user_id' => KpiResource::resolveOwnerId(),
+            ],
+            [
+                'target_value' => $this->targetValue,
+                'warning_offset' => $this->warningOffset,
+            ]
+        );
+
+        Notification::make()
+            ->title('Cilj i tolerancija su spremljeni.')
+            ->success()
+            ->send();
+
+        $this->closeTargetModal();
+        $this->loadData();
+    }
+
+    public function resetTargetOverride(): void
+    {
+        $this->validate([
+            'targetKpiId' => ['required', 'integer', 'exists:kpis,id'],
+        ]);
+
+        if (auth()->user()?->isSuperAdmin()) {
+            abort(403);
+        }
+
+        KpiTargetOverride::query()
+            ->where('kpi_id', $this->targetKpiId)
+            ->where('user_id', KpiResource::resolveOwnerId())
+            ->delete();
+
+        Notification::make()
+            ->title('Vraćen je globalni cilj.')
+            ->success()
+            ->send();
+
+        $this->closeTargetModal();
+        $this->loadData();
     }
 
     protected function loadData(): void

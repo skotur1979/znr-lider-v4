@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\WasteOrganizations;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\WasteOrganizations\Pages\CreateWasteOrganization;
 use App\Filament\Resources\WasteOrganizations\Pages\EditWasteOrganization;
 use App\Filament\Resources\WasteOrganizations\Pages\ListWasteOrganizations;
@@ -18,37 +19,42 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
-use Filament\Schemas\Components\Section as FormSection;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section as FormSection;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Auth;
 
-class WasteOrganizationResource extends Resource
+class WasteOrganizationResource extends BaseResource
 {
     protected static ?string $model = WasteOrganization::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-building-office-2';
+    protected static bool $usesSoftDeletes = true;
 
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-office-2';
     protected static ?string $navigationLabel = 'Organizacije otpada';
     protected static ?string $modelLabel = 'Organizacija otpada';
     protected static ?string $pluralModelLabel = 'Organizacije otpada';
-    protected static string | \UnitEnum | null $navigationGroup = 'Zaštita okoliša';
+    protected static string|\UnitEnum|null $navigationGroup = 'Zaštita okoliša';
     protected static ?int $navigationSort = 1;
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'waste_organizations';
+    }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             Hidden::make('user_id')
-                ->default(fn () => Auth::id()),
+                ->default(fn () => static::defaultUserId())
+                ->dehydrated(fn () => ! static::isSuperAdmin())
+                ->visible(fn () => ! static::isSuperAdmin()),
 
             FormSection::make('Podaci o organizaciji')
                 ->schema([
@@ -60,10 +66,9 @@ class WasteOrganizationResource extends Resource
 
                     TextInput::make('oib')
                         ->label('OIB')
-                        ->maxLength(20)
-                        ->numeric()
                         ->minLength(11)
-                        ->maxLength(11),
+                        ->maxLength(11)
+                        ->numeric(),
 
                     TextInput::make('nkd_code')
                         ->label('NKD razred')
@@ -218,7 +223,23 @@ class WasteOrganizationResource extends Resource
                         );
                     }),
 
-                TrashedFilter::make(),
+                SelectFilter::make('record_status')
+                    ->label('Status zapisa')
+                    ->placeholder('Odaberi status')
+                    ->options([
+                        'active' => 'Aktivni zapisi',
+                        'trashed' => 'Deaktivirani zapisi',
+                        'all' => 'Svi zapisi',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
+
+                        return match ($value) {
+                            'trashed' => $query->onlyTrashed(),
+                            'all' => $query->withTrashed(),
+                            default => $query->withoutTrashed(),
+                        };
+                    }),
             ])
             ->recordActions([
                 ActionGroup::make([
@@ -226,66 +247,70 @@ class WasteOrganizationResource extends Resource
                         ->label('Prikaz'),
 
                     EditAction::make()
-                        ->label('Uredi'),
+                        ->label('Uredi')
+                        ->visible(fn (WasteOrganization $record) => ! $record->trashed()),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
+                        ->requiresConfirmation()
+                        ->visible(fn (WasteOrganization $record) => ! $record->trashed())
                         ->modalHeading('Deaktiviraj organizaciju')
                         ->modalDescription('Jesi li siguran/a da želiš deaktivirati ovu organizaciju?')
                         ->successNotificationTitle('Organizacija je deaktivirana.'),
 
                     RestoreAction::make()
                         ->label('Vrati')
+                        ->requiresConfirmation()
+                        ->visible(fn (WasteOrganization $record) => $record->trashed())
                         ->successNotificationTitle('Organizacija je vraćena.'),
 
                     ForceDeleteAction::make()
                         ->label('Trajno izbriši')
+                        ->requiresConfirmation()
+                        ->visible(fn (WasteOrganization $record) => $record->trashed())
                         ->modalHeading('Trajno izbriši organizaciju')
                         ->modalDescription('Jesi li siguran/a? Ova radnja je nepovratna.')
                         ->successNotificationTitle('Organizacija je trajno izbrisana.'),
                 ]),
             ])
-            ->toolbarActions([
+            ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
+                    ->requiresConfirmation()
+                    ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire))
                     ->modalHeading('Deaktiviraj odabrano')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->successNotificationTitle('Odabrane organizacije su deaktivirane.'),
 
                 RestoreBulkAction::make()
-                    ->label('Vrati označeno'),
+                    ->label('Vrati označeno')
+                    ->requiresConfirmation()
+                    ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno izbriši označeno')
+                    ->requiresConfirmation()
                     ->modalHeading('Trajno izbriši odabrano')
                     ->modalDescription('Jesi li siguran/a? Ova radnja je nepovratna.'),
             ]);
     }
 
-    public static function getRelations(): array
+    private static function isOnlyTrashed(HasTable $livewire): bool
     {
-        return [
-            //
-        ];
+        $state = $livewire->getTableFilterState('record_status');
+        $value = data_get($state, 'value');
+
+        return $value === 'trashed';
     }
 
-    public static function getEloquentQuery(): Builder
+    public static function getRelations(): array
     {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ]);
-
-        if (Auth::user()?->isAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::id());
+        return [];
     }
 
     public static function canCreate(): bool
     {
-        return Auth::check();
+        return static::user() !== null;
     }
 
     public static function getPages(): array
@@ -297,25 +322,4 @@ class WasteOrganizationResource extends Resource
             'edit' => EditWasteOrganization::route('/{record}/edit'),
         ];
     }
-    public static function getNavigationBadge(): ?string
-    {
-        $q = static::getModel()::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
-        }
-
-        return (string) $q->count();
-    }
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('waste_organizations');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
 }

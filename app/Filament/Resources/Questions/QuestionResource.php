@@ -2,26 +2,24 @@
 
 namespace App\Filament\Resources\Questions;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Questions\Pages;
 use App\Filament\Resources\Questions\Schemas\QuestionForm;
 use App\Models\Question;
-use Filament\Resources\Resource;
+use BackedEnum;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
-use Filament\Tables\Table;
-use Filament\Tables;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Columns\TextColumn as BadgeLike;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use UnitEnum;
-use BackedEnum;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 
-class QuestionResource extends Resource
+class QuestionResource extends BaseResource
 {
     protected static ?string $model = Question::class;
 
@@ -31,6 +29,11 @@ class QuestionResource extends Resource
     protected static ?string $modelLabel = 'Pitanje';
     protected static ?string $pluralModelLabel = 'Pitanja';
     protected static ?int $navigationSort = 98;
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'questions';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -63,68 +66,61 @@ class QuestionResource extends Resource
             ->filters([
                 SelectFilter::make('test_id')
                     ->label('Test')
-                    ->relationship('test', 'naziv', function (Builder $q) {
-                        if (! Auth::user()?->isAdmin()) {
-                            $q->where('user_id', Auth::id());
+                    ->relationship('test', 'naziv', function (Builder $query) {
+                        if (! Auth::user()?->isSuperAdmin()) {
+                            $query->where(function (Builder $q) {
+                                $q->whereNull('user_id')
+                                    ->orWhere('user_id', Auth::id());
+                            });
                         }
                     })
-                    ->searchable(),
+                    ->searchable()
+                    ->preload(),
             ])
             ->defaultSort('test_id')
             ->actions([
-    EditAction::make(),
-    DeleteAction::make(),
-])
-->bulkActions([
-    DeleteBulkAction::make(),
-]);
+                EditAction::make()->label('Uredi'),
+                DeleteAction::make()->label('Obriši'),
+            ])
+            ->bulkActions([
+                DeleteBulkAction::make()->label('Obriši označeno'),
+            ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (Auth::user()?->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) {
+            $q->whereNull('user_id')
+                ->orWhere('user_id', Auth::id());
+        });
     }
 
     public static function getNavigationBadge(): ?string
-{
-    $q = static::getModel()::query();
+    {
+        $query = static::getModel()::query();
 
-    if (Auth::user()?->isAdmin()) {
-        return (string) $q->count();
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where(function (Builder $q) {
+                $q->whereNull('user_id')
+                    ->orWhere('user_id', Auth::id());
+            });
+        }
+
+        return (string) $query->count();
     }
 
-    $q->where(function (Builder $qq) {
-        $qq->whereNull('user_id')
-           ->orWhere('user_id', Auth::id());
-    });
-
-    return (string) $q->count();
-}
-    public static function getEloquentQuery(): Builder
-{
-    $q = parent::getEloquentQuery();
-
-    if (Auth::user()?->isAdmin()) {
-        return $q;
-    }
-
-    return $q->where(function (Builder $qq) {
-        $qq->whereNull('user_id')
-           ->orWhere('user_id', Auth::id());
-    });
-}
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('questions');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListQuestions::route('/'),
+            'index' => Pages\ListQuestions::route('/'),
             'create' => Pages\CreateQuestion::route('/create'),
-            'edit'   => Pages\EditQuestion::route('/{record}/edit'),
+            'edit' => Pages\EditQuestion::route('/{record}/edit'),
         ];
     }
 }

@@ -379,6 +379,75 @@
         opacity: .8;
     }
 
+    .kpi-target-btn {
+        margin-top: 6px;
+        padding: 4px 8px;
+        border: none;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        background: rgba(59,130,246,.12);
+        color: #2563eb;
+    }
+
+    .dark .kpi-target-btn {
+        background: rgba(59,130,246,.18);
+        color: #93c5fd;
+    }
+
+    .kpi-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, .55);
+        z-index: 9998;
+    }
+
+    .kpi-modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(560px, calc(100vw - 32px));
+        background: #ffffff;
+        color: #111827;
+        border-radius: 18px;
+        border: 1px solid #d1d5db;
+        box-shadow: 0 20px 60px rgba(0,0,0,.28);
+        z-index: 9999;
+        overflow: hidden;
+    }
+
+    .dark .kpi-modal {
+        background: #111827;
+        color: #f9fafb;
+        border-color: rgba(255,255,255,.10);
+    }
+
+    .kpi-modal-head {
+        padding: 18px 20px;
+        border-bottom: 1px solid #e5e7eb;
+        font-size: 18px;
+        font-weight: 800;
+    }
+
+    .dark .kpi-modal-head {
+        border-bottom-color: rgba(255,255,255,.10);
+    }
+
+    .kpi-modal-body {
+        padding: 20px;
+        display: grid;
+        gap: 14px;
+    }
+
+    .kpi-modal-actions {
+        padding: 0 20px 20px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
     @media (max-width: 1150px) {
         .kpi-filter-grid {
             grid-template-columns: 1fr 1fr;
@@ -484,13 +553,14 @@
                 <table class="kpi-table">
                     <thead>
                         <tr>
-                            <th class="kpi-left" style="width: 260px;">KPI</th>
+                            <th class="kpi-left" style="width: 240px;">KPI</th>
                             <th class="kpi-center" style="width: 90px;">Jedinica</th>
                             <th class="kpi-right" style="width: 120px;">Odabrani period</th>
                             <th class="kpi-right" style="width: 120px;">Usporedni period</th>
                             <th class="kpi-right" style="width: 90px;">Razlika</th>
-                            <th class="kpi-right" style="width: 90px;">Cilj</th>
+                            <th class="kpi-right" style="width: 110px;">Cilj</th>
                             <th class="kpi-center" style="width: 120px;">Status</th>
+                            <th class="kpi-center" style="width: 120px;">Akcija</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -519,6 +589,19 @@
                                 <td class="kpi-right">{{ $row['formatted_target'] }}</td>
                                 <td class="kpi-center">
                                     <span class="kpi-badge {{ $statusClass }}">{{ $statusText }}</span>
+                                </td>
+                                <td class="kpi-center">
+                                    @if(($row['is_global'] ?? false) && !auth()->user()?->isSuperAdmin())
+                                        <button
+                                            type="button"
+                                            wire:click="openTargetModal({{ $row['id'] }})"
+                                            class="kpi-target-btn"
+                                        >
+                                            Cilj
+                                        </button>
+                                    @else
+                                        -
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach
@@ -633,5 +716,62 @@
             </div>
         </div>
     </div>
+
+    @if($showTargetModal)
+    <div class="kpi-modal-backdrop" wire:click="closeTargetModal"></div>
+
+    <div class="kpi-modal">
+        <div class="kpi-modal-head">
+            Postavi cilj: {{ $targetKpiName }}
+        </div>
+
+        <form wire:submit="saveTargetOverride">
+            <div class="kpi-modal-body">
+                <div style="font-size:13px; line-height:1.5; opacity:.9; padding:10px 12px; border-radius:12px; background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.16);">
+                    @if($targetUsesOverride)
+                        Trenutno koristiš <strong>svoj organizacijski cilj</strong>.
+                        Globalni cilj je <strong>{{ $globalTargetValue !== null ? number_format((float) $globalTargetValue, 2, ',', '.') : '-' }}</strong>,
+                        a globalna tolerancija je <strong>{{ $globalWarningOffset !== null ? number_format((float) $globalWarningOffset, 2, ',', '.') : '-' }}</strong>.
+                    @else
+                        Trenutno koristiš <strong>globalni cilj</strong>.
+                        Ako spremiš ove vrijednosti, postavit će se poseban cilj samo za tvoju organizaciju.
+                    @endif
+                </div>
+
+                <div>
+                    <label class="kpi-label">Cilj</label>
+                    <input type="number" step="0.0001" wire:model="targetValue" class="kpi-input">
+                    @error('targetValue')
+                        <div style="color:#dc2626;font-size:12px;margin-top:6px;">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div>
+                    <label class="kpi-label">Tolerancija upozorenja</label>
+                    <input type="number" step="0.0001" wire:model="warningOffset" class="kpi-input">
+                    @error('warningOffset')
+                        <div style="color:#dc2626;font-size:12px;margin-top:6px;">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
+
+            <div class="kpi-modal-actions">
+                @if($targetUsesOverride)
+                    <x-filament::button type="button" color="danger" wire:click="resetTargetOverride">
+                        Vrati globalni cilj
+                    </x-filament::button>
+                @endif
+
+                <x-filament::button type="button" color="gray" wire:click="closeTargetModal">
+                    Odustani
+                </x-filament::button>
+
+                <x-filament::button type="submit">
+                    Spremi
+                </x-filament::button>
+                </div>
+            </form>
+        </div>
+    @endif
 </div>
 </x-filament-panels::page>

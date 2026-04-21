@@ -2,14 +2,17 @@
 
 namespace App\Filament\Resources\Expenses\Expenses;
 
+use App\Exports\ExpensesExport;
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Expenses\Expenses\Pages;
 use App\Filament\Resources\Expenses\Expenses\Schemas\ExpenseForm;
 use App\Models\Budget;
 use App\Models\Expense;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
@@ -17,14 +20,11 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Support\Carbon;
-use App\Exports\ExpensesExport;
-use Filament\Actions\CreateAction;
-use Filament\Actions\Action;
 
-class ExpenseResource extends Resource
+class ExpenseResource extends BaseResource
 {
     protected static ?string $model = Expense::class;
 
@@ -34,8 +34,12 @@ class ExpenseResource extends Resource
     protected static ?string $pluralModelLabel = 'Troškovi';
     protected static \UnitEnum|string|null $navigationGroup = 'Upravljanje';
     protected static ?int $navigationSort = 6;
-
     protected static ?string $recordTitleAttribute = 'naziv_troska';
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'expenses';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -45,9 +49,10 @@ class ExpenseResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(function (Builder $query) {
-                $query->orderByRaw("
-                    FIELD(mjesec,
+            ->modifyQueryUsing(function (Builder $query): Builder {
+                return $query->orderByRaw("
+                    FIELD(
+                        mjesec,
                         'Siječanj','Veljača','Ožujak','Travanj','Svibanj','Lipanj',
                         'Srpanj','Kolovoz','Rujan','Listopad','Studeni','Prosinac'
                     )
@@ -98,36 +103,43 @@ class ExpenseResource extends Resource
                     ->options(ExpenseForm::months())
                     ->placeholder('Sve'),
 
-                    SelectFilter::make('category')
-    ->label('Kategorija')
-    ->relationship('category', 'name') // ili 'naziv'
-    ->preload(),
+                SelectFilter::make('category_id')
+                    ->label('Kategorija')
+                    ->relationship('category', 'name')
+                    ->preload()
+                    ->searchable(),
 
                 SelectFilter::make('godina')
                     ->label('Godina')
-                    ->options(function () {
-                        $qb = Budget::query()->orderByDesc('godina');
+                    ->options(function (): array {
+                        $query = Budget::query()->orderByDesc('godina');
 
-                        if (! auth()->user()?->isAdmin()) {
-                            $qb->where('user_id', auth()->id());
+                        if (! Auth::user()?->isSuperAdmin()) {
+                            $query->where('user_id', Auth::user()?->ownerId());
                         }
 
-                        return $qb->pluck('godina', 'godina')->toArray();
+                        return $query->pluck('godina', 'godina')->toArray();
                     })
                     ->placeholder('Sve')
                     ->query(function (Builder $query, array $data): Builder {
                         $year = $data['value'] ?? null;
 
-                        if (! $year) {
+                        if (! filled($year)) {
                             return $query;
                         }
 
-                        return $query->whereHas('budget', fn (Builder $b) => $b->where('godina', $year));
+                        return $query->whereHas(
+                            'budget',
+                            fn (Builder $budgetQuery) => $budgetQuery->where('godina', $year)
+                        );
                     }),
 
                 SelectFilter::make('realizirano')
                     ->label('Realizirano')
-                    ->options(['1' => 'Da', '0' => 'Ne'])
+                    ->options([
+                        '1' => 'Da',
+                        '0' => 'Ne',
+                    ])
                     ->placeholder('Sve')
                     ->query(function (Builder $query, array $data): Builder {
                         $value = $data['value'] ?? null;
@@ -142,35 +154,37 @@ class ExpenseResource extends Resource
             ->actions([
                 ActionGroup::make([
                     EditAction::make()->label('Uredi'),
-                ])->icon(Heroicon::EllipsisVertical)->label(''),
+                ])
+                    ->icon(Heroicon::EllipsisVertical)
+                    ->label(''),
             ])
             ->headerActions([
-    CreateAction::make()
-        ->label('Novi trošak')
-        ->modalHeading('Novi trošak')
-        ->form(ExpenseForm::schema())
-        ->mutateFormDataUsing(function (array $data): array {
-            if (! Auth::user()?->isAdmin()) {
-                $data['user_id'] = Auth::id();
-            }
-            return $data;
-        }),
+                CreateAction::make()
+                    ->label('Novi trošak')
+                    ->modalHeading('Novi trošak')
+                    ->form(ExpenseForm::schema())
+                    ->mutateFormDataUsing(function (array $data): array {
+                        if (! Auth::user()?->isSuperAdmin()) {
+                            $data['user_id'] = Auth::user()?->ownerId();
+                        }
 
-    Action::make('export_excel')
-        ->label('Izvoz u Excel')
-        ->icon('heroicon-o-document-text')
-        ->color('success')
-        ->action(function () {
-            // godina iz aktivnog filtera; ako nema, tekuća
-            $year = data_get(request()->input('tableFilters.godina'), 'value')
-                ?: (string) Carbon::now('Europe/Zagreb')->year;
+                        return $data;
+                    }),
 
-            return Excel::download(
-                new ExpensesExport($year),
-                'Troskovi_' . $year . '.xlsx'
-            );
-        }),
-])
+                Action::make('export_excel')
+                    ->label('Izvoz u Excel')
+                    ->icon('heroicon-o-document-text')
+                    ->color('success')
+                    ->action(function () {
+                        $year = data_get(request()->input('tableFilters.godina'), 'value')
+                            ?: (string) Carbon::now('Europe/Zagreb')->year;
+
+                        return Excel::download(
+                            new ExpensesExport($year),
+                            'Troskovi_' . $year . '.xlsx'
+                        );
+                    }),
+            ])
             ->bulkActions([
                 DeleteBulkAction::make()->label('Obriši označeno'),
             ]);
@@ -178,29 +192,50 @@ class ExpenseResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $q = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery();
 
-        return Auth::user()?->isAdmin()
-            ? $q
-            : $q->where('user_id', Auth::id());
+        if (Auth::user()?->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where('user_id', Auth::user()?->ownerId());
     }
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
 
-    return $user?->isSuperAdmin() || $user?->canAccessModule('expenses');
-}
+    public static function getNavigationBadge(): ?string
+    {
+        $query = static::getModel()::query();
 
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
+        if (! Auth::user()?->isSuperAdmin()) {
+            $query->where('user_id', Auth::user()?->ownerId());
+        }
+
+        return (string) $query->count();
+    }
+
+    public static function mutateFormDataBeforeCreate(array $data): array
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
+
+        return $data;
+    }
+
+    public static function mutateFormDataBeforeSave(array $data): array
+    {
+        if (! Auth::user()?->isSuperAdmin()) {
+            $data['user_id'] = Auth::user()?->ownerId();
+        }
+
+        return $data;
+    }
+
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListExpenses::route('/'),
+            'index' => Pages\ListExpenses::route('/'),
             'create' => Pages\CreateExpense::route('/create'),
-            'edit'   => Pages\EditExpense::route('/{record}/edit'),
+            'edit' => Pages\EditExpense::route('/{record}/edit'),
         ];
     }
 }

@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\OntoRecords;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\OntoRecords\Pages\CreateOntoRecord;
 use App\Filament\Resources\OntoRecords\Pages\EditOntoRecord;
 use App\Filament\Resources\OntoRecords\Pages\ListOntoRecords;
 use App\Filament\Resources\OntoRecords\Pages\ViewOntoRecord;
 use App\Models\OntoRecord;
+use App\Models\WasteOrganizationLocation;
 use App\Models\WasteTrackingForm;
 use App\Models\WasteType;
 use App\Services\OntoService;
@@ -22,13 +24,12 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
-use Filament\Schemas\Components\Section as FormSection;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
-use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section as FormSection;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -41,24 +42,38 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use RuntimeException;
 
-
-class OntoRecordResource extends Resource
+class OntoRecordResource extends BaseResource
 {
     protected static ?string $model = OntoRecord::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-clipboard-document-list';
-
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?string $navigationLabel = 'ONTO obrasci';
     protected static ?string $modelLabel = 'ONTO obrazac';
     protected static ?string $pluralModelLabel = 'ONTO obrasci';
-    protected static string | \UnitEnum | null $navigationGroup = 'Zaštita okoliša';
+    protected static string|\UnitEnum|null $navigationGroup = 'Zaštita okoliša';
     protected static ?int $navigationSort = 3;
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'onto_records';
+    }
+
+    protected static function ownerId(): ?int
+    {
+        return Auth::user()?->ownerId();
+    }
+
+    protected static function isSuperAdmin(): bool
+    {
+        return Auth::user()?->isSuperAdmin() ?? false;
+    }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             Hidden::make('user_id')
-                ->default(fn () => Auth::id()),
+                ->default(fn () => static::ownerId())
+                ->dehydrated(),
 
             FormSection::make('Podaci o ONTO obrascu')
                 ->schema([
@@ -67,7 +82,7 @@ class OntoRecordResource extends Resource
                         ->relationship(
                             name: 'organization',
                             titleAttribute: 'company_name',
-                            modifyQueryUsing: fn (Builder $query) => static::applyOrganizationScope($query)
+                            modifyQueryUsing: fn (Builder $query) => static::applyOrganizationScope($query),
                         )
                         ->searchable()
                         ->preload()
@@ -83,13 +98,13 @@ class OntoRecordResource extends Resource
                                 return [];
                             }
 
-                            return \App\Models\WasteOrganizationLocation::query()
+                            return WasteOrganizationLocation::query()
                                 ->where('waste_organization_id', $organizationId)
                                 ->where('is_active', true)
                                 ->orderBy('name')
                                 ->get()
-                                ->mapWithKeys(fn ($location) => [
-                                    $location->id => $location->display_name
+                                ->mapWithKeys(fn (WasteOrganizationLocation $location) => [
+                                    $location->id => $location->display_name,
                                 ])
                                 ->toArray();
                         })
@@ -159,42 +174,38 @@ class OntoRecordResource extends Resource
                     ->toggleable(),
 
                 TextColumn::make('organizationLocation.name')
-    ->label('Lokacija')
-    ->formatStateUsing(fn ($state, OntoRecord $record) =>
-        $record->organizationLocation?->display_name
-            ?? $record->organizationLocation?->name
-            ?? $record->organizationLocation?->location_name
-            ?? '-'
-    )
-    ->searchable()
-    ->sortable()
-    ->weight('bold'),
+                    ->label('Lokacija')
+                    ->formatStateUsing(fn ($state, OntoRecord $record) => $record->organizationLocation?->display_name
+                        ?? $record->organizationLocation?->name
+                        ?? $record->organizationLocation?->location_name
+                        ?? '-')
+                    ->searchable()
+                    ->sortable()
+                    ->weight('bold'),
 
                 TextColumn::make('wasteType.waste_code')
-    ->label('K.B.')
-    ->html()
-    ->formatStateUsing(function (?string $state): string {
+                    ->label('K.B.')
+                    ->html()
+                    ->formatStateUsing(function (?string $state): string {
+                        if (! $state) {
+                            return '-';
+                        }
 
-        if (!$state) {
-            return '-';
-        }
+                        $hasStar = str_ends_with($state, '*');
+                        $code = rtrim($state, '*');
 
-        $hasStar = str_ends_with($state, '*');
-        $code = rtrim($state, '*');
+                        if (strlen($code) === 6) {
+                            $code = substr($code, 0, 2) . ' '
+                                . substr($code, 2, 2) . ' '
+                                . substr($code, 4, 2);
+                        }
 
-        if (strlen($code) === 6) {
-            $code =
-                substr($code, 0, 2) . ' ' .
-                substr($code, 2, 2) . ' ' .
-                substr($code, 4, 2);
-        }
-
-        return $hasStar
-            ? $code . '<sup style="font-size:0.75em">*</sup>'
-            : $code;
-    })
-    ->sortable()
-    ->searchable(),
+                        return $hasStar
+                            ? $code . '<sup style="font-size:0.75em">*</sup>'
+                            : $code;
+                    })
+                    ->sortable()
+                    ->searchable(),
 
                 TextColumn::make('wasteType.name')
                     ->label('Naziv otpada')
@@ -247,22 +258,20 @@ class OntoRecordResource extends Resource
                     ->relationship(
                         'organization',
                         'company_name',
-                        fn (Builder $query) => static::applyOrganizationScope($query)
+                        fn (Builder $query) => static::applyOrganizationScope($query),
                     )
                     ->searchable()
                     ->preload(),
 
                 SelectFilter::make('waste_organization_location_id')
-    ->label('Lokacija')
-    ->relationship(
-    'organizationLocation',
-    'name',
-    fn (Builder $query) => ! Auth::user()?->isAdmin()
-        ? $query->whereHas('organization', fn (Builder $q) => $q->where('user_id', Auth::id()))
-        : $query
-)
-    ->searchable()
-    ->preload(),
+                    ->label('Lokacija')
+                    ->relationship(
+                        'organizationLocation',
+                        'name',
+                        fn (Builder $query) => static::applyLocationScope($query),
+                    )
+                    ->searchable()
+                    ->preload(),
 
                 SelectFilter::make('waste_type_id')
                     ->label('Vrsta otpada')
@@ -279,7 +288,7 @@ class OntoRecordResource extends Resource
                     ->query(function (Builder $query, array $data): Builder {
                         return $query->when(
                             filled($data['year'] ?? null),
-                            fn (Builder $query) => $query->where('year', $data['year'])
+                            fn (Builder $query) => $query->where('year', $data['year']),
                         );
                     }),
 
@@ -292,7 +301,7 @@ class OntoRecordResource extends Resource
                     ->query(function (Builder $query, array $data): Builder {
                         return $query->when(
                             filled($data['value'] ?? null),
-                            fn (Builder $query) => $query->where('is_closed', (bool) $data['value'])
+                            fn (Builder $query) => $query->where('is_closed', (bool) $data['value']),
                         );
                     }),
 
@@ -435,8 +444,8 @@ class OntoRecordResource extends Resource
                                 ->rows(3),
                         ])
                         ->action(function (OntoRecord $record, array $data): void {
-                            $trackingForm = WasteTrackingForm::create([
-                                'user_id' => Auth::id(),
+                            WasteTrackingForm::create([
+                                'user_id' => static::ownerId(),
                                 'onto_record_id' => $record->id,
                                 'document_number' => $data['document_number'] ?? null,
                                 'handover_date' => $data['handover_date'] ?? now()->format('Y-m-d'),
@@ -444,8 +453,7 @@ class OntoRecordResource extends Resource
                                 'description' => $data['description'] ?? $record->wasteType?->name,
                                 'sender_name' => $record->organization?->company_name,
                                 'sender_oib' => $record->organization?->oib,
-                                'sender_address' => $record->organizationLocation?->address
-                                ??$record->organization?->address,
+                                'sender_address' => $record->organizationLocation?->address ?? $record->organization?->address,
                                 'note' => $data['note'] ?? null,
                             ]);
 
@@ -494,25 +502,48 @@ class OntoRecordResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-    ->with(['organization', 'organizationLocation', 'wasteType'])
+            ->with(['organization', 'organizationLocation', 'wasteType'])
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ]);
 
-        if (Auth::user()?->isAdmin()) {
+        if (static::isSuperAdmin()) {
             return $query;
         }
 
-        return $query->where('user_id', Auth::id());
+        return $query->where('user_id', static::ownerId());
+    }
+
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        $query = parent::getRecordRouteBindingEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
+
+        if (static::isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where('user_id', static::ownerId());
     }
 
     protected static function applyOrganizationScope(Builder $query): Builder
     {
-        if (Auth::user()?->isAdmin()) {
+        if (static::isSuperAdmin()) {
             return $query;
         }
 
-        return $query->where('user_id', Auth::id());
+        return $query->where('user_id', static::ownerId());
+    }
+
+    protected static function applyLocationScope(Builder $query): Builder
+    {
+        if (static::isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->whereHas('organization', fn (Builder $q) => $q->where('user_id', static::ownerId()));
     }
 
     public static function canCreate(): bool
@@ -522,9 +553,7 @@ class OntoRecordResource extends Resource
 
     public static function mutateFormDataBeforeCreate(array $data): array
     {
-        if (! Auth::user()?->isAdmin()) {
-            $data['user_id'] = Auth::id();
-        }
+        $data['user_id'] = static::ownerId();
 
         return $data;
     }
@@ -538,31 +567,15 @@ class OntoRecordResource extends Resource
             'edit' => EditOntoRecord::route('/{record}/edit'),
         ];
     }
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
 
-    if (! $user) {
-        return false;
-    }
-
-    return
-        (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) ||
-        (method_exists($user, 'canAccessModule') && $user->canAccessModule('onto_records'));
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
     public static function getNavigationBadge(): ?string
     {
-        $q = static::getModel()::query();
+        $query = static::getModel()::query();
 
-        if (! Auth::user()?->isAdmin()) {
-            $q->where('user_id', Auth::id());
+        if (! static::isSuperAdmin()) {
+            $query->where('user_id', static::ownerId());
         }
 
-        return (string) $q->count();
+        return (string) $query->count();
     }
 }

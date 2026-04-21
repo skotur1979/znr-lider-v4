@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class Kpi extends Model
@@ -58,6 +59,11 @@ class Kpi extends Model
         return $this->hasMany(KpiValue::class)->orderBy('year')->orderBy('month');
     }
 
+    public function targetOverrides(): HasMany
+    {
+        return $this->hasMany(KpiTargetOverride::class)->orderByDesc('id');
+    }
+
     public function latestValue(): ?KpiValue
     {
         return $this->hasMany(KpiValue::class)
@@ -103,14 +109,43 @@ class Kpi extends Model
         });
     }
 
-    public function evaluateStatus(?float $value): string
+    public function targetOverrideFor(?int $userId = null): ?KpiTargetOverride
     {
-        if ($value === null || $this->target_value === null) {
+        $userId ??= Auth::id();
+
+        if (! $userId) {
+            return null;
+        }
+
+        return $this->targetOverrides()
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    public function effectiveTargetValue(?int $userId = null): ?float
+    {
+        $override = $this->targetOverrideFor($userId);
+
+        return $override?->target_value ?? $this->target_value;
+    }
+
+    public function effectiveWarningOffset(?int $userId = null): ?float
+    {
+        $override = $this->targetOverrideFor($userId);
+
+        return $override?->warning_offset ?? $this->warning_offset;
+    }
+
+    public function evaluateStatus(?float $value, ?int $userId = null): string
+    {
+        $targetValue = $this->effectiveTargetValue($userId);
+        $warningOffset = (float) ($this->effectiveWarningOffset($userId) ?? 0);
+
+        if ($value === null || $targetValue === null) {
             return 'neutral';
         }
 
-        $target = (float) $this->target_value;
-        $warningOffset = (float) ($this->warning_offset ?? 0);
+        $target = (float) $targetValue;
 
         return match ($this->direction) {
             'lower_better' => $this->evaluateLowerBetter($value, $target, $warningOffset),

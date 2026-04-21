@@ -2,52 +2,42 @@
 
 namespace App\Filament\Resources\Fires;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Fires\Pages;
 use App\Models\Fire;
 use App\Support\ExpiryBadge;
-
-use Filament\Resources\Resource;
-
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Schema;
-
+use Filament\Actions\ActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
-
 use Filament\Infolists\Components\TextEntry;
-
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
-
-use Filament\Actions\ActionGroup;
-
-use Filament\Actions\ViewAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\RestoreAction;
-use Filament\Actions\ForceDeleteAction;
-
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
-use Filament\Actions\ForceDeleteBulkAction;
-
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
-
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
-class FireResource extends Resource
+class FireResource extends BaseResource
 {
     protected static ?string $model = Fire::class;
+
+    protected static bool $usesSoftDeletes = true;
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedFire;
 
@@ -58,12 +48,17 @@ class FireResource extends Resource
     protected static \UnitEnum|string|null $navigationGroup = 'Ispitivanja';
     protected static ?int $navigationSort = 2;
 
+    protected static function getModuleKey(): ?string
+    {
+        return 'fires';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             Hidden::make('user_id')
-    ->default(fn () => Auth::user()?->ownerId())
-    ->dehydrated(),
+                ->default(fn () => static::defaultUserId())
+                ->dehydrated(),
 
             Section::make('Podatci o vatrogasnom aparatu')
                 ->schema([
@@ -77,22 +72,26 @@ class FireResource extends Resource
                         ->maxLength(255),
 
                     TextInput::make('factory_number_year_of_production')
-    ->label('Tvornički broj/Godina proizvodnje')
-    ->maxLength(255)
-    ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
-    ->dehydrateStateUsing(fn ($state) => $state)
-    ->saveRelationshipsUsing(null)
-    ->rule(function ($record) {
-        return \Illuminate\Validation\Rule::unique('fires', 'factory_number/year_of_production')
-            ->where(function ($query) {
-                $query->where('user_id', auth()->user()?->ownerId())
-                    ->whereNull('deleted_at');
-            })
-            ->ignore($record?->id);
-    })
-    ->validationMessages([
-        'unique' => 'Već postoji vatrogasni aparat s istim tvorničkim brojem / godinom proizvodnje.',
-    ]),
+                        ->label('Tvornički broj/Godina proizvodnje')
+                        ->maxLength(255)
+                        ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
+                        ->dehydrateStateUsing(fn ($state) => $state)
+                        ->rule(function ($record) {
+                            return Rule::unique('fires', 'factory_number/year_of_production')
+                                ->where(function ($query) {
+                                    $ownerId = static::ownerId();
+
+                                    if ($ownerId) {
+                                        $query->where('user_id', $ownerId);
+                                    }
+
+                                    $query->whereNull('deleted_at');
+                                })
+                                ->ignore($record?->id);
+                        })
+                        ->validationMessages([
+                            'unique' => 'Već postoji vatrogasni aparat s istim tvorničkim brojem / godinom proizvodnje.',
+                        ]),
 
                     TextInput::make('serial_label_number')
                         ->label('Serijski broj evidencijske naljepnice')
@@ -152,8 +151,8 @@ class FireResource extends Resource
                         ->maxFiles(10)
                         ->maxSize(30720)
                         ->preserveFilenames()
-                        ->enableOpen()
-                        ->enableDownload()
+                        ->openable()
+                        ->downloadable()
                         ->acceptedFileTypes([
                             'application/pdf',
                             'application/msword',
@@ -283,22 +282,22 @@ class FireResource extends Resource
 
                     EditAction::make()
                         ->label('Uredi')
-                        ->visible(fn (Fire $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (Fire $record) => ! $record->trashed()),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (Fire $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (Fire $record) => ! $record->trashed()),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (Fire $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (Fire $record) => $record->trashed()),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (Fire $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (Fire $record) => $record->trashed()),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -306,30 +305,29 @@ class FireResource extends Resource
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
-            ->requiresConfirmation()
-            ->modalHeading('Deaktiviraj odabrano')
-            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-            ->modalSubmitActionLabel('Deaktiviraj')
-            ->modalCancelActionLabel('Odustani')
+                    ->requiresConfirmation()
+                    ->modalHeading('Deaktiviraj odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalSubmitActionLabel('Deaktiviraj')
+                    ->modalCancelActionLabel('Odustani')
                     ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
-            ->requiresConfirmation()
-            ->modalHeading('Vrati odabrano')
-            ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-            ->modalSubmitActionLabel('Vrati')
-            ->modalCancelActionLabel('Odustani')
+                    ->requiresConfirmation()
+                    ->modalHeading('Vrati odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalSubmitActionLabel('Vrati')
+                    ->modalCancelActionLabel('Odustani')
                     ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
-            ->requiresConfirmation()
-            ->modalHeading('Trajno obriši odabrano')
-            ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
-            ->modalSubmitActionLabel('Trajno obriši')
-            ->modalCancelActionLabel('Odustani')
-            
+                    ->requiresConfirmation()
+                    ->modalHeading('Trajno obriši odabrano')
+                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+                    ->modalSubmitActionLabel('Trajno obriši')
+                    ->modalCancelActionLabel('Odustani'),
             ]);
     }
 
@@ -341,39 +339,6 @@ class FireResource extends Resource
         return $value === 'trashed';
     }
 
-   public static function getEloquentQuery(): Builder
-{
-    $query = parent::getEloquentQuery()
-        ->withoutGlobalScopes([SoftDeletingScope::class]);
-
-    if (Auth::user()?->isSuperAdmin()) {
-        return $query;
-    }
-
-    return $query->where('user_id', Auth::user()->ownerId());
-}
-
-    public static function getNavigationBadge(): ?string
-{
-    $q = static::getModel()::query();
-
-    if (! Auth::user()?->isSuperAdmin()) {
-        $q->where('user_id', Auth::user()->ownerId());
-    }
-
-    return (string) $q->count();
-}
-public static function shouldRegisterNavigation(): bool
-{
-    $user = Auth::user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('fires');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
     public static function getPages(): array
     {
         return [

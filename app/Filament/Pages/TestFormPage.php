@@ -3,30 +3,21 @@
 namespace App\Filament\Pages;
 
 use App\Models\AttemptAnswer;
-use App\Models\Employee;
 use App\Models\Test;
 use App\Models\TestAttempt;
-use Carbon\Carbon;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class TestFormPage extends Page
 {
-    // ✅ Filament v4: view je NON-static
     protected string $view = 'filament.pages.test-form-page';
 
-    // ✅ Ne prikazuj u navigaciji (jer ima {test} parametar)
     protected static bool $shouldRegisterNavigation = false;
 
-    /**
-     * ✅ VAŽNO:
-     * Ne smije biti "tests/{test}" jer TestResource koristi /tests i /tests/create.
-     * Ovo ti uzrokuje 404 na /admin/tests/create.
-     */
     protected static ?string $slug = 'testovi/{test}';
 
-    // (opcionalno) naslov taba/breadcrumba
     protected static ?string $title = 'Rješavanje testa';
 
     public Test $test;
@@ -45,24 +36,25 @@ class TestFormPage extends Page
     {
         abort_unless(Auth::check(), 401);
 
+        if (
+            ! Auth::user()?->isSuperAdmin()
+            && ! is_null($test->user_id)
+            && (int) $test->user_id !== (int) Auth::id()
+        ) {
+            abort(403);
+        }
+
         $this->test = $test->load('questions.answers');
 
-        $employee = Employee::where('user_id', Auth::id())->first();
-
-        if ($employee) {
-            $this->ime_prezime  = (string) ($employee->ime_prezime ?? '');
-            $this->radno_mjesto = (string) ($employee->radno_mjesto ?? '');
-
-            $this->datum_rodjenja = $employee->datum_rodjenja
-                ? Carbon::parse($employee->datum_rodjenja)->format('Y-m-d')
-                : null;
-        } else {
-            $this->ime_prezime = (string) (Auth::user()->name ?? '');
-        }
+        // Ručni unos podataka kandidata - bez povlačenja iz korisnika
+        $this->ime_prezime = '';
+        $this->radno_mjesto = '';
+        $this->datum_rodjenja = null;
 
         foreach ($this->test->questions as $q) {
             if ($q->visestruki_odgovori) {
                 $this->odgovori[$q->id] = [];
+
                 foreach ($q->answers as $a) {
                     $this->odgovori[$q->id][$a->id] = false;
                 }
@@ -75,28 +67,13 @@ class TestFormPage extends Page
     public function submit(): void
     {
         $this->validate([
-            'ime_prezime'    => 'required|string',
-            'radno_mjesto'   => 'nullable|string',
-            'datum_rodjenja' => 'nullable|string',
+            'ime_prezime' => ['required', 'string', 'max:255'],
+            'radno_mjesto' => ['nullable', 'string', 'max:255'],
+            'datum_rodjenja' => ['nullable', 'date'],
+        ], [
+            'ime_prezime.required' => 'Ime i prezime je obavezno.',
+            'datum_rodjenja.date' => 'Datum rođenja nije ispravan.',
         ]);
-
-        $parsedDate = null;
-
-        if (! empty($this->datum_rodjenja)) {
-            $formats = ['Y-m-d', 'd.m.Y', 'd/m/Y'];
-
-            foreach ($formats as $format) {
-                try {
-                    $parsedDate = Carbon::createFromFormat($format, $this->datum_rodjenja);
-                    break;
-                } catch (\Throwable $e) {}
-            }
-
-            if (! $parsedDate) {
-                $this->dispatch('notify', type: 'danger', message: 'Datum rođenja nije u ispravnom formatu.');
-                return;
-            }
-        }
 
         $unanswered = $this->test->questions->filter(function ($q) {
             $sel = $this->odgovori[$q->id] ?? null;
@@ -109,7 +86,11 @@ class TestFormPage extends Page
         });
 
         if ($unanswered->isNotEmpty()) {
-            $this->dispatch('notify', type: 'danger', message: 'Niste odgovorili na sva pitanja.');
+            Notification::make()
+                ->title('Niste odgovorili na sva pitanja.')
+                ->danger()
+                ->send();
+
             return;
         }
 
@@ -122,6 +103,7 @@ class TestFormPage extends Page
                 $tocni = $pitanje->answers
                     ->where('is_correct', true)
                     ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
                     ->sort()
                     ->values();
 
@@ -145,8 +127,8 @@ class TestFormPage extends Page
                 foreach ($selectedIds as $answerId) {
                     $rows[] = [
                         'test_attempt_id' => 0,
-                        'question_id'     => (int) $pitanje->id,
-                        'answer_id'       => (int) $answerId,
+                        'question_id' => (int) $pitanje->id,
+                        'answer_id' => (int) $answerId,
                     ];
                 }
             }
@@ -155,18 +137,18 @@ class TestFormPage extends Page
                 ? round(($bodovi / $ukupnoPitanja) * 100, 2)
                 : 0.0;
 
-            $prolaz = $postotak >= (float) $this->test->minimalni_prolaz;
+            $prolaz = $postotak >= (float) ($this->test->minimalni_prolaz ?? 75);
 
-            DB::transaction(function () use ($postotak, $prolaz, $bodovi, $parsedDate, &$rows) {
+            DB::transaction(function () use ($postotak, $prolaz, $bodovi, &$rows) {
                 $attempt = TestAttempt::create([
-                    'user_id'         => Auth::id(),
-                    'test_id'         => $this->test->id,
-                    'ime_prezime'     => $this->ime_prezime,
-                    'radno_mjesto'    => $this->radno_mjesto,
-                    'datum_rodjenja'  => $parsedDate?->format('Y-m-d'),
+                    'user_id' => Auth::id(),
+                    'test_id' => $this->test->id,
+                    'ime_prezime' => $this->ime_prezime,
+                    'radno_mjesto' => $this->radno_mjesto,
+                    'datum_rodjenja' => $this->datum_rodjenja,
                     'bodovi_osvojeni' => $bodovi,
-                    'rezultat'        => $postotak,
-                    'prolaz'          => $prolaz,
+                    'rezultat' => $postotak,
+                    'prolaz' => $prolaz,
                 ]);
 
                 foreach ($rows as &$r) {
@@ -176,15 +158,24 @@ class TestFormPage extends Page
                 if (! empty($rows)) {
                     AttemptAnswer::insert($rows);
                 }
-
-                $this->rezultat  = $postotak;
-                $this->prolaz    = $prolaz;
-                $this->submitted = true;
             });
 
+            $this->rezultat = $postotak;
+            $this->prolaz = $prolaz;
+            $this->submitted = true;
+
+            Notification::make()
+                ->title('Test je uspješno poslan.')
+                ->success()
+                ->send();
         } catch (\Throwable $e) {
             report($e);
-            $this->dispatch('notify', type: 'danger', message: 'Greška: ' . $e->getMessage());
+
+            Notification::make()
+                ->title('Dogodila se greška prilikom spremanja testa.')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
         }
     }
 }

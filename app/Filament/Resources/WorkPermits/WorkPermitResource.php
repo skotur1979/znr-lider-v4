@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\WorkPermits;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\WorkPermits\Pages;
 use App\Models\WorkPermit;
 use BackedEnum;
@@ -17,11 +18,10 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -31,15 +31,13 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Schema as DbSchema;
-use Illuminate\Support\Str;
 use UnitEnum;
 
-class WorkPermitResource extends Resource
+class WorkPermitResource extends BaseResource
 {
     protected static ?string $model = WorkPermit::class;
+
+    protected static bool $usesSoftDeletes = true;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-check';
     protected static string|UnitEnum|null $navigationGroup = 'Upravljanje';
@@ -48,83 +46,28 @@ class WorkPermitResource extends Resource
     protected static ?string $modelLabel = 'Dozvola za rad';
     protected static ?int $navigationSort = 8;
 
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = auth()->user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('work_permits');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
-
-    private static function isAdminUser($user): bool
+    protected static function getModuleKey(): ?string
     {
-        if (! $user) {
-            return false;
-        }
-
-        if ((int) $user->id === 1) {
-            return true;
-        }
-
-        try {
-            if (method_exists($user, 'getRoleNames')) {
-                $roles = $user->getRoleNames()->toArray();
-
-                foreach ($roles as $role) {
-                    $name = trim((string) $role);
-
-                    if (
-                        Str::contains(Str::lower($name), 'admin') ||
-                        in_array(Str::lower($name), ['administrator', 'super-admin', 'super admin', 'owner', 'root'])
-                    ) {
-                        return true;
-                    }
-                }
-            }
-
-            if (method_exists($user, 'hasAnyRole')) {
-                if ($user->hasAnyRole([
-                    'admin', 'Admin', 'administrator', 'Administrator',
-                    'super-admin', 'Super Admin', 'owner', 'Owner', 'root', 'Root',
-                ])) {
-                    return true;
-                }
-            }
-
-            if (method_exists($user, 'hasRole')) {
-                foreach (['admin', 'Admin', 'administrator', 'Administrator', 'super-admin', 'Super Admin', 'owner', 'Owner', 'root', 'Root'] as $role) {
-                    if ($user->hasRole($role)) {
-                        return true;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-        }
-
-        if (isset($user->is_admin) && (bool) $user->is_admin) {
-            return true;
-        }
-
-        try {
-            if (method_exists($user, 'can') && $user->can('viewAny', \App\Models\WorkPermit::class)) {
-                return true;
-            }
-        } catch (\Throwable $e) {
-        }
-
-        return false;
+        return 'work_permits';
     }
 
     public static function generateNextPermitNumber(): string
     {
         $year = now()->year;
 
-        $last = WorkPermit::query()
-            ->withTrashed()
+        $query = WorkPermit::query()->withTrashed();
+
+        if (! static::isSuperAdmin()) {
+            $ownerId = static::ownerId();
+
+            if (! $ownerId) {
+                return '01/' . $year;
+            }
+
+            $query->where('user_id', $ownerId);
+        }
+
+        $last = $query
             ->whereYear('created_at', $year)
             ->count();
 
@@ -136,13 +79,18 @@ public static function canViewAny(): bool
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Hidden::make('user_id')
+                ->default(fn () => static::defaultUserId())
+                ->dehydrated(fn () => ! static::isSuperAdmin())
+                ->visible(fn () => ! static::isSuperAdmin()),
+
             Section::make('Osnovni podaci')
                 ->columnSpanFull()
                 ->columns(2)
                 ->schema([
                     TextInput::make('permit_number')
                         ->label('Broj')
-                        ->default(fn () => self::generateNextPermitNumber())
+                        ->default(fn () => static::generateNextPermitNumber())
                         ->required(),
 
                     DatePicker::make('issue_date')
@@ -173,21 +121,21 @@ public static function canViewAny(): bool
                         ->columns(5),
 
                     TextInput::make('other_work_type')
-                    ->label('Ostalo')
-                    ->maxLength(50)
-                    ->rule('max:50')
-                    ->extraAttributes(['maxlength' => 50])
-                    ->live(onBlur: true)
-                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/50'),
+                        ->label('Ostalo')
+                        ->maxLength(50)
+                        ->rule('max:50')
+                        ->extraAttributes(['maxlength' => 50])
+                        ->live(onBlur: true)
+                        ->helperText(fn ($state) => mb_strlen((string) $state) . '/50'),
 
                     Textarea::make('request_or_regulation')
-                    ->label('Zahtjev / propis')
-                    ->rows(2)
-                    ->maxLength(150)
-                    ->rule('max:150')
-                    ->extraAttributes(['maxlength' => 150])
-                    ->live(onBlur: true)
-                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/150'),
+                        ->label('Zahtjev / propis')
+                        ->rows(2)
+                        ->maxLength(150)
+                        ->rule('max:150')
+                        ->extraAttributes(['maxlength' => 150])
+                        ->live(onBlur: true)
+                        ->helperText(fn ($state) => mb_strlen((string) $state) . '/150'),
                 ]),
 
             Section::make('Radove izvode')
@@ -212,24 +160,26 @@ public static function canViewAny(): bool
                         ]),
 
                     Textarea::make('work_description')
-    ->label('Opis poslova - radova')
-    ->rows(3)
-    ->maxLength(300)
-    ->rule('max:300')
-    ->extraAttributes(['maxlength' => 300])
-    ->live(onBlur: true)
-    ->helperText(fn ($state) => mb_strlen((string) $state) . '/300'),
+                        ->label('Opis poslova - radova')
+                        ->rows(3)
+                        ->maxLength(300)
+                        ->rule('max:300')
+                        ->extraAttributes(['maxlength' => 300])
+                        ->live(onBlur: true)
+                        ->helperText(fn ($state) => mb_strlen((string) $state) . '/300'),
 
                     Grid::make(2)
                         ->schema([
                             TextInput::make('contact_person')
-                            ->label('Kontakt osoba')
-                            ->maxLength(50)
-                            ->rule('max:50')
-                            ->extraAttributes(['maxlength' => 50])
-                            ->live(onBlur: true)
-                            ->helperText(fn ($state) => mb_strlen((string) $state) . '/50'),
-                            TextInput::make('phone')->label('Telefonski broj'),
+                                ->label('Kontakt osoba')
+                                ->maxLength(50)
+                                ->rule('max:50')
+                                ->extraAttributes(['maxlength' => 50])
+                                ->live(onBlur: true)
+                                ->helperText(fn ($state) => mb_strlen((string) $state) . '/50'),
+
+                            TextInput::make('phone')
+                                ->label('Telefonski broj'),
                         ]),
                 ]),
 
@@ -242,13 +192,13 @@ public static function canViewAny(): bool
                         ->columns(2),
 
                     Textarea::make('additional_measures')
-                    ->label('Dodatne mjere')
-                    ->rows(2)
-                    ->maxLength(200)
-                    ->rule('max:200')
-                    ->extraAttributes(['maxlength' => 200])
-                    ->live(onBlur: true)
-                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/200'),
+                        ->label('Dodatne mjere')
+                        ->rows(2)
+                        ->maxLength(200)
+                        ->rule('max:200')
+                        ->extraAttributes(['maxlength' => 200])
+                        ->live(onBlur: true)
+                        ->helperText(fn ($state) => mb_strlen((string) $state) . '/200'),
 
                     Textarea::make('required_equipment')
                         ->label('Potrebna oprema')
@@ -264,12 +214,12 @@ public static function canViewAny(): bool
                         ->columns(3),
 
                     TextInput::make('other_hazard')
-                    ->label('Ostalo')
-                    ->maxLength(30)
-                    ->rule('max:30')
-                    ->extraAttributes(['maxlength' => 30])
-                    ->live(onBlur: true)
-                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/30'),
+                        ->label('Ostalo')
+                        ->maxLength(30)
+                        ->rule('max:30')
+                        ->extraAttributes(['maxlength' => 30])
+                        ->live(onBlur: true)
+                        ->helperText(fn ($state) => mb_strlen((string) $state) . '/30'),
                 ]),
 
             Section::make('Osobna zaštitna oprema')
@@ -329,14 +279,14 @@ public static function canViewAny(): bool
                         ->inline(),
 
                     Textarea::make('unfinished_reason')
-                    ->label('Ako nisu završeni navesti razlog')
-                    ->rows(3)
-                    ->maxLength(150)
-                    ->rule('max:150')
-                    ->extraAttributes(['maxlength' => 150])
-                    ->live(onBlur: true)
-                    ->helperText(fn ($state) => mb_strlen((string) $state) . '/150')
-                    ->columnSpanFull(),
+                        ->label('Ako nisu završeni navesti razlog')
+                        ->rows(3)
+                        ->maxLength(150)
+                        ->rule('max:150')
+                        ->extraAttributes(['maxlength' => 150])
+                        ->live(onBlur: true)
+                        ->helperText(fn ($state) => mb_strlen((string) $state) . '/150')
+                        ->columnSpanFull(),
 
                     TextInput::make('verification_name')->label('Ime i prezime'),
                     TextInput::make('verification_signature')->label('Potpis'),
@@ -346,10 +296,10 @@ public static function canViewAny(): bool
         ]);
     }
 
-    public static function infolist(\Filament\Schemas\Schema $schema): \Filament\Schemas\Schema
-{
-    return $schema->components([]);
-}
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->components([]);
+    }
 
     public static function table(Table $table): Table
     {
@@ -383,11 +333,6 @@ public static function canViewAny(): bool
                     ->dateTime('d.m.Y. H:i')
                     ->sortable(),
 
-                TextColumn::make('work_types')
-                    ->label('Vrsta poslova')
-                    ->searchable()
-                    ->wrap(),
-
                 TextColumn::make('works_finished')
                     ->label('Završeno')
                     ->badge()
@@ -413,7 +358,7 @@ public static function canViewAny(): bool
                         'trashed' => 'Deaktivirani zapisi',
                         'all' => 'Svi zapisi',
                     ])
-                    ->query(function (Builder $query, array $data) {
+                    ->query(function ($query, array $data) {
                         $value = $data['value'] ?? null;
 
                         return match ($value) {
@@ -426,21 +371,25 @@ public static function canViewAny(): bool
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaži'),
+
                     EditAction::make()
                         ->label('Uredi')
-                        ->visible(fn (WorkPermit $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (WorkPermit $record) => ! $record->trashed()),
+
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (WorkPermit $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(fn (WorkPermit $record) => ! $record->trashed()),
+
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (WorkPermit $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (WorkPermit $record) => $record->trashed()),
+
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (WorkPermit $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(fn (WorkPermit $record) => $record->trashed()),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -449,17 +398,25 @@ public static function canViewAny(): bool
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
-                    ->visible(fn (\Filament\Tables\Contracts\HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+                    ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire)),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
                     ->requiresConfirmation()
-                    ->visible(fn (\Filament\Tables\Contracts\HasTable $livewire) => self::isOnlyTrashed($livewire)),
+                    ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
                     ->requiresConfirmation(),
             ]);
+    }
+
+    private static function isOnlyTrashed(HasTable $livewire): bool
+    {
+        $state = $livewire->getTableFilterState('status');
+        $value = data_get($state, 'value');
+
+        return $value === 'trashed';
     }
 
     public static function getPages(): array
@@ -470,59 +427,5 @@ public static function canViewAny(): bool
             'edit' => Pages\EditWorkPermit::route('/{record}/edit'),
             'view' => Pages\ViewWorkPermit::route('/{record}'),
         ];
-    }
-
-    public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
-
-        $user = auth()->user();
-
-        if (! $user) {
-            return $query->whereRaw('1=0');
-        }
-
-        return self::isAdminUser($user)
-            ? $query
-            : $query->where('user_id', $user->id);
-    }
-
-    public static function getNavigationBadge(): ?string
-    {
-        try {
-            if (! DbSchema::hasTable('work_permits')) {
-                return null;
-            }
-
-            $user = auth()->user();
-
-            if (! $user) {
-                return '0';
-            }
-
-            $query = static::getModel()::query();
-
-            if (! self::isAdminUser($user)) {
-                $query->where('user_id', $user->id);
-            }
-
-            return (string) $query->count();
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
-    public static function getGlobalSearchEloquentQuery(): Builder
-    {
-        return static::getEloquentQuery();
-    }
-
-    private static function isOnlyTrashed(\Filament\Tables\Contracts\HasTable $livewire): bool
-    {
-        $state = $livewire->getTableFilterState('status');
-        $value = data_get($state, 'value');
-
-        return $value === 'trashed';
     }
 }

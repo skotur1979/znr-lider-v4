@@ -23,7 +23,6 @@ class TestForm
                     TextInput::make('sifra')
                         ->label('Šifra')
                         ->required()
-                        // ✅ Filament v4 način (automatski ignorira record na edit)
                         ->unique(table: 'tests', column: 'sifra', ignoreRecord: true),
 
                     TextInput::make('minimalni_prolaz')

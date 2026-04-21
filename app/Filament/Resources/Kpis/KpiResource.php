@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Kpis;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Kpis\Pages;
 use App\Filament\Resources\Kpis\RelationManagers\KpiValuesRelationManager;
 use App\Models\Kpi;
@@ -20,7 +21,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
@@ -31,14 +31,14 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\Str;
 use UnitEnum;
 
-class KpiResource extends Resource
+class KpiResource extends BaseResource
 {
     protected static ?string $model = Kpi::class;
+
+    protected static bool $usesSoftDeletes = true;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar-square';
     protected static string|UnitEnum|null $navigationGroup = 'Upravljanje';
@@ -48,40 +48,14 @@ class KpiResource extends Resource
     protected static ?int $navigationSort = 30;
     protected static ?string $recordTitleAttribute = 'name';
 
-    public static function shouldRegisterNavigation(): bool
-{
-    $user = auth()->user();
-
-    return $user?->isSuperAdmin() || $user?->canAccessModule('kpis');
-}
-
-public static function canViewAny(): bool
-{
-    return static::shouldRegisterNavigation();
-}
-
-    private static function isAdminUser($user): bool
+    protected static function getModuleKey(): ?string
     {
-        if (! $user) {
-            return false;
-        }
+        return 'kpis';
+    }
 
-        if ((int) $user->id === 1) {
-            return true;
-        }
-
-        try {
-            if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
-                return true;
-            }
-        } catch (\Throwable $e) {
-        }
-
-        if (isset($user->is_admin) && (bool) $user->is_admin) {
-            return true;
-        }
-
-        return false;
+    public static function resolveOwnerId(): ?int
+    {
+        return static::ownerId() ?: static::defaultUserId();
     }
 
     public static function form(Schema $schema): Schema
@@ -203,7 +177,7 @@ public static function canViewAny(): bool
         ]);
     }
 
-    public static function infolist(\Filament\Schemas\Schema $schema): \Filament\Schemas\Schema
+    public static function infolist(Schema $schema): Schema
     {
         return $schema->components([]);
     }
@@ -230,10 +204,10 @@ public static function canViewAny(): bool
                     ->badge()
                     ->alignment(Alignment::Center),
 
-                TextColumn::make('target_value')
+                TextColumn::make('effective_target')
                     ->label('Cilj')
-                    ->formatStateUsing(fn ($state, Kpi $record) => $record->formatNumberOnly($state))
-                    ->sortable(),
+                    ->state(fn (Kpi $record) => $record->effectiveTargetValue(static::resolveOwnerId()))
+                    ->formatStateUsing(fn ($state, Kpi $record) => $record->formatNumberOnly($state)),
 
                 TextColumn::make('calculation_type')
                     ->label('Tip')
@@ -270,7 +244,7 @@ public static function canViewAny(): bool
                 TextColumn::make('current_status')
                     ->label('Status')
                     ->badge()
-                    ->state(fn (Kpi $record) => $record->current_status)
+                    ->state(fn (Kpi $record) => $record->evaluateStatus($record->latestValue()?->value, static::resolveOwnerId()))
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'success' => 'U cilju',
                         'warning' => 'Upozorenje',
@@ -330,22 +304,46 @@ public static function canViewAny(): bool
 
                     EditAction::make()
                         ->label('Uredi')
-                        ->visible(fn (Kpi $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(function (Kpi $record): bool {
+                            if (auth()->user()?->isSuperAdmin()) {
+                                return true;
+                            }
+
+                            return filled($record->user_id);
+                        }),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (Kpi $record) => ! (method_exists($record, 'trashed') && $record->trashed())),
+                        ->visible(function (Kpi $record): bool {
+                            if (auth()->user()?->isSuperAdmin()) {
+                                return true;
+                            }
+
+                            return filled($record->user_id);
+                        }),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (Kpi $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(function (Kpi $record): bool {
+                            if (auth()->user()?->isSuperAdmin()) {
+                                return $record->trashed();
+                            }
+
+                            return $record->trashed() && filled($record->user_id);
+                        }),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (Kpi $record) => method_exists($record, 'trashed') && $record->trashed()),
+                        ->visible(function (Kpi $record): bool {
+                            if (auth()->user()?->isSuperAdmin()) {
+                                return $record->trashed();
+                            }
+
+                            return $record->trashed() && filled($record->user_id);
+                        }),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -354,16 +352,17 @@ public static function canViewAny(): bool
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
-                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+                    ->visible(fn () => auth()->user()?->isSuperAdmin()),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
                     ->requiresConfirmation()
-                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+                    ->visible(fn () => auth()->user()?->isSuperAdmin()),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
-                    ->requiresConfirmation(),
+                    ->requiresConfirmation()
+                    ->visible(fn () => auth()->user()?->isSuperAdmin()),
             ]);
     }
 
@@ -389,51 +388,22 @@ public static function canViewAny(): bool
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
+        $query = parent::getEloquentQuery();
 
-        $user = auth()->user();
-
-        if (! $user) {
-            return $query->whereRaw('1=0');
-        }
-
-        if (self::isAdminUser($user)) {
+        if (static::isSuperAdmin()) {
             return $query;
         }
 
-        return $query->where(function (Builder $q) use ($user) {
-            $q->where('user_id', $user->id)
+        $ownerId = static::ownerId();
+
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $q) use ($ownerId) {
+            $q->where('user_id', $ownerId)
                 ->orWhereNull('user_id');
         });
-    }
-
-    public static function getNavigationBadge(): ?string
-    {
-        try {
-            if (! DbSchema::hasTable('kpis')) {
-                return null;
-            }
-
-            $user = auth()->user();
-
-            if (! $user) {
-                return '0';
-            }
-
-            $query = static::getModel()::query();
-
-            if (! self::isAdminUser($user)) {
-                $query->where(function (Builder $q) use ($user) {
-                    $q->where('user_id', $user->id)
-                        ->orWhereNull('user_id');
-                });
-            }
-
-            return (string) $query->count();
-        } catch (\Throwable $e) {
-            return null;
-        }
     }
 
     public static function getGlobalSearchEloquentQuery(): Builder
@@ -441,11 +411,23 @@ public static function canViewAny(): bool
         return static::getEloquentQuery();
     }
 
-    private static function isOnlyTrashed(HasTable $livewire): bool
+    public static function getNavigationBadge(): ?string
     {
-        $state = $livewire->getTableFilterState('status');
-        $value = data_get($state, 'value');
+        $query = static::getModel()::query();
 
-        return $value === 'trashed';
+        if (! static::isSuperAdmin()) {
+            $ownerId = static::ownerId();
+
+            if (! $ownerId) {
+                return '0';
+            }
+
+            $query->where(function (Builder $q) use ($ownerId) {
+                $q->where('user_id', $ownerId)
+                    ->orWhereNull('user_id');
+            });
+        }
+
+        return (string) $query->count();
     }
 }
