@@ -7,4 +7,13 @@ use Illuminate\Support\Facades\Schedule;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
 Schedule::command('kpi:generate')->dailyAt('01:10');
+
+Schedule::command('emails:send-daily-status')
+    ->weekdays()
+    ->at('06:30');
+
+Schedule::command('emails:send-weekly-status')
+    ->mondays()
+    ->at('07:00');
