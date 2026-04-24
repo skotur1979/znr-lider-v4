@@ -63,7 +63,7 @@ class ExpenseResource extends BaseResource
                     ->label('Godina')
                     ->sortable()
                     ->searchable(),
-
+static::userTableColumn(),
                 TextColumn::make('category.name')
                     ->label('Kategorija')
                     ->sortable()

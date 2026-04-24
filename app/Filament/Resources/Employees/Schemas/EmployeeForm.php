@@ -158,18 +158,22 @@ class EmployeeForm
                                 ->columnSpanFull()
                                 ->schema([
                                     Repeater::make('certificates')
-                                        ->label('Popis edukacija / ovlaštenja')
-                                        ->relationship()
-                                        ->createItemButtonLabel('Dodaj novi zapis')
-                                        ->columns(3)
-                                        ->collapsible()
-                                        ->itemLabel(fn ($state) => $state['title'] ?? 'Nova stavka')
-                                        ->schema([
-                                            TextInput::make('title')->label('Naziv')->required(),
+    ->label('Popis edukacija / ovlaštenja')
+    ->relationship()
+    ->createItemButtonLabel('Dodaj novi zapis')
+    ->defaultItems(0)
+    ->minItems(0)
+    ->columns(3)
+    ->collapsible()
+    ->itemLabel(fn ($state) => filled($state['title'] ?? null) ? $state['title'] : 'Nova stavka')
+    ->schema([
+        TextInput::make('title')
+            ->label('Naziv')
+            ->maxLength(191),
 
-                                            $date('valid_from', 'Vrijedi od', true),
-                                            $date('valid_until', 'Vrijedi do'),
-                                        ]),
+        $date('valid_from', 'Vrijedi od'),
+        $date('valid_until', 'Vrijedi do'),
+    ]),
                                 ]),
                         ]),
 

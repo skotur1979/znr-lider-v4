@@ -161,7 +161,7 @@ class WasteOrganizationResource extends BaseResource
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
-
+static::userTableColumn(),
                 TextColumn::make('oib')
                     ->label('OIB')
                     ->searchable()

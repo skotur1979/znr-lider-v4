@@ -66,18 +66,18 @@ class WasteTrackingFormResource extends BaseResource
     {
         return $schema->components([
             Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => static::isSuperAdmin())
-                ->dehydrated(fn () => static::isSuperAdmin()),
+    ->label('Korisnik')
+    ->relationship('user', 'name')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+    ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
 
-            Hidden::make('user_id')
-                ->default(fn () => static::defaultUserId())
-                ->visible(fn () => ! static::isSuperAdmin())
-                ->dehydrated(fn () => ! static::isSuperAdmin()),
+           Hidden::make('user_id')
+    ->default(fn () => static::defaultUserId())
+    ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+    ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
 
             FormSection::make('POŠILJKA OTPADA (A)')
                 ->schema([
@@ -525,7 +525,7 @@ class WasteTrackingFormResource extends BaseResource
                     ->sortable()
                     ->weight('bold')
                     ->toggleable(),
-
+static::userTableColumn(),
                 TextColumn::make('handover_date')
                     ->label('Datum')
                     ->date('d.m.Y.')

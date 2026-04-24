@@ -57,9 +57,7 @@ class CategoryResource extends BaseResource
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('user.name')
-                    ->label('Vlasnik')
-                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+                static::userTableColumn(),
             ])
             ->paginated([10, 25, 50, 'all'])
             ->actions([

@@ -188,7 +188,7 @@ class WasteTypeResource extends BaseResource
                     ->searchable()
                     ->sortable()
                     ->wrap(),
-
+static::userTableColumn(),
                 IconColumn::make('is_hazardous')
                     ->label('Opasan')
                     ->boolean()

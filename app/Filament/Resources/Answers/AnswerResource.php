@@ -50,7 +50,7 @@ class AnswerResource extends BaseResource
                     ->limit(60)
                     ->searchable()
                     ->sortable(),
-
+static::userTableColumn(),
                 TextColumn::make('tekst')
                     ->label('Odgovor')
                     ->wrap()

@@ -32,6 +32,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Filament\Forms\Components\Select;
 
 class FireResource extends BaseResource
 {
@@ -56,9 +57,20 @@ class FireResource extends BaseResource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Hidden::make('user_id')
-                ->default(fn () => static::defaultUserId())
-                ->dehydrated(),
+            Select::make('user_id')
+    ->label('Korisnik')
+    ->relationship('user', 'name')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->visible(fn () => static::isSuperAdmin())
+    ->dehydrated(fn () => static::isSuperAdmin())
+    ->hiddenOn('view'),
+
+Hidden::make('user_id')
+    ->default(fn () => static::defaultUserId())
+    ->visible(fn () => ! static::isSuperAdmin())
+    ->dehydrated(fn () => ! static::isSuperAdmin()),
 
             Section::make('Podatci o vatrogasnom aparatu')
                 ->schema([
@@ -211,7 +223,7 @@ class FireResource extends BaseResource
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
-
+static::userTableColumn(),
                 TextColumn::make('type')
                     ->label('Tip aparata')
                     ->alignment(Alignment::Center)

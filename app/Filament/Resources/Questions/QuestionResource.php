@@ -48,7 +48,7 @@ class QuestionResource extends BaseResource
                     ->label('Test')
                     ->sortable()
                     ->searchable(),
-
+static::userTableColumn(),
                 TextColumn::make('tekst')
                     ->label('Pitanje')
                     ->limit(80)

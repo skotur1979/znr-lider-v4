@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WorkPermit extends Model
 {
@@ -168,5 +169,9 @@ class WorkPermit extends Model
             'face_shield' => 'Zaštitni vizir',
             'fall_protection_belt' => 'Pojas za rad na visini',
         ];
+    }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

@@ -48,18 +48,18 @@ class RiskAssessmentResource extends BaseResource
     {
         return $schema->schema([
             Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => Auth::user()?->isSuperAdmin())
-                ->dehydrated(fn () => Auth::user()?->isSuperAdmin()),
+            ->label('Korisnik')
+            ->relationship('user', 'name')
+            ->searchable()
+            ->preload()
+            ->required()
+            ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+            ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
 
-            Hidden::make('user_id')
-                ->default(fn () => Auth::user()?->ownerId())
-                ->visible(fn () => ! Auth::user()?->isSuperAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isSuperAdmin()),
+        Hidden::make('user_id')
+            ->default(fn () => static::ownerId())
+            ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+            ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
 
             Section::make('Podaci o procjeni rizika')
                 ->columns(3)
@@ -183,7 +183,7 @@ class RiskAssessmentResource extends BaseResource
                     ->sortable()
                     ->weight('bold')
                     ->wrap(),
-
+static::userTableColumn(),
                 TextColumn::make('broj_procjene')
                     ->label('Broj procjene')
                     ->alignment(Alignment::Center)

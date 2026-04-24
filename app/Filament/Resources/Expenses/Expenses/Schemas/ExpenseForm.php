@@ -18,13 +18,14 @@ class ExpenseForm
         return [
             // ✅ Jedan user_id (admin bira, ostali hidden)
             Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => Auth::user()?->isAdmin())
-                ->dehydrated(fn () => Auth::user()?->isAdmin()),
+    ->label('Korisnik')
+    ->relationship('user', 'name')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->visible(fn () => static::isSuperAdmin())
+    ->dehydrated(fn () => static::isSuperAdmin())
+    ->hiddenOn(['edit', 'view']),
 
             Hidden::make('user_id')
                 ->default(fn () => Auth::id())

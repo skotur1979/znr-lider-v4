@@ -192,7 +192,7 @@ class KpiResource extends BaseResource
                     ->sortable()
                     ->weight('bold')
                     ->wrap(),
-
+static::userTableColumn(),
                 TextColumn::make('category')
                     ->label('Kategorija')
                     ->badge()

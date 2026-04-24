@@ -60,7 +60,7 @@ class ChemicalResource extends BaseResource
                     ->sortable()
                     ->wrap()
                     ->tooltip(fn (Chemical $record) => (string) $record->product_name),
-
+static::userTableColumn(),
                 TextColumn::make('cas_number')
                     ->label('CAS')
                     ->searchable()

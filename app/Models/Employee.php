@@ -3,9 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Employee extends Model
 {
@@ -67,17 +67,25 @@ class Employee extends Model
         'pdf' => 'array',
     ];
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function certificates(): HasMany
-{
-    return $this->hasMany(\App\Models\EmployeeCertificate::class, 'employee_id');
-}
-public function getOibAttribute(): ?string
-{
-    return $this->attributes['OIB'] ?? null;
-}
-public function nightWorkReferrals()
-{
-    return $this->hasMany(\App\Models\NightWorkReferral::class);
-}
+    {
+        return $this->hasMany(EmployeeCertificate::class, 'employee_id');
+    }
+
+    public function nightWorkReferrals(): HasMany
+    {
+        return $this->hasMany(NightWorkReferral::class);
+    }
+
+    public function getOibAttribute(): ?string
+    {
+        return $this->attributes['OIB'] ?? null;
+    }
+    
 }
 

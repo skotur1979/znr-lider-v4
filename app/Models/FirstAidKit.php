@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FirstAidKit extends Model
 {
@@ -22,4 +23,9 @@ class FirstAidKit extends Model
     {
         return $this->hasMany(FirstAidItem::class);
     }
-}
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+    }
+    

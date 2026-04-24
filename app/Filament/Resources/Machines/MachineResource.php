@@ -58,14 +58,15 @@ class MachineResource extends BaseResource
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => static::isSuperAdmin())
-                ->dehydrated(fn () => static::isSuperAdmin()),
+           Select::make('user_id')
+    ->label('Korisnik')
+    ->relationship('user', 'name')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->visible(fn () => static::isSuperAdmin())
+    ->dehydrated(fn () => static::isSuperAdmin())
+    ->hiddenOn('view'),
 
             Hidden::make('user_id')
                 ->default(fn () => static::defaultUserId())
@@ -212,18 +213,20 @@ class MachineResource extends BaseResource
     {
         return $table
             ->columns([
-                TextColumn::make('name')
-                    ->label('Naziv')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->wrap(),
+    TextColumn::make('name')
+        ->label('Naziv')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->wrap(),
 
-                TextColumn::make('manufacturer')
-                    ->label('Proizvođač')
-                    ->searchable()
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    static::userTableColumn(),
+
+    TextColumn::make('manufacturer')
+        ->label('Proizvođač')
+        ->searchable()
+        ->sortable()
+        ->alignment(Alignment::Center),
 
                 TextColumn::make('factory_number')
                     ->label('Tvor.broj')

@@ -73,7 +73,7 @@ class TestAttemptResource extends BaseResource
                 TextColumn::make('user.name')
                     ->label('Korisnik')
                     ->searchable(),
-
+static::userTableColumn(),
                 TextColumn::make('test.naziv')
                     ->label('Naziv testa')
                     ->searchable(),

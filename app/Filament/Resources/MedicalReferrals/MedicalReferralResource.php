@@ -483,7 +483,7 @@ class MedicalReferralResource extends BaseResource
                     ->sortable()
                     ->weight('bold')
                     ->wrap(),
-
+static::userTableColumn(),
                 TextColumn::make('referral_number')
                     ->label('Broj uputnice')
                     ->sortable()

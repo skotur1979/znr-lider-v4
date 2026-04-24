@@ -71,9 +71,19 @@ class OntoRecordResource extends BaseResource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Select::make('user_id')
+    ->label('Korisnik')
+    ->relationship('user', 'name')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+    ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
+
             Hidden::make('user_id')
-                ->default(fn () => static::ownerId())
-                ->dehydrated(),
+    ->default(fn () => static::ownerId())
+    ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+    ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
 
             FormSection::make('Podaci o ONTO obrascu')
                 ->schema([
@@ -172,7 +182,7 @@ class OntoRecordResource extends BaseResource
                     ->searchable()
                     ->sortable()
                     ->toggleable(),
-
+static::userTableColumn(),
                 TextColumn::make('organizationLocation.name')
                     ->label('Lokacija')
                     ->formatStateUsing(fn ($state, OntoRecord $record) => $record->organizationLocation?->display_name

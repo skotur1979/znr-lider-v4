@@ -102,7 +102,7 @@ class FirstAidKitResource extends BaseResource
                     ->label('Lokacija ormarića')
                     ->sortable()
                     ->searchable(),
-
+static::userTableColumn(),
                 TextColumn::make('inspected_at')
                     ->label('Pregled obavljen')
                     ->date('d.m.Y.')

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Chemical extends Model
 {
@@ -32,4 +33,8 @@ class Chemical extends Model
         'attachments'       => 'array',
         'stl_hzjz'          => 'date',
     ];
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 }

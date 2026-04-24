@@ -37,16 +37,6 @@ class Inspection extends Model
     protected static function booted(): void
     {
         static::creating(function (Inspection $inspection) {
-            if (blank($inspection->number)) {
-                $year = now()->format('Y');
-
-                $countThisYear = static::query()
-                    ->whereYear('created_at', now()->year)
-                    ->count() + 1;
-
-                $inspection->number = 'N-' . str_pad((string) $countThisYear, 2, '0', STR_PAD_LEFT) . '/' . $year;
-            }
-
             if (blank($inspection->performed_by) && auth()->check()) {
                 $inspection->performed_by = auth()->user()->name ?? null;
             }

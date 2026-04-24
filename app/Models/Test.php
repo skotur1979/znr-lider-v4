@@ -34,4 +34,5 @@ class Test extends Model
     {
         return $this->hasMany(TestAttempt::class);
     }
+    
 }

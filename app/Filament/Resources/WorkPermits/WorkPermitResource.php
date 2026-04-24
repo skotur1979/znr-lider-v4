@@ -311,7 +311,7 @@ class WorkPermitResource extends BaseResource
                     ->sortable()
                     ->weight('bold')
                     ->alignment(Alignment::Center),
-
+static::userTableColumn(),
                 TextColumn::make('issue_date')
                     ->label('Datum')
                     ->date('d.m.Y.')

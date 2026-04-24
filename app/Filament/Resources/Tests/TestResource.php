@@ -45,7 +45,7 @@ class TestResource extends BaseResource
                     ->label('Naziv')
                     ->searchable()
                     ->sortable(),
-
+static::userTableColumn(),
                 TextColumn::make('sifra')
                     ->label('Šifra')
                     ->searchable()

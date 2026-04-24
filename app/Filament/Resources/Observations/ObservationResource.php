@@ -122,14 +122,18 @@ class ObservationResource extends BaseResource
     }
 
     protected static function responsiblePersonOptions(): array
-    {
-        return static::getScopedQuery(Employee::query())
-            ->orderBy('name')
-            ->pluck('name')
-            ->unique()
-            ->values()
-            ->toArray();
-    }
+{
+    return Employee::query()
+        ->when(
+            ! auth()->user()?->isSuperAdmin(),
+            fn ($query) => $query->where('user_id', auth()->user()?->ownerId())
+        )
+        ->orderBy('name')
+        ->pluck('name')
+        ->unique()
+        ->values()
+        ->all();
+}
 
     public static function form(Schema $schema): Schema
     {
@@ -221,7 +225,7 @@ class ObservationResource extends BaseResource
                     ->sortable()
                     ->alignment(Alignment::Center)
                     ->wrap(),
-
+static::userTableColumn(),
                 TextColumn::make('observation_type')
                     ->label('Vrsta zapažanja')
                     ->alignment(Alignment::Center)

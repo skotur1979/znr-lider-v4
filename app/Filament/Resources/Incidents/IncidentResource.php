@@ -236,6 +236,8 @@ class IncidentResource extends BaseResource
                     ->sortable()
                     ->weight('bold')
                     ->wrap(),
+                    
+                    static::userTableColumn(),
 
                 TextColumn::make('type_of_incident')
                     ->label('Vrsta incidenta')
@@ -310,18 +312,20 @@ class IncidentResource extends BaseResource
                     ->options(static::incidentTypes()),
 
                 SelectFilter::make('godina_filter')
-                    ->label('Godina nastanka')
-                    ->options(fn () => static::getYearOptions())
-                    ->placeholder('Sve')
-                    ->query(function (Builder $query, array $data) {
-                        $value = $data['value'] ?? null;
+    ->label('Godina nastanka')
+    ->options(fn () => static::getYearOptions())
+    ->default((string) now()->year)
+    ->selectablePlaceholder(true)
+    ->placeholder('Sve')
+    ->query(function (Builder $query, array $data) {
+        $value = $data['value'] ?? null;
 
-                        if ($value) {
-                            $query->whereYear('date_occurred', $value);
-                        }
+        if (filled($value)) {
+            $query->whereYear('date_occurred', $value);
+        }
 
-                        return $query;
-                    }),
+        return $query;
+    }),
             ])
             ->paginated([10, 25, 50, 'all'])
             ->actions([
@@ -388,15 +392,23 @@ class IncidentResource extends BaseResource
     }
 
     protected static function getYearOptions(): array
-    {
-        return static::getEloquentQuery()
-            ->selectRaw('YEAR(date_occurred) as year')
-            ->whereNotNull('date_occurred')
-            ->distinct()
-            ->orderByDesc('year')
-            ->pluck('year', 'year')
-            ->toArray();
-    }
+{
+    $years = static::getEloquentQuery()
+        ->selectRaw('YEAR(date_occurred) as year')
+        ->whereNotNull('date_occurred')
+        ->distinct()
+        ->orderByDesc('year')
+        ->pluck('year', 'year')
+        ->toArray();
+
+    $currentYear = (string) now()->year;
+
+    $years[$currentYear] = $currentYear;
+
+    krsort($years);
+
+    return $years;
+}
 
     public static function getPages(): array
     {

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Kpi extends Model
 {
@@ -219,5 +220,9 @@ class Kpi extends Model
     public function getCurrentStatusAttribute(): string
     {
         return $this->evaluateStatus($this->latestValue()?->value);
+    }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

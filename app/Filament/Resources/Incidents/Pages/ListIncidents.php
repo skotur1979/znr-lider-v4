@@ -7,23 +7,23 @@ use App\Filament\Resources\Incidents\IncidentResource;
 use App\Filament\Resources\Incidents\Widgets\IncidentsOverview;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
+use Filament\Pages\Concerns\ExposesTableToWidgets;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ListIncidents extends ListRecords
 {
+    use ExposesTableToWidgets;
+
     protected static string $resource = IncidentResource::class;
 
-    /**
-     * ✅ Stats kartice gore (widget koji već imaš: IncidentsOverview.php)
-     */
     protected function getHeaderWidgets(): array
-{
-    return [
-        \App\Filament\Resources\Incidents\Widgets\IncidentsOverview::class,
-    ];
-}
+    {
+        return [
+            IncidentsOverview::class,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {
@@ -36,10 +36,8 @@ class ListIncidents extends ListRecords
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('warning')
                 ->action(function () {
-                    // ✅ isti query kao tablica (user scope + soft delete scope uklonjen u resource)
                     $query = IncidentResource::getEloquentQuery();
 
-                    // ✅ primijeni filtere iz tablice (status / vrsta / godina)
                     $query = $this->applyTableFiltersToQuery($query);
 
                     $incidents = $query
@@ -60,7 +58,6 @@ class ListIncidents extends ListRecords
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->action(function () {
-                    // ✅ proslijedi trenutno stanje filtera u export
                     $filters = $this->getTableFiltersForm()->getState();
 
                     return Excel::download(
@@ -71,34 +68,46 @@ class ListIncidents extends ListRecords
         ];
     }
 
-    /**
-     * ✅ Primijeni filtere iz tablice na query (za export)
-     * Napomena: moraš imati filtere u IncidentResource::table():
-     * - status (active/trashed/all)
-     * - type_of_incident
-     * - godina_filter
-     */
+    public function getSelectedYearRaw(): ?string
+{
+    $year =
+        data_get($this->tableFilters, 'godina_filter.value')
+        ?? data_get(request()->query(), 'filters.godina_filter.value')
+        ?? data_get(request()->query(), 'tableFilters.godina_filter.value');
+
+    if (blank($year) || $year === 'all' || $year === 'SVE') {
+        return null;
+    }
+
+    return (string) $year;
+}
+
+public function getSelectedYearLabel(): string
+{
+    return $this->getSelectedYearRaw() ?? 'SVE';
+}
+
     private function applyTableFiltersToQuery(Builder $query): Builder
     {
         $filters = $this->getTableFiltersForm()->getState();
 
-        // status filter (kao Machines)
         $status = data_get($filters, 'status.value');
+
         $query = match ($status) {
             'trashed' => $query->onlyTrashed(),
-            'all'     => $query->withTrashed(),
-            default   => $query->withoutTrashed(),
+            'all' => $query->withTrashed(),
+            default => $query->withoutTrashed(),
         };
 
-        // vrsta incidenta
         $type = data_get($filters, 'type_of_incident.value');
-        if ($type) {
+
+        if (filled($type)) {
             $query->where('type_of_incident', $type);
         }
 
-        // godina
         $year = data_get($filters, 'godina_filter.value');
-        if ($year) {
+
+        if (filled($year)) {
             $query->whereYear('date_occurred', $year);
         }
 

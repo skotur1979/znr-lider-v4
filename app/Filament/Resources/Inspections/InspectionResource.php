@@ -56,8 +56,9 @@ class InspectionResource extends BaseResource
                 ->schema([
                     TextInput::make('number')
                         ->label('Broj nadzora')
-                        ->disabled()
-                        ->dehydrated(false),
+                        ->required()
+                        ->maxLength(50)
+                        ->unique(ignoreRecord: true),
 
                     TextInput::make('title')
                         ->label('Naziv nadzora')
@@ -97,7 +98,7 @@ class InspectionResource extends BaseResource
                 TextColumn::make('number')
                     ->label('Broj')
                     ->weight('bold'),
-
+static::userTableColumn(),
                 TextColumn::make('inspection_type')
                     ->label('Tip')
                     ->badge()

@@ -23,11 +23,13 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ForceDeleteBulkAction;
 
 use Filament\Tables\Contracts\HasTable;
+use App\Filament\Resources\Concerns\HasUserTableColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class EmployeesTable
 {
+    use HasUserTableColumn;
     public static function configure(Table $table): Table
     {
         return $table
@@ -37,6 +39,11 @@ class EmployeesTable
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
+                    
+TextColumn::make('user.name')
+    ->label('Korisnik')
+    ->badge()
+    ->visible(fn () => auth()->user()?->isSuperAdmin()),
 
                 TextColumn::make('workplace')
                     ->label('Radno mjesto')

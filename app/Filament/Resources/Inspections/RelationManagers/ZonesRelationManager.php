@@ -47,6 +47,8 @@ class ZonesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+        ->emptyStateHeading('Nema 5S zona')
+        ->emptyStateDescription('Stvori 5S zonu kako bi započeo.')
             ->columns([
                 TextColumn::make('name')
                     ->label('Zona')

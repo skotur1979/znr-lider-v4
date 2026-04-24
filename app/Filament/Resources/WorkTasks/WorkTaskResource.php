@@ -86,7 +86,7 @@ class WorkTaskResource extends BaseResource
                     ->searchable()
                     ->wrap()
                     ->weight('bold'),
-
+static::userTableColumn(),
                 TextColumn::make('description')
                     ->label('Opis')
                     ->limit(80)

@@ -23,6 +23,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
+
 
 class DocumentationItemResource extends BaseResource
 {
@@ -42,69 +49,92 @@ class DocumentationItemResource extends BaseResource
     }
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->schema([
-            Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => Auth::user()?->isSuperAdmin())
-                ->dehydrated(fn () => Auth::user()?->isSuperAdmin()),
+{
+    return $schema->schema([
+        Select::make('user_id')
+            ->label('Korisnik')
+            ->relationship('user', 'name')
+            ->searchable()
+            ->preload()
+            ->required()
+            ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+            ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
 
-            Hidden::make('user_id')
-                ->default(fn () => Auth::user()?->ownerId())
-                ->visible(fn () => ! Auth::user()?->isSuperAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isSuperAdmin()),
+        Hidden::make('user_id')
+            ->default(fn () => static::ownerId())
+            ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+            ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
 
-            Section::make('Dokument')
-                ->columns(2)
-                ->schema([
-                    TextInput::make('naziv')
-                        ->label('Naziv dokumenta')
-                        ->required()
-                        ->maxLength(255),
+        Section::make('Dokument')
+    ->columnSpanFull()
+    ->columns(1)
+    ->schema([
+        TextInput::make('naziv')
+            ->label('Naziv dokumenta')
+            ->required()
+            ->maxLength(255)
+            ->columnSpanFull(),
 
-                    TextInput::make('tvrtka')
-                        ->label('Tvrtka')
-                        ->maxLength(255),
+        TextInput::make('tvrtka')
+            ->label('Tvrtka')
+            ->maxLength(255)
+            ->columnSpanFull(),
 
-                    DatePicker::make('datum_izrade')
-                        ->label('Datum izrade')
-                        ->displayFormat('d.m.Y.')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb'),
+        DatePicker::make('datum_izrade')
+            ->label('Datum izrade')
+            ->displayFormat('d.m.Y.')
+            ->weekStartsOnMonday()
+            ->timezone('Europe/Zagreb')
+            ->columnSpanFull(),
 
-                    TextInput::make('status_napomena')
-                        ->label('Status / napomena')
-                        ->maxLength(255),
-                ]),
+        TextInput::make('status_napomena')
+            ->label('Status / napomena')
+            ->maxLength(255)
+            ->columnSpanFull(),
+    ])
+    ->extraAttributes([
+        'style' => 'max-width: 720px;' // 👈 ovo ga fino centrira i suzi
+    ]),
 
-            FileUpload::make('prilozi')
-                ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
-                ->disk('public')
-                ->directory('pdfs')
-                ->multiple()
-                ->maxFiles(5)
-                ->maxSize(30720)
-                ->preserveFilenames()
-                ->openable()
-                ->downloadable()
-                ->acceptedFileTypes([
-                    'application/pdf',
-                    'application/msword',
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    'application/vnd.ms-excel',
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    'image/jpeg',
-                    'image/png',
-                    'image/gif',
-                    'image/webp',
-                    'application/zip',
-                    'application/x-rar-compressed',
-                ]),
+        Hidden::make('prilozi')
+            ->dehydrated(true),
+
+        Section::make('Prilozi')
+    ->columnSpanFull()
+    ->columns(1)
+    ->extraAttributes([
+        'style' => 'max-width: 720px; margin-top: 16px;',
+    ])
+            ->description('Dodaj nove dokumente ili upravljaj postojećim prilozima.')
+            ->schema([
+                FileUpload::make('prilozi')
+    ->label('Dodaj priloge (max. 5 kom do 30 MB po datoteci)')
+    ->disk('public')
+    ->directory('pdfs')
+    ->multiple()
+    ->maxFiles(5)
+    ->maxSize(30720)
+    ->preserveFilenames()
+    ->openable()
+    ->downloadable()
+    ->deletable()
+    ->acceptedFileTypes([
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'application/zip',
+        'application/x-rar-compressed',
+    ])
+    ->columnSpanFull(),
+            ]),
         ]);
+
     }
 
     public static function table(Table $table): Table
@@ -118,7 +148,7 @@ class DocumentationItemResource extends BaseResource
                     ->sortable()
                     ->weight('bold')
                     ->wrap(),
-
+static::userTableColumn(),
                 TextColumn::make('tvrtka')
                     ->label('Tvrtka')
                     ->searchable()
@@ -176,8 +206,99 @@ class DocumentationItemResource extends BaseResource
                     ->modalSubmitActionLabel('Obriši')
                     ->modalCancelActionLabel('Odustani'),
             ]);
+            
     }
+public static function infolist(Schema $schema): Schema
+{
+    return $schema->components([
+        Tabs::make('Dokumentacija')
+            ->tabs([
+                Tab::make('Osnovno')
+                    ->schema([
+                        Grid::make(2)
+                            ->schema([
+                                Section::make('Podaci o dokumentu')
+                                    ->columns(2)
+                                    ->schema([
+                                        TextEntry::make('naziv')
+                                            ->label('Naziv dokumenta')
+                                            ->weight('bold')
+                                            ->columnSpanFull(),
 
+                                        TextEntry::make('tvrtka')
+                                            ->label('Tvrtka')
+                                            ->placeholder('—'),
+
+                                        TextEntry::make('datum_izrade')
+                                            ->label('Datum izrade')
+                                            ->date('d.m.Y.')
+                                            ->placeholder('—'),
+
+                                        TextEntry::make('status_napomena')
+                                            ->label('Status / napomena')
+                                            ->badge()
+                                            ->color('warning')
+                                            ->placeholder('—')
+                                            ->columnSpanFull(),
+                                    ]),
+
+                                Section::make('Sažetak')
+                                    ->columns(2)
+                                    ->schema([
+                                        TextEntry::make('broj_priloga')
+                                            ->label('Broj priloga')
+                                            ->state(fn ($record) => is_array($record->prilozi) ? count($record->prilozi) : 0)
+                                            ->badge()
+                                            ->color('info'),
+
+                                        TextEntry::make('status_prikaza')
+                                            ->label('Status')
+                                            ->state('Aktivno')
+                                            ->badge()
+                                            ->color('success'),
+                                    ]),
+                            ]),
+                    ]),
+
+                Tab::make('Prilozi')
+                    ->schema([
+                        Section::make('Prilozi dokumenta')
+                            ->schema([
+                                TextEntry::make('prilozi')
+                                    ->label('')
+                                    ->html()
+                                    ->state(function ($record) {
+                                        if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
+                                            return new HtmlString('<span style="color: #9ca3af;">Nema dodanih priloga.</span>');
+                                        }
+
+                                        $items = collect($record->prilozi)
+                                            ->map(function ($file) {
+                                                $url = asset('storage/' . ltrim($file, '/'));
+                                                $name = e(basename($file));
+
+                                                return '<a href="' . $url . '" target="_blank" style="
+                                                    display: inline-flex;
+                                                    align-items: center;
+                                                    padding: 8px 12px;
+                                                    margin: 4px 6px 4px 0;
+                                                    border-radius: 10px;
+                                                    background: rgba(245, 158, 11, 0.12);
+                                                    color: #f59e0b;
+                                                    font-weight: 700;
+                                                    text-decoration: none;
+                                                ">📎 ' . $name . '</a>';
+                                            })
+                                            ->implode('');
+
+                                        return new HtmlString($items);
+                                    }),
+                            ]),
+                    ]),
+            ])
+            ->columnSpanFull(),
+    ]);
+}
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();

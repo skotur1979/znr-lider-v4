@@ -41,14 +41,15 @@ class BudgetResource extends BaseResource
     {
         return $schema->schema([
             Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => Auth::user()?->isSuperAdmin())
-                ->dehydrated(fn () => Auth::user()?->isSuperAdmin()),
-
+    ->label('Korisnik')
+    ->relationship('user', 'name')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->visible(fn () => static::isSuperAdmin())
+    ->dehydrated(fn () => static::isSuperAdmin())
+    ->hiddenOn(['edit', 'view']),
+    
             Hidden::make('user_id')
                 ->default(fn () => Auth::user()?->ownerId())
                 ->visible(fn () => ! Auth::user()?->isSuperAdmin())
@@ -78,7 +79,7 @@ class BudgetResource extends BaseResource
                 TextColumn::make('godina')
                     ->label('Godina')
                     ->sortable(),
-
+static::userTableColumn(),
                 TextColumn::make('ukupni_budget')
                     ->label('Ukupni budžet (€)')
                     ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.') . ' €')

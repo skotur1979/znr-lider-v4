@@ -6,9 +6,11 @@ use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
+use App\Filament\Resources\Concerns\HasUserTableColumn;
 
 abstract class BaseResource extends Resource
 {
+    use HasUserTableColumn;
     /**
      * Uključi na true ako resource koristi SoftDeletes
      */

@@ -314,6 +314,8 @@ class FindingsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('description')
+            ->emptyStateHeading('Nema nalaza nadzora')
+            ->emptyStateDescription('Stvori nalaz nadzora kako bi započeo.')
             ->columns([
                 TextColumn::make('category')
                     ->label('Područje')

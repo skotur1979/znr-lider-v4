@@ -32,6 +32,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Filament\Forms\Components\Hidden;
 
 class MiscellaneousResource extends BaseResource
 {
@@ -52,6 +53,21 @@ class MiscellaneousResource extends BaseResource
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
+            Select::make('user_id')
+    ->label('Korisnik')
+    ->relationship('user', 'name')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->visible(fn () => static::isSuperAdmin())
+    ->dehydrated(fn () => static::isSuperAdmin())
+    ->hiddenOn('view'),
+
+Hidden::make('user_id')
+    ->default(fn () => static::defaultUserId())
+    ->visible(fn () => ! static::isSuperAdmin())
+    ->dehydrated(fn () => ! static::isSuperAdmin()),
+    
             Section::make('Podatci o predmetu')
                 ->schema([
                     TextInput::make('name')
@@ -170,7 +186,7 @@ class MiscellaneousResource extends BaseResource
                     ->sortable()
                     ->weight('bold')
                     ->wrap(),
-
+static::userTableColumn(),
                 TextColumn::make('category.name')
                     ->label('Kategorija')
                     ->sortable()

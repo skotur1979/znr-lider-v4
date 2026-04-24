@@ -180,7 +180,7 @@ class PPELogResource extends BaseResource
                     ->extraAttributes([
                         'style' => 'vertical-align: top;',
                     ]),
-
+static::userTableColumn(),
                 TextColumn::make('user_oib')
                     ->label('OIB')
                     ->alignCenter()
