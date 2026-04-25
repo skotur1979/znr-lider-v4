@@ -119,23 +119,58 @@ static::userTableColumn(),
                     ->alignCenter(),
 
                 TextColumn::make('attachments')
-                    ->label('Prilozi')
-                    ->alignCenter()
-                    ->badge()
-                    ->icon(fn (Chemical $record) => is_array($record->attachments) && count($record->attachments) > 0 ? 'heroicon-o-paper-clip' : null)
-                    ->color(fn (Chemical $record) => is_array($record->attachments) && count($record->attachments) > 0 ? 'info' : 'gray')
-                    ->formatStateUsing(fn ($state, Chemical $record) => is_array($record->attachments) ? (string) count($record->attachments) : '0')
-                    ->tooltip(function (Chemical $record) {
-                        $files = $record->attachments;
+    ->label('Prilozi')
+    ->alignment(\Filament\Support\Enums\Alignment::Center)
+    ->html()
+    ->state(function (Chemical $record): string {
+        if (! is_array($record->attachments) || count($record->attachments) === 0) {
+            return '<span style="color:#6b7280;">0</span>';
+        }
 
-                        if (! is_array($files) || empty($files)) {
-                            return 'Nema priloga';
-                        }
+        return collect($record->attachments)
+            ->map(function ($file, $index) {
+                $url = route('file.preview', [
+                    'file' => ltrim($file, '/'),
+                ]);
 
-                        return collect($files)
-                            ->map(fn ($path) => is_string($path) ? basename($path) : (string) $path)
-                            ->implode("\n");
-                    }),
+                $name = e(basename($file));
+                $number = $index + 1;
+
+                return '<a href="' . e($url) . '"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="' . $name . '"
+                    onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                    style="
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        min-width:28px;
+                        height:24px;
+                        padding:0 8px;
+                        margin:1px 2px;
+                        border-radius:7px;
+                        background:rgba(59,130,246,.15);
+                        border:1px solid rgba(59,130,246,.35);
+                        color:#93c5fd;
+                        font-size:12px;
+                        font-weight:700;
+                        text-decoration:none;
+                        cursor:pointer;
+                    "
+                >📎 ' . $number . '</a>';
+            })
+            ->implode('');
+    })
+    ->tooltip(function (Chemical $record): string {
+        if (! is_array($record->attachments) || count($record->attachments) === 0) {
+            return 'Nema priloga';
+        }
+
+        return collect($record->attachments)
+            ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+            ->implode("\n");
+    }),
             ])
             ->filters([
                 SelectFilter::make('status')

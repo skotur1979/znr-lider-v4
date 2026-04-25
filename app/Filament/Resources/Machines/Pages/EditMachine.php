@@ -49,6 +49,17 @@ class EditMachine extends EditRecord
         ];
     }
 
+    protected function getFormActions(): array
+    {
+        return [
+            $this->getSaveFormAction()
+                ->label('Spremi promjene'),
+
+            $this->getCancelFormAction()
+                ->label('Odustani'),
+        ];
+    }
+
     public function runOcrPreview(): void
     {
         $ocrData = $this->runOcrAndGetData();
@@ -64,27 +75,24 @@ class EditMachine extends EditRecord
             $newValue = $ocrData[$field] ?? null;
 
             $oldString = $this->stringifyValue($oldValue);
-$newString = $this->stringifyValue($newValue);
+            $newString = $this->stringifyValue($newValue);
 
-$isSame = $this->valuesAreEqual($oldValue, $newValue);
-$hasNew = filled($newString);
-$hasOld = filled($oldString);
+            $isSame = $this->valuesAreEqual($oldValue, $newValue);
+            $hasNew = filled($newString);
+            $hasOld = filled($oldString);
 
-// Prikaži samo stvarno različita polja:
-// - mora postojati nova OCR vrijednost
-// - i mora biti različita od postojeće
-if (! $hasNew || $isSame) {
-    continue;
-}
+            if (! $hasNew || $isSame) {
+                continue;
+            }
 
-$this->ocrDiffs[$field] = [
-    'label' => $label,
-    'old' => $oldString,
-    'new' => $newString,
-    'replace' => true,
-    'same' => false,
-    'type' => $hasOld ? 'changed' : 'new',
-];
+            $this->ocrDiffs[$field] = [
+                'label' => $label,
+                'old' => $oldString,
+                'new' => $newString,
+                'replace' => true,
+                'same' => false,
+                'type' => $hasOld ? 'changed' : 'new',
+            ];
         }
 
         $this->showOcrDiffs = true;
@@ -125,12 +133,7 @@ $this->ocrDiffs[$field] = [
             $newValue = $diff['new'] ?? null;
             $replace = (bool) ($diff['replace'] ?? false);
 
-            if (blank($newValue)) {
-                $skipped++;
-                continue;
-            }
-
-            if (! $replace) {
+            if (blank($newValue) || ! $replace) {
                 $skipped++;
                 continue;
             }

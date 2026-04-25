@@ -30,18 +30,18 @@ class EmployeeForm
         return $schema->schema([
             // ✅ user_id (admin bira, user automatski)
             Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => Auth::user()?->isAdmin())
-                ->dehydrated(fn () => Auth::user()?->isAdmin()),
+    ->label('Korisnik')
+    ->relationship('user', 'name')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->visible(fn (string $operation): bool => auth()->user()?->isSuperAdmin() && $operation === 'create')
+    ->dehydrated(fn (string $operation): bool => auth()->user()?->isSuperAdmin() && $operation === 'create'),
 
-            Hidden::make('user_id')
-    ->default(fn () => Auth::user()?->ownerId())
-    ->visible(fn () => ! Auth::user()?->isAdmin())
-    ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+Hidden::make('user_id')
+    ->default(fn () => auth()->id())
+    ->visible(fn (string $operation): bool => ! auth()->user()?->isSuperAdmin() && $operation === 'create')
+    ->dehydrated(fn (string $operation): bool => ! auth()->user()?->isSuperAdmin() && $operation === 'create'),
 
             Tabs::make('EmployeeTabs')
                 ->columnSpanFull()

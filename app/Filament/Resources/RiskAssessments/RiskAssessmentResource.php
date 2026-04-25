@@ -173,38 +173,104 @@ class RiskAssessmentResource extends BaseResource
     }
 
     public static function table(Table $table): Table
-    {
-        return $table
-            ->defaultSort('datum_izrade', 'desc')
-            ->columns([
-                TextColumn::make('tvrtka')
-                    ->label('Tvrtka')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->wrap(),
-static::userTableColumn(),
-                TextColumn::make('broj_procjene')
-                    ->label('Broj procjene')
-                    ->alignment(Alignment::Center)
-                    ->sortable(),
+{
+    return $table
+    ->modifyQueryUsing(fn ($query) => $query->with('attachments'))
+    ->defaultSort('datum_izrade', 'desc')
+    ->columns([
+            TextColumn::make('tvrtka')
+                ->label('Tvrtka')
+                ->searchable()
+                ->sortable()
+                ->weight('bold')
+                ->wrap(),
 
-                TextColumn::make('datum_izrade')
-                    ->label('Datum izrade')
-                    ->date('d.m.Y.')
-                    ->alignment(Alignment::Center)
-                    ->sortable(),
+            static::userTableColumn(),
 
-                TextColumn::make('vrsta_procjene')
-                    ->label('Vrsta procjene')
-                    ->alignment(Alignment::Center)
-                    ->searchable(),
+            TextColumn::make('broj_procjene')
+                ->label('Broj procjene')
+                ->alignment(Alignment::Center)
+                ->sortable(),
 
-                TextColumn::make('revisions_count')
-                    ->label('Broj revizija')
-                    ->alignment(Alignment::Center)
-                    ->counts('revisions'),
-            ])
+            TextColumn::make('datum_izrade')
+                ->label('Datum izrade')
+                ->date('d.m.Y.')
+                ->alignment(Alignment::Center)
+                ->sortable(),
+
+            TextColumn::make('vrsta_procjene')
+                ->label('Vrsta procjene')
+                ->alignment(Alignment::Center)
+                ->searchable(),
+
+            TextColumn::make('attachments')
+    ->label('Prilozi')
+    ->alignment(Alignment::Center)
+    ->html()
+    ->state(function ($record): string {
+        $attachments = $record->attachments;
+
+        if ($attachments->isEmpty()) {
+            return '<span style="color:#6b7280;">0</span>';
+        }
+
+        return $attachments
+            ->map(function ($attachment, $index) {
+                if (blank($attachment->file_path)) {
+                    return null;
+                }
+
+                $url = route('file.preview', [
+                    'file' => ltrim($attachment->file_path, '/'),
+                ]);
+
+                $name = e(basename($attachment->file_path));
+                $number = $index + 1;
+
+                return '<a href="' . e($url) . '"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="' . $name . '"
+                    onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                    style="
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        min-width:28px;
+                        height:24px;
+                        padding:0 8px;
+                        margin:1px 2px;
+                        border-radius:7px;
+                        background:rgba(59,130,246,.15);
+                        border:1px solid rgba(59,130,246,.35);
+                        color:#93c5fd;
+                        font-size:12px;
+                        font-weight:700;
+                        text-decoration:none;
+                        cursor:pointer;
+                    "
+                >📎 ' . $number . '</a>';
+            })
+            ->filter()
+            ->implode('');
+    })
+    ->tooltip(function ($record): string {
+        $attachments = $record->attachments;
+
+        if ($attachments->isEmpty()) {
+            return 'Nema priloga';
+        }
+
+        return $attachments
+            ->map(fn ($attachment, $index) => ($index + 1) . '. ' . basename($attachment->file_path))
+            ->implode("\n");
+                }),
+
+            TextColumn::make('revisions_count')
+                ->label('Broj revizija')
+                ->alignment(Alignment::Center)
+                ->counts('revisions'),
+        ])
             ->paginated([10, 25, 50, 'all'])
             ->actions([
                 ActionGroup::make([

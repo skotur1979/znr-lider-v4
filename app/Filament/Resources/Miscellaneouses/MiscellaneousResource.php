@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Filament\Forms\Components\Hidden;
+use Filament\Support\Enums\Alignment;
 
 class MiscellaneousResource extends BaseResource
 {
@@ -54,19 +55,18 @@ class MiscellaneousResource extends BaseResource
     {
         return $schema->schema([
             Select::make('user_id')
-    ->label('Korisnik')
-    ->relationship('user', 'name')
-    ->searchable()
-    ->preload()
-    ->required()
-    ->visible(fn () => static::isSuperAdmin())
-    ->dehydrated(fn () => static::isSuperAdmin())
-    ->hiddenOn('view'),
+            ->label('Korisnik')
+            ->relationship('user', 'name')
+            ->searchable()
+            ->preload()
+            ->required()
+            ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+            ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
 
-Hidden::make('user_id')
-    ->default(fn () => static::defaultUserId())
-    ->visible(fn () => ! static::isSuperAdmin())
-    ->dehydrated(fn () => ! static::isSuperAdmin()),
+        Hidden::make('user_id')
+            ->default(fn () => static::ownerId())
+            ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+            ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
     
             Section::make('Podatci o predmetu')
                 ->schema([
@@ -221,27 +221,58 @@ static::userTableColumn(),
                     ->limit(60),
 
                 TextColumn::make('pdf')
-                    ->label('Prilozi')
-                    ->alignCenter()
-                    ->badge()
-                    ->icon(function (Miscellaneous $record) {
-                        $count = is_array($record->pdf) ? count($record->pdf) : 0;
+    ->label('Prilozi')
+    ->alignment(Alignment::Center)
+    ->html()
+    ->state(function (Miscellaneous $record): string {
+        if (! is_array($record->pdf) || count($record->pdf) === 0) {
+            return '<span style="color:#6b7280;">0</span>';
+        }
 
-                        return $count > 0 ? 'heroicon-o-paper-clip' : null;
-                    })
-                    ->color(function (Miscellaneous $record) {
-                        $count = is_array($record->pdf) ? count($record->pdf) : 0;
+        return collect($record->pdf)
+            ->map(function ($file, $index) {
+                $url = route('file.preview', [
+                    'file' => ltrim($file, '/'),
+                ]);
 
-                        return $count > 0 ? 'info' : 'gray';
-                    })
-                    ->state(fn (Miscellaneous $record) => is_array($record->pdf) ? count($record->pdf) : 0)
-                    ->tooltip(function (Miscellaneous $record) {
-                        if (! is_array($record->pdf) || count($record->pdf) === 0) {
-                            return 'Nema priloga';
-                        }
+                $name = e(basename($file));
+                $number = $index + 1;
 
-                        return implode("\n", $record->pdf);
-                    }),
+                return '<a href="' . e($url) . '"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="' . $name . '"
+                    onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                    style="
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        min-width:28px;
+                        height:24px;
+                        padding:0 8px;
+                        margin:1px 2px;
+                        border-radius:7px;
+                        background:rgba(59,130,246,.15);
+                        border:1px solid rgba(59,130,246,.35);
+                        color:#93c5fd;
+                        font-size:12px;
+                        font-weight:700;
+                        text-decoration:none;
+                        cursor:pointer;
+                    "
+                >📎 ' . $number . '</a>';
+            })
+            ->implode('');
+    })
+    ->tooltip(function (Miscellaneous $record): string {
+        if (! is_array($record->pdf) || count($record->pdf) === 0) {
+            return 'Nema priloga';
+        }
+
+        return collect($record->pdf)
+            ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+            ->implode("\n");
+    }),
             ])
             ->filters([
                 SelectFilter::make('status')

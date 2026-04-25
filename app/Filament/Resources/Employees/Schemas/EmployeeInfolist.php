@@ -19,9 +19,6 @@ class EmployeeInfolist
             Tabs::make('ViewTabs')
                 ->columnSpanFull()
                 ->tabs([
-                    // ======================
-                    // OSNOVNO (v2 layout)
-                    // ======================
                     Tab::make('Osnovno')->schema([
                         Grid::make()
                             ->columns(2)
@@ -73,10 +70,7 @@ class EmployeeInfolist
                             ]),
                     ]),
 
-                    // ======================
-                    // ROKOVI (v2 layout + boje)
-                    // ======================
-                    Tab::make('Rokovi')->schema([
+                    Tab::make('Rokovi i osposobljavanja')->schema([
                         Grid::make()
                             ->columns(2)
                             ->schema([
@@ -149,12 +143,9 @@ class EmployeeInfolist
                             ]),
                     ]),
 
-                    // ======================
-                    // EDUKACIJE (ostavi kako je)
-                    // ======================
-                    Tab::make('Edukacije')->schema([
+                    Tab::make('Ostale edukacije')->schema([
                         Section::make('Ostale edukacije i ovlaštenja')
-                            ->description('Popis edukacija (certificates) za ovog zaposlenika.')
+                            ->description('Popis edukacija za ovog zaposlenika.')
                             ->schema([
                                 RepeatableEntry::make('certificates')
                                     ->label('')
@@ -179,17 +170,58 @@ class EmployeeInfolist
                                     ]),
                             ]),
                     ]),
+
+                    Tab::make('Prilozi')->schema([
+                        Section::make('Prilozi')
+                            ->schema([
+                                TextEntry::make('pdf')
+                                    ->label('')
+                                    ->html()
+                                    ->state(function ($record): string {
+                                        if (! is_array($record->pdf) || count($record->pdf) === 0) {
+                                            return '<span style="color:#6b7280;">Nema priloga</span>';
+                                        }
+
+                                        return collect($record->pdf)
+                                            ->map(function ($file, $index) {
+                                                $url = route('file.preview', [
+                                                    'file' => ltrim($file, '/'),
+                                                ]);
+
+                                                $name = e(basename($file));
+                                                $number = $index + 1;
+
+                                                return '<a href="' . e($url) . '"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    title="' . $name . '"
+                                                    style="
+                                                        display:inline-flex;
+                                                        align-items:center;
+                                                        justify-content:center;
+                                                        min-width:110px;
+                                                        height:34px;
+                                                        padding:0 12px;
+                                                        margin:4px 6px 4px 0;
+                                                        border-radius:8px;
+                                                        background:rgba(59,130,246,.15);
+                                                        border:1px solid rgba(59,130,246,.35);
+                                                        color:#93c5fd;
+                                                        font-size:13px;
+                                                        font-weight:700;
+                                                        text-decoration:none;
+                                                        cursor:pointer;
+                                                    "
+                                                >📎 Prilog ' . $number . '</a>';
+                                            })
+                                            ->implode('');
+                                    }),
+                            ]),
+                    ]),
                 ]),
         ]);
     }
 
-    /**
-     * Boje rokova:
-     * - danger = isteklo (crveno)
-     * - warning = ističe <= 30 dana (žuto)
-     * - success = ok (zeleno)
-     * - gray = nema datuma
-     */
     private static function rokColor($state): string
     {
         if (! $state) {
@@ -197,7 +229,7 @@ class EmployeeInfolist
         }
 
         $today = Carbon::today();
-        $soon  = $today->copy()->addDays(30);
+        $soon = $today->copy()->addDays(30);
 
         $d = Carbon::parse($state);
 

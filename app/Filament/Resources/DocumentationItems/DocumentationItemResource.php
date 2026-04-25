@@ -167,19 +167,58 @@ static::userTableColumn(),
                     ->alignment(Alignment::Center),
 
                 TextColumn::make('prilozi')
-                    ->label('Prilozi')
-                    ->badge()
-                    ->alignment(Alignment::Center)
-                    ->icon(fn (DocumentationItem $record) => is_array($record->prilozi) && count($record->prilozi) > 0 ? Heroicon::PaperClip : null)
-                    ->color(fn (DocumentationItem $record) => is_array($record->prilozi) && count($record->prilozi) > 0 ? 'info' : 'gray')
-                    ->formatStateUsing(fn ($state, DocumentationItem $record) => is_array($record->prilozi) ? (string) count($record->prilozi) : '0')
-                    ->tooltip(function (DocumentationItem $record): string {
-                        if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
-                            return 'Nema priloga';
-                        }
+    ->label('Prilozi')
+    ->alignment(Alignment::Center)
+    ->html()
+    ->state(function (DocumentationItem $record): string {
+        if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
+            return '<span style="color:#6b7280;">0</span>';
+        }
 
-                        return implode("\n", $record->prilozi);
-                    }),
+        return collect($record->prilozi)
+            ->map(function ($file, $index) {
+                $url = route('file.preview', [
+                    'file' => ltrim($file, '/'),
+                ]);
+
+                $name = e(basename($file));
+                $number = $index + 1;
+
+                return '<a href="' . $url . '"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="' . $name . '"
+                    onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                    style="
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        min-width:28px;
+                        height:24px;
+                        padding:0 8px;
+                        margin:1px 2px;
+                        border-radius:7px;
+                        background:rgba(59,130,246,.15);
+                        border:1px solid rgba(59,130,246,.35);
+                        color:#93c5fd;
+                        font-size:12px;
+                        font-weight:700;
+                        text-decoration:none;
+                        cursor:pointer;
+                    "
+                >📎 ' . $number . '</a>';
+            })
+            ->implode('');
+    })
+    ->tooltip(function (DocumentationItem $record): string {
+        if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
+            return 'Nema priloga';
+        }
+
+        return collect($record->prilozi)
+            ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+            ->implode("\n");
+    }),
             ])
             ->paginated([10, 25, 50, 'all'])
             ->actions([

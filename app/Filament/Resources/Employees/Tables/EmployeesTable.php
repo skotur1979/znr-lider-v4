@@ -95,20 +95,84 @@ TextColumn::make('user.name')
                     ->alignment(Alignment::Center),
 
                 ViewColumn::make('certificates')
-                    ->label('Ostale edukacije')
-                    ->state(fn (Employee $record) => $record->certificates)
-                    ->view('filament.components.certificates-filtered'),
+    ->label('Ostale edukacije')
+    ->state(fn (Employee $record) => $record->certificates)
+    ->view('filament.components.certificates-filtered')
+    ->extraAttributes([
+        'style' => 'max-width:240px; width:240px; overflow:hidden;',
+    ]),
 
-                TextColumn::make('pdf')
-                    ->label('Prilozi')
-                    ->badge()
-                    ->alignment(Alignment::Center)
-                    ->icon(fn (Employee $record) => (is_array($record->pdf) && count($record->pdf)) ? 'heroicon-o-paper-clip' : null)
-                    ->color(fn (Employee $record) => (is_array($record->pdf) && count($record->pdf)) ? 'info' : 'gray')
-                    ->formatStateUsing(fn ($state, Employee $record) => is_array($record->pdf) ? (string) count($record->pdf) : '0')
-                    ->tooltip(fn (Employee $record) => (is_array($record->pdf) && count($record->pdf))
-                        ? implode("\n", $record->pdf)
-                        : 'Nema priloga'),
+TextColumn::make('pdf')
+    ->label('Prilozi')
+    ->alignment(Alignment::Center)
+    ->html()
+    ->extraAttributes([
+        'style' => 'min-width:230px; width:230px;',
+    ])
+    ->state(function (Employee $record): string {
+        if (! is_array($record->pdf) || count($record->pdf) === 0) {
+            return '<span style="color:#6b7280;">0</span>';
+        }
+
+        $files = collect($record->pdf)->take(10)->values();
+
+        $makeLink = function ($file, $index) {
+            $url = route('file.preview', [
+                'file' => ltrim($file, '/'),
+            ]);
+
+            $name = e(basename($file));
+            $number = $index + 1;
+
+            return '<a href="' . e($url) . '"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="' . $name . '"
+                onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                style="
+                    display:inline-flex;
+                    align-items:center;
+                    justify-content:center;
+                    width:36px;
+                    height:24px;
+                    border-radius:7px;
+                    background:rgba(59,130,246,.15);
+                    border:1px solid rgba(59,130,246,.35);
+                    color:#93c5fd;
+                    font-size:12px;
+                    font-weight:700;
+                    text-decoration:none;
+                    cursor:pointer;
+                    white-space:nowrap;
+                    flex:0 0 36px;
+                "
+            >📎 ' . $number . '</a>';
+        };
+
+        $row1 = $files->slice(0, 5)
+    ->values()
+    ->map(fn ($file, $index) => $makeLink($file, $index))
+    ->implode('');
+
+$row2 = $files->slice(5, 5)
+    ->values()
+    ->map(fn ($file, $index) => $makeLink($file, $index + 5))
+    ->implode('');
+
+        return '<div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+            <div style="display:flex; gap:4px; justify-content:center; flex-wrap:nowrap;">' . $row1 . '</div>
+            <div style="display:flex; gap:4px; justify-content:center; flex-wrap:nowrap;">' . $row2 . '</div>
+        </div>';
+    })
+    ->tooltip(function (Employee $record): string {
+        if (! is_array($record->pdf) || count($record->pdf) === 0) {
+            return 'Nema priloga';
+        }
+
+        return collect($record->pdf)
+            ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+            ->implode("\n");
+    }),
             ])
             ->filters([
                 SelectFilter::make('status')
