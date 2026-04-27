@@ -79,25 +79,36 @@ class ObservationResource extends BaseResource
     }
 
     protected static function priorityOptions(): array
-    {
-        return [
-            'low' => 'Nisko',
-            'medium' => 'Srednje',
-            'high' => 'Visoko',
-            'critical' => 'Kritično',
-        ];
-    }
+{
+    return [
+        'low' => 'Nisko',
+        'medium' => 'Srednje',
+        'high' => 'Visoko',
+        'critical' => 'Kritično',
+    ];
+}
 
     protected static function priorityColor(?string $state): string
-    {
-        return match ($state) {
-            'low' => 'gray',
-            'medium' => 'info',
-            'high' => 'warning',
-            'critical' => 'danger',
-            default => 'gray',
-        };
-    }
+{
+    return match ($state) {
+        'low' => 'gray',
+        'medium' => 'info',
+        'high' => 'warning',
+        'critical' => 'danger',
+        default => 'gray',
+    };
+}
+
+protected static function priorityIcon(?string $state): ?string
+{
+    return match ($state) {
+        'low' => 'heroicon-o-minus-circle',
+        'medium' => 'heroicon-o-exclamation-circle',
+        'high' => 'heroicon-o-exclamation-triangle',
+        'critical' => 'heroicon-o-fire',
+        default => null,
+    };
+}
 
     protected static function statusOptions(): array
     {
@@ -184,10 +195,21 @@ class ObservationResource extends BaseResource
                         ->required(),
 
                     Select::make('priority')
-                        ->label('Prioritet')
-                        ->options(static::priorityOptions())
-                        ->default('medium')
-                        ->required(),
+    ->label('Prioritet')
+    ->options(static::priorityOptions())
+    ->default('medium')
+    ->required()
+    ->native(false)
+    ->helperText('Kritično označi samo za zapažanja koja zahtijevaju hitnu reakciju.')
+    ->extraAttributes(fn ($state) => [
+        'style' => match ($state) {
+            'critical' => 'border:2px solid #ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.20); border-radius:10px;',
+            'high' => 'border:2px solid #f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.18); border-radius:10px;',
+            'medium' => 'border:2px solid #0ea5e9; box-shadow:0 0 0 3px rgba(14,165,233,.14); border-radius:10px;',
+            'low' => 'border:2px solid #6b7280; border-radius:10px;',
+            default => '',
+        },
+    ]),
 
                     TextInput::make('location')
                         ->label('Lokacija')
@@ -292,12 +314,18 @@ class ObservationResource extends BaseResource
                     ->formatStateUsing(fn (?string $state) => static::observationTypeLabel($state)),
 
                 TextColumn::make('priority')
-                    ->label('Prioritet')
-                    ->badge()
-                    ->alignment(Alignment::Center)
-                    ->color(fn (?string $state) => static::priorityColor($state))
-                    ->formatStateUsing(fn (?string $state) => static::priorityOptions()[$state] ?? $state)
-                    ->sortable(),
+    ->label('Prioritet')
+    ->badge()
+    ->icon(fn (?string $state) => static::priorityIcon($state))
+    ->alignment(Alignment::Center)
+    ->color(fn (?string $state) => static::priorityColor($state))
+    ->formatStateUsing(fn (?string $state) => static::priorityOptions()[$state] ?? $state)
+    ->sortable()
+    ->extraAttributes(fn (Observation $record) => [
+        'style' => $record->priority === 'critical'
+            ? 'font-weight:900; text-transform:uppercase;'
+            : '',
+    ]),
 
                 TextColumn::make('location')
                     ->label('Lokacija')

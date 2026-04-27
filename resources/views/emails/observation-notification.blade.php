@@ -21,6 +21,22 @@
         default => 'Srednje',
     };
 
+    $priorityStyle = match ($observation->priority) {
+        'critical' => 'background:#dc2626; color:#ffffff; border:2px solid #991b1b;',
+        'high' => 'background:#f97316; color:#ffffff; border:2px solid #c2410c;',
+        'medium' => 'background:#f59e0b; color:#111827; border:2px solid #d97706;',
+        'low' => 'background:#e5e7eb; color:#111827; border:2px solid #9ca3af;',
+        default => 'background:#e5e7eb; color:#111827; border:2px solid #9ca3af;',
+    };
+
+    $priorityIcon = match ($observation->priority) {
+        'critical' => '🚨',
+        'high' => '⚠️',
+        'medium' => '🔶',
+        'low' => 'ℹ️',
+        default => 'ℹ️',
+    };
+
     $title = $mode === 'updated' ? 'Izmjena zapažanja' : 'Novo zapažanje';
 @endphp
 
@@ -55,6 +71,22 @@
                 </p>
             </div>
 
+            <div style="{{ $priorityStyle }} border-radius:16px; padding:18px 20px; margin:22px 0; text-align:center;">
+                <div style="font-size:13px; font-weight:900; text-transform:uppercase; letter-spacing:1px;">
+                    Prioritet zapažanja
+                </div>
+
+                <div style="font-size:28px; font-weight:900; margin-top:6px;">
+                    {{ $priorityIcon }} {{ mb_strtoupper($priorityLabel) }}
+                </div>
+
+                @if ($observation->priority === 'critical')
+                    <div style="font-size:15px; font-weight:700; margin-top:10px;">
+                        HITNO: Ovo zapažanje zahtijeva prioritetnu reakciju i praćenje do zatvaranja.
+                    </div>
+                @endif
+            </div>
+
             @if (! empty($imagePath) && file_exists($imagePath))
                 <h2 style="font-size:19px; margin:26px 0 12px;">Slika zapažanja</h2>
 
@@ -70,17 +102,64 @@
             <h2 style="font-size:19px; margin:26px 0 12px;">Podaci zapažanja</h2>
 
             <table style="width:100%; border-collapse:collapse; font-size:14px;">
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700; width:210px;">Datum</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->incident_date?->format('d.m.Y.') }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Vrsta zapažanja</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $typeLabel }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Prioritet</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $priorityLabel }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Lokacija</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->location }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Opis zapažanja</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->item }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Vrsta opasnosti</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->potential_incident_type }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Potrebna radnja</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->action }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Odgovorna osoba</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->responsible }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Rok za provedbu</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->target_date?->format('d.m.Y.') }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Status</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $statusLabel }}</td></tr>
-                <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Komentar</td><td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->comments }}</td></tr>
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700; width:210px;">Datum</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->incident_date?->format('d.m.Y.') }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Vrsta zapažanja</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $typeLabel }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Prioritet</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">
+                        <span style="{{ $priorityStyle }} display:inline-block; padding:8px 14px; border-radius:999px; font-weight:900;">
+                            {{ $priorityIcon }} {{ $priorityLabel }}
+                        </span>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Lokacija</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->location }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Opis zapažanja</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->item }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Vrsta opasnosti</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->potential_incident_type }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Potrebna radnja</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->action }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Odgovorna osoba</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->responsible }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Rok za provedbu</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->target_date?->format('d.m.Y.') }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Status</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $statusLabel }}</td>
+                </tr>
+
+                <tr>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Komentar</td>
+                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->comments }}</td>
+                </tr>
             </table>
 
             <div style="margin-top:28px; padding:16px; background:#f9fafb; border-radius:14px; border:1px solid #e5e7eb;">
