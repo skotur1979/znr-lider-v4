@@ -5,6 +5,7 @@ use App\Http\Controllers\TestAttemptController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
+use App\Http\Controllers\ZnrGeneralReportController;
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/test-attempts/{attempt}', [TestAttemptController::class, 'show'])
@@ -12,6 +13,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/test-attempts/{attempt}/pdf', [TestAttemptController::class, 'downloadPdf'])
         ->name('test-attempts.download');
+        
+    Route::get('/admin/znr-general-report/pdf', [ZnrGeneralReportController::class, 'pdf'])
+    ->name('znr.general-report.pdf');
 
     Route::get('/preview-file', function (Request $request) {
     $file = ltrim((string) $request->query('file'), '/');
