@@ -4,9 +4,11 @@ namespace App\Filament\Resources\Observations\Pages;
 
 use App\Filament\Resources\Inspections\InspectionResource;
 use App\Filament\Resources\Observations\ObservationResource;
+use App\Mail\ObservationNotificationMail;
 use App\Models\InspectionFinding;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 
 class CreateObservation extends CreateRecord
 {
@@ -47,14 +49,16 @@ class CreateObservation extends CreateRecord
             'user_id' => request()->query('user_id'),
             'incident_date' => request()->query('incident_date'),
             'observation_type' => request()->query('observation_type'),
+            'priority' => request()->query('priority') ?? 'medium',
             'location' => request()->query('location'),
             'item' => request()->query('item'),
             'potential_incident_type' => request()->query('potential_incident_type'),
             'picture_path' => request()->query('picture_path'),
             'action' => request()->query('action'),
             'responsible' => request()->query('responsible'),
+            'notification_emails' => request()->query('notification_emails'),
             'target_date' => request()->query('target_date'),
-            'status' => request()->query('status'),
+            'status' => request()->query('status') ?? 'Not started',
             'comments' => request()->query('comments'),
         ]);
     }
@@ -65,6 +69,14 @@ class CreateObservation extends CreateRecord
             $data['user_id'] = Auth::id();
         }
 
+        if (blank($data['priority'] ?? null)) {
+            $data['priority'] = 'medium';
+        }
+
+        if (blank($data['status'] ?? null)) {
+            $data['status'] = 'Not started';
+        }
+
         return $data;
     }
 
@@ -72,19 +84,31 @@ class CreateObservation extends CreateRecord
     {
         $findingId = request()->query('inspection_finding_id');
 
-        if (! $findingId) {
-            return;
+        if ($findingId) {
+            $finding = InspectionFinding::find($findingId);
+
+            if ($finding) {
+                $finding->update([
+                    'observation_id' => $this->record?->id,
+                    'workflow_status' => 'converted_to_observation',
+                ]);
+            }
         }
 
-        $finding = InspectionFinding::find($findingId);
+        $emails = collect($this->record->notification_emails ?? [])
+            ->push('prvostupnik@gmail.com')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
-        if (! $finding) {
-            return;
+        foreach ($emails as $email) {
+            Mail::to($email)->send(new ObservationNotificationMail($this->record));
         }
 
-        $finding->update([
-            'observation_id' => $this->record?->id,
-            'workflow_status' => 'converted_to_observation',
+        $this->record->update([
+            'notification_emails' => $emails,
+            'sent_at' => now(),
         ]);
     }
 

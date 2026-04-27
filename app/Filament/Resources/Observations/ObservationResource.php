@@ -4,8 +4,10 @@ namespace App\Filament\Resources\Observations;
 
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Observations\Pages;
+use App\Mail\ObservationNotificationMail;
 use App\Models\Employee;
 use App\Models\Observation;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -19,9 +21,11 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
@@ -32,6 +36,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class ObservationResource extends BaseResource
@@ -70,6 +75,27 @@ class ObservationResource extends BaseResource
             'Negative Observation' => 'Negativno zapažanje',
             'Positive Observation' => 'Pozitivno zapažanje',
             default => $state,
+        };
+    }
+
+    protected static function priorityOptions(): array
+    {
+        return [
+            'low' => 'Nisko',
+            'medium' => 'Srednje',
+            'high' => 'Visoko',
+            'critical' => 'Kritično',
+        ];
+    }
+
+    protected static function priorityColor(?string $state): string
+    {
+        return match ($state) {
+            'low' => 'gray',
+            'medium' => 'info',
+            'high' => 'warning',
+            'critical' => 'danger',
+            default => 'gray',
         };
     }
 
@@ -122,18 +148,18 @@ class ObservationResource extends BaseResource
     }
 
     protected static function responsiblePersonOptions(): array
-{
-    return Employee::query()
-        ->when(
-            ! auth()->user()?->isSuperAdmin(),
-            fn ($query) => $query->where('user_id', auth()->user()?->ownerId())
-        )
-        ->orderBy('name')
-        ->pluck('name')
-        ->unique()
-        ->values()
-        ->all();
-}
+    {
+        return Employee::query()
+            ->when(
+                ! auth()->user()?->isSuperAdmin(),
+                fn ($query) => $query->where('user_id', auth()->user()?->ownerId())
+            )
+            ->orderBy('name')
+            ->pluck('name')
+            ->unique()
+            ->values()
+            ->all();
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -157,15 +183,31 @@ class ObservationResource extends BaseResource
                         ->options(static::observationTypeOptions())
                         ->required(),
 
+                    Select::make('priority')
+                        ->label('Prioritet')
+                        ->options(static::priorityOptions())
+                        ->default('medium')
+                        ->required(),
+
                     TextInput::make('location')
                         ->label('Lokacija')
                         ->required()
                         ->maxLength(255),
 
-                    TextInput::make('item')
+                    Textarea::make('item')
                         ->label('Opis zapažanja')
                         ->required()
-                        ->maxLength(255),
+                        ->rows(3)
+                        ->maxLength(2000)
+                        ->extraAttributes([
+                            'data-voice-target' => 'observation-item',
+                        ]),
+
+                    View::make('filament.components.observation-voice-button')
+                        ->viewData([
+                            'target' => 'observation-item',
+                            'label' => 'Govori opis zapažanja',
+                        ]),
 
                     TextInput::make('potential_incident_type')
                         ->label('Vrsta opasnosti')
@@ -188,7 +230,15 @@ class ObservationResource extends BaseResource
                     Textarea::make('action')
                         ->label('Potrebna radnja')
                         ->rows(3)
-                        ->columnSpanFull(),
+                        ->extraAttributes([
+                            'data-voice-target' => 'observation-action',
+                        ]),
+
+                    View::make('filament.components.observation-voice-button')
+                        ->viewData([
+                            'target' => 'observation-action',
+                            'label' => 'Govori potrebnu radnju',
+                        ]),
 
                     TextInput::make('responsible')
                         ->label('Odgovorna osoba')
@@ -202,9 +252,16 @@ class ObservationResource extends BaseResource
                         ->weekStartsOnMonday()
                         ->timezone('Europe/Zagreb'),
 
+                    TagsInput::make('notification_emails')
+                        ->label('E-mail primatelji')
+                        ->placeholder('Upiši e-mail i pritisni Enter')
+                        ->helperText('Možeš upisati više adresa: direktor, voditelj, odgovorna osoba...')
+                        ->columnSpanFull(),
+
                     Select::make('status')
                         ->label('Status')
                         ->options(static::statusOptions())
+                        ->default('Not started')
                         ->required(),
 
                     Textarea::make('comments')
@@ -225,12 +282,22 @@ class ObservationResource extends BaseResource
                     ->sortable()
                     ->alignment(Alignment::Center)
                     ->wrap(),
-static::userTableColumn(),
+
+                static::userTableColumn(),
+
                 TextColumn::make('observation_type')
                     ->label('Vrsta zapažanja')
                     ->alignment(Alignment::Center)
                     ->wrap()
                     ->formatStateUsing(fn (?string $state) => static::observationTypeLabel($state)),
+
+                TextColumn::make('priority')
+                    ->label('Prioritet')
+                    ->badge()
+                    ->alignment(Alignment::Center)
+                    ->color(fn (?string $state) => static::priorityColor($state))
+                    ->formatStateUsing(fn (?string $state) => static::priorityOptions()[$state] ?? $state)
+                    ->sortable(),
 
                 TextColumn::make('location')
                     ->label('Lokacija')
@@ -238,9 +305,9 @@ static::userTableColumn(),
                     ->wrap(),
 
                 TextColumn::make('item')
-                    ->label('Opis')
-                    ->wrap()
-                    ->limit(70),
+    ->label('Opis')
+    ->wrap()
+    ->limit(70),
 
                 TextColumn::make('potential_incident_type')
                     ->label('Vrsta opasnosti')
@@ -261,9 +328,9 @@ static::userTableColumn(),
                     ->openUrlInNewTab(),
 
                 TextColumn::make('action')
-                    ->label('Potrebna radnja')
-                    ->wrap()
-                    ->limit(70),
+    ->label('Potrebna radnja')
+    ->wrap()
+    ->limit(70),
 
                 TextColumn::make('responsible')
                     ->label('Odgovorna osoba')
@@ -300,6 +367,12 @@ static::userTableColumn(),
                     ->badge()
                     ->color(fn (?string $state) => static::statusColor($state))
                     ->formatStateUsing(fn (?string $state) => static::statusOptions()[$state] ?? $state),
+
+                TextColumn::make('sent_at')
+                    ->label('Poslano')
+                    ->dateTime('d.m.Y. H:i')
+                    ->alignment(Alignment::Center)
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('comments')
                     ->label('Komentar')
@@ -348,6 +421,11 @@ static::userTableColumn(),
                             : $query
                     ),
 
+                SelectFilter::make('priority')
+                    ->label('Prioritet')
+                    ->placeholder('Svi prioriteti')
+                    ->options(static::priorityOptions()),
+
                 SelectFilter::make('year')
                     ->label('Godina nastanka')
                     ->placeholder('Sve godine')
@@ -370,6 +448,36 @@ static::userTableColumn(),
                     EditAction::make()
                         ->label('Uredi')
                         ->visible(fn (Observation $record) => ! $record->trashed()),
+
+                    Action::make('send_observation')
+                        ->label('Pošalji zapažanje')
+                        ->icon('heroicon-o-paper-airplane')
+                        ->color('info')
+                        ->visible(fn (Observation $record) => ! $record->trashed())
+                        ->form([
+                            TagsInput::make('emails')
+                                ->label('Primatelji')
+                                ->placeholder('Upiši e-mail i pritisni Enter')
+                                ->default(fn (Observation $record) => $record->notification_emails ?? [])
+                                ->required(),
+                        ])
+                        ->action(function (Observation $record, array $data) {
+                            $emails = collect($data['emails'] ?? [])
+                                ->filter()
+                                ->unique()
+                                ->values()
+                                ->all();
+
+                            foreach ($emails as $email) {
+                                Mail::to($email)->send(new ObservationNotificationMail($record));
+                            }
+
+                            $record->update([
+                                'notification_emails' => $emails,
+                                'sent_at' => now(),
+                            ]);
+                        })
+                        ->successNotificationTitle('Zapažanje je poslano'),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
