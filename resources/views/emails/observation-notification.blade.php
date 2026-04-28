@@ -42,6 +42,8 @@
 
 <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:24px; color:#111827;">
     <div style="max-width:820px; margin:0 auto; background:#ffffff; border-radius:18px; overflow:hidden; border:1px solid #e5e7eb;">
+        
+        <!-- HEADER -->
         <div style="background:#111827; color:#ffffff; padding:24px 28px;">
             <div style="font-size:13px; letter-spacing:1px; color:#f59e0b; font-weight:700;">ZNR LIDER</div>
             <h1 style="margin:8px 0 0; font-size:26px;">{{ $title }}</h1>
@@ -51,121 +53,133 @@
         </div>
 
         <div style="padding:26px 28px;">
+
+            <!-- UVOD -->
             <p style="font-size:15px; line-height:1.6; margin-top:0;">
                 Poštovani,<br>
                 @if ($mode === 'updated')
-                    zapažanje u sustavu ZNR LIDER je izmijenjeno. U nastavku su ažurirani podaci.
+                    zapažanje u sustavu ZNR LIDER je izmijenjeno.
                 @else
-                    u sustavu ZNR LIDER kreirano je novo zapažanje koje zahtijeva pregled i eventualno poduzimanje mjera.
+                    kreirano je novo zapažanje koje zahtijeva pregled i poduzimanje mjera.
                 @endif
             </p>
 
+            <!-- SAŽETAK -->
             <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:14px; padding:18px; margin:22px 0;">
                 <div style="font-size:13px; font-weight:800; color:#92400e; text-transform:uppercase;">Pametni sažetak</div>
-                <p style="margin:8px 0 0; font-size:15px; line-height:1.6;">
-                    Zapažanje prioriteta <strong>{{ $priorityLabel }}</strong> na lokaciji
-                    <strong>{{ $observation->location }}</strong>.
-                    Odgovorna osoba: <strong>{{ $observation->responsible ?: 'nije dodijeljena' }}</strong>.
-                    Rok provedbe:
-                    <strong>{{ $observation->target_date ? $observation->target_date->format('d.m.Y.') : 'nije definiran' }}</strong>.
+                <p style="margin:8px 0 0; font-size:15px;">
+                    Prioritet <strong>{{ $priorityLabel }}</strong> na lokaciji <strong>{{ $observation->location }}</strong>.
                 </p>
             </div>
 
-            <div style="{{ $priorityStyle }} border-radius:16px; padding:18px 20px; margin:22px 0; text-align:center;">
-                <div style="font-size:13px; font-weight:900; text-transform:uppercase; letter-spacing:1px;">
-                    Prioritet zapažanja
+            <!-- PRIORITET BLOK -->
+            <div style="{{ $priorityStyle }} border-radius:16px; padding:20px; margin:22px 0; text-align:center;">
+                <div style="font-size:13px; font-weight:900; text-transform:uppercase;">
+                    PRIORITET ZAPAŽANJA
                 </div>
 
-                <div style="font-size:28px; font-weight:900; margin-top:6px;">
+                <div style="font-size:30px; font-weight:900; margin-top:6px;">
                     {{ $priorityIcon }} {{ mb_strtoupper($priorityLabel) }}
                 </div>
 
                 @if ($observation->priority === 'critical')
-                    <div style="font-size:15px; font-weight:700; margin-top:10px;">
-                        HITNO: Ovo zapažanje zahtijeva prioritetnu reakciju i praćenje do zatvaranja.
+                    <div style="margin-top:10px; font-weight:800;">
+                        🚨 HITNO DJELOVANJE POTREBNO
                     </div>
                 @endif
             </div>
 
+            <!-- SLIKA -->
             @if (! empty($imagePath) && file_exists($imagePath))
                 <h2 style="font-size:19px; margin:26px 0 12px;">Slika zapažanja</h2>
 
-                <div style="margin-bottom:22px; border:1px solid #e5e7eb; border-radius:14px; padding:12px; background:#f9fafb;">
+                <div style="margin-bottom:22px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
                     <img
                         src="{{ $message->embed($imagePath) }}"
-                        alt="Slika zapažanja"
-                        style="max-width:100%; height:auto; border-radius:10px; display:block;"
+                        style="max-width:100%; border-radius:10px;"
                     >
                 </div>
             @endif
 
+            <!-- TABLICA -->
             <h2 style="font-size:19px; margin:26px 0 12px;">Podaci zapažanja</h2>
 
             <table style="width:100%; border-collapse:collapse; font-size:14px;">
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700; width:210px;">Datum</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->incident_date?->format('d.m.Y.') }}</td>
+                    <td style="padding:10px; font-weight:700;">Datum</td>
+                    <td style="padding:10px;">{{ $observation->incident_date?->format('d.m.Y.') }}</td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Vrsta zapažanja</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $typeLabel }}</td>
+                    <td style="padding:10px; font-weight:700;">Vrsta</td>
+                    <td style="padding:10px;">{{ $typeLabel }}</td>
                 </tr>
 
+                <!-- OVDJE JE FIX -->
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Prioritet</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">
-                        <span style="{{ $priorityStyle }} display:inline-block; padding:8px 14px; border-radius:999px; font-weight:900;">
-                            {{ $priorityIcon }} {{ $priorityLabel }}
+                    <td style="padding:10px; font-weight:700;">Prioritet</td>
+                    <td style="padding:10px; text-align:center;">
+                        <span style="{{ $priorityStyle }} 
+                            display:inline-flex; 
+                            align-items:center; 
+                            justify-content:center; 
+                            gap:6px;
+                            padding:10px 18px; 
+                            border-radius:999px; 
+                            font-weight:900;">
+                            
+                            <span>{{ $priorityIcon }}</span>
+                            <span>{{ $priorityLabel }}</span>
                         </span>
                     </td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Lokacija</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->location }}</td>
+                    <td style="padding:10px; font-weight:700;">Lokacija</td>
+                    <td style="padding:10px;">{{ $observation->location }}</td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Opis zapažanja</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->item }}</td>
+                    <td style="padding:10px; font-weight:700;">Opis</td>
+                    <td style="padding:10px;">{{ $observation->item }}</td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Vrsta opasnosti</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->potential_incident_type }}</td>
+                    <td style="padding:10px; font-weight:700;">Opasnost</td>
+                    <td style="padding:10px;">{{ $observation->potential_incident_type }}</td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Potrebna radnja</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->action }}</td>
+                    <td style="padding:10px; font-weight:700;">Radnja</td>
+                    <td style="padding:10px;">{{ $observation->action }}</td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Odgovorna osoba</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->responsible }}</td>
+                    <td style="padding:10px; font-weight:700;">Odgovorna osoba</td>
+                    <td style="padding:10px;">{{ $observation->responsible }}</td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Rok za provedbu</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->target_date?->format('d.m.Y.') }}</td>
+                    <td style="padding:10px; font-weight:700;">Rok</td>
+                    <td style="padding:10px;">{{ $observation->target_date?->format('d.m.Y.') }}</td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Status</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $statusLabel }}</td>
+                    <td style="padding:10px; font-weight:700;">Status</td>
+                    <td style="padding:10px;">{{ $statusLabel }}</td>
                 </tr>
 
                 <tr>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; font-weight:700;">Komentar</td>
-                    <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $observation->comments }}</td>
+                    <td style="padding:10px; font-weight:700;">Komentar</td>
+                    <td style="padding:10px;">{{ $observation->comments }}</td>
                 </tr>
             </table>
 
-            <div style="margin-top:28px; padding:16px; background:#f9fafb; border-radius:14px; border:1px solid #e5e7eb;">
-                Ovaj email je automatski generiran iz sustava ZNR LIDER.
-                Ako podaci odstupaju od očekivanih, provjerite zapažanje unutar aplikacije.
+            <!-- FOOTER -->
+            <div style="margin-top:28px; padding:16px; background:#f9fafb; border-radius:14px;">
+                Automatski generirano iz ZNR LIDER sustava.
             </div>
+
         </div>
     </div>
 </div>
