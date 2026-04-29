@@ -21,19 +21,20 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class EmployeesExport extends DefaultValueBinder implements
-    FromCollection,
-    WithHeadings,
-    WithMapping,
-    WithColumnFormatting,
-    ShouldAutoSize,
-    WithEvents,
-    WithCustomValueBinder
+class EmployeesExport extends DefaultValueBinder implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents, WithCustomValueBinder
 {
     protected $employees;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->employees = EmployeeResource::getEloquentQuery()
             ->with(['user', 'certificates'])
             ->orderBy('name')
@@ -47,7 +48,9 @@ class EmployeesExport extends DefaultValueBinder implements
 
     public function bindValue(Cell $cell, $value): bool
     {
-        if (in_array($cell->getColumn(), ['E', 'F'], true)) {
+        $textColumns = $this->showUserColumn ? ['E', 'F'] : ['D', 'E'];
+
+        if (in_array($cell->getColumn(), $textColumns, true)) {
             $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
             return true;
         }
@@ -57,9 +60,13 @@ class EmployeesExport extends DefaultValueBinder implements
 
     public function headings(): array
     {
-        return [
-            'Ime i prezime',
-            'Korisnik',
+        $headings = ['Ime i prezime'];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Adresa',
             'Spol',
             'OIB',
@@ -99,7 +106,7 @@ class EmployeesExport extends DefaultValueBinder implements
             'Certifikat 8 naziv', 'Certifikat 8 od', 'Certifikat 8 do',
             'Certifikat 9 naziv', 'Certifikat 9 od', 'Certifikat 9 do',
             'Certifikat 10 naziv', 'Certifikat 10 od', 'Certifikat 10 do',
-        ];
+        ]);
     }
 
     public function map($employee): array
@@ -111,7 +118,13 @@ class EmployeesExport extends DefaultValueBinder implements
 
         $row = [
             $employee->name,
-            $employee->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $employee->user?->name ?? '';
+        }
+
+        $row = array_merge($row, [
             $employee->address,
             $employee->gender,
             (string) ($employee->OIB ?? ''),
@@ -144,7 +157,7 @@ class EmployeesExport extends DefaultValueBinder implements
             $excel($employee->employers_authorization_valid_until),
 
             is_array($employee->pdf) ? count($employee->pdf) : 0,
-        ];
+        ]);
 
         for ($i = 0; $i < 10; $i++) {
             $certificate = $certs->get($i);
@@ -161,42 +174,42 @@ class EmployeesExport extends DefaultValueBinder implements
     {
         $date = NumberFormat::FORMAT_DATE_DDMMYYYY;
 
-        return [
-            'O' => $date,
-            'P' => $date,
-            'Q' => $date,
-            'R' => $date,
-            'T' => $date,
-            'U' => $date,
-            'V' => $date,
-            'W' => $date,
-            'X' => $date,
-            'Y' => $date,
-            'Z' => $date,
-            'AA' => $date,
-            'AB' => $date,
-            'AC' => $date,
+        if ($this->showUserColumn) {
+            return [
+                'O' => $date, 'P' => $date, 'Q' => $date, 'R' => $date,
+                'T' => $date, 'U' => $date, 'V' => $date, 'W' => $date,
+                'X' => $date, 'Y' => $date, 'Z' => $date, 'AA' => $date,
+                'AB' => $date, 'AC' => $date,
 
-            'AF' => $date,
-            'AG' => $date,
-            'AI' => $date,
-            'AJ' => $date,
-            'AL' => $date,
-            'AM' => $date,
-            'AO' => $date,
-            'AP' => $date,
-            'AR' => $date,
-            'AS' => $date,
-            'AU' => $date,
-            'AV' => $date,
-            'AX' => $date,
-            'AY' => $date,
-            'BA' => $date,
-            'BB' => $date,
-            'BD' => $date,
-            'BE' => $date,
-            'BG' => $date,
-            'BH' => $date,
+                'AF' => $date, 'AG' => $date,
+                'AI' => $date, 'AJ' => $date,
+                'AL' => $date, 'AM' => $date,
+                'AO' => $date, 'AP' => $date,
+                'AR' => $date, 'AS' => $date,
+                'AU' => $date, 'AV' => $date,
+                'AX' => $date, 'AY' => $date,
+                'BA' => $date, 'BB' => $date,
+                'BD' => $date, 'BE' => $date,
+                'BG' => $date, 'BH' => $date,
+            ];
+        }
+
+        return [
+            'N' => $date, 'O' => $date, 'P' => $date, 'Q' => $date,
+            'S' => $date, 'T' => $date, 'U' => $date, 'V' => $date,
+            'W' => $date, 'X' => $date, 'Y' => $date, 'Z' => $date,
+            'AA' => $date, 'AB' => $date,
+
+            'AE' => $date, 'AF' => $date,
+            'AH' => $date, 'AI' => $date,
+            'AK' => $date, 'AL' => $date,
+            'AN' => $date, 'AO' => $date,
+            'AQ' => $date, 'AR' => $date,
+            'AT' => $date, 'AU' => $date,
+            'AW' => $date, 'AX' => $date,
+            'AZ' => $date, 'BA' => $date,
+            'BC' => $date, 'BD' => $date,
+            'BF' => $date, 'BG' => $date,
         ];
     }
 
@@ -206,13 +219,14 @@ class EmployeesExport extends DefaultValueBinder implements
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = $this->employees->count() + 1;
+                $lastCol = $this->showUserColumn ? 'BH' : 'BG';
 
-                $sheet->getStyle("A1:BH{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:BH1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -230,22 +244,58 @@ class EmployeesExport extends DefaultValueBinder implements
                     ],
                 ]);
 
-                $sheet->getStyle("A2:BH{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("O2:R{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("O2:R{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("T2:AC{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("AD2:AD{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("T2:AC{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $widths = [
+                        'A' => 30, 'B' => 22, 'C' => 34, 'D' => 12, 'E' => 16, 'F' => 16,
+                        'G' => 28, 'H' => 30, 'I' => 28, 'J' => 18, 'K' => 22, 'L' => 22,
+                        'M' => 28, 'N' => 22, 'O' => 16, 'P' => 16, 'Q' => 16, 'R' => 16,
+                        'S' => 22, 'AD' => 14,
+                    ];
 
-                $sheet->getStyle("AD2:AD{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $deadlineColumns = [
+                        'R' => fn (Employee $e) => $e->medical_examination_valid_until,
+                        'Y' => fn (Employee $e) => $e->first_aid_valid_until,
+                        'AA' => fn (Employee $e) => $e->toxicology_valid_until,
+                        'AC' => fn (Employee $e) => $e->employers_authorization_valid_until,
+                    ];
+
+                    $certificateDeadlineColumns = [
+                        'AG' => 0, 'AJ' => 1, 'AM' => 2, 'AP' => 3, 'AS' => 4,
+                        'AV' => 5, 'AY' => 6, 'BB' => 7, 'BE' => 8, 'BH' => 9,
+                    ];
+                } else {
+                    $sheet->getStyle("N2:Q{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("S2:AB{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("AC2:AC{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 30, 'B' => 34, 'C' => 12, 'D' => 16, 'E' => 16,
+                        'F' => 28, 'G' => 30, 'H' => 28, 'I' => 18, 'J' => 22, 'K' => 22,
+                        'L' => 28, 'M' => 22, 'N' => 16, 'O' => 16, 'P' => 16, 'Q' => 16,
+                        'R' => 22, 'AC' => 14,
+                    ];
+
+                    $deadlineColumns = [
+                        'Q' => fn (Employee $e) => $e->medical_examination_valid_until,
+                        'X' => fn (Employee $e) => $e->first_aid_valid_until,
+                        'Z' => fn (Employee $e) => $e->toxicology_valid_until,
+                        'AB' => fn (Employee $e) => $e->employers_authorization_valid_until,
+                    ];
+
+                    $certificateDeadlineColumns = [
+                        'AF' => 0, 'AI' => 1, 'AL' => 2, 'AO' => 3, 'AR' => 4,
+                        'AU' => 5, 'AX' => 6, 'BA' => 7, 'BD' => 8, 'BG' => 9,
+                    ];
+                }
 
                 $sheet->getRowDimension(1)->setRowHeight(30);
 
@@ -253,55 +303,12 @@ class EmployeesExport extends DefaultValueBinder implements
                     $sheet->getRowDimension($row)->setRowHeight(34);
                 }
 
-                $widths = [
-                    'A' => 30,
-                    'B' => 22,
-                    'C' => 34,
-                    'D' => 12,
-                    'E' => 16,
-                    'F' => 16,
-                    'G' => 28,
-                    'H' => 30,
-                    'I' => 28,
-                    'J' => 18,
-                    'K' => 22,
-                    'L' => 22,
-                    'M' => 28,
-                    'N' => 22,
-                    'O' => 16,
-                    'P' => 16,
-                    'Q' => 16,
-                    'R' => 16,
-                    'S' => 22,
-                    'AD' => 14,
-                ];
-
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
 
                 $today = Carbon::today();
                 $soon = $today->copy()->addDays(30);
-
-                $deadlineColumns = [
-                    'R' => fn (Employee $e) => $e->medical_examination_valid_until,
-                    'Y' => fn (Employee $e) => $e->first_aid_valid_until,
-                    'AA' => fn (Employee $e) => $e->toxicology_valid_until,
-                    'AC' => fn (Employee $e) => $e->employers_authorization_valid_until,
-                ];
-
-                $certificateDeadlineColumns = [
-                    'AG' => 0,
-                    'AJ' => 1,
-                    'AM' => 2,
-                    'AP' => 3,
-                    'AS' => 4,
-                    'AV' => 5,
-                    'AY' => 6,
-                    'BB' => 7,
-                    'BE' => 8,
-                    'BH' => 9,
-                ];
 
                 foreach ($this->employees as $index => $employee) {
                     $row = $index + 2;
@@ -330,7 +337,7 @@ class EmployeesExport extends DefaultValueBinder implements
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:BH{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

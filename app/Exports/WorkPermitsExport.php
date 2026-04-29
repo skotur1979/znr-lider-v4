@@ -16,8 +16,16 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
 {
     protected $permits;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->permits = WorkPermitResource::getEloquentQuery()
             ->with('user')
             ->orderByDesc('issue_date')
@@ -31,9 +39,13 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
 
     public function headings(): array
     {
-        return [
-            'Broj dozvole',
-            'Korisnik',
+        $headings = ['Broj dozvole'];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Datum',
             'Vrijedi od',
             'Vrijedi do',
@@ -62,16 +74,20 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
             'Provjerio',
             'Datum provjere',
             'Vrijeme provjere',
-        ];
+        ]);
     }
 
     public function map($permit): array
     {
         /** @var WorkPermit $permit */
 
-        return [
-            $permit->permit_number,
-            $permit->user?->name ?? '',
+        $row = [$permit->permit_number];
+
+        if ($this->showUserColumn) {
+            $row[] = $permit->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $permit->issue_date ? $permit->issue_date->format('d.m.Y.') : '',
             $permit->valid_from ? $permit->valid_from->format('d.m.Y. H:i') : '',
             $permit->valid_until ? $permit->valid_until->format('d.m.Y. H:i') : '',
@@ -100,7 +116,7 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
             $permit->verification_name,
             $permit->verification_date ? $permit->verification_date->format('d.m.Y.') : '',
             $permit->verification_time,
-        ];
+        ]);
     }
 
     public function registerEvents(): array
@@ -110,13 +126,14 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->permits->count() + 1;
+                $lastCol = $this->showUserColumn ? 'AD' : 'AC';
 
-                $sheet->getStyle("A1:AD{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:AD1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -134,35 +151,58 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
                     ],
                 ]);
 
-                $sheet->getStyle("A2:AD{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:AD{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("A2:E{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("A2:E{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("Y2:Z{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("Y2:Z{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("AC2:AD{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("AC2:AD{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $widths = [
-                    'A' => 16, 'B' => 20, 'C' => 14, 'D' => 18, 'E' => 18,
-                    'F' => 32, 'G' => 22, 'H' => 36, 'I' => 28, 'J' => 36,
-                    'K' => 44, 'L' => 24, 'M' => 18, 'N' => 55, 'O' => 42,
-                    'P' => 36, 'Q' => 55, 'R' => 24, 'S' => 55, 'T' => 28,
-                    'U' => 28, 'V' => 18, 'W' => 18, 'X' => 28, 'Y' => 16,
-                    'Z' => 16, 'AA' => 42, 'AB' => 24, 'AC' => 16, 'AD' => 16,
-                ];
+                    $widths = [
+                        'A' => 16, 'B' => 20, 'C' => 14, 'D' => 18, 'E' => 18,
+                        'F' => 32, 'G' => 22, 'H' => 36, 'I' => 28, 'J' => 36,
+                        'K' => 44, 'L' => 24, 'M' => 18, 'N' => 55, 'O' => 42,
+                        'P' => 36, 'Q' => 55, 'R' => 24, 'S' => 55, 'T' => 28,
+                        'U' => 28, 'V' => 18, 'W' => 18, 'X' => 28, 'Y' => 16,
+                        'Z' => 16, 'AA' => 42, 'AB' => 24, 'AC' => 16, 'AD' => 16,
+                    ];
+                } else {
+                    $sheet->getStyle("A2:D{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("X2:Y{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("AB2:AC{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 16, 'B' => 14, 'C' => 18, 'D' => 18,
+                        'E' => 32, 'F' => 22, 'G' => 36, 'H' => 28, 'I' => 36,
+                        'J' => 44, 'K' => 24, 'L' => 18, 'M' => 55, 'N' => 42,
+                        'O' => 36, 'P' => 55, 'Q' => 24, 'R' => 55, 'S' => 28,
+                        'T' => 28, 'U' => 18, 'V' => 18, 'W' => 28, 'X' => 16,
+                        'Y' => 16, 'Z' => 42, 'AA' => 24, 'AB' => 16, 'AC' => 16,
+                    ];
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -175,7 +215,7 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:AD{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

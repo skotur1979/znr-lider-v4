@@ -23,10 +23,18 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
 {
     protected Collection $kits;
 
+    protected bool $showUserColumn = false;
+
     private int $maxItems = 15;
 
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->kits = FirstAidKitResource::getEloquentQuery()
             ->with([
                 'user',
@@ -46,14 +54,20 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
     {
         $heads = [
             'Lokacija ormarića',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $heads[] = 'Korisnik';
+        }
+
+        $heads = array_merge($heads, [
             'Pregled obavljen',
             'Napomena',
             'Ukupan broj stavki',
             'Uskoro ističe',
             'Isteklo',
             'Najraniji rok',
-        ];
+        ]);
 
         for ($i = 1; $i <= $this->maxItems; $i++) {
             $heads[] = "Stavka {$i} - vrsta";
@@ -92,14 +106,20 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
 
         $row = [
             $kit->location,
-            $kit->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $kit->user?->name ?? '';
+        }
+
+        $row = array_merge($row, [
             $excelDate($kit->inspected_at),
             $kit->note,
             (int) $kit->items_count,
             (int) $soon,
             (int) $expired,
             $earliest ? ExcelDate::dateTimeToExcel($earliest) : null,
-        ];
+        ]);
 
         for ($i = 0; $i < $this->maxItems; $i++) {
             /** @var FirstAidItem|null $item */
@@ -117,12 +137,21 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
     {
         $dateFormat = NumberFormat::FORMAT_DATE_DDMMYYYY;
 
-        $formats = [
-            'C' => $dateFormat,
-            'H' => $dateFormat,
-        ];
+        if ($this->showUserColumn) {
+            $formats = [
+                'C' => $dateFormat,
+                'H' => $dateFormat,
+            ];
 
-        $startColIndex = $this->colToIndex('I');
+            $startColIndex = $this->colToIndex('I');
+        } else {
+            $formats = [
+                'B' => $dateFormat,
+                'G' => $dateFormat,
+            ];
+
+            $startColIndex = $this->colToIndex('H');
+        }
 
         for ($i = 0; $i < $this->maxItems; $i++) {
             $dateColIndex = $startColIndex + ($i * 3) + 2;
@@ -173,31 +202,44 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("C2:H{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-                $startColIndex = $this->colToIndex('I');
-
-                for ($i = 0; $i < $this->maxItems; $i++) {
-                    $dateColIndex = $startColIndex + ($i * 3) + 2;
-                    $dateCol = $this->indexToCol($dateColIndex);
-
-                    $sheet->getStyle("{$dateCol}2:{$dateCol}{$lastRow}")
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("C2:H{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                }
 
-                $widths = [
-                    'A' => 28,
-                    'B' => 22,
-                    'C' => 18,
-                    'D' => 36,
-                    'E' => 16,
-                    'F' => 16,
-                    'G' => 14,
-                    'H' => 16,
-                ];
+                    $startColIndex = $this->colToIndex('I');
+
+                    $widths = [
+                        'A' => 28,
+                        'B' => 22,
+                        'C' => 18,
+                        'D' => 36,
+                        'E' => 16,
+                        'F' => 16,
+                        'G' => 14,
+                        'H' => 16,
+                    ];
+
+                    $earliestColumn = 'H';
+                } else {
+                    $sheet->getStyle("B2:G{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $startColIndex = $this->colToIndex('H');
+
+                    $widths = [
+                        'A' => 28,
+                        'B' => 18,
+                        'C' => 36,
+                        'D' => 16,
+                        'E' => 16,
+                        'F' => 14,
+                        'G' => 16,
+                    ];
+
+                    $earliestColumn = 'G';
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -209,6 +251,12 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
                     $sheet->getColumnDimension($this->indexToCol($base))->setWidth(28);
                     $sheet->getColumnDimension($this->indexToCol($base + 1))->setWidth(32);
                     $sheet->getColumnDimension($this->indexToCol($base + 2))->setWidth(16);
+
+                    $dateCol = $this->indexToCol($base + 2);
+
+                    $sheet->getStyle("{$dateCol}2:{$dateCol}{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 }
 
                 $sheet->getRowDimension(1)->setRowHeight(30);
@@ -232,9 +280,9 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
 
                     if ($earliest) {
                         if ($earliest->lt($today)) {
-                            $this->fillCell($sheet, "H{$row}", 'FFFF0000');
+                            $this->fillCell($sheet, "{$earliestColumn}{$row}", 'FFFF0000');
                         } elseif ($earliest->lte($soon)) {
-                            $this->fillCell($sheet, "H{$row}", 'FFFFFF00');
+                            $this->fillCell($sheet, "{$earliestColumn}{$row}", 'FFFFFF00');
                         }
                     }
 

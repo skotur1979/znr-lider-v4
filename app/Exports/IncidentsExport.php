@@ -24,11 +24,19 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
 
     protected array $filters = [];
 
+    protected bool $showUserColumn = false;
+
     private int $imgHeight = 70;
 
     public function __construct(array $filters = [])
     {
         $this->filters = $filters;
+
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
 
         $query = IncidentResource::getEloquentQuery()
             ->with('user')
@@ -46,9 +54,15 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Datum nastanka',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Vrsta incidenta',
             'Vrsta zaposlenja',
             'Lokacija',
@@ -60,7 +74,7 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
             'Napomena / podaci o ozlijeđenom radniku',
             'Broj priloga',
             'Slika',
-        ];
+        ]);
     }
 
     public function map($i): array
@@ -70,9 +84,15 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
         $occurred = $i->date_occurred ? Carbon::parse($i->date_occurred) : null;
         $return = $i->date_of_return ? Carbon::parse($i->date_of_return) : null;
 
-        return [
+        $row = [
             $occurred ? ExcelDate::dateTimeToExcel($occurred) : null,
-            $i->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $i->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $this->incidentTypeLabel($i->type_of_incident),
             $this->employmentTypeLabel($i->permanent_or_temporary),
             $i->location,
@@ -84,20 +104,29 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
             $i->other,
             is_array($i->investigation_report) ? count($i->investigation_report) : 0,
             null,
-        ];
+        ]);
     }
 
     public function columnFormats(): array
     {
+        if ($this->showUserColumn) {
+            return [
+                'A' => 'dd.mm.yyyy',
+                'H' => 'dd.mm.yyyy',
+            ];
+        }
+
         return [
             'A' => 'dd.mm.yyyy',
-            'H' => 'dd.mm.yyyy',
+            'G' => 'dd.mm.yyyy',
         ];
     }
 
     public function drawings(): array
     {
         $drawings = [];
+
+        $imageColumn = $this->showUserColumn ? 'M' : 'L';
 
         foreach ($this->incidents as $idx => $i) {
             if (! $i->image_path) {
@@ -118,7 +147,7 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
             $drawing->setPath($fullPath);
             $drawing->setHeight($this->imgHeight);
             $drawing->setResizeProportional(true);
-            $drawing->setCoordinates("M{$row}");
+            $drawing->setCoordinates("{$imageColumn}{$row}");
             $drawing->setOffsetX(5);
             $drawing->setOffsetY(5);
 
@@ -135,13 +164,14 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->incidents->count() + 1;
+                $lastCol = $this->showUserColumn ? 'M' : 'L';
 
-                $sheet->getStyle("A1:M{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:M1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -159,42 +189,75 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
                     ],
                 ]);
 
-                $sheet->getStyle("A2:M{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:M{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("A2:D{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("A2:D{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("G2:H{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("G2:H{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("L2:M{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("L2:M{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $widths = [
-                    'A' => 16,
-                    'B' => 20,
-                    'C' => 26,
-                    'D' => 18,
-                    'E' => 24,
-                    'F' => 28,
-                    'G' => 18,
-                    'H' => 16,
-                    'I' => 40,
-                    'J' => 40,
-                    'K' => 45,
-                    'L' => 14,
-                    'M' => 15,
-                ];
+                    $widths = [
+                        'A' => 16,
+                        'B' => 20,
+                        'C' => 26,
+                        'D' => 18,
+                        'E' => 24,
+                        'F' => 28,
+                        'G' => 18,
+                        'H' => 16,
+                        'I' => 40,
+                        'J' => 40,
+                        'K' => 45,
+                        'L' => 14,
+                        'M' => 15,
+                    ];
+
+                    $returnDateColumn = 'H';
+                } else {
+                    $sheet->getStyle("A2:C{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("F2:G{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("K2:L{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 16,
+                        'B' => 26,
+                        'C' => 18,
+                        'D' => 24,
+                        'E' => 28,
+                        'F' => 18,
+                        'G' => 16,
+                        'H' => 40,
+                        'I' => 40,
+                        'J' => 45,
+                        'K' => 14,
+                        'L' => 15,
+                    ];
+
+                    $returnDateColumn = 'G';
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -219,17 +282,17 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
                     }
 
                     if ($return->lt($today)) {
-                        $this->fillCell($sheet, "H{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "{$returnDateColumn}{$row}", 'FFFF0000');
                         continue;
                     }
 
                     if ($return->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "H{$row}", 'FFFFFF00');
+                        $this->fillCell($sheet, "{$returnDateColumn}{$row}", 'FFFFFF00');
                     }
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:M{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

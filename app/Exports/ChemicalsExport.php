@@ -18,8 +18,16 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
 {
     protected $chemicals;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->chemicals = ChemicalResource::getEloquentQuery()
             ->with('user')
             ->orderBy('product_name')
@@ -33,9 +41,15 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Ime proizvoda',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'CAS',
             'UFI',
             'Piktogrami',
@@ -46,16 +60,22 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
             'GVI / KGVI',
             'VOC',
             'STL – HZJZ',
-        ];
+        ]);
     }
 
     public function map($chemical): array
     {
         /** @var Chemical $chemical */
 
-        return [
+        $row = [
             $chemical->product_name,
-            $chemical->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $chemical->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $chemical->cas_number,
             $chemical->ufi_number,
             '',
@@ -66,7 +86,7 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
             $chemical->gvi_kgvi,
             $chemical->voc,
             $chemical->stl_hzjz ? $chemical->stl_hzjz->format('d.m.Y.') : '',
-        ];
+        ]);
     }
 
     public function registerEvents(): array
@@ -76,13 +96,14 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->chemicals->count() + 1;
+                $lastCol = $this->showUserColumn ? 'L' : 'K';
 
-                $sheet->getStyle("A1:L{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:L1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -100,31 +121,57 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
                     ],
                 ]);
 
-                $sheet->getStyle("A2:L{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:L{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("I2:K{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("I2:K{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getColumnDimension('A')->setWidth(28);
-                $sheet->getColumnDimension('B')->setWidth(18);
-                $sheet->getColumnDimension('C')->setWidth(20);
-                $sheet->getColumnDimension('D')->setWidth(20);
-                $sheet->getColumnDimension('E')->setWidth(20);
-                $sheet->getColumnDimension('F')->setWidth(28);
-                $sheet->getColumnDimension('G')->setWidth(42);
-                $sheet->getColumnDimension('H')->setWidth(24);
-                $sheet->getColumnDimension('I')->setWidth(12);
-                $sheet->getColumnDimension('J')->setWidth(12);
-                $sheet->getColumnDimension('K')->setWidth(10);
-                $sheet->getColumnDimension('L')->setWidth(16);
+                    $widths = [
+                        'A' => 28,
+                        'B' => 18,
+                        'C' => 20,
+                        'D' => 20,
+                        'E' => 20,
+                        'F' => 28,
+                        'G' => 42,
+                        'H' => 24,
+                        'I' => 12,
+                        'J' => 12,
+                        'K' => 10,
+                        'L' => 16,
+                    ];
+                } else {
+                    $sheet->getStyle("H2:J{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 28,
+                        'B' => 20,
+                        'C' => 20,
+                        'D' => 20,
+                        'E' => 28,
+                        'F' => 42,
+                        'G' => 24,
+                        'H' => 12,
+                        'I' => 12,
+                        'J' => 10,
+                        'K' => 16,
+                    ];
+                }
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
 
                 $sheet->getRowDimension(1)->setRowHeight(26);
 
@@ -136,7 +183,7 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:L{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }
@@ -144,6 +191,8 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
     public function drawings(): array
     {
         $drawings = [];
+
+        $pictogramColumn = $this->showUserColumn ? 'E' : 'D';
 
         foreach ($this->chemicals as $i => $chemical) {
             $row = $i + 2;
@@ -161,7 +210,7 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
                 $drawing->setDescription($code);
                 $drawing->setPath($path);
                 $drawing->setHeight(18);
-                $drawing->setCoordinates('E' . $row);
+                $drawing->setCoordinates($pictogramColumn . $row);
 
                 $drawing->setOffsetX(4 + (($idx % 3) * 24));
                 $drawing->setOffsetY(4 + (intdiv($idx, 3) * 21));

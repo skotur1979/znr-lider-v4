@@ -4,7 +4,6 @@ namespace App\Exports;
 
 use App\Models\OntoEntry;
 use App\Models\OntoRecord;
-use App\Models\WasteOrganizationLocation;
 use App\Models\WasteType;
 use App\Support\WasteCodeFormatter;
 use Illuminate\Support\Facades\Auth;
@@ -25,21 +24,9 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
     public function headings(): array
     {
         return [
-            'R.br.',
-            'K.B.',
-            'Naziv',
-            'Sij',
-            'Velj',
-            'Ožu',
-            'Tra',
-            'Svi',
-            'Lip',
-            'Srp',
-            'Kol',
-            'Ruj',
-            'Lis',
-            'Stu',
-            'Pro',
+            'R.br.', 'K.B.', 'Naziv',
+            'Sij', 'Velj', 'Ožu', 'Tra', 'Svi', 'Lip',
+            'Srp', 'Kol', 'Ruj', 'Lis', 'Stu', 'Pro',
             (string) $this->year,
         ];
     }
@@ -63,7 +50,7 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
                 $index + 1,
                 WasteCodeFormatter::plain($row['waste_code']),
                 $row['name'] . ($row['is_hazardous'] ? ' (Opasan)' : ''),
-                ...array_map(fn ($v) => (float) $v, $row['months']),
+                ...array_map(fn ($value) => (float) $value, $row['months']),
                 (float) $row['total'],
             ];
         }
@@ -72,7 +59,7 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
             '',
             '',
             'Ukupno po mjesecima',
-            ...array_map(fn ($v) => (float) $v, $totals),
+            ...array_map(fn ($value) => (float) $value, $totals),
             (float) $grandTotal,
         ];
 
@@ -96,6 +83,7 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
                         'name' => 'DejaVu Sans',
+                        'size' => 10,
                     ],
                     'fill' => [
                         'fillType' => 'solid',
@@ -104,6 +92,7 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
                     'alignment' => [
                         'horizontal' => Alignment::HORIZONTAL_CENTER,
                         'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
                     ],
                 ]);
 
@@ -138,7 +127,7 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
                 $widths = [
                     'A' => 8,
                     'B' => 16,
-                    'C' => 38,
+                    'C' => 42,
                     'D' => 12,
                     'E' => 12,
                     'F' => 12,
@@ -161,7 +150,7 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
                 $sheet->getRowDimension(1)->setRowHeight(28);
 
                 for ($row = 2; $row <= $lastRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(30);
+                    $sheet->getRowDimension($row)->setRowHeight(28);
                 }
 
                 $sheet->freezePane('A2');
@@ -172,10 +161,12 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
 
     private function rows(): array
     {
+        $ownerId = Auth::user()?->ownerId();
+
         $baseWasteTypeIds = OntoRecord::query()
             ->when(
-                ! Auth::user()?->isAdmin(),
-                fn ($query) => $query->where('user_id', Auth::id())
+                ! Auth::user()?->isSuperAdmin(),
+                fn ($query) => $query->where('user_id', $ownerId)
             )
             ->where('year', $this->year)
             ->when(
@@ -203,8 +194,8 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
             ->where('onto_entries.entry_type', 'output')
             ->whereYear('onto_entries.entry_date', $this->year)
             ->when(
-                ! Auth::user()?->isAdmin(),
-                fn ($query) => $query->where('onto_records.user_id', Auth::id())
+                ! Auth::user()?->isSuperAdmin(),
+                fn ($query) => $query->where('onto_records.user_id', $ownerId)
             )
             ->when(
                 filled($this->locationId),

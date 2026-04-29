@@ -20,8 +20,16 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
 {
     protected $fires;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->fires = FireResource::getEloquentQuery()
             ->with('user')
             ->orderBy('place')
@@ -35,9 +43,15 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Mjesto',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Tip',
             'Tvor. broj / god. proizv.',
             'Serijski broj',
@@ -49,7 +63,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             'Uočeni nedostatci',
             'Postupci otklanjanja',
             'Broj priloga',
-        ];
+        ]);
     }
 
     public function map($fire): array
@@ -60,9 +74,15 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
         $validUntil = $fire->examination_valid_until ? Carbon::parse($fire->examination_valid_until) : null;
         $regularFrom = $fire->regular_examination_valid_from ? Carbon::parse($fire->regular_examination_valid_from) : null;
 
-        return [
+        $row = [
             $fire->place,
-            $fire->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $fire->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $fire->type,
             $fire->factory_number_year_of_production,
             $fire->serial_label_number,
@@ -74,15 +94,23 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             $fire->remark,
             $fire->action,
             is_array($fire->pdf) ? count($fire->pdf) : 0,
-        ];
+        ]);
     }
 
     public function columnFormats(): array
     {
+        if ($this->showUserColumn) {
+            return [
+                'F' => 'dd.mm.yyyy',
+                'G' => 'dd.mm.yyyy',
+                'I' => 'dd.mm.yyyy',
+            ];
+        }
+
         return [
+            'E' => 'dd.mm.yyyy',
             'F' => 'dd.mm.yyyy',
-            'G' => 'dd.mm.yyyy',
-            'I' => 'dd.mm.yyyy',
+            'H' => 'dd.mm.yyyy',
         ];
     }
 
@@ -93,13 +121,14 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->fires->count() + 1;
+                $lastCol = $this->showUserColumn ? 'M' : 'L';
 
-                $sheet->getStyle("A1:M{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:M1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -117,42 +146,75 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                     ],
                 ]);
 
-                $sheet->getStyle("A2:M{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:M{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("D2:G{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("D2:G{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("I2:I{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("I2:I{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("M2:M{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("M2:M{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $widths = [
-                    'A' => 30,
-                    'B' => 22,
-                    'C' => 18,
-                    'D' => 24,
-                    'E' => 24,
-                    'F' => 18,
-                    'G' => 16,
-                    'H' => 28,
-                    'I' => 20,
-                    'J' => 28,
-                    'K' => 32,
-                    'L' => 32,
-                    'M' => 14,
-                ];
+                    $widths = [
+                        'A' => 30,
+                        'B' => 22,
+                        'C' => 18,
+                        'D' => 24,
+                        'E' => 24,
+                        'F' => 18,
+                        'G' => 16,
+                        'H' => 28,
+                        'I' => 20,
+                        'J' => 28,
+                        'K' => 32,
+                        'L' => 32,
+                        'M' => 14,
+                    ];
+
+                    $expiryColumn = 'G';
+                } else {
+                    $sheet->getStyle("C2:F{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("H2:H{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("L2:L{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 30,
+                        'B' => 18,
+                        'C' => 24,
+                        'D' => 24,
+                        'E' => 18,
+                        'F' => 16,
+                        'G' => 28,
+                        'H' => 20,
+                        'I' => 28,
+                        'J' => 32,
+                        'K' => 32,
+                        'L' => 14,
+                    ];
+
+                    $expiryColumn = 'F';
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -178,17 +240,17 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                     }
 
                     if ($until->lt($today)) {
-                        $this->fillCell($sheet, "G{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFF0000');
                         continue;
                     }
 
                     if ($until->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "G{$row}", 'FFFFFF00');
+                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFFFF00');
                     }
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:M{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

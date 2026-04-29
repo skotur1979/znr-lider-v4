@@ -21,8 +21,16 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
 
     protected $items;
 
+    protected bool $showUserColumn = false;
+
     public function __construct(PPELog $log)
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->log = $log->load(['items', 'user']);
         $this->items = $this->log->items->sortBy('equipment_name')->values();
     }
@@ -34,8 +42,13 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
 
     public function headings(): array
     {
-        return [
-            'Korisnik',
+        $headings = [];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Prezime i ime',
             'OIB',
             'Radno mjesto',
@@ -47,7 +60,7 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
             'Izdano',
             'Istek',
             'Datum vraćanja',
-        ];
+        ]);
     }
 
     public function map($item): array
@@ -56,8 +69,13 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
         $end = $item->end_date ? Carbon::parse($item->end_date) : null;
         $return = $item->return_date ? Carbon::parse($item->return_date) : null;
 
-        return [
-            $this->log->user?->name ?? '',
+        $row = [];
+
+        if ($this->showUserColumn) {
+            $row[] = $this->log->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $this->log->user_last_name,
             $this->log->user_oib,
             $this->log->workplace,
@@ -69,15 +87,23 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
             $issue ? ExcelDate::dateTimeToExcel($issue) : null,
             $end ? ExcelDate::dateTimeToExcel($end) : null,
             $return ? ExcelDate::dateTimeToExcel($return) : null,
-        ];
+        ]);
     }
 
     public function columnFormats(): array
     {
+        if ($this->showUserColumn) {
+            return [
+                'J' => 'dd.mm.yyyy',
+                'K' => 'dd.mm.yyyy',
+                'L' => 'dd.mm.yyyy',
+            ];
+        }
+
         return [
+            'I' => 'dd.mm.yyyy',
             'J' => 'dd.mm.yyyy',
             'K' => 'dd.mm.yyyy',
-            'L' => 'dd.mm.yyyy',
         ];
     }
 
@@ -87,13 +113,14 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = $this->items->count() + 1;
+                $lastCol = $this->showUserColumn ? 'L' : 'K';
 
-                $sheet->getStyle("A1:L{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:L1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -111,31 +138,57 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
                     ],
                 ]);
 
-                $sheet->getStyle("A2:L{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                foreach (['C', 'G', 'H', 'I', 'J', 'K', 'L'] as $col) {
-                    $sheet->getStyle("{$col}2:{$col}{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                }
+                if ($this->showUserColumn) {
+                    foreach (['C', 'G', 'H', 'I', 'J', 'K', 'L'] as $col) {
+                        $sheet->getStyle("{$col}2:{$col}{$lastRow}")
+                            ->getAlignment()
+                            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    }
 
-                $widths = [
-                    'A' => 22,
-                    'B' => 28,
-                    'C' => 16,
-                    'D' => 26,
-                    'E' => 28,
-                    'F' => 32,
-                    'G' => 18,
-                    'H' => 14,
-                    'I' => 16,
-                    'J' => 16,
-                    'K' => 16,
-                    'L' => 18,
-                ];
+                    $widths = [
+                        'A' => 22,
+                        'B' => 28,
+                        'C' => 16,
+                        'D' => 26,
+                        'E' => 28,
+                        'F' => 32,
+                        'G' => 18,
+                        'H' => 14,
+                        'I' => 16,
+                        'J' => 16,
+                        'K' => 16,
+                        'L' => 18,
+                    ];
+
+                    $expiryColumn = 'K';
+                } else {
+                    foreach (['B', 'F', 'G', 'H', 'I', 'J', 'K'] as $col) {
+                        $sheet->getStyle("{$col}2:{$col}{$lastRow}")
+                            ->getAlignment()
+                            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    }
+
+                    $widths = [
+                        'A' => 28,
+                        'B' => 16,
+                        'C' => 26,
+                        'D' => 28,
+                        'E' => 32,
+                        'F' => 18,
+                        'G' => 14,
+                        'H' => 16,
+                        'I' => 16,
+                        'J' => 16,
+                        'K' => 18,
+                    ];
+
+                    $expiryColumn = 'J';
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -159,14 +212,14 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
                     }
 
                     if ($end->lt($today)) {
-                        $this->fillCell($sheet, "K{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFF0000');
                     } elseif ($end->lte($soon)) {
-                        $this->fillCell($sheet, "K{$row}", 'FFFFFF00');
+                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFFFF00');
                     }
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:L{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

@@ -20,8 +20,16 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
 {
     protected $records;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->records = MiscellaneousResource::getEloquentQuery()
             ->with(['user', 'category'])
             ->orderByDesc('examination_valid_until')
@@ -35,9 +43,15 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Naziv',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Kategorija',
             'Ispitao',
             'Broj izvještaja',
@@ -45,7 +59,7 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
             'Vrijedi do',
             'Napomena',
             'Broj priloga',
-        ];
+        ]);
     }
 
     public function map($record): array
@@ -55,9 +69,15 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
         $from = $record->examination_valid_from ? Carbon::parse($record->examination_valid_from) : null;
         $until = $record->examination_valid_until ? Carbon::parse($record->examination_valid_until) : null;
 
-        return [
+        $row = [
             $record->name,
-            $record->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $record->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $record->category?->name ?? '',
             $record->examiner,
             $record->report_number,
@@ -65,14 +85,21 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
             $until ? ExcelDate::dateTimeToExcel($until) : null,
             $record->remark,
             is_array($record->pdf) ? count($record->pdf) : 0,
-        ];
+        ]);
     }
 
     public function columnFormats(): array
     {
+        if ($this->showUserColumn) {
+            return [
+                'F' => 'dd.mm.yyyy',
+                'G' => 'dd.mm.yyyy',
+            ];
+        }
+
         return [
+            'E' => 'dd.mm.yyyy',
             'F' => 'dd.mm.yyyy',
-            'G' => 'dd.mm.yyyy',
         ];
     }
 
@@ -83,13 +110,14 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->records->count() + 1;
+                $lastCol = $this->showUserColumn ? 'I' : 'H';
 
-                $sheet->getStyle("A1:I{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:I1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -107,34 +135,59 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
                     ],
                 ]);
 
-                $sheet->getStyle("A2:I{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:I{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("F2:G{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("F2:G{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("I2:I{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("I2:I{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $widths = [
-                    'A' => 32,
-                    'B' => 22,
-                    'C' => 26,
-                    'D' => 24,
-                    'E' => 22,
-                    'F' => 16,
-                    'G' => 16,
-                    'H' => 45,
-                    'I' => 14,
-                ];
+                    $widths = [
+                        'A' => 32,
+                        'B' => 22,
+                        'C' => 26,
+                        'D' => 24,
+                        'E' => 22,
+                        'F' => 16,
+                        'G' => 16,
+                        'H' => 45,
+                        'I' => 14,
+                    ];
+
+                    $expiryColumn = 'G';
+                } else {
+                    $sheet->getStyle("E2:F{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("H2:H{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 32,
+                        'B' => 26,
+                        'C' => 24,
+                        'D' => 22,
+                        'E' => 16,
+                        'F' => 16,
+                        'G' => 45,
+                        'H' => 14,
+                    ];
+
+                    $expiryColumn = 'F';
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -160,17 +213,17 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
                     }
 
                     if ($until->lt($today)) {
-                        $this->fillCell($sheet, "G{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFF0000');
                         continue;
                     }
 
                     if ($until->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "G{$row}", 'FFFFFF00');
+                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFFFF00');
                     }
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:I{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

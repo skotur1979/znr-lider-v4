@@ -19,8 +19,16 @@ class WasteTrackingFormsExport implements FromCollection, WithHeadings, WithMapp
 {
     protected $records;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->records = WasteTrackingFormResource::getEloquentQuery()
             ->with([
                 'user',
@@ -40,16 +48,22 @@ class WasteTrackingFormsExport implements FromCollection, WithHeadings, WithMapp
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Broj PL-O',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Datum',
             'Lokacija',
             'K.B.',
             'Naziv otpada',
             'Količina (kg)',
             'Status',
-        ];
+        ]);
     }
 
     public function map($record): array
@@ -58,9 +72,15 @@ class WasteTrackingFormsExport implements FromCollection, WithHeadings, WithMapp
 
         $date = $record->handover_date ? Carbon::parse($record->handover_date) : null;
 
-        return [
+        $row = [
             $record->document_number,
-            $record->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $record->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $date ? ExcelDate::dateTimeToExcel($date) : null,
             $record->ontoRecord?->organizationLocation?->display_name
                 ?? $record->ontoRecord?->organizationLocation?->name
@@ -70,14 +90,21 @@ class WasteTrackingFormsExport implements FromCollection, WithHeadings, WithMapp
             $record->ontoRecord?->wasteType?->name ?? '',
             (float) $record->quantity_kg,
             $record->status === 'locked' ? 'Zaključen' : 'Nacrt',
-        ];
+        ]);
     }
 
     public function columnFormats(): array
     {
+        if ($this->showUserColumn) {
+            return [
+                'C' => 'dd.mm.yyyy',
+                'G' => '#,##0.00',
+            ];
+        }
+
         return [
-            'C' => 'dd.mm.yyyy',
-            'G' => '#,##0.00',
+            'B' => 'dd.mm.yyyy',
+            'F' => '#,##0.00',
         ];
     }
 
@@ -88,13 +115,14 @@ class WasteTrackingFormsExport implements FromCollection, WithHeadings, WithMapp
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->records->count() + 1;
+                $lastCol = $this->showUserColumn ? 'H' : 'G';
 
-                $sheet->getStyle("A1:H{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:H1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -112,37 +140,61 @@ class WasteTrackingFormsExport implements FromCollection, WithHeadings, WithMapp
                     ],
                 ]);
 
-                $sheet->getStyle("A2:H{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:H{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("C2:C{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("C2:C{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("E2:E{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("E2:E{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("G2:H{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("G2:H{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $widths = [
-                    'A' => 34,
-                    'B' => 22,
-                    'C' => 16,
-                    'D' => 28,
-                    'E' => 14,
-                    'F' => 36,
-                    'G' => 16,
-                    'H' => 16,
-                ];
+                    $widths = [
+                        'A' => 34,
+                        'B' => 22,
+                        'C' => 16,
+                        'D' => 28,
+                        'E' => 14,
+                        'F' => 36,
+                        'G' => 16,
+                        'H' => 16,
+                    ];
+                } else {
+                    $sheet->getStyle("B2:B{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("D2:D{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("F2:G{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 34,
+                        'B' => 16,
+                        'C' => 28,
+                        'D' => 14,
+                        'E' => 36,
+                        'F' => 16,
+                        'G' => 16,
+                    ];
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -155,7 +207,7 @@ class WasteTrackingFormsExport implements FromCollection, WithHeadings, WithMapp
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:H{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

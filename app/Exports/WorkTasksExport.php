@@ -16,8 +16,16 @@ class WorkTasksExport implements FromCollection, WithHeadings, WithMapping, Shou
 {
     protected $tasks;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->tasks = WorkTaskResource::getEloquentQuery()
             ->with('user')
             ->orderBy('due_date')
@@ -32,28 +40,36 @@ class WorkTasksExport implements FromCollection, WithHeadings, WithMapping, Shou
 
     public function headings(): array
     {
-        return [
-            'Zadatak',
-            'Korisnik',
+        $headings = ['Zadatak'];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Opis',
             'Datum',
             'Status',
             'Zatvoreno',
-        ];
+        ]);
     }
 
     public function map($task): array
     {
         /** @var WorkTask $task */
 
-        return [
-            $task->title,
-            $task->user?->name ?? '',
+        $row = [$task->title];
+
+        if ($this->showUserColumn) {
+            $row[] = $task->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $task->description,
             $task->due_date ? $task->due_date->format('d.m.Y.') : '',
             $task->is_done ? 'Riješeno' : 'Otvoreno',
             $task->completed_at ? $task->completed_at->format('d.m.Y. H:i') : '',
-        ];
+        ]);
     }
 
     public function registerEvents(): array
@@ -63,13 +79,14 @@ class WorkTasksExport implements FromCollection, WithHeadings, WithMapping, Shou
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->tasks->count() + 1;
+                $lastCol = $this->showUserColumn ? 'F' : 'E';
 
-                $sheet->getStyle("A1:F{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:F1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -87,25 +104,45 @@ class WorkTasksExport implements FromCollection, WithHeadings, WithMapping, Shou
                     ],
                 ]);
 
-                $sheet->getStyle("A2:F{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:F{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("D2:F{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("D2:F{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getColumnDimension('A')->setWidth(34);
-                $sheet->getColumnDimension('B')->setWidth(22);
-                $sheet->getColumnDimension('C')->setWidth(55);
-                $sheet->getColumnDimension('D')->setWidth(16);
-                $sheet->getColumnDimension('E')->setWidth(16);
-                $sheet->getColumnDimension('F')->setWidth(20);
+                    $widths = [
+                        'A' => 34,
+                        'B' => 22,
+                        'C' => 55,
+                        'D' => 16,
+                        'E' => 16,
+                        'F' => 20,
+                    ];
+                } else {
+                    $sheet->getStyle("C2:E{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 34,
+                        'B' => 55,
+                        'C' => 16,
+                        'D' => 16,
+                        'E' => 20,
+                    ];
+                }
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
 
                 $sheet->getRowDimension(1)->setRowHeight(28);
 
@@ -114,7 +151,7 @@ class WorkTasksExport implements FromCollection, WithHeadings, WithMapping, Shou
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:F{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

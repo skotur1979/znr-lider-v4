@@ -16,8 +16,16 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
 {
     protected $kpis;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->kpis = KpiResource::getEloquentQuery()
             ->with('user')
             ->orderBy('sort_order')
@@ -32,9 +40,15 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Naziv KPI-a',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Kategorija',
             'Jedinica',
             'Cilj',
@@ -49,7 +63,7 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
             'Redoslijed',
             'Opis formule / napomena',
             'Opis',
-        ];
+        ]);
     }
 
     public function map($kpi): array
@@ -60,9 +74,15 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
         $latestValue = $kpi->latestValue()?->value;
         $status = $kpi->evaluateStatus($latestValue, $ownerId);
 
-        return [
+        $row = [
             $kpi->name,
-            $kpi->user?->name ?? 'Globalni KPI',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $kpi->user?->name ?? 'Globalni KPI';
+        }
+
+        return array_merge($row, [
             $kpi->category,
             $kpi->unit,
             $kpi->formatNumberOnly($kpi->effectiveTargetValue($ownerId)),
@@ -77,7 +97,7 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
             $kpi->sort_order,
             $kpi->formula_text,
             $kpi->description,
-        ];
+        ]);
     }
 
     public function registerEvents(): array
@@ -87,13 +107,14 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->kpis->count() + 1;
+                $lastCol = $this->showUserColumn ? 'P' : 'O';
 
-                $sheet->getStyle("A1:P{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:P1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -111,41 +132,69 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
                     ],
                 ]);
 
-                $sheet->getStyle("A2:P{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:P{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("C2:H{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("C2:H{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("J2:N{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("J2:N{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $widths = [
-                    'A' => 34,
-                    'B' => 22,
-                    'C' => 16,
-                    'D' => 14,
-                    'E' => 14,
-                    'F' => 18,
-                    'G' => 20,
-                    'H' => 18,
-                    'I' => 34,
-                    'J' => 18,
-                    'K' => 18,
-                    'L' => 12,
-                    'M' => 18,
-                    'N' => 12,
-                    'O' => 45,
-                    'P' => 45,
-                ];
+                    $widths = [
+                        'A' => 34,
+                        'B' => 22,
+                        'C' => 16,
+                        'D' => 14,
+                        'E' => 14,
+                        'F' => 18,
+                        'G' => 20,
+                        'H' => 18,
+                        'I' => 34,
+                        'J' => 18,
+                        'K' => 18,
+                        'L' => 12,
+                        'M' => 18,
+                        'N' => 12,
+                        'O' => 45,
+                        'P' => 45,
+                    ];
+                } else {
+                    $sheet->getStyle("B2:G{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("I2:M{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 34,
+                        'B' => 16,
+                        'C' => 14,
+                        'D' => 14,
+                        'E' => 18,
+                        'F' => 20,
+                        'G' => 18,
+                        'H' => 34,
+                        'I' => 18,
+                        'J' => 18,
+                        'K' => 12,
+                        'L' => 18,
+                        'M' => 12,
+                        'N' => 45,
+                        'O' => 45,
+                    ];
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -158,7 +207,7 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:P{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

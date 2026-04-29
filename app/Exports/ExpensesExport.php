@@ -22,6 +22,8 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
 
     protected string $year;
 
+    protected bool $showUserColumn = false;
+
     protected float $totalExpenses = 0.0;
     protected float $totalBudget = 0.0;
     protected float $balance = 0.0;
@@ -29,6 +31,12 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
     public function __construct(string $year)
     {
         $this->year = $year;
+
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
 
         $this->expenses = ExpenseResource::getEloquentQuery()
             ->with(['user', 'budget', 'category'])
@@ -46,7 +54,10 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
         $this->totalExpenses = (float) $this->expenses->sum('iznos');
 
         $this->totalBudget = (float) Budget::query()
-            ->when(! auth()->user()?->isSuperAdmin(), fn (Builder $query) => $query->where('user_id', auth()->user()?->ownerId()))
+            ->when(
+                ! auth()->user()?->isSuperAdmin(),
+                fn (Builder $query) => $query->where('user_id', auth()->user()?->ownerId())
+            )
             ->where('godina', $this->year)
             ->sum('ukupni_budget');
 
@@ -60,9 +71,15 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Godina',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Budžet (€)',
             'Kategorija',
             'Mjesec',
@@ -70,16 +87,22 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
             'Iznos (€)',
             'Dobavljač',
             'Realizirano',
-        ];
+        ]);
     }
 
     public function map($expense): array
     {
         /** @var Expense $expense */
 
-        return [
+        $row = [
             $expense->budget?->godina ?? '',
-            $expense->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $expense->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $expense->budget?->ukupni_budget ?? null,
             $expense->category?->name ?? '',
             $expense->mjesec,
@@ -87,14 +110,21 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
             (float) $expense->iznos,
             $expense->dobavljac,
             $expense->realizirano ? 'Da' : 'Ne',
-        ];
+        ]);
     }
 
     public function columnFormats(): array
     {
+        if ($this->showUserColumn) {
+            return [
+                'C' => '#,##0.00',
+                'G' => '#,##0.00',
+            ];
+        }
+
         return [
-            'C' => '#,##0.00',
-            'G' => '#,##0.00',
+            'B' => '#,##0.00',
+            'F' => '#,##0.00',
         ];
     }
 
@@ -107,12 +137,14 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
                 $lastDataRow = $this->expenses->count() + 1;
                 $summaryStartRow = $lastDataRow + 3;
 
-                $sheet->getStyle("A1:I{$summaryStartRow}")
+                $lastCol = $this->showUserColumn ? 'I' : 'H';
+
+                $sheet->getStyle("A1:{$lastCol}{$summaryStartRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:I1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -130,42 +162,71 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
                     ],
                 ]);
 
-                $sheet->getStyle("A2:I{$lastDataRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastDataRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:I{$lastDataRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastDataRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("A2:A{$lastDataRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("A2:A{$lastDataRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("C2:C{$lastDataRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("C2:C{$lastDataRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
-                $sheet->getStyle("E2:E{$lastDataRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("E2:E{$lastDataRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("G2:I{$lastDataRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("G2:I{$lastDataRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $widths = [
-                    'A' => 12,
-                    'B' => 22,
-                    'C' => 16,
-                    'D' => 26,
-                    'E' => 16,
-                    'F' => 38,
-                    'G' => 16,
-                    'H' => 28,
-                    'I' => 16,
-                ];
+                    $widths = [
+                        'A' => 12,
+                        'B' => 22,
+                        'C' => 16,
+                        'D' => 26,
+                        'E' => 16,
+                        'F' => 38,
+                        'G' => 16,
+                        'H' => 28,
+                        'I' => 16,
+                    ];
+                } else {
+                    $sheet->getStyle("A2:A{$lastDataRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("B2:B{$lastDataRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                    $sheet->getStyle("D2:D{$lastDataRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("F2:H{$lastDataRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 12,
+                        'B' => 16,
+                        'C' => 26,
+                        'D' => 16,
+                        'E' => 38,
+                        'F' => 16,
+                        'G' => 28,
+                        'H' => 16,
+                    ];
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -178,12 +239,12 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:I{$lastDataRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastDataRow}");
 
                 $sheet->setCellValue("A{$summaryStartRow}", "SAŽETAK TROŠKOVA ZA {$this->year}. GODINU");
-                $sheet->mergeCells("A{$summaryStartRow}:I{$summaryStartRow}");
+                $sheet->mergeCells("A{$summaryStartRow}:{$lastCol}{$summaryStartRow}");
 
-                $sheet->getStyle("A{$summaryStartRow}:I{$summaryStartRow}")->applyFromArray([
+                $sheet->getStyle("A{$summaryStartRow}:{$lastCol}{$summaryStartRow}")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],

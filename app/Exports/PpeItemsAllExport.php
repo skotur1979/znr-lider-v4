@@ -23,8 +23,16 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
 
     protected ?string $lastKey = null;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $logIds = PPELogResource::getEloquentQuery()
             ->select('id')
             ->pluck('id');
@@ -54,8 +62,13 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
 
     public function headings(): array
     {
-        return [
-            'Korisnik',
+        $headings = [];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Prezime i ime',
             'OIB',
             'Radno mjesto',
@@ -67,7 +80,7 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
             'Izdano',
             'Istek',
             'Datum vraćanja',
-        ];
+        ]);
     }
 
     public function map($item): array
@@ -77,7 +90,7 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
         $log = $item->log;
 
         $key = trim(
-            ($log?->user?->name ?? '') . '|' .
+            ($this->showUserColumn ? ($log?->user?->name ?? '') . '|' : '') .
             ($log?->user_last_name ?? '') . '|' .
             ($log?->user_oib ?? '') . '|' .
             ($log?->workplace ?? '') . '|' .
@@ -94,8 +107,13 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
         $end = $item->end_date ? Carbon::parse($item->end_date) : null;
         $return = $item->return_date ? Carbon::parse($item->return_date) : null;
 
-        return [
-            $isRepeat ? '' : ($log?->user?->name ?? ''),
+        $row = [];
+
+        if ($this->showUserColumn) {
+            $row[] = $isRepeat ? '' : ($log?->user?->name ?? '');
+        }
+
+        return array_merge($row, [
             $isRepeat ? '' : ($log?->user_last_name ?? ''),
             $isRepeat ? '' : ($log?->user_oib ?? ''),
             $isRepeat ? '' : ($log?->workplace ?? ''),
@@ -107,15 +125,23 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
             $issue ? ExcelDate::dateTimeToExcel($issue) : null,
             $end ? ExcelDate::dateTimeToExcel($end) : null,
             $return ? ExcelDate::dateTimeToExcel($return) : null,
-        ];
+        ]);
     }
 
     public function columnFormats(): array
     {
+        if ($this->showUserColumn) {
+            return [
+                'J' => 'dd.mm.yyyy',
+                'K' => 'dd.mm.yyyy',
+                'L' => 'dd.mm.yyyy',
+            ];
+        }
+
         return [
+            'I' => 'dd.mm.yyyy',
             'J' => 'dd.mm.yyyy',
             'K' => 'dd.mm.yyyy',
-            'L' => 'dd.mm.yyyy',
         ];
     }
 
@@ -125,13 +151,14 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $highestRow = $sheet->getHighestRow();
+                $lastCol = $this->showUserColumn ? 'L' : 'K';
 
-                $sheet->getStyle("A1:L{$highestRow}")
+                $sheet->getStyle("A1:{$lastCol}{$highestRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:L1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -149,31 +176,61 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
                     ],
                 ]);
 
-                $sheet->getStyle("A2:L{$highestRow}")
+                $sheet->getStyle("A2:{$lastCol}{$highestRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                foreach (['C', 'G', 'H', 'I', 'J', 'K', 'L'] as $col) {
-                    $sheet->getStyle("{$col}2:{$col}{$highestRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                }
+                if ($this->showUserColumn) {
+                    foreach (['C', 'G', 'H', 'I', 'J', 'K', 'L'] as $col) {
+                        $sheet->getStyle("{$col}2:{$col}{$highestRow}")
+                            ->getAlignment()
+                            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    }
 
-                $widths = [
-                    'A' => 22,
-                    'B' => 28,
-                    'C' => 16,
-                    'D' => 26,
-                    'E' => 28,
-                    'F' => 32,
-                    'G' => 18,
-                    'H' => 14,
-                    'I' => 16,
-                    'J' => 16,
-                    'K' => 16,
-                    'L' => 18,
-                ];
+                    $widths = [
+                        'A' => 22,
+                        'B' => 28,
+                        'C' => 16,
+                        'D' => 26,
+                        'E' => 28,
+                        'F' => 32,
+                        'G' => 18,
+                        'H' => 14,
+                        'I' => 16,
+                        'J' => 16,
+                        'K' => 16,
+                        'L' => 18,
+                    ];
+
+                    $expiryColumn = 'K';
+                    $groupColumns = ['A', 'B', 'C', 'D', 'E'];
+                    $centerGroupColumns = ['C'];
+                } else {
+                    foreach (['B', 'F', 'G', 'H', 'I', 'J', 'K'] as $col) {
+                        $sheet->getStyle("{$col}2:{$col}{$highestRow}")
+                            ->getAlignment()
+                            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    }
+
+                    $widths = [
+                        'A' => 28,
+                        'B' => 16,
+                        'C' => 26,
+                        'D' => 28,
+                        'E' => 32,
+                        'F' => 18,
+                        'G' => 14,
+                        'H' => 16,
+                        'I' => 16,
+                        'J' => 16,
+                        'K' => 18,
+                    ];
+
+                    $expiryColumn = 'J';
+                    $groupColumns = ['A', 'B', 'C', 'D'];
+                    $centerGroupColumns = ['B'];
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -197,38 +254,38 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
                     }
 
                     if ($end->lt($today)) {
-                        $this->fillCell($sheet, "K{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFF0000');
                     } elseif ($end->lte($soon)) {
-                        $this->fillCell($sheet, "K{$row}", 'FFFFFF00');
+                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFFFF00');
                     }
                 }
 
-                $sheet->getStyle("A1:L{$highestRow}")
+                $sheet->getStyle("A1:{$lastCol}{$highestRow}")
                     ->getBorders()
                     ->getAllBorders()
                     ->setBorderStyle(Border::BORDER_THIN);
 
-                $this->mergeGroupedColumns($sheet, $highestRow, ['A', 'B', 'C', 'D', 'E']);
-                $this->applyGroupTopBorders($sheet, $highestRow);
+                $this->mergeGroupedColumns($sheet, $highestRow, $groupColumns, $centerGroupColumns);
+                $this->applyGroupTopBorders($sheet, $highestRow, $lastCol);
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:L{$highestRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$highestRow}");
             },
         ];
     }
 
-    private function mergeGroupedColumns($sheet, int $highestRow, array $columns): void
+    private function mergeGroupedColumns($sheet, int $highestRow, array $columns, array $centerColumns = []): void
     {
         if ($highestRow < 3) {
             return;
         }
 
         $groupStart = 2;
-        $prevKey = $this->groupKeyFromSheet($sheet, 2);
+        $prevKey = $this->groupKeyFromSheet($sheet, 2, $columns);
 
         for ($row = 3; $row <= $highestRow + 1; $row++) {
             $currentKey = $row <= $highestRow
-                ? $this->groupKeyFromSheet($sheet, $row)
+                ? $this->groupKeyFromSheet($sheet, $row, $columns)
                 : '__END__';
 
             if ($currentKey !== $prevKey) {
@@ -250,7 +307,7 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
                         $sheet->getStyle("{$topCell}:{$bottomCell}")
                             ->getAlignment()
                             ->setVertical(Alignment::VERTICAL_CENTER)
-                            ->setHorizontal(in_array($col, ['C'], true)
+                            ->setHorizontal(in_array($col, $centerColumns, true)
                                 ? Alignment::HORIZONTAL_CENTER
                                 : Alignment::HORIZONTAL_LEFT);
                     }
@@ -262,17 +319,21 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
         }
     }
 
-    private function applyGroupTopBorders($sheet, int $highestRow): void
+    private function applyGroupTopBorders($sheet, int $highestRow, string $lastCol): void
     {
         if ($highestRow < 2) {
             return;
         }
 
+        $groupColumns = $this->showUserColumn
+            ? ['A', 'B', 'C', 'D', 'E']
+            : ['A', 'B', 'C', 'D'];
+
         $groupStartRows = [2];
-        $prevKey = $this->groupKeyFromSheet($sheet, 2);
+        $prevKey = $this->groupKeyFromSheet($sheet, 2, $groupColumns);
 
         for ($row = 3; $row <= $highestRow; $row++) {
-            $currentKey = $this->groupKeyFromSheet($sheet, $row);
+            $currentKey = $this->groupKeyFromSheet($sheet, $row, $groupColumns);
 
             if ($currentKey !== '' && $currentKey !== $prevKey) {
                 $groupStartRows[] = $row;
@@ -281,18 +342,18 @@ class PpeItemsAllExport implements FromCollection, WithHeadings, WithMapping, Wi
         }
 
         foreach ($groupStartRows as $row) {
-            $sheet->getStyle("A{$row}:L{$row}")
+            $sheet->getStyle("A{$row}:{$lastCol}{$row}")
                 ->getBorders()
                 ->getTop()
                 ->setBorderStyle(Border::BORDER_MEDIUM);
         }
     }
 
-    private function groupKeyFromSheet($sheet, int $row): string
+    private function groupKeyFromSheet($sheet, int $row, array $columns): string
     {
         $values = [];
 
-        foreach (['A', 'B', 'C', 'D', 'E'] as $column) {
+        foreach ($columns as $column) {
             $values[] = trim((string) $sheet->getCell("{$column}{$row}")->getValue());
         }
 

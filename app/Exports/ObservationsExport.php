@@ -22,10 +22,18 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
 {
     protected $observations;
 
+    protected bool $showUserColumn = false;
+
     private int $imgHeight = 70;
 
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->observations = ObservationResource::getEloquentQuery()
             ->with('user')
             ->orderByDesc('incident_date')
@@ -39,9 +47,15 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Datum',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Vrsta zapažanja',
             'Prioritet',
             'Lokacija',
@@ -55,7 +69,7 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
             'Poslano',
             'Komentar',
             'Slika',
-        ];
+        ]);
     }
 
     public function map($o): array
@@ -66,9 +80,15 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
         $target = $o->target_date ? Carbon::parse($o->target_date) : null;
         $sentAt = $o->sent_at ? Carbon::parse($o->sent_at) : null;
 
-        return [
+        $row = [
             $incident ? ExcelDate::dateTimeToExcel($incident) : null,
-            $o->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $o->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $this->observationTypeLabel($o->observation_type),
             $this->priorityLabel($o->priority),
             $o->location,
@@ -82,21 +102,31 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
             $sentAt ? ExcelDate::dateTimeToExcel($sentAt) : null,
             $o->comments,
             null,
-        ];
+        ]);
     }
 
     public function columnFormats(): array
     {
+        if ($this->showUserColumn) {
+            return [
+                'A' => 'dd.mm.yyyy',
+                'J' => 'dd.mm.yyyy',
+                'M' => 'dd.mm.yyyy hh:mm',
+            ];
+        }
+
         return [
             'A' => 'dd.mm.yyyy',
-            'J' => 'dd.mm.yyyy',
-            'M' => 'dd.mm.yyyy hh:mm',
+            'I' => 'dd.mm.yyyy',
+            'L' => 'dd.mm.yyyy hh:mm',
         ];
     }
 
     public function drawings(): array
     {
         $drawings = [];
+
+        $imageColumn = $this->showUserColumn ? 'O' : 'N';
 
         foreach ($this->observations as $i => $o) {
             if (! $o->picture_path) {
@@ -116,7 +146,7 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
             $drawing->setDescription('Slika zapažanja');
             $drawing->setPath($fullPath);
             $drawing->setHeight($this->imgHeight);
-            $drawing->setCoordinates("O{$row}");
+            $drawing->setCoordinates("{$imageColumn}{$row}");
             $drawing->setOffsetX(5);
             $drawing->setOffsetY(5);
             $drawing->setResizeProportional(true);
@@ -134,13 +164,14 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->observations->count() + 1;
+                $lastCol = $this->showUserColumn ? 'O' : 'N';
 
-                $sheet->getStyle("A1:O{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:O1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -158,40 +189,71 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
                     ],
                 ]);
 
-                $sheet->getStyle("A2:O{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:O{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("A2:D{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("A2:D{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("I2:M{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("I2:M{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $widths = [
-                    'A' => 14,
-                    'B' => 20,
-                    'C' => 24,
-                    'D' => 14,
-                    'E' => 22,
-                    'F' => 42,
-                    'G' => 30,
-                    'H' => 42,
-                    'I' => 22,
-                    'J' => 16,
-                    'K' => 18,
-                    'L' => 34,
-                    'M' => 18,
-                    'N' => 35,
-                    'O' => 15,
-                ];
+                    $widths = [
+                        'A' => 14,
+                        'B' => 20,
+                        'C' => 24,
+                        'D' => 14,
+                        'E' => 22,
+                        'F' => 42,
+                        'G' => 30,
+                        'H' => 42,
+                        'I' => 22,
+                        'J' => 16,
+                        'K' => 18,
+                        'L' => 34,
+                        'M' => 18,
+                        'N' => 35,
+                        'O' => 15,
+                    ];
+
+                    $targetDateColumn = 'J';
+                } else {
+                    $sheet->getStyle("A2:C{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("H2:L{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 14,
+                        'B' => 24,
+                        'C' => 14,
+                        'D' => 22,
+                        'E' => 42,
+                        'F' => 30,
+                        'G' => 42,
+                        'H' => 22,
+                        'I' => 16,
+                        'J' => 18,
+                        'K' => 34,
+                        'L' => 18,
+                        'M' => 35,
+                        'N' => 15,
+                    ];
+
+                    $targetDateColumn = 'I';
+                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -215,17 +277,17 @@ class ObservationsExport implements FromCollection, WithHeadings, WithMapping, W
                     }
 
                     if ($target->lt($today)) {
-                        $this->fillCell($sheet, "J{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "{$targetDateColumn}{$row}", 'FFFF0000');
                         continue;
                     }
 
                     if ($target->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "J{$row}", 'FFFFFF00');
+                        $this->fillCell($sheet, "{$targetDateColumn}{$row}", 'FFFFFF00');
                     }
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:O{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

@@ -16,8 +16,16 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
 {
     protected $inspections;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->inspections = InspectionResource::getEloquentQuery()
             ->with('user')
             ->withCount(['findings', 'zones'])
@@ -32,9 +40,15 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Broj nadzora',
-            'Korisnik',
+        ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
             'Tip nadzora',
             'Datum nadzora',
             'Naziv nadzora',
@@ -48,7 +62,7 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
             'Broj 5S zona',
             'Opis',
             'Zaključak',
-        ];
+        ]);
     }
 
     public function map($inspection): array
@@ -57,9 +71,15 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
 
         $fiveSScore = $inspection->calculateFiveSScore();
 
-        return [
+        $row = [
             $inspection->number,
-            $inspection->user?->name ?? '',
+        ];
+
+        if ($this->showUserColumn) {
+            $row[] = $inspection->user?->name ?? '';
+        }
+
+        return array_merge($row, [
             $this->inspectionTypeLabel($inspection->inspection_type),
             $inspection->performed_at ? $inspection->performed_at->format('d.m.Y.') : '',
             $inspection->title,
@@ -73,7 +93,7 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
             $inspection->zones_count ?? $inspection->zones()->count(),
             $inspection->description,
             $inspection->conclusion,
-        ];
+        ]);
     }
 
     public function registerEvents(): array
@@ -83,13 +103,14 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->inspections->count() + 1;
+                $lastCol = $this->showUserColumn ? 'O' : 'N';
 
-                $sheet->getStyle("A1:O{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:O1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -107,38 +128,71 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
                     ],
                 ]);
 
-                $sheet->getStyle("A2:O{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:O{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("D2:D{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                if ($this->showUserColumn) {
+                    $sheet->getStyle("D2:D{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("K2:M{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("K2:M{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getColumnDimension('A')->setWidth(16);
-                $sheet->getColumnDimension('B')->setWidth(20);
-                $sheet->getColumnDimension('C')->setWidth(18);
-                $sheet->getColumnDimension('D')->setWidth(16);
-                $sheet->getColumnDimension('E')->setWidth(34);
-                $sheet->getColumnDimension('F')->setWidth(24);
-                $sheet->getColumnDimension('G')->setWidth(24);
-                $sheet->getColumnDimension('H')->setWidth(36);
-                $sheet->getColumnDimension('I')->setWidth(18);
-                $sheet->getColumnDimension('J')->setWidth(18);
-                $sheet->getColumnDimension('K')->setWidth(14);
-                $sheet->getColumnDimension('L')->setWidth(14);
-                $sheet->getColumnDimension('M')->setWidth(14);
-                $sheet->getColumnDimension('N')->setWidth(45);
-                $sheet->getColumnDimension('O')->setWidth(45);
+                    $widths = [
+                        'A' => 16,
+                        'B' => 20,
+                        'C' => 18,
+                        'D' => 16,
+                        'E' => 34,
+                        'F' => 24,
+                        'G' => 24,
+                        'H' => 36,
+                        'I' => 18,
+                        'J' => 18,
+                        'K' => 14,
+                        'L' => 14,
+                        'M' => 14,
+                        'N' => 45,
+                        'O' => 45,
+                    ];
+                } else {
+                    $sheet->getStyle("C2:C{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $sheet->getStyle("J2:L{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    $widths = [
+                        'A' => 16,
+                        'B' => 18,
+                        'C' => 16,
+                        'D' => 34,
+                        'E' => 24,
+                        'F' => 24,
+                        'G' => 36,
+                        'H' => 18,
+                        'I' => 18,
+                        'J' => 14,
+                        'K' => 14,
+                        'L' => 14,
+                        'M' => 45,
+                        'N' => 45,
+                    ];
+                }
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
 
                 $sheet->getRowDimension(1)->setRowHeight(28);
 
@@ -147,7 +201,7 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:O{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }

@@ -16,8 +16,16 @@ class CategoriesExport implements FromCollection, WithHeadings, WithMapping, Sho
 {
     protected $categories;
 
+    protected bool $showUserColumn = false;
+
     public function __construct()
     {
+        $user = auth()->user();
+
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
+
         $this->categories = CategoryResource::getEloquentQuery()
             ->with('user')
             ->orderBy('name')
@@ -31,20 +39,30 @@ class CategoriesExport implements FromCollection, WithHeadings, WithMapping, Sho
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Naziv',
-            'Korisnik',
         ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return $headings;
     }
 
     public function map($category): array
     {
         /** @var Category $category */
 
-        return [
+        $row = [
             $category->name,
-            $category->user?->name ?? '',
         ];
+
+        if ($this->showUserColumn) {
+            $row[] = $category->user?->name ?? '';
+        }
+
+        return $row;
     }
 
     public function registerEvents(): array
@@ -54,13 +72,14 @@ class CategoriesExport implements FromCollection, WithHeadings, WithMapping, Sho
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->categories->count() + 1;
+                $lastCol = $this->showUserColumn ? 'B' : 'A';
 
-                $sheet->getStyle("A1:B{$lastRow}")
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:B1')->applyFromArray([
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -78,13 +97,16 @@ class CategoriesExport implements FromCollection, WithHeadings, WithMapping, Sho
                     ],
                 ]);
 
-                $sheet->getStyle("A2:B{$lastRow}")
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
                 $sheet->getColumnDimension('A')->setWidth(36);
-                $sheet->getColumnDimension('B')->setWidth(24);
+
+                if ($this->showUserColumn) {
+                    $sheet->getColumnDimension('B')->setWidth(24);
+                }
 
                 $sheet->getRowDimension(1)->setRowHeight(28);
 
@@ -93,7 +115,7 @@ class CategoriesExport implements FromCollection, WithHeadings, WithMapping, Sho
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:B{$lastRow}");
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }
