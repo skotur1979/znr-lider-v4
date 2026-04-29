@@ -18,13 +18,12 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents
 {
-    /** @var \Illuminate\Support\Collection<int, \App\Models\Fire> */
     protected $fires;
 
     public function __construct()
     {
-        // ✅ user scope + soft delete scope maknut u Resource::getEloquentQuery()
         $this->fires = FireResource::getEloquentQuery()
+            ->with('user')
             ->orderBy('place')
             ->get();
     }
@@ -38,6 +37,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
     {
         return [
             'Mjesto',
+            'Korisnik',
             'Tip',
             'Tvor. broj / god. proizv.',
             'Serijski broj',
@@ -48,6 +48,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             'Uočljivost',
             'Uočeni nedostatci',
             'Postupci otklanjanja',
+            'Broj priloga',
         ];
     }
 
@@ -56,30 +57,32 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
         /** @var Fire $fire */
 
         $serviceFrom = $fire->examination_valid_from ? Carbon::parse($fire->examination_valid_from) : null;
-        $validUntil  = $fire->examination_valid_until ? Carbon::parse($fire->examination_valid_until) : null;
+        $validUntil = $fire->examination_valid_until ? Carbon::parse($fire->examination_valid_until) : null;
         $regularFrom = $fire->regular_examination_valid_from ? Carbon::parse($fire->regular_examination_valid_from) : null;
 
         return [
             $fire->place,
+            $fire->user?->name ?? '',
             $fire->type,
-            $fire->factory_number_year_of_production, // ✅ alias koji mapira na DB "factory_number/year_of_production"
+            $fire->factory_number_year_of_production,
             $fire->serial_label_number,
             $serviceFrom ? ExcelDate::dateTimeToExcel($serviceFrom) : null,
-            $validUntil  ? ExcelDate::dateTimeToExcel($validUntil)  : null,
+            $validUntil ? ExcelDate::dateTimeToExcel($validUntil) : null,
             $fire->service,
             $regularFrom ? ExcelDate::dateTimeToExcel($regularFrom) : null,
             $fire->visible,
             $fire->remark,
             $fire->action,
+            is_array($fire->pdf) ? count($fire->pdf) : 0,
         ];
     }
 
     public function columnFormats(): array
     {
         return [
-            'E' => 'dd.mm.yyyy', // Datum periodičkog servisa
-            'F' => 'dd.mm.yyyy', // Vrijedi do (boji se ovaj stupac)
-            'H' => 'dd.mm.yyyy', // Datum redovnog pregleda
+            'F' => 'dd.mm.yyyy',
+            'G' => 'dd.mm.yyyy',
+            'I' => 'dd.mm.yyyy',
         ];
     }
 
@@ -89,9 +92,77 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                // ✅ header stil
-                $sheet->getStyle('A1:K1')->getFont()->setBold(true);
-                $sheet->getStyle('A1:K1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $lastRow = $this->fires->count() + 1;
+
+                $sheet->getStyle("A1:M{$lastRow}")
+                    ->getFont()
+                    ->setName('DejaVu Sans')
+                    ->setSize(10);
+
+                $sheet->getStyle('A1:M1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'name' => 'DejaVu Sans',
+                        'size' => 10,
+                    ],
+                    'fill' => [
+                        'fillType' => 'solid',
+                        'startColor' => ['rgb' => '1F2937'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                ]);
+
+                $sheet->getStyle("A2:M{$lastRow}")
+                    ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setWrapText(true);
+
+                $sheet->getStyle("A2:M{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+                $sheet->getStyle("D2:G{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $sheet->getStyle("I2:I{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $sheet->getStyle("M2:M{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $widths = [
+                    'A' => 30,
+                    'B' => 22,
+                    'C' => 18,
+                    'D' => 24,
+                    'E' => 24,
+                    'F' => 18,
+                    'G' => 16,
+                    'H' => 28,
+                    'I' => 20,
+                    'J' => 28,
+                    'K' => 32,
+                    'L' => 32,
+                    'M' => 14,
+                ];
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
+
+                $sheet->getRowDimension(1)->setRowHeight(30);
+
+                for ($row = 2; $row <= $lastRow; $row++) {
+                    $sheet->getRowDimension($row)->setRowHeight(34);
+                }
 
                 $today = Carbon::today();
 
@@ -106,18 +177,18 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                         continue;
                     }
 
-                    // 🔴 isteklo
                     if ($until->lt($today)) {
-                        $this->fillCell($sheet, "F{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "G{$row}", 'FFFF0000');
                         continue;
                     }
 
-                    // 🟡 ističe unutar 30 dana
                     if ($until->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "F{$row}", 'FFFFFF00');
-                        continue;
+                        $this->fillCell($sheet, "G{$row}", 'FFFFFF00');
                     }
                 }
+
+                $sheet->freezePane('A2');
+                $sheet->setAutoFilter("A1:M{$lastRow}");
             },
         ];
     }
@@ -127,7 +198,5 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
         $sheet->getStyle($cell)->getFill()->setFillType(Fill::FILL_SOLID);
         $sheet->getStyle($cell)->getFill()->getStartColor()->setARGB($argb);
         $sheet->getStyle($cell)->getFont()->setBold(true);
-        $sheet->getStyle('A:K')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-$sheet->getStyle('A:K')->getAlignment()->setWrapText(true);
     }
 }

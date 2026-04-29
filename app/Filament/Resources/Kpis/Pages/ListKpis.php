@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\Kpis\Pages;
 
+use App\Exports\KpisExport;
 use App\Filament\Resources\Kpis\KpiResource;
 use App\Services\KpiCalculationService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ListKpis extends ListRecords
 {
@@ -44,6 +46,17 @@ class ListKpis extends ListRecords
                         ->title('KPI vrijednosti su generirane za tekući mjesec.')
                         ->success()
                         ->send();
+                }),
+
+            Action::make('exportExcel')
+                ->label('Izvoz u Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->action(function () {
+                    return Excel::download(
+                        new KpisExport(),
+                        'kpi-' . now()->format('Y-m-d') . '.xlsx'
+                    );
                 }),
 
             Action::make('create')

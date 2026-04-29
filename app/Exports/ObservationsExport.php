@@ -5,7 +5,6 @@ namespace App\Exports;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Models\Observation;
 use Illuminate\Support\Carbon;
-
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
@@ -13,31 +12,22 @@ use Maatwebsite\Excel\Concerns\WithDrawings;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-
 use Maatwebsite\Excel\Events\AfterSheet;
-
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
-class ObservationsExport implements
-    FromCollection,
-    WithHeadings,
-    WithMapping,
-    WithColumnFormatting,
-    ShouldAutoSize,
-    WithEvents,
-    WithDrawings
+class ObservationsExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents, WithDrawings
 {
     protected $observations;
 
-    // kontrola veličine slike
-    private int $imgHeight = 70; // visina slike u px
+    private int $imgHeight = 70;
 
     public function __construct()
     {
         $this->observations = ObservationResource::getEloquentQuery()
+            ->with('user')
             ->orderByDesc('incident_date')
             ->get();
     }
@@ -51,7 +41,9 @@ class ObservationsExport implements
     {
         return [
             'Datum',
+            'Korisnik',
             'Vrsta zapažanja',
+            'Prioritet',
             'Lokacija',
             'Opis',
             'Vrsta opasnosti',
@@ -59,6 +51,8 @@ class ObservationsExport implements
             'Odgovorna osoba',
             'Rok za provedbu',
             'Status',
+            'E-mail primatelji',
+            'Poslano',
             'Komentar',
             'Slika',
         ];
@@ -66,33 +60,26 @@ class ObservationsExport implements
 
     public function map($o): array
     {
+        /** @var Observation $o */
+
         $incident = $o->incident_date ? Carbon::parse($o->incident_date) : null;
-        $target   = $o->target_date ? Carbon::parse($o->target_date) : null;
-
-        $type = match ($o->observation_type) {
-            'Near Miss' => 'NM - Skoro nezgoda',
-            'Negative Observation' => 'Negativno zapažanje',
-            'Positive Observation' => 'Pozitivno zapažanje',
-            default => (string) $o->observation_type,
-        };
-
-        $status = match ($o->status) {
-            'Not started' => 'Nije započeto',
-            'In progress' => 'U tijeku',
-            'Complete' => 'Završeno',
-            default => (string) $o->status,
-        };
+        $target = $o->target_date ? Carbon::parse($o->target_date) : null;
+        $sentAt = $o->sent_at ? Carbon::parse($o->sent_at) : null;
 
         return [
             $incident ? ExcelDate::dateTimeToExcel($incident) : null,
-            $type,
+            $o->user?->name ?? '',
+            $this->observationTypeLabel($o->observation_type),
+            $this->priorityLabel($o->priority),
             $o->location,
             $o->item,
             $o->potential_incident_type,
             $o->action,
             $o->responsible,
             $target ? ExcelDate::dateTimeToExcel($target) : null,
-            $status,
+            $this->statusLabel($o->status),
+            $this->emails($o->notification_emails ?? null),
+            $sentAt ? ExcelDate::dateTimeToExcel($sentAt) : null,
             $o->comments,
             null,
         ];
@@ -102,19 +89,16 @@ class ObservationsExport implements
     {
         return [
             'A' => 'dd.mm.yyyy',
-            'H' => 'dd.mm.yyyy',
+            'J' => 'dd.mm.yyyy',
+            'M' => 'dd.mm.yyyy hh:mm',
         ];
     }
 
-    /**
-     * 🔥 Slika zaključana u ćeliji
-     */
     public function drawings(): array
     {
         $drawings = [];
 
         foreach ($this->observations as $i => $o) {
-
             if (! $o->picture_path) {
                 continue;
             }
@@ -128,20 +112,13 @@ class ObservationsExport implements
             $row = $i + 2;
 
             $drawing = new Drawing();
-            $drawing->setName('Slika');
-            $drawing->setDescription('Observation image');
+            $drawing->setName("slika_{$row}");
+            $drawing->setDescription('Slika zapažanja');
             $drawing->setPath($fullPath);
-
-            // Zaključaj veličinu slike
             $drawing->setHeight($this->imgHeight);
-
-            $drawing->setCoordinates("K{$row}");
-
-            // Centriraj unutar ćelije
+            $drawing->setCoordinates("O{$row}");
             $drawing->setOffsetX(5);
             $drawing->setOffsetY(5);
-
-            // 🔥 Zaključaj na ćeliju
             $drawing->setResizeProportional(true);
 
             $drawings[] = $drawing;
@@ -154,46 +131,82 @@ class ObservationsExport implements
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
-
                 $sheet = $event->sheet->getDelegate();
+
                 $lastRow = $this->observations->count() + 1;
 
-                // ===== WRAP TEXT SVUGDJE =====
-                $sheet->getStyle("A1:K{$lastRow}")
+                $sheet->getStyle("A1:O{$lastRow}")
+                    ->getFont()
+                    ->setName('DejaVu Sans')
+                    ->setSize(10);
+
+                $sheet->getStyle('A1:O1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'name' => 'DejaVu Sans',
+                        'size' => 10,
+                    ],
+                    'fill' => [
+                        'fillType' => 'solid',
+                        'startColor' => ['rgb' => '1F2937'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                ]);
+
+                $sheet->getStyle("A2:O{$lastRow}")
                     ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                // ===== CENTRIRAJ SVE =====
-                $sheet->getStyle("A1:K{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-                    ->setVertical(Alignment::VERTICAL_CENTER);
-
-                // tekstualne kolone lijevo
-                $sheet->getStyle("C2:F{$lastRow}")
+                $sheet->getStyle("A2:O{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("J2:J{$lastRow}")
+                $sheet->getStyle("A2:D{$lastRow}")
                     ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                // ===== POSTAVI VISINU REDA TOČNO KAO SLIKA =====
-                foreach ($this->observations as $i => $o) {
-                    $row = $i + 2;
-                    $sheet->getRowDimension($row)->setRowHeight($this->imgHeight * 0.75);
+                $sheet->getStyle("I2:M{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $widths = [
+                    'A' => 14,
+                    'B' => 20,
+                    'C' => 24,
+                    'D' => 14,
+                    'E' => 22,
+                    'F' => 42,
+                    'G' => 30,
+                    'H' => 42,
+                    'I' => 22,
+                    'J' => 16,
+                    'K' => 18,
+                    'L' => 34,
+                    'M' => 18,
+                    'N' => 35,
+                    'O' => 15,
+                ];
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
                 }
 
-                // ===== POSTAVI ŠIRINU KOLONE K TOČNO KAO SLIKA =====
-                // 1 Excel width unit ≈ 7 px
-                $excelWidth = ($this->imgHeight * 1.3) / 7;
-                $sheet->getColumnDimension('K')->setWidth($excelWidth);
+                $sheet->getRowDimension(1)->setRowHeight(30);
 
-                // ===== BOJE ROKA =====
+                foreach ($this->observations as $i => $o) {
+                    $row = $i + 2;
+                    $sheet->getRowDimension($row)->setRowHeight($o->picture_path ? $this->imgHeight * 0.75 : 38);
+                }
+
                 $today = Carbon::today();
 
                 foreach ($this->observations as $i => $o) {
-
                     $row = $i + 2;
                     $target = $o->target_date ? Carbon::parse($o->target_date) : null;
 
@@ -202,16 +215,59 @@ class ObservationsExport implements
                     }
 
                     if ($target->lt($today)) {
-                        $this->fillCell($sheet, "H{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "J{$row}", 'FFFF0000');
                         continue;
                     }
 
                     if ($target->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "H{$row}", 'FFFFFF00');
+                        $this->fillCell($sheet, "J{$row}", 'FFFFFF00');
                     }
                 }
+
+                $sheet->freezePane('A2');
+                $sheet->setAutoFilter("A1:O{$lastRow}");
             },
         ];
+    }
+
+    private function observationTypeLabel(?string $state): string
+    {
+        return match ($state) {
+            'Near Miss' => 'NM - Skoro nezgoda',
+            'Negative Observation' => 'Negativno zapažanje',
+            'Positive Observation' => 'Pozitivno zapažanje',
+            default => $state ?? '',
+        };
+    }
+
+    private function priorityLabel(?string $state): string
+    {
+        return match ($state) {
+            'low' => 'Nisko',
+            'medium' => 'Srednje',
+            'high' => 'Visoko',
+            'critical' => 'Kritično',
+            default => $state ?? '',
+        };
+    }
+
+    private function statusLabel(?string $state): string
+    {
+        return match ($state) {
+            'Not started' => 'Nije započeto',
+            'In progress' => 'U tijeku',
+            'Complete' => 'Završeno',
+            default => $state ?? '',
+        };
+    }
+
+    private function emails($value): string
+    {
+        if (is_array($value)) {
+            return collect($value)->filter()->implode(', ');
+        }
+
+        return (string) ($value ?? '');
     }
 
     private function fillCell($sheet, string $cell, string $argb): void

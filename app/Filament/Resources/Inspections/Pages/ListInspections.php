@@ -2,9 +2,12 @@
 
 namespace App\Filament\Resources\Inspections\Pages;
 
+use App\Exports\InspectionsExport;
 use App\Filament\Resources\Inspections\InspectionResource;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ListInspections extends ListRecords
 {
@@ -13,13 +16,27 @@ class ListInspections extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()
+                ->label('Novi nadzor'),
+
+            Action::make('create_five_s')
+                ->label('Novi 5S nadzor')
+                ->icon('heroicon-o-squares-2x2')
+                ->color('success')
+                ->url(fn () => static::getResource()::getUrl('create', [
+                    'inspection_type' => 'five_s',
+                ])),
+
+            Action::make('exportExcel')
+                ->label('Izvoz u Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->action(function () {
+                    return Excel::download(
+                        new InspectionsExport(),
+                        'nadzori-' . now()->format('Y-m-d') . '.xlsx'
+                    );
+                }),
         ];
-    
-    Action::make('create_five_s')
-    ->label('Novi 5S nadzor')
-    ->icon('heroicon-o-squares-2x2')
-    ->color('success')
-    ->url(fn () => static::getResource()::getUrl('create', ['inspection_type' => 'five_s']));
-}
+    }
 }

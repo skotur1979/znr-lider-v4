@@ -30,12 +30,12 @@ class EmployeesExport extends DefaultValueBinder implements
     WithEvents,
     WithCustomValueBinder
 {
-    /** @var \Illuminate\Support\Collection<int, \App\Models\Employee> */
     protected $employees;
 
     public function __construct()
     {
         $this->employees = EmployeeResource::getEloquentQuery()
+            ->with(['user', 'certificates'])
             ->orderBy('name')
             ->get();
     }
@@ -45,91 +45,113 @@ class EmployeesExport extends DefaultValueBinder implements
         return $this->employees;
     }
 
-    /**
-     * ✅ samo OIB i telefon forsiramo kao TEXT
-     * D = oib, E = telefon
-     */
     public function bindValue(Cell $cell, $value): bool
     {
-        $col = $cell->getColumn();
-
-        if (in_array($col, ['D', 'E'], true)) {
+        if (in_array($cell->getColumn(), ['E', 'F'], true)) {
             $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
             return true;
         }
 
-        // sve ostalo (uključujući datume) ostaje normalno: brojevi ostaju brojevi
         return parent::bindValue($cell, $value);
     }
 
     public function headings(): array
     {
         return [
-            'ime_i_prezime','adresa','spol','oib','telefon','email','radno_mjesto','organizacijska_jedinica',
-            'vrsta_ugovora','zanimanje','skolska_sprema','datum_i_mjesto_rodenja','ime_oca_majke',
-            'datum_zaposlenja','datum_prekida_ugovora','lijecnicki_pregled_od','lijecnicki_pregled_do',
-            'clanak_3_tocke','znr_od','zop_od','zop_izjava_od','evakuacija_od','prva_pomoc_od','prva_pomoc_do',
-            'toksikologija_od','toksikologija_do','ovlastenik_poslodavca_od','ovlastenik_poslodavca_do',
+            'Ime i prezime',
+            'Korisnik',
+            'Adresa',
+            'Spol',
+            'OIB',
+            'Telefon',
+            'E-mail',
+            'Radno mjesto',
+            'Organizacijska jedinica',
+            'Vrsta ugovora',
+            'Zanimanje',
+            'Školska sprema',
+            'Datum i mjesto rođenja',
+            'Ime oca/majke',
+            'Datum zaposlenja',
+            'Datum prekida ugovora',
+            'Liječnički pregled od',
+            'Liječnički pregled do',
+            'Članak 3. točke',
+            'ZNR od',
+            'ZOP od',
+            'ZOP izjava od',
+            'Evakuacija od',
+            'Prva pomoć od',
+            'Prva pomoć do',
+            'Toksikologija od',
+            'Toksikologija do',
+            'Ovlaštenik poslodavca od',
+            'Ovlaštenik poslodavca do',
+            'Broj priloga',
 
-            'certifikat_1_naziv','certifikat_1_od','certifikat_1_do',
-            'certifikat_2_naziv','certifikat_2_od','certifikat_2_do',
-            'certifikat_3_naziv','certifikat_3_od','certifikat_3_do',
-            'certifikat_4_naziv','certifikat_4_od','certifikat_4_do',
-            'certifikat_5_naziv','certifikat_5_od','certifikat_5_do',
-            'certifikat_6_naziv','certifikat_6_od','certifikat_6_do',
-            'certifikat_7_naziv','certifikat_7_od','certifikat_7_do',
-            'certifikat_8_naziv','certifikat_8_od','certifikat_8_do',
-            'certifikat_9_naziv','certifikat_9_od','certifikat_9_do',
-            'certifikat_10_naziv','certifikat_10_od','certifikat_10_do',
+            'Certifikat 1 naziv', 'Certifikat 1 od', 'Certifikat 1 do',
+            'Certifikat 2 naziv', 'Certifikat 2 od', 'Certifikat 2 do',
+            'Certifikat 3 naziv', 'Certifikat 3 od', 'Certifikat 3 do',
+            'Certifikat 4 naziv', 'Certifikat 4 od', 'Certifikat 4 do',
+            'Certifikat 5 naziv', 'Certifikat 5 od', 'Certifikat 5 do',
+            'Certifikat 6 naziv', 'Certifikat 6 od', 'Certifikat 6 do',
+            'Certifikat 7 naziv', 'Certifikat 7 od', 'Certifikat 7 do',
+            'Certifikat 8 naziv', 'Certifikat 8 od', 'Certifikat 8 do',
+            'Certifikat 9 naziv', 'Certifikat 9 od', 'Certifikat 9 do',
+            'Certifikat 10 naziv', 'Certifikat 10 od', 'Certifikat 10 do',
         ];
     }
 
-    public function map($e): array
+    public function map($employee): array
     {
-        /** @var Employee $e */
-        $certs = $e->certificates?->values() ?? collect();
+        /** @var Employee $employee */
 
+        $certs = $employee->certificates?->values() ?? collect();
         $excel = fn ($date) => $date ? ExcelDate::dateTimeToExcel(Carbon::parse($date)) : null;
 
         $row = [
-            $e->name,
-            $e->address,
-            $e->gender,
-            (string) ($e->OIB ?? ''),
-            (string) ($e->phone ?? ''),
-            $e->email,
-            $e->workplace,
-            $e->organization_unit,
-            $e->contract_type,
-            $e->job_title,
-            $e->education,
-            $e->place_of_birth,
-            $e->name_of_parents,
+            $employee->name,
+            $employee->user?->name ?? '',
+            $employee->address,
+            $employee->gender,
+            (string) ($employee->OIB ?? ''),
+            (string) ($employee->phone ?? ''),
+            $employee->email,
+            $employee->workplace,
+            $employee->organization_unit,
+            $employee->contract_type,
+            $employee->job_title,
+            $employee->education,
+            $employee->place_of_birth,
+            $employee->name_of_parents,
 
-            $excel($e->employeed_at),
-            $excel($e->contract_ended_at),
-            $excel($e->medical_examination_valid_from),
-            $excel($e->medical_examination_valid_until),
+            $excel($employee->employeed_at),
+            $excel($employee->contract_ended_at),
+            $excel($employee->medical_examination_valid_from),
+            $excel($employee->medical_examination_valid_until),
 
-            $e->article,
+            $employee->article,
 
-            $excel($e->occupational_safety_valid_from),
-            $excel($e->fire_protection_valid_from),
-            $excel($e->fire_protection_statement_at),
-            $excel($e->evacuation_valid_from),
-            $excel($e->first_aid_valid_from),
-            $excel($e->first_aid_valid_until),
-            $excel($e->toxicology_valid_from),
-            $excel($e->toxicology_valid_until),
-            $excel($e->employers_authorization_valid_from),
-            $excel($e->employers_authorization_valid_until),
+            $excel($employee->occupational_safety_valid_from),
+            $excel($employee->fire_protection_valid_from),
+            $excel($employee->fire_protection_statement_at),
+            $excel($employee->evacuation_valid_from),
+            $excel($employee->first_aid_valid_from),
+            $excel($employee->first_aid_valid_until),
+            $excel($employee->toxicology_valid_from),
+            $excel($employee->toxicology_valid_until),
+            $excel($employee->employers_authorization_valid_from),
+            $excel($employee->employers_authorization_valid_until),
+
+            is_array($employee->pdf) ? count($employee->pdf) : 0,
         ];
 
         for ($i = 0; $i < 10; $i++) {
-            $c = $certs->get($i);
-            $row[] = $c?->title ?? null;
-            $row[] = $excel($c?->valid_from);
-            $row[] = $excel($c?->valid_until);
+            $certificate = $certs->get($i);
+
+            $row[] = $certificate?->title;
+            $row[] = $excel($certificate?->valid_from);
+            $row[] = $excel($certificate?->valid_until);
         }
 
         return $row;
@@ -137,24 +159,44 @@ class EmployeesExport extends DefaultValueBinder implements
 
     public function columnFormats(): array
     {
-        $d = NumberFormat::FORMAT_DATE_DDMMYYYY;
+        $date = NumberFormat::FORMAT_DATE_DDMMYYYY;
 
         return [
-            'N' => $d, 'O' => $d, 'P' => $d, 'Q' => $d,
-            'S' => $d, 'T' => $d, 'U' => $d, 'V' => $d,
-            'W' => $d, 'X' => $d, 'Y' => $d, 'Z' => $d,
-            'AA' => $d, 'AB' => $d,
+            'O' => $date,
+            'P' => $date,
+            'Q' => $date,
+            'R' => $date,
+            'T' => $date,
+            'U' => $date,
+            'V' => $date,
+            'W' => $date,
+            'X' => $date,
+            'Y' => $date,
+            'Z' => $date,
+            'AA' => $date,
+            'AB' => $date,
+            'AC' => $date,
 
-            'AD' => $d, 'AE' => $d,
-            'AG' => $d, 'AH' => $d,
-            'AJ' => $d, 'AK' => $d,
-            'AM' => $d, 'AN' => $d,
-            'AP' => $d, 'AQ' => $d,
-            'AS' => $d, 'AT' => $d,
-            'AV' => $d, 'AW' => $d,
-            'AY' => $d, 'AZ' => $d,
-            'BB' => $d, 'BC' => $d,
-            'BE' => $d, 'BF' => $d,
+            'AF' => $date,
+            'AG' => $date,
+            'AI' => $date,
+            'AJ' => $date,
+            'AL' => $date,
+            'AM' => $date,
+            'AO' => $date,
+            'AP' => $date,
+            'AR' => $date,
+            'AS' => $date,
+            'AU' => $date,
+            'AV' => $date,
+            'AX' => $date,
+            'AY' => $date,
+            'BA' => $date,
+            'BB' => $date,
+            'BD' => $date,
+            'BE' => $date,
+            'BG' => $date,
+            'BH' => $date,
         ];
     }
 
@@ -163,69 +205,146 @@ class EmployeesExport extends DefaultValueBinder implements
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $lastRow = $sheet->getHighestRow();
+                $lastRow = $this->employees->count() + 1;
 
-                // Header kao Machines
-                $sheet->getStyle('A1:BF1')->getFont()->setBold(true);
-                $sheet->getStyle('A1:BF1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("A1:BH{$lastRow}")
+                    ->getFont()
+                    ->setName('DejaVu Sans')
+                    ->setSize(10);
 
-                // Wrap duga polja
-                foreach (['B', 'F', 'G', 'H', 'L', 'M', 'R'] as $col) {
-                    $sheet->getStyle("{$col}1:{$col}{$lastRow}")
-                        ->getAlignment()
-                        ->setWrapText(true);
+                $sheet->getStyle('A1:BH1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'name' => 'DejaVu Sans',
+                        'size' => 10,
+                    ],
+                    'fill' => [
+                        'fillType' => 'solid',
+                        'startColor' => ['rgb' => '1F2937'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                ]);
+
+                $sheet->getStyle("A2:BH{$lastRow}")
+                    ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setWrapText(true);
+
+                $sheet->getStyle("O2:R{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $sheet->getStyle("T2:AC{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $sheet->getStyle("AD2:AD{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $sheet->getRowDimension(1)->setRowHeight(30);
+
+                for ($row = 2; $row <= $lastRow; $row++) {
+                    $sheet->getRowDimension($row)->setRowHeight(34);
                 }
 
-                // Boje isteka kao Machines (računamo iz modela)
+                $widths = [
+                    'A' => 30,
+                    'B' => 22,
+                    'C' => 34,
+                    'D' => 12,
+                    'E' => 16,
+                    'F' => 16,
+                    'G' => 28,
+                    'H' => 30,
+                    'I' => 28,
+                    'J' => 18,
+                    'K' => 22,
+                    'L' => 22,
+                    'M' => 28,
+                    'N' => 22,
+                    'O' => 16,
+                    'P' => 16,
+                    'Q' => 16,
+                    'R' => 16,
+                    'S' => 22,
+                    'AD' => 14,
+                ];
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
+
                 $today = Carbon::today();
-                $soon  = $today->copy()->addDays(30);
+                $soon = $today->copy()->addDays(30);
 
-                $doMap = [
-                    'Q'  => fn(Employee $e) => $e->medical_examination_valid_until,
-                    'X'  => fn(Employee $e) => $e->first_aid_valid_until,
-                    'Z'  => fn(Employee $e) => $e->toxicology_valid_until,
-                    'AB' => fn(Employee $e) => $e->employers_authorization_valid_until,
+                $deadlineColumns = [
+                    'R' => fn (Employee $e) => $e->medical_examination_valid_until,
+                    'Y' => fn (Employee $e) => $e->first_aid_valid_until,
+                    'AA' => fn (Employee $e) => $e->toxicology_valid_until,
+                    'AC' => fn (Employee $e) => $e->employers_authorization_valid_until,
                 ];
 
-                $certDoCols = [
-                    'AE' => 0, 'AH' => 1, 'AK' => 2, 'AN' => 3, 'AQ' => 4,
-                    'AT' => 5, 'AW' => 6, 'AZ' => 7, 'BC' => 8, 'BF' => 9,
+                $certificateDeadlineColumns = [
+                    'AG' => 0,
+                    'AJ' => 1,
+                    'AM' => 2,
+                    'AP' => 3,
+                    'AS' => 4,
+                    'AV' => 5,
+                    'AY' => 6,
+                    'BB' => 7,
+                    'BE' => 8,
+                    'BH' => 9,
                 ];
 
-                foreach ($this->employees as $i => $e) {
-                    $row = $i + 2;
+                foreach ($this->employees as $index => $employee) {
+                    $row = $index + 2;
 
-                    foreach ($doMap as $col => $getter) {
-                        $untilRaw = $getter($e);
-                        if (! $untilRaw) continue;
+                    foreach ($deadlineColumns as $column => $getter) {
+                        $date = $getter($employee);
 
-                        $until = Carbon::parse($untilRaw);
-                        $cell  = "{$col}{$row}";
-
-                        if ($until->lt($today)) {
-                            $this->fillCell($sheet, $cell, 'FFFF0000'); // 🔴
-                        } elseif ($until->lte($soon)) {
-                            $this->fillCell($sheet, $cell, 'FFFFFF00'); // 🟡
+                        if (! $date) {
+                            continue;
                         }
+
+                        $this->colorDeadlineCell($sheet, "{$column}{$row}", Carbon::parse($date), $today, $soon);
                     }
 
-                    $certs = $e->certificates?->values() ?? collect();
-                    foreach ($certDoCols as $col => $idx) {
-                        $c = $certs->get($idx);
-                        if (! $c?->valid_until) continue;
+                    $certificates = $employee->certificates?->values() ?? collect();
 
-                        $until = Carbon::parse($c->valid_until);
-                        $cell  = "{$col}{$row}";
+                    foreach ($certificateDeadlineColumns as $column => $certificateIndex) {
+                        $certificate = $certificates->get($certificateIndex);
 
-                        if ($until->lt($today)) {
-                            $this->fillCell($sheet, $cell, 'FFFF0000'); // 🔴
-                        } elseif ($until->lte($soon)) {
-                            $this->fillCell($sheet, $cell, 'FFFFFF00'); // 🟡
+                        if (! $certificate?->valid_until) {
+                            continue;
                         }
+
+                        $this->colorDeadlineCell($sheet, "{$column}{$row}", Carbon::parse($certificate->valid_until), $today, $soon);
                     }
                 }
+
+                $sheet->freezePane('A2');
+                $sheet->setAutoFilter("A1:BH{$lastRow}");
             },
         ];
+    }
+
+    private function colorDeadlineCell($sheet, string $cell, Carbon $date, Carbon $today, Carbon $soon): void
+    {
+        if ($date->lt($today)) {
+            $this->fillCell($sheet, $cell, 'FFFF0000');
+            return;
+        }
+
+        if ($date->lte($soon)) {
+            $this->fillCell($sheet, $cell, 'FFFFFF00');
+        }
     }
 
     private function fillCell($sheet, string $cell, string $argb): void

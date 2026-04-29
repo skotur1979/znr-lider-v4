@@ -3,8 +3,8 @@
 namespace App\Exports;
 
 use App\Filament\Resources\FirstAidKits\FirstAidKitResource;
-use App\Models\FirstAidKit;
 use App\Models\FirstAidItem;
+use App\Models\FirstAidKit;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -19,24 +19,19 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class FirstAidKitsExport implements
-    FromCollection,
-    WithHeadings,
-    WithMapping,
-    WithColumnFormatting,
-    ShouldAutoSize,
-    WithEvents
+class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents
 {
-    /** @var Collection<int, FirstAidKit> */
     protected Collection $kits;
 
-    private int $maxItems = 15; // promijeni ako želiš više
+    private int $maxItems = 15;
 
     public function __construct()
     {
-        // koristi isti query scope kao tablica (admin vidi sve, user samo svoje)
         $this->kits = FirstAidKitResource::getEloquentQuery()
-            ->with(['items' => fn ($q) => $q->orderBy('valid_until')])
+            ->with([
+                'user',
+                'items' => fn ($query) => $query->orderBy('valid_until'),
+            ])
             ->withCount('items')
             ->orderByDesc('inspected_at')
             ->get();
@@ -50,19 +45,20 @@ class FirstAidKitsExport implements
     public function headings(): array
     {
         $heads = [
-            'lokacija_ormarica',
-            'pregled_obavljen',
-            'napomena',
-            'ukupan_broj_stavki',
-            'uskoro_istice',
-            'isteklo',
-            'najraniji_rok',
+            'Lokacija ormarića',
+            'Korisnik',
+            'Pregled obavljen',
+            'Napomena',
+            'Ukupan broj stavki',
+            'Uskoro ističe',
+            'Isteklo',
+            'Najraniji rok',
         ];
 
         for ($i = 1; $i <= $this->maxItems; $i++) {
-            $heads[] = "stavka_{$i}_vrsta";
-            $heads[] = "stavka_{$i}_namjena";
-            $heads[] = "stavka_{$i}_vrijedi_do";
+            $heads[] = "Stavka {$i} - vrsta";
+            $heads[] = "Stavka {$i} - namjena";
+            $heads[] = "Stavka {$i} - vrijedi do";
         }
 
         return $heads;
@@ -71,23 +67,24 @@ class FirstAidKitsExport implements
     public function map($kit): array
     {
         /** @var FirstAidKit $kit */
+
         $items = $kit->items?->values() ?? collect();
 
         $today = Carbon::today();
         $soonLimit = $today->copy()->addDays(30);
 
-        $soon = 0;
-        $expired = 0;
-
         $dates = $items
             ->pluck('valid_until')
             ->filter()
-            ->map(fn ($d) => Carbon::parse($d)->startOfDay());
+            ->map(fn ($date) => Carbon::parse($date)->startOfDay());
 
-        foreach ($dates as $d) {
-            if ($d->lt($today)) $expired++;
-            elseif ($d->lte($soonLimit)) $soon++;
-        }
+        $soon = $dates
+            ->filter(fn (Carbon $date) => ! $date->lt($today) && $date->lte($soonLimit))
+            ->count();
+
+        $expired = $dates
+            ->filter(fn (Carbon $date) => $date->lt($today))
+            ->count();
 
         $earliest = $dates->sort()->first();
 
@@ -95,6 +92,7 @@ class FirstAidKitsExport implements
 
         $row = [
             $kit->location,
+            $kit->user?->name ?? '',
             $excelDate($kit->inspected_at),
             $kit->note,
             (int) $kit->items_count,
@@ -104,12 +102,12 @@ class FirstAidKitsExport implements
         ];
 
         for ($i = 0; $i < $this->maxItems; $i++) {
-            /** @var FirstAidItem|null $it */
-            $it = $items->get($i);
+            /** @var FirstAidItem|null $item */
+            $item = $items->get($i);
 
-            $row[] = $it?->material_type ?? null;
-            $row[] = $it?->purpose ?? null;
-            $row[] = $excelDate($it?->valid_until);
+            $row[] = $item?->material_type;
+            $row[] = $item?->purpose;
+            $row[] = $excelDate($item?->valid_until);
         }
 
         return $row;
@@ -117,20 +115,18 @@ class FirstAidKitsExport implements
 
     public function columnFormats(): array
     {
-        $d = NumberFormat::FORMAT_DATE_DDMMYYYY;
+        $dateFormat = NumberFormat::FORMAT_DATE_DDMMYYYY;
 
-        // B = inspected_at, G = earliest_rok
         $formats = [
-            'B' => $d,
-            'G' => $d,
+            'C' => $dateFormat,
+            'H' => $dateFormat,
         ];
 
-        // svaka 3. kolona u item blokovima je datum
-        // početak item blokova je H
-        $startColIndex = $this->colToIndex('H');
+        $startColIndex = $this->colToIndex('I');
+
         for ($i = 0; $i < $this->maxItems; $i++) {
-            $dateColIndex = $startColIndex + ($i * 3) + 2; // vrsta, namjena, datum
-            $formats[$this->indexToCol($dateColIndex)] = $d;
+            $dateColIndex = $startColIndex + ($i * 3) + 2;
+            $formats[$this->indexToCol($dateColIndex)] = $dateFormat;
         }
 
         return $formats;
@@ -141,58 +137,128 @@ class FirstAidKitsExport implements
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
+
                 $lastRow = $sheet->getHighestRow();
                 $lastCol = $sheet->getHighestColumn();
 
-                // header
-                $sheet->getStyle("A1:{$lastCol}1")->getFont()->setBold(true);
-                $sheet->getStyle("A1:{$lastCol}1")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
+                    ->getFont()
+                    ->setName('DejaVu Sans')
+                    ->setSize(10);
 
-                // wrap za napomenu + namjene
-                $sheet->getStyle("C1:C{$lastRow}")->getAlignment()->setWrapText(true);
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'name' => 'DejaVu Sans',
+                        'size' => 10,
+                    ],
+                    'fill' => [
+                        'fillType' => 'solid',
+                        'startColor' => ['rgb' => '1F2937'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                ]);
 
-                // boje isteka
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
+                    ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setWrapText(true);
+
+                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+                $sheet->getStyle("C2:H{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $startColIndex = $this->colToIndex('I');
+
+                for ($i = 0; $i < $this->maxItems; $i++) {
+                    $dateColIndex = $startColIndex + ($i * 3) + 2;
+                    $dateCol = $this->indexToCol($dateColIndex);
+
+                    $sheet->getStyle("{$dateCol}2:{$dateCol}{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                }
+
+                $widths = [
+                    'A' => 28,
+                    'B' => 22,
+                    'C' => 18,
+                    'D' => 36,
+                    'E' => 16,
+                    'F' => 16,
+                    'G' => 14,
+                    'H' => 16,
+                ];
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
+
+                for ($i = 0; $i < $this->maxItems; $i++) {
+                    $base = $startColIndex + ($i * 3);
+
+                    $sheet->getColumnDimension($this->indexToCol($base))->setWidth(28);
+                    $sheet->getColumnDimension($this->indexToCol($base + 1))->setWidth(32);
+                    $sheet->getColumnDimension($this->indexToCol($base + 2))->setWidth(16);
+                }
+
+                $sheet->getRowDimension(1)->setRowHeight(30);
+
+                for ($row = 2; $row <= $lastRow; $row++) {
+                    $sheet->getRowDimension($row)->setRowHeight(34);
+                }
+
                 $today = Carbon::today();
-                $soon  = $today->copy()->addDays(30);
+                $soon = $today->copy()->addDays(30);
 
                 foreach ($this->kits as $i => $kit) {
                     $row = $i + 2;
 
-                    // G = najraniji rok
                     $earliest = $kit->items
                         ?->pluck('valid_until')
                         ->filter()
-                        ->map(fn ($d) => Carbon::parse($d)->startOfDay())
+                        ->map(fn ($date) => Carbon::parse($date)->startOfDay())
                         ->sort()
                         ->first();
 
                     if ($earliest) {
-                        $cell = "G{$row}";
                         if ($earliest->lt($today)) {
-                            $this->fillCell($sheet, $cell, 'FFFF0000'); // 🔴
+                            $this->fillCell($sheet, "H{$row}", 'FFFF0000');
                         } elseif ($earliest->lte($soon)) {
-                            $this->fillCell($sheet, $cell, 'FFFFFF00'); // 🟡
+                            $this->fillCell($sheet, "H{$row}", 'FFFFFF00');
                         }
                     }
 
-                    // oboji sve "stavka_i_vrijedi_do" datume
-                    $startColIndex = $this->colToIndex('H');
                     for ($k = 0; $k < $this->maxItems; $k++) {
-                        $it = $kit->items?->values()->get($k);
-                        if (! $it?->valid_until) continue;
+                        $item = $kit->items?->values()->get($k);
 
-                        $d = Carbon::parse($it->valid_until)->startOfDay();
+                        if (! $item?->valid_until) {
+                            continue;
+                        }
 
+                        $date = Carbon::parse($item->valid_until)->startOfDay();
                         $dateColIndex = $startColIndex + ($k * 3) + 2;
                         $cell = $this->indexToCol($dateColIndex) . $row;
 
-                        if ($d->lt($today)) {
-                            $this->fillCell($sheet, $cell, 'FFFF0000'); // 🔴
-                        } elseif ($d->lte($soon)) {
-                            $this->fillCell($sheet, $cell, 'FFFFFF00'); // 🟡
+                        if ($date->lt($today)) {
+                            $this->fillCell($sheet, $cell, 'FFFF0000');
+                        } elseif ($date->lte($soon)) {
+                            $this->fillCell($sheet, $cell, 'FFFFFF00');
                         }
                     }
                 }
+
+                $sheet->freezePane('A2');
+                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
     }
@@ -206,14 +272,12 @@ class FirstAidKitsExport implements
         $style->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     }
 
-    // helpers (A=1, B=2...)
     private function colToIndex(string $col): int
     {
         $col = strtoupper($col);
-        $len = strlen($col);
         $num = 0;
 
-        for ($i = 0; $i < $len; $i++) {
+        for ($i = 0; $i < strlen($col); $i++) {
             $num = $num * 26 + (ord($col[$i]) - 64);
         }
 
@@ -223,11 +287,13 @@ class FirstAidKitsExport implements
     private function indexToCol(int $index): string
     {
         $col = '';
+
         while ($index > 0) {
             $mod = ($index - 1) % 26;
             $col = chr(65 + $mod) . $col;
             $index = intdiv($index - 1, 26);
         }
+
         return $col;
     }
 }

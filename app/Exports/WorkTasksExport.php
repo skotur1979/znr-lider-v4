@@ -2,7 +2,8 @@
 
 namespace App\Exports;
 
-use App\Models\WasteType;
+use App\Filament\Resources\WorkTasks\WorkTaskResource;
+use App\Models\WorkTask;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -11,56 +12,47 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class WasteTypesExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithEvents
+class WorkTasksExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithEvents
 {
-    protected array $filters;
-    protected int $rowNumber = 0;
-    protected $rows;
+    protected $tasks;
 
-    public function __construct(array $filters = [])
+    public function __construct()
     {
-        $this->filters = $filters;
-
-        $query = WasteType::query();
-
-        $status = data_get($this->filters, 'status.value');
-
-        $query = match ($status) {
-            'trashed' => $query->onlyTrashed(),
-            'all' => $query->withTrashed(),
-            default => $query->withoutTrashed(),
-        };
-
-        $this->rows = $query
-            ->orderBy('waste_code')
-            ->orderBy('name')
+        $this->tasks = WorkTaskResource::getEloquentQuery()
+            ->with('user')
+            ->orderBy('due_date')
+            ->orderBy('id')
             ->get();
     }
 
     public function collection()
     {
-        return $this->rows;
+        return $this->tasks;
     }
 
     public function headings(): array
     {
         return [
-            'Redni broj',
-            'Ključni broj otpada',
-            'Naziv otpada',
-            'Opasan otpad',
-            'Datum unosa',
+            'Zadatak',
+            'Korisnik',
+            'Opis',
+            'Datum',
+            'Status',
+            'Zatvoreno',
         ];
     }
 
-    public function map($row): array
+    public function map($task): array
     {
+        /** @var WorkTask $task */
+
         return [
-            ++$this->rowNumber,
-            $row->waste_code,
-            $row->name,
-            $row->is_hazardous ? 'DA' : 'NE',
-            $row->created_at ? $row->created_at->format('d.m.Y. H:i') : '',
+            $task->title,
+            $task->user?->name ?? '',
+            $task->description,
+            $task->due_date ? $task->due_date->format('d.m.Y.') : '',
+            $task->is_done ? 'Riješeno' : 'Otvoreno',
+            $task->completed_at ? $task->completed_at->format('d.m.Y. H:i') : '',
         ];
     }
 
@@ -69,14 +61,15 @@ class WasteTypesExport implements FromCollection, WithHeadings, WithMapping, Sho
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $lastRow = $this->rows->count() + 1;
 
-                $sheet->getStyle("A1:E{$lastRow}")
+                $lastRow = $this->tasks->count() + 1;
+
+                $sheet->getStyle("A1:F{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:E1')->applyFromArray([
+                $sheet->getStyle('A1:F1')->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -94,33 +87,34 @@ class WasteTypesExport implements FromCollection, WithHeadings, WithMapping, Sho
                     ],
                 ]);
 
-                $sheet->getStyle("A2:E{$lastRow}")
+                $sheet->getStyle("A2:F{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:B{$lastRow}")
+                $sheet->getStyle("A2:F{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+                $sheet->getStyle("D2:F{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("D2:E{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-                $sheet->getColumnDimension('A')->setWidth(12);
-                $sheet->getColumnDimension('B')->setWidth(20);
-                $sheet->getColumnDimension('C')->setWidth(48);
+                $sheet->getColumnDimension('A')->setWidth(34);
+                $sheet->getColumnDimension('B')->setWidth(22);
+                $sheet->getColumnDimension('C')->setWidth(55);
                 $sheet->getColumnDimension('D')->setWidth(16);
-                $sheet->getColumnDimension('E')->setWidth(20);
+                $sheet->getColumnDimension('E')->setWidth(16);
+                $sheet->getColumnDimension('F')->setWidth(20);
 
                 $sheet->getRowDimension(1)->setRowHeight(28);
 
                 for ($row = 2; $row <= $lastRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(28);
+                    $sheet->getRowDimension($row)->setRowHeight(34);
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:E{$lastRow}");
+                $sheet->setAutoFilter("A1:F{$lastRow}");
             },
         ];
     }

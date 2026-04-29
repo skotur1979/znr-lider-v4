@@ -4,7 +4,6 @@ namespace App\Exports;
 
 use App\Filament\Resources\Chemicals\ChemicalResource;
 use App\Models\Chemical;
-use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithDrawings;
@@ -12,17 +11,17 @@ use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithEvents, WithDrawings
 {
-    /** @var \Illuminate\Support\Collection<int, \App\Models\Chemical> */
     protected $chemicals;
 
     public function __construct()
     {
         $this->chemicals = ChemicalResource::getEloquentQuery()
+            ->with('user')
             ->orderBy('product_name')
             ->get();
     }
@@ -36,6 +35,7 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
     {
         return [
             'Ime proizvoda',
+            'Korisnik',
             'CAS',
             'UFI',
             'Piktogrami',
@@ -53,16 +53,14 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
     {
         /** @var Chemical $chemical */
 
-        $h = $this->toList($chemical->h_statements);
-        $p = $this->toList($chemical->p_statements);
-
         return [
             $chemical->product_name,
+            $chemical->user?->name ?? '',
             $chemical->cas_number,
             $chemical->ufi_number,
-            '', // ✅ slike se crtaju preko drawings()
-            implode(', ', $h),
-            implode(', ', $p),
+            '',
+            implode(', ', $this->toList($chemical->h_statements)),
+            implode(', ', $this->toList($chemical->p_statements)),
             $chemical->usage_location,
             $chemical->annual_quantity,
             $chemical->gvi_kgvi,
@@ -77,23 +75,68 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                // header bold + centriran
-                $sheet->getStyle('A1:K1')->getFont()->setBold(true);
-                $sheet->getStyle('A1:K1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $lastRow = $this->chemicals->count() + 1;
 
-                // Piktogrami stupac malo širi
-                $sheet->getColumnDimension('D')->setWidth(18);
+                $sheet->getStyle("A1:L{$lastRow}")
+                    ->getFont()
+                    ->setName('DejaVu Sans')
+                    ->setSize(10);
 
-                // Visina redaka da stanu 1-2 reda piktograma
-                // (ako netko ima puno piktograma)
+                $sheet->getStyle('A1:L1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'name' => 'DejaVu Sans',
+                        'size' => 10,
+                    ],
+                    'fill' => [
+                        'fillType' => 'solid',
+                        'startColor' => ['rgb' => '1F2937'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                ]);
+
+                $sheet->getStyle("A2:L{$lastRow}")
+                    ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setWrapText(true);
+
+                $sheet->getStyle("A2:L{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+                $sheet->getStyle("I2:K{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $sheet->getColumnDimension('A')->setWidth(28);
+                $sheet->getColumnDimension('B')->setWidth(18);
+                $sheet->getColumnDimension('C')->setWidth(20);
+                $sheet->getColumnDimension('D')->setWidth(20);
+                $sheet->getColumnDimension('E')->setWidth(20);
+                $sheet->getColumnDimension('F')->setWidth(28);
+                $sheet->getColumnDimension('G')->setWidth(42);
+                $sheet->getColumnDimension('H')->setWidth(24);
+                $sheet->getColumnDimension('I')->setWidth(12);
+                $sheet->getColumnDimension('J')->setWidth(12);
+                $sheet->getColumnDimension('K')->setWidth(10);
+                $sheet->getColumnDimension('L')->setWidth(16);
+
+                $sheet->getRowDimension(1)->setRowHeight(26);
+
                 foreach ($this->chemicals as $i => $chemical) {
                     $row = $i + 2;
-
                     $count = count($this->normalizePictos($chemical->hazard_pictograms));
 
-                    // 0-3 -> jedan red slika, 4+ -> dva reda
-                    $sheet->getRowDimension($row)->setRowHeight($count > 3 ? 45 : 28);
+                    $sheet->getRowDimension($row)->setRowHeight($count > 3 ? 48 : 32);
                 }
+
+                $sheet->freezePane('A2');
+                $sheet->setAutoFilter("A1:L{$lastRow}");
             },
         ];
     }
@@ -106,35 +149,22 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
             $row = $i + 2;
             $codes = $this->normalizePictos($chemical->hazard_pictograms);
 
-            // max koliko god imaš, složimo 3 po redu
             foreach ($codes as $idx => $code) {
                 $path = $this->findPictogramPath($code);
 
-                // Excel drawings: najbolje png/jpg; ako nema – preskoči
                 if (! $path) {
                     continue;
                 }
-
-                $col = 'D';
-                $cell = $col . $row;
-
-                // 3 po redu
-                $colIndex = $idx % 3;          // 0,1,2
-                $rowIndex = intdiv($idx, 3);   // 0,1,2...
 
                 $drawing = new Drawing();
                 $drawing->setName("picto_{$row}_{$idx}");
                 $drawing->setDescription($code);
                 $drawing->setPath($path);
-                $drawing->setHeight(18); // veličina ikone
+                $drawing->setHeight(18);
+                $drawing->setCoordinates('E' . $row);
 
-                $drawing->setCoordinates($cell);
-
-                // offseti unutar ćelije:
-                // X: 0, 22, 44 (razmak)
-                // Y: 2 ili 22 (drugi red)
-                $drawing->setOffsetX(2 + ($colIndex * 22));
-                $drawing->setOffsetY(2 + ($rowIndex * 20));
+                $drawing->setOffsetX(4 + (($idx % 3) * 24));
+                $drawing->setOffsetY(4 + (intdiv($idx, 3) * 21));
 
                 $drawings[] = $drawing;
             }
@@ -145,9 +175,7 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
 
     private function normalizePictos($value): array
     {
-        $list = $this->toList($value);
-
-        return collect($list)
+        return collect($this->toList($value))
             ->map(fn ($v) => strtoupper(trim((string) $v)))
             ->filter()
             ->unique()
@@ -157,30 +185,37 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
 
     private function toList($value): array
     {
-        if ($value === null || $value === '') return [];
+        if ($value === null || $value === '') {
+            return [];
+        }
 
         if (is_array($value)) {
-            return collect($value)->map(fn ($v) => trim((string) $v))->filter()->values()->all();
+            return collect($value)
+                ->map(fn ($v) => trim((string) $v))
+                ->filter()
+                ->values()
+                ->all();
         }
 
         $value = (string) $value;
 
-        // glavno: split po zarezu
         $parts = explode(',', $value);
 
-        // ako netko ima "GHS01 GHS02" bez zareza, dodatno split po whitespace
         if (count($parts) === 1 && preg_match('/\s+/', $value)) {
             $parts = preg_split('/\s+/', $value) ?: [];
         }
 
-        return collect($parts)->map(fn ($v) => trim($v))->filter()->values()->all();
+        return collect($parts)
+            ->map(fn ($v) => trim($v))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function findPictogramPath(string $code): ?string
     {
         $code = strtoupper(trim($code));
 
-        // Excel: prvo png/jpg, pa gif
         $candidates = [
             public_path("images/ghs/{$code}.png"),
             public_path("images/ghs/{$code}.jpg"),

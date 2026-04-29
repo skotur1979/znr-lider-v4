@@ -5,7 +5,6 @@ namespace App\Exports;
 use App\Filament\Resources\Incidents\IncidentResource;
 use App\Models\Incident;
 use Illuminate\Support\Carbon;
-
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
@@ -13,38 +12,28 @@ use Maatwebsite\Excel\Concerns\WithDrawings;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-
 use Maatwebsite\Excel\Events\AfterSheet;
-
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
-class IncidentsExport implements
-    FromCollection,
-    WithHeadings,
-    WithMapping,
-    WithColumnFormatting,
-    ShouldAutoSize,
-    WithEvents,
-    WithDrawings
+class IncidentsExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents, WithDrawings
 {
     protected $incidents;
 
     protected array $filters = [];
 
-    // kontrola veličine slike
-    private int $imgHeight = 70; // px
+    private int $imgHeight = 70;
 
     public function __construct(array $filters = [])
     {
         $this->filters = $filters;
 
         $query = IncidentResource::getEloquentQuery()
+            ->with('user')
             ->orderByDesc('date_occurred');
 
-        // ✅ primijeni iste filtere kao u tablici / exportu
         $query = $this->applyFilters($query, $filters);
 
         $this->incidents = $query->get();
@@ -59,14 +48,16 @@ class IncidentsExport implements
     {
         return [
             'Datum nastanka',
+            'Korisnik',
             'Vrsta incidenta',
+            'Vrsta zaposlenja',
             'Lokacija',
             'Ozlijeđeni dio tijela',
             'Izgubljeni radni dani',
             'Datum povratka',
             'Uzrok ozljede',
             'Tip ozljede',
-            'Napomena',
+            'Napomena / podaci o ozlijeđenom radniku',
             'Broj priloga',
             'Slika',
         ];
@@ -75,21 +66,15 @@ class IncidentsExport implements
     public function map($i): array
     {
         /** @var Incident $i */
+
         $occurred = $i->date_occurred ? Carbon::parse($i->date_occurred) : null;
-        $return   = $i->date_of_return ? Carbon::parse($i->date_of_return) : null;
-
-        $type = match ($i->type_of_incident) {
-            'LTA' => 'LTA – Ozljeda na radu',
-            'MTA' => 'MTA – Pružanje PP izvan tvrtke',
-            'FAA' => 'FAA – Pružanje PP u tvrtki',
-            default => (string) $i->type_of_incident,
-        };
-
-        $attachmentsCount = is_array($i->investigation_report) ? count($i->investigation_report) : 0;
+        $return = $i->date_of_return ? Carbon::parse($i->date_of_return) : null;
 
         return [
             $occurred ? ExcelDate::dateTimeToExcel($occurred) : null,
-            $type,
+            $i->user?->name ?? '',
+            $this->incidentTypeLabel($i->type_of_incident),
+            $this->employmentTypeLabel($i->permanent_or_temporary),
             $i->location,
             $i->injured_body_part,
             $i->working_days_lost,
@@ -97,28 +82,24 @@ class IncidentsExport implements
             $i->causes_of_injury,
             $i->accident_injury_type,
             $i->other,
-            $attachmentsCount,
-            null, // slika ide preko drawings()
+            is_array($i->investigation_report) ? count($i->investigation_report) : 0,
+            null,
         ];
     }
 
     public function columnFormats(): array
     {
         return [
-            'A' => 'dd.mm.yyyy', // datum nastanka
-            'F' => 'dd.mm.yyyy', // datum povratka
+            'A' => 'dd.mm.yyyy',
+            'H' => 'dd.mm.yyyy',
         ];
     }
 
-    /**
-     * 🔥 Slika zaključana u ćeliji (kolona K)
-     */
     public function drawings(): array
     {
         $drawings = [];
 
         foreach ($this->incidents as $idx => $i) {
-
             if (! $i->image_path) {
                 continue;
             }
@@ -132,18 +113,12 @@ class IncidentsExport implements
             $row = $idx + 2;
 
             $drawing = new Drawing();
-            $drawing->setName('Slika');
-            $drawing->setDescription('Incident image');
+            $drawing->setName("slika_{$row}");
+            $drawing->setDescription('Slika incidenta');
             $drawing->setPath($fullPath);
-
-            // Zaključaj veličinu slike
             $drawing->setHeight($this->imgHeight);
             $drawing->setResizeProportional(true);
-
-            // ✅ kolona K = "Slika"
-            $drawing->setCoordinates("K{$row}");
-
-            // centriraj unutar ćelije
+            $drawing->setCoordinates("M{$row}");
             $drawing->setOffsetX(5);
             $drawing->setOffsetY(5);
 
@@ -157,61 +132,125 @@ class IncidentsExport implements
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
-
                 $sheet = $event->sheet->getDelegate();
+
                 $lastRow = $this->incidents->count() + 1;
 
-                // ===== WRAP TEXT SVUGDJE =====
-                $sheet->getStyle("A1:K{$lastRow}")
+                $sheet->getStyle("A1:M{$lastRow}")
+                    ->getFont()
+                    ->setName('DejaVu Sans')
+                    ->setSize(10);
+
+                $sheet->getStyle('A1:M1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'name' => 'DejaVu Sans',
+                        'size' => 10,
+                    ],
+                    'fill' => [
+                        'fillType' => 'solid',
+                        'startColor' => ['rgb' => '1F2937'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                ]);
+
+                $sheet->getStyle("A2:M{$lastRow}")
                     ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                // ===== CENTRIRAJ SVE =====
-                $sheet->getStyle("A1:K{$lastRow}")
+                $sheet->getStyle("A2:M{$lastRow}")
                     ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-                    ->setVertical(Alignment::VERTICAL_CENTER);
+                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                // tekstualne kolone lijevo (Lokacija, Ozlijeđeni dio, Uzrok, Tip, Napomena)
-                $sheet->getStyle("C2:C{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                $sheet->getStyle("D2:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                $sheet->getStyle("G2:I{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                $sheet->getStyle("A2:D{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                // ===== VISINA REDA = slika =====
-                foreach ($this->incidents as $idx => $i) {
-                    $row = $idx + 2;
-                    $sheet->getRowDimension($row)->setRowHeight($this->imgHeight * 0.75);
+                $sheet->getStyle("G2:H{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $sheet->getStyle("L2:M{$lastRow}")
+                    ->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                $widths = [
+                    'A' => 16,
+                    'B' => 20,
+                    'C' => 26,
+                    'D' => 18,
+                    'E' => 24,
+                    'F' => 28,
+                    'G' => 18,
+                    'H' => 16,
+                    'I' => 40,
+                    'J' => 40,
+                    'K' => 45,
+                    'L' => 14,
+                    'M' => 15,
+                ];
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
                 }
 
-                // ===== ŠIRINA KOLONE K (Slika) =====
-                // 1 Excel width unit ≈ 7 px
-                $excelWidth = ($this->imgHeight * 1.3) / 7;
-                $sheet->getColumnDimension('K')->setWidth($excelWidth);
+                $sheet->getRowDimension(1)->setRowHeight(30);
 
-                // ===== BOJE DATUM POVRATKA (F) =====
-                // crveno: prošao datum povratka
-                // žuto: povratak unutar 30 dana
+                foreach ($this->incidents as $idx => $i) {
+                    $row = $idx + 2;
+                    $sheet->getRowDimension($row)->setRowHeight($i->image_path ? $this->imgHeight * 0.75 : 38);
+                }
+
                 $today = Carbon::today();
 
                 foreach ($this->incidents as $idx => $i) {
                     $row = $idx + 2;
 
                     $return = $i->date_of_return ? Carbon::parse($i->date_of_return) : null;
+
                     if (! $return) {
                         continue;
                     }
 
                     if ($return->lt($today)) {
-                        $this->fillCell($sheet, "F{$row}", 'FFFF0000');
+                        $this->fillCell($sheet, "H{$row}", 'FFFF0000');
                         continue;
                     }
 
                     if ($return->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "F{$row}", 'FFFFFF00');
+                        $this->fillCell($sheet, "H{$row}", 'FFFFFF00');
                     }
                 }
+
+                $sheet->freezePane('A2');
+                $sheet->setAutoFilter("A1:M{$lastRow}");
             },
         ];
+    }
+
+    private function incidentTypeLabel(?string $value): string
+    {
+        return match ($value) {
+            'LTA' => 'LTA – Ozljeda na radu',
+            'MTA' => 'MTA – Pružanje PP izvan tvrtke',
+            'FAA' => 'FAA – Pružanje PP u tvrtki',
+            default => $value ?? '',
+        };
+    }
+
+    private function employmentTypeLabel(?string $value): string
+    {
+        return match ($value) {
+            'Permanent' => 'Stalni',
+            'Temporary' => 'Privremeni',
+            default => $value ?? '',
+        };
     }
 
     private function fillCell($sheet, string $cell, string $argb): void
@@ -223,22 +262,22 @@ class IncidentsExport implements
 
     private function applyFilters($query, array $filters)
     {
-        // status: active/trashed/all
         $status = data_get($filters, 'status.value');
+
         $query = match ($status) {
             'trashed' => $query->onlyTrashed(),
-            'all'     => $query->withTrashed(),
-            default   => $query->withoutTrashed(),
+            'all' => $query->withTrashed(),
+            default => $query->withoutTrashed(),
         };
 
-        // vrsta incidenta
         $type = data_get($filters, 'type_of_incident.value');
+
         if ($type) {
             $query->where('type_of_incident', $type);
         }
 
-        // godina
         $year = data_get($filters, 'godina_filter.value');
+
         if ($year) {
             $query->whereYear('date_occurred', $year);
         }

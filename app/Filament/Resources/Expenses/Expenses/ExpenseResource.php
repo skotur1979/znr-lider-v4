@@ -172,18 +172,21 @@ static::userTableColumn(),
                     }),
 
                 Action::make('export_excel')
-                    ->label('Izvoz u Excel')
-                    ->icon('heroicon-o-document-text')
-                    ->color('success')
-                    ->action(function () {
-                        $year = data_get(request()->input('tableFilters.godina'), 'value')
-                            ?: (string) Carbon::now('Europe/Zagreb')->year;
+    ->label('Izvoz u Excel')
+    ->icon('heroicon-o-document-text')
+    ->color('success')
+    ->action(function ($livewire) {
+        $year = data_get($livewire->tableFilters, 'godina.value');
 
-                        return Excel::download(
-                            new ExpensesExport($year),
-                            'Troskovi_' . $year . '.xlsx'
-                        );
-                    }),
+        if (! filled($year)) {
+            $year = (string) Carbon::now('Europe/Zagreb')->year;
+        }
+
+        return Excel::download(
+            new ExpensesExport((string) $year),
+            'Troskovi_' . $year . '.xlsx'
+        );
+    }),
             ])
             ->bulkActions([
                 DeleteBulkAction::make()->label('Obriši označeno'),

@@ -19,12 +19,11 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
 {
     protected PPELog $log;
 
-    /** @var \Illuminate\Support\Collection */
     protected $items;
 
     public function __construct(PPELog $log)
     {
-        $this->log = $log->load('items');
+        $this->log = $log->load(['items', 'user']);
         $this->items = $this->log->items->sortBy('equipment_name')->values();
     }
 
@@ -36,6 +35,11 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
     public function headings(): array
     {
         return [
+            'Korisnik',
+            'Prezime i ime',
+            'OIB',
+            'Radno mjesto',
+            'Organizacijska jedinica',
             'Naziv OZO',
             'HRN EN',
             'Veličina',
@@ -49,26 +53,31 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
     public function map($item): array
     {
         $issue = $item->issue_date ? Carbon::parse($item->issue_date) : null;
-        $end   = $item->end_date ? Carbon::parse($item->end_date) : null;
-        $ret   = $item->return_date ? Carbon::parse($item->return_date) : null;
+        $end = $item->end_date ? Carbon::parse($item->end_date) : null;
+        $return = $item->return_date ? Carbon::parse($item->return_date) : null;
 
         return [
+            $this->log->user?->name ?? '',
+            $this->log->user_last_name,
+            $this->log->user_oib,
+            $this->log->workplace,
+            $this->log->organization_unit,
             $item->equipment_name,
             $item->standard,
             $item->size,
             $item->duration_months,
             $issue ? ExcelDate::dateTimeToExcel($issue) : null,
-            $end   ? ExcelDate::dateTimeToExcel($end) : null,
-            $ret   ? ExcelDate::dateTimeToExcel($ret) : null,
+            $end ? ExcelDate::dateTimeToExcel($end) : null,
+            $return ? ExcelDate::dateTimeToExcel($return) : null,
         ];
     }
 
     public function columnFormats(): array
     {
         return [
-            'E' => 'dd.mm.yyyy', // Izdano
-            'F' => 'dd.mm.yyyy', // Istek
-            'G' => 'dd.mm.yyyy', // Datum vraćanja
+            'J' => 'dd.mm.yyyy',
+            'K' => 'dd.mm.yyyy',
+            'L' => 'dd.mm.yyyy',
         ];
     }
 
@@ -77,33 +86,87 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
+                $lastRow = $this->items->count() + 1;
 
-                $sheet->getStyle('A1:G1')->getFont()->setBold(true);
-                $sheet->getStyle('A1:G1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("A1:L{$lastRow}")
+                    ->getFont()
+                    ->setName('DejaVu Sans')
+                    ->setSize(10);
+
+                $sheet->getStyle('A1:L1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'name' => 'DejaVu Sans',
+                        'size' => 10,
+                    ],
+                    'fill' => [
+                        'fillType' => 'solid',
+                        'startColor' => ['rgb' => '1F2937'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                ]);
+
+                $sheet->getStyle("A2:L{$lastRow}")
+                    ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setWrapText(true);
+
+                foreach (['C', 'G', 'H', 'I', 'J', 'K', 'L'] as $col) {
+                    $sheet->getStyle("{$col}2:{$col}{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                }
+
+                $widths = [
+                    'A' => 22,
+                    'B' => 28,
+                    'C' => 16,
+                    'D' => 26,
+                    'E' => 28,
+                    'F' => 32,
+                    'G' => 18,
+                    'H' => 14,
+                    'I' => 16,
+                    'J' => 16,
+                    'K' => 16,
+                    'L' => 18,
+                ];
+
+                foreach ($widths as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
+
+                $sheet->getRowDimension(1)->setRowHeight(30);
+
+                for ($row = 2; $row <= $lastRow; $row++) {
+                    $sheet->getRowDimension($row)->setRowHeight(34);
+                }
 
                 $today = Carbon::today();
+                $soon = $today->copy()->addDays(30);
 
                 foreach ($this->items as $i => $item) {
-                    $row = $i + 2; // header = 1
+                    $row = $i + 2;
                     $end = $item->end_date ? Carbon::parse($item->end_date) : null;
 
                     if (! $end) {
                         continue;
                     }
 
-                    // F = Istek
-                    $cell = "F{$row}";
-
                     if ($end->lt($today)) {
-                        $this->fillCell($sheet, $cell, 'FFFF0000'); // crveno
-                        continue;
-                    }
-
-                    if ($end->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, $cell, 'FFFFFF00'); // žuto
-                        continue;
+                        $this->fillCell($sheet, "K{$row}", 'FFFF0000');
+                    } elseif ($end->lte($soon)) {
+                        $this->fillCell($sheet, "K{$row}", 'FFFFFF00');
                     }
                 }
+
+                $sheet->freezePane('A2');
+                $sheet->setAutoFilter("A1:L{$lastRow}");
             },
         ];
     }

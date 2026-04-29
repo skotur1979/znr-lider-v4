@@ -2,9 +2,9 @@
 
 namespace App\Exports;
 
-use App\Filament\Resources\Machines\MachineResource;
-use App\Models\Machine;
-use Illuminate\Support\Carbon;
+use App\Filament\Resources\Miscellaneouses\MiscellaneousResource;
+use App\Models\Miscellaneous;
+use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
@@ -16,21 +16,21 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents
+class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents
 {
-    protected $machines;
+    protected $records;
 
     public function __construct()
     {
-        $this->machines = MachineResource::getEloquentQuery()
-            ->with('user')
-            ->orderBy('name')
+        $this->records = MiscellaneousResource::getEloquentQuery()
+            ->with(['user', 'category'])
+            ->orderByDesc('examination_valid_until')
             ->get();
     }
 
     public function collection()
     {
-        return $this->machines;
+        return $this->records;
     }
 
     public function headings(): array
@@ -38,39 +38,33 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
         return [
             'Naziv',
             'Korisnik',
-            'Proizvođač',
-            'Tvornički broj',
-            'Inventarni broj',
-            'Vrijedi od',
-            'Vrijedi do',
+            'Kategorija',
             'Ispitao',
             'Broj izvještaja',
-            'Lokacija',
+            'Vrijedi od',
+            'Vrijedi do',
             'Napomena',
             'Broj priloga',
         ];
     }
 
-    public function map($machine): array
+    public function map($record): array
     {
-        /** @var Machine $machine */
+        /** @var Miscellaneous $record */
 
-        $from = $machine->examination_valid_from ? Carbon::parse($machine->examination_valid_from) : null;
-        $until = $machine->examination_valid_until ? Carbon::parse($machine->examination_valid_until) : null;
+        $from = $record->examination_valid_from ? Carbon::parse($record->examination_valid_from) : null;
+        $until = $record->examination_valid_until ? Carbon::parse($record->examination_valid_until) : null;
 
         return [
-            $machine->name,
-            $machine->user?->name ?? '',
-            $machine->manufacturer,
-            $machine->factory_number,
-            $machine->inventory_number,
+            $record->name,
+            $record->user?->name ?? '',
+            $record->category?->name ?? '',
+            $record->examiner,
+            $record->report_number,
             $from ? ExcelDate::dateTimeToExcel($from) : null,
             $until ? ExcelDate::dateTimeToExcel($until) : null,
-            $machine->examined_by,
-            $machine->report_number,
-            $machine->location,
-            $machine->remark,
-            is_array($machine->pdf) ? count($machine->pdf) : 0,
+            $record->remark,
+            is_array($record->pdf) ? count($record->pdf) : 0,
         ];
     }
 
@@ -88,14 +82,14 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                $lastRow = $this->machines->count() + 1;
+                $lastRow = $this->records->count() + 1;
 
-                $sheet->getStyle("A1:L{$lastRow}")
+                $sheet->getStyle("A1:I{$lastRow}")
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:L1')->applyFromArray([
+                $sheet->getStyle('A1:I1')->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -113,36 +107,33 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
                     ],
                 ]);
 
-                $sheet->getStyle("A2:L{$lastRow}")
+                $sheet->getStyle("A2:I{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:L{$lastRow}")
+                $sheet->getStyle("A2:I{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                $sheet->getStyle("D2:G{$lastRow}")
+                $sheet->getStyle("F2:G{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                $sheet->getStyle("L2:L{$lastRow}")
+                $sheet->getStyle("I2:I{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 $widths = [
-                    'A' => 30,
+                    'A' => 32,
                     'B' => 22,
-                    'C' => 24,
-                    'D' => 22,
-                    'E' => 20,
+                    'C' => 26,
+                    'D' => 24,
+                    'E' => 22,
                     'F' => 16,
                     'G' => 16,
-                    'H' => 24,
-                    'I' => 22,
-                    'J' => 24,
-                    'K' => 45,
-                    'L' => 14,
+                    'H' => 45,
+                    'I' => 14,
                 ];
 
                 foreach ($widths as $column => $width) {
@@ -157,11 +148,11 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
 
                 $today = Carbon::today();
 
-                foreach ($this->machines as $i => $machine) {
+                foreach ($this->records as $i => $record) {
                     $row = $i + 2;
 
-                    $until = $machine->examination_valid_until
-                        ? Carbon::parse($machine->examination_valid_until)
+                    $until = $record->examination_valid_until
+                        ? Carbon::parse($record->examination_valid_until)
                         : null;
 
                     if (! $until) {
@@ -179,7 +170,7 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:L{$lastRow}");
+                $sheet->setAutoFilter("A1:I{$lastRow}");
             },
         ];
     }

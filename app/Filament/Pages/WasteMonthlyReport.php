@@ -9,6 +9,9 @@ use App\Models\WasteType;
 use App\Support\WasteCodeFormatter;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
+use App\Exports\WasteMonthlyReportExport;
+use Filament\Actions\Action;
+use Maatwebsite\Excel\Facades\Excel;
 
 class WasteMonthlyReport extends Page
 {
@@ -35,6 +38,33 @@ class WasteMonthlyReport extends Page
         return 'Mjesečni izvještaj';
     }
 
+    protected function getHeaderActions(): array
+{
+    return [
+        Action::make('exportExcel')
+            ->label('Izvoz u Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(function () {
+                $locationName = 'sve-lokacije';
+
+                if ($this->selectedLocationId) {
+                    $location = WasteOrganizationLocation::find($this->selectedLocationId);
+                    $locationName = str($location?->display_name ?? $location?->name ?? 'lokacija')
+                        ->slug()
+                        ->toString();
+                }
+
+                return Excel::download(
+                    new WasteMonthlyReportExport(
+                        (int) $this->selectedYear,
+                        $this->selectedLocationId ? (int) $this->selectedLocationId : null,
+                    ),
+                    'mjesecni-izvjestaj-otpada-' . $this->selectedYear . '-' . $locationName . '.xlsx'
+                );
+            }),
+    ];
+}
     public function getMonthLabels(): array
     {
         return [
