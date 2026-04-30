@@ -29,23 +29,29 @@ class ListEmployees extends ListRecords
                 ->label('Novi Zaposlenik'),
 
             Actions\Action::make('export_pdf')
-                ->label('Izvoz u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('warning')
-                ->action(function () {
-                    // ✅ isti query kao tablica (admin/user + without softdelete + with certificates)
-                    $employees = EmployeeResource::getEloquentQuery()
-                        ->orderBy('name')
-                        ->get();
+    ->label('Izvoz u PDF')
+    ->icon('heroicon-o-arrow-down-tray')
+    ->color('warning')
+    ->action(function () {
+        $employees = $this->getFilteredSortedTableQuery()
+            ->with('certificates')
+            ->get();
 
-                    $pdf = Pdf::loadView('pdf.employees', compact('employees'))
-                        ->setPaper('a4', 'landscape');
+        $pdf = Pdf::loadView('pdf.employees', compact('employees'))
+            ->setPaper('a4', 'landscape')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'isPhpEnabled' => true,
+                'dpi' => 96,
+                'defaultFont' => 'DejaVu Sans',
+            ]);
 
-                    return response()->streamDownload(
-                        fn () => print($pdf->output()),
-                        'zaposlenici-' . now()->format('Y-m-d') . '.pdf'
-                    );
-                }),
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            'zaposlenici-' . now()->format('Y-m-d') . '.pdf'
+        );
+    }),
 
             Actions\Action::make('export_excel')
                 ->label('Izvoz u Excel')
@@ -57,40 +63,66 @@ class ListEmployees extends ListRecords
                 )),
 
             Actions\Action::make('import_excel')
-                ->label('Uvoz iz Excela')
-                ->icon('heroicon-o-document-arrow-up')
-                ->color('warning')
-                ->form([
-                    FileUpload::make('excel_file')
-                        ->label('Excel datoteka')
-                        ->disk('local')
-                        ->directory('imports')
-                        ->preserveFilenames()
-                        ->acceptedFileTypes([
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'application/vnd.ms-excel',
-                        ])
-                        ->required(),
-                ])
-                ->action(function (array $data) {
-                    $file = $data['excel_file'];
+    ->label('Uvoz iz Excela')
+    ->icon('heroicon-o-document-arrow-up')
+    ->color('warning')
+    ->form([
+        FileUpload::make('excel_file')
+            ->label('Excel datoteka')
+            ->disk('local')
+            ->directory('imports')
+            ->preserveFilenames()
+            ->acceptedFileTypes([
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel',
+            ])
+            ->required(),
+    ])
+    ->action(function (array $data): void {
+        $path = $data['excel_file'];
 
-                    // ✅ string path ili TemporaryUploadedFile
-                    if ($file instanceof TemporaryUploadedFile) {
-                        $path = $file->store('imports', 'local');
-                    } else {
-                        $path = (string) $file;
-                    }
+        if (is_array($path)) {
+            $path = collect($path)->first();
+        }
 
-                    $fullPath = Storage::disk('local')->path($path);
+        if ($path instanceof TemporaryUploadedFile) {
+            $path = $path->store('imports', 'local');
+        }
 
-                    Excel::import(new EmployeesImport(), $fullPath);
+        if (! Storage::disk('local')->exists($path)) {
+            Notification::make()
+                ->title('Excel datoteka nije pronađena')
+                ->danger()
+                ->send();
 
-                    Notification::make()
-                        ->title('Uvoz uspješan!')
-                        ->success()
-                        ->send();
-                }),
+            return;
+        }
+
+        $fullPath = Storage::disk('local')->path($path);
+
+        $import = new EmployeesImport();
+
+        Excel::import($import, $fullPath);
+
+        $total = $import->created + $import->updated + $import->unchanged + $import->skipped;
+
+        Notification::make()
+            ->title('Uvoz zaposlenika je završen')
+            ->body(
+                "Ukupno obrađeno zaposlenika: {$total}\n" .
+                "Novi zaposlenici: {$import->created}\n" .
+                "Ažurirani zaposlenici: {$import->updated}\n" .
+                "Bez promjene: {$import->unchanged}\n" .
+                "Preskočeni redovi: {$import->skipped}\n\n" .
+                "Novi certifikati: {$import->certificatesCreated}\n" .
+                "Ažurirani certifikati: {$import->certificatesUpdated}\n" .
+                "Certifikati bez promjene: {$import->certificatesUnchanged}"
+            )
+            ->success()
+            ->send();
+
+        $this->resetTable();
+    }),
         ];
     }
      protected function getTableQuery(): Builder

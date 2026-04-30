@@ -4,54 +4,89 @@ namespace App\Imports;
 
 use App\Models\Machine;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use Maatwebsite\Excel\Concerns\ToModel;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\ToCollection;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
-class MachinesImport implements ToModel, WithHeadingRow
+class MachinesImport implements ToCollection
 {
-    public function headingRow(): int
+    public int $created = 0;
+    public int $updated = 0;
+    public int $unchanged = 0;
+    public int $skipped = 0;
+
+    public function collection(Collection $rows): void
     {
-        return 1; // prva linija je header
-    }
+        $headerRowIndex = 3;
+        $dataStartIndex = 4;
 
-    public function model(array $row)
-    {
-        // Normalizirani ključevi (ako Excel header ima razmake/čudna slova)
-        $row = $this->normalizeKeys($row);
+        $headers = $rows->get($headerRowIndex);
 
-        // Mapiranje kolona (prilagodi ako ti se headeri zovu drugačije)
-        $name            = $row['naziv'] ?? null;
-        $manufacturer    = $row['proizvodac'] ?? null;
-        $factoryNumber   = $row['tvornicki_broj'] ?? null;
-        $inventoryNumber = $row['inventarni_broj'] ?? null;
-
-        $validFrom  = $this->parseDate($row['vrijedi_od'] ?? null);
-        $validUntil = $this->parseDate($row['vrijedi_do'] ?? null);
-
-        $examinedBy  = $row['ispitao'] ?? null;
-        $reportNo    = $row['broj_izvjestaja'] ?? null;
-        $location    = $row['lokacija'] ?? null;
-        $remark      = $row['napomena'] ?? null;
-
-        // Preskoči prazne retke
-        if (! $name) {
-            return null;
+        if (! $headers) {
+            $this->skipped++;
+            return;
         }
 
-        // ✅ user_id: standardni korisnik uvozi sebi, admin može uvesti sebi (ili kasnije proširimo da bira korisnika)
-        $userId = Auth::id();
+        $map = [];
 
-        // ✅ update-or-create po (name + factory_number) (po želji promijeni kriterij)
-        return Machine::updateOrCreate(
-            [
+        foreach ($headers as $index => $header) {
+            $key = $this->normalizeKey($header);
+
+            if ($key) {
+                $map[$key] = $index;
+            }
+        }
+
+        for ($i = $dataStartIndex; $i < $rows->count(); $i++) {
+            $row = $rows->get($i);
+
+            if (! $row || $this->isEmptyRow($row)) {
+                continue;
+            }
+
+            $name = $this->clean($this->value($row, $map, 'naziv'));
+
+            if (! $name) {
+                $this->skipped++;
+                continue;
+            }
+
+            $manufacturer = $this->clean($this->value($row, $map, 'proizvodac'));
+            $factoryNumber = $this->clean($this->value($row, $map, 'tvornicki_broj'));
+            $inventoryNumber = $this->clean($this->value($row, $map, 'inventarni_broj'));
+            $validFrom = $this->parseDate($this->value($row, $map, 'vrijedi_od'));
+            $validUntil = $this->parseDate($this->value($row, $map, 'vrijedi_do'));
+            $examinedBy = $this->clean($this->value($row, $map, 'ispitao'));
+            $reportNo = $this->clean($this->value($row, $map, 'broj_izvjestaja'));
+            $location = $this->clean($this->value($row, $map, 'lokacija'));
+            $remark = $this->clean($this->value($row, $map, 'napomena'));
+
+            if (! $validFrom || ! $validUntil || ! $location) {
+                $this->skipped++;
+                continue;
+            }
+
+            $userId = Auth::user()?->ownerId() ?? Auth::id();
+
+            $machine = Machine::query()
+                ->where('user_id', $userId)
+                ->where('name', $name)
+                ->where(function ($query) use ($factoryNumber) {
+                    if ($factoryNumber) {
+                        $query->where('factory_number', $factoryNumber);
+                    } else {
+                        $query->whereNull('factory_number');
+                    }
+                })
+                ->first();
+
+            $data = [
                 'user_id' => $userId,
                 'name' => $name,
-                'factory_number' => $factoryNumber,
-            ],
-            [
                 'manufacturer' => $manufacturer,
+                'factory_number' => $factoryNumber,
                 'inventory_number' => $inventoryNumber,
                 'examination_valid_from' => $validFrom,
                 'examination_valid_until' => $validUntil,
@@ -59,8 +94,71 @@ class MachinesImport implements ToModel, WithHeadingRow
                 'report_number' => $reportNo,
                 'location' => $location,
                 'remark' => $remark,
-            ]
-        );
+            ];
+
+            if (! $machine) {
+                Machine::create($data);
+                $this->created++;
+                continue;
+            }
+
+            $changed = [];
+
+            foreach ($data as $field => $value) {
+                if (in_array($field, ['user_id', 'name', 'factory_number'], true)) {
+                    continue;
+                }
+
+                if ($value === null) {
+                    continue;
+                }
+
+                $current = $machine->{$field};
+
+                if ($current instanceof \Carbon\CarbonInterface) {
+                    $current = $current->format('Y-m-d');
+                }
+
+                if ((string) ($current ?? '') !== (string) $value) {
+                    $changed[$field] = $value;
+                }
+            }
+
+            if (empty($changed)) {
+                $this->unchanged++;
+                continue;
+            }
+
+            $machine->update($changed);
+            $this->updated++;
+        }
+    }
+
+    private function value($row, array $map, string $key)
+    {
+        return array_key_exists($key, $map) ? ($row[$map[$key]] ?? null) : null;
+    }
+
+    private function isEmptyRow($row): bool
+    {
+        foreach ($row as $value) {
+            if ($this->clean($value) !== null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function clean($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function parseDate($value): ?string
@@ -69,75 +167,61 @@ class MachinesImport implements ToModel, WithHeadingRow
             return null;
         }
 
-        // Excel serial number (npr. 45231)
         if (is_numeric($value)) {
             try {
-                // Excel date serial -> Carbon (1900 date system)
-                $date = Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $value));
-                return $date->format('Y-m-d');
-            } catch (\Throwable $e) {
+                return Carbon::instance(Date::excelToDateTimeObject((float) $value))->format('Y-m-d');
+            } catch (\Throwable) {
                 return null;
             }
         }
 
-        $value = trim((string) $value);
+        $value = rtrim(trim((string) $value), '.');
 
-        // Makni završnu točku (13.05.2025.)
-        $value = rtrim($value, '.');
-
-        // Najčešći formati koje želiš podržati
-        $formats = [
-            'd.m.Y',     // 13.05.2025
-            'd/m/Y',     // 13/05/2025
-            'd-m-Y',     // 13-05-2025
-            'Y-m-d',     // 2025-05-13
-            'd.m.y',     // 13.05.25
-            'd/m/y',
-            'd-m-y',
-        ];
-
-        foreach ($formats as $format) {
+        foreach (['d.m.Y', 'd/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.y', 'd/m/y', 'd-m-y'] as $format) {
             try {
-                $dt = Carbon::createFromFormat($format, $value);
-                if ($dt !== false) {
-                    return $dt->format('Y-m-d');
+                $date = Carbon::createFromFormat($format, $value);
+
+                if ($date !== false) {
+                    return $date->format('Y-m-d');
                 }
-            } catch (\Throwable $e) {
-                // nastavi
+            } catch (\Throwable) {
             }
         }
 
-        // Zadnja šansa: Carbon “pogađanje”
         try {
             return Carbon::parse($value)->format('Y-m-d');
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return null;
         }
     }
 
-    private function normalizeKeys(array $row): array
+    private function normalizeKey($key): ?string
     {
-        $out = [];
-
-        foreach ($row as $key => $val) {
-            $k = (string) $key;
-            $k = Str::of($k)
-                ->lower()
-                ->replace(['š','đ','č','ć','ž'], ['s','d','c','c','z'])
-                ->replace(['/', '-', '.', '(', ')'], ' ')
-                ->replace(['  '], ' ')
-                ->trim()
-                ->toString();
-
-            $k = preg_replace('/\s+/', '_', $k);
-
-            // Neke tvoje kolone
-            $k = str_replace('tvorn_broj', 'tvornicki_broj', $k);
-            $k = str_replace('broj_izvjestaja', 'broj_izvjestaja', $k);
-
-            $out[$k] = $val;
+        if ($key === null || trim((string) $key) === '') {
+            return null;
         }
 
-        return $out;
+        $key = Str::of((string) $key)
+            ->lower()
+            ->replace(['š', 'đ', 'č', 'ć', 'ž'], ['s', 'd', 'c', 'c', 'z'])
+            ->replace(['/', '-', '.', '(', ')'], ' ')
+            ->replaceMatches('/\s+/', ' ')
+            ->trim()
+            ->replace(' ', '_')
+            ->toString();
+
+        return match ($key) {
+            'naziv' => 'naziv',
+            'proizvodac' => 'proizvodac',
+            'tvornicki_broj', 'tvorn_broj', 'tvornicki_br', 'tvor_broj' => 'tvornicki_broj',
+            'inventarni_broj', 'inventarni_br' => 'inventarni_broj',
+            'vrijedi_od' => 'vrijedi_od',
+            'vrijedi_do' => 'vrijedi_do',
+            'ispitao' => 'ispitao',
+            'broj_izvjestaja', 'broj_izvestaja', 'izvjestaj_broj' => 'broj_izvjestaja',
+            'lokacija' => 'lokacija',
+            'napomena' => 'napomena',
+            default => $key,
+        };
     }
 }

@@ -32,26 +32,28 @@ class ListIncidents extends ListRecords
                 ->label('Novi incident'),
 
             Actions\Action::make('export_pdf')
-                ->label('Izvoz u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('warning')
-                ->action(function () {
-                    $query = IncidentResource::getEloquentQuery();
+    ->label('Izvoz u PDF')
+    ->icon('heroicon-o-arrow-down-tray')
+    ->color('warning')
+    ->action(function () {
+        $incidents = $this->getFilteredSortedTableQuery()
+            ->get();
 
-                    $query = $this->applyTableFiltersToQuery($query);
+        $pdf = Pdf::loadView('pdf.incidents', compact('incidents'))
+            ->setPaper('a4', 'landscape')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'isPhpEnabled' => true,
+                'dpi' => 96,
+                'defaultFont' => 'DejaVu Sans',
+            ]);
 
-                    $incidents = $query
-                        ->orderByDesc('date_occurred')
-                        ->get();
-
-                    $pdf = Pdf::loadView('pdf.incidents', compact('incidents'))
-                        ->setPaper('a4', 'landscape');
-
-                    return response()->streamDownload(
-                        fn () => print($pdf->output()),
-                        'incidenti-' . now()->format('Y-m-d') . '.pdf'
-                    );
-                }),
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            'incidenti-' . now()->format('Y-m-d') . '.pdf'
+        );
+    }),
 
             Actions\Action::make('export_excel')
                 ->label('Izvoz u Excel')

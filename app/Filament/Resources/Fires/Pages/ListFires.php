@@ -27,22 +27,28 @@ class ListFires extends ListRecords
                 ->label('Dodaj Vatrogasni aparat'),
 
             Actions\Action::make('export_pdf')
-                ->label('Izvoz u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('warning')
-                ->action(function () {
-                    $fires = FireResource::getEloquentQuery()
-                        ->orderBy('place')
-                        ->get();
+    ->label('Izvoz u PDF')
+    ->icon('heroicon-o-arrow-down-tray')
+    ->color('warning')
+    ->action(function () {
+        $fires = $this->getFilteredSortedTableQuery()->get();
 
-                    $pdf = Pdf::loadView('pdf.fires', compact('fires'))
-                        ->setPaper('a4', 'landscape');
+        $pdf = Pdf::loadView('pdf.fires', [
+                'fires' => $fires,
+            ])
+            ->setPaper('a4', 'landscape')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'isPhpEnabled' => true,
+                'dpi' => 96,
+                'defaultFont' => 'DejaVu Sans',
+            ]);
 
-                    return response()->streamDownload(
-                        fn () => print($pdf->output()),
-                        'vatrogasni-aparati-' . now()->format('Y-m-d') . '.pdf'
-                    );
-                }),
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, 'vatrogasni-aparati-' . now()->format('Y-m-d') . '.pdf');
+    }),
 
             Actions\Action::make('export_excel')
                 ->label('Izvoz u Excel')
@@ -51,42 +57,63 @@ class ListFires extends ListRecords
                 ->action(fn () => Excel::download(new FiresExport(), 'vatrogasni-aparati-' . now()->format('Y-m-d') . '.xlsx')),
 
             Actions\Action::make('import_excel')
-                ->label('Uvoz iz Excela')
-                ->icon('heroicon-o-document-arrow-up')
-                ->color('warning')
-                ->form([
-                    FileUpload::make('excel_file')
-                        ->label('Excel datoteka')
-                        ->disk('local')
-                        ->directory('imports')
-                        ->preserveFilenames()
-                        ->acceptedFileTypes([
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'application/vnd.ms-excel',
-                        ])
-                        ->required(),
-                ])
-                ->action(function (array $data) {
+    ->label('Uvoz iz Excela')
+    ->icon('heroicon-o-document-arrow-up')
+    ->color('warning')
+    ->form([
+        FileUpload::make('excel_file')
+            ->label('Excel datoteka')
+            ->disk('local')
+            ->directory('imports')
+            ->preserveFilenames()
+            ->acceptedFileTypes([
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel',
+            ])
+            ->required(),
+    ])
+    ->action(function (array $data): void {
+        $path = $data['excel_file'];
 
-                    $file = $data['excel_file'];
+        if (is_array($path)) {
+            $path = collect($path)->first();
+        }
 
-                    if ($file instanceof TemporaryUploadedFile) {
-                        $path = $file->store('imports', 'local');
-                    } else {
-                        $path = (string) $file;
-                    }
+        if ($path instanceof TemporaryUploadedFile) {
+            $path = $path->store('imports', 'local');
+        }
 
-                    $fullPath = Storage::disk('local')->path($path);
+        if (! Storage::disk('local')->exists($path)) {
+            Notification::make()
+                ->title('Excel datoteka nije pronađena')
+                ->danger()
+                ->send();
 
-                    Excel::import(new FiresImport, $fullPath);
-                    // ✅ opcionalno obriši upload nakon importa
-                    Storage::disk('local')->delete($path);
+            return;
+        }
 
-                    Notification::make()
-                        ->title('Uvoz uspješan!')
-                        ->success()
-                        ->send();
-                }),
+        $fullPath = Storage::disk('local')->path($path);
+
+        $import = new FiresImport();
+
+        Excel::import($import, $fullPath);
+
+        $total = $import->created + $import->updated + $import->unchanged + $import->skipped;
+
+        Notification::make()
+            ->title('Uvoz vatrogasnih aparata je završen')
+            ->body(
+                "Ukupno obrađeno: {$total}\n" .
+                "Novi zapisi: {$import->created}\n" .
+                "Ažurirani zapisi: {$import->updated}\n" .
+                "Bez promjene: {$import->unchanged}\n" .
+                "Preskočeni redovi: {$import->skipped}"
+            )
+            ->success()
+            ->send();
+
+        $this->resetTable();
+    }),
         ];
     }
     protected function getTableQuery(): Builder

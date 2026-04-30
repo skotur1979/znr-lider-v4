@@ -22,27 +22,32 @@ class ListFirstAidKits extends ListRecords
                 ->label('Novi zapis'),
 
             Actions\Action::make('export_pdf')
-                ->label('Izvoz u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('warning')
-                ->action(function () {
-                    // ✅ isti query kao tablica (user scope preko Resource query-ja)
-                    $kits = FirstAidKitResource::getEloquentQuery()
-                        ->with(['items' => fn ($q) => $q->orderBy('valid_until')])
-                        ->withCount('items')
-                        ->orderByDesc('inspected_at')
-                        ->get();
+    ->label('Izvoz u PDF')
+    ->icon('heroicon-o-arrow-down-tray')
+    ->color('warning')
+    ->action(function () {
+        $kits = $this->getFilteredSortedTableQuery()
+            ->with(['items' => fn ($q) => $q->orderBy('valid_until')])
+            ->withCount('items')
+            ->get();
 
-                    $pdf = Pdf::loadView('pdf.first-aid-kits', [
-                        'kits' => $kits,
-                    ])->setPaper('a4', 'landscape');
+        $pdf = Pdf::loadView('pdf.first-aid-kits', [
+                'kits' => $kits,
+            ])
+            ->setPaper('a4', 'landscape')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'isPhpEnabled' => true,
+                'dpi' => 96,
+                'defaultFont' => 'DejaVu Sans',
+            ]);
 
-                    return response()->streamDownload(
-                        fn () => print($pdf->output()),
-                        'prva-pomoc-ormarici-' . now()->format('Y-m-d') . '.pdf'
-                    );
-                }),
-
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            'prva-pomoc-ormarici-' . now()->format('Y-m-d') . '.pdf'
+        );
+    }),
             Actions\Action::make('export_excel')
                 ->label('Izvoz u Excel')
                 ->icon('heroicon-o-document-arrow-down')

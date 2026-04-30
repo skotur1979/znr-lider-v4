@@ -1,146 +1,100 @@
-<!doctype html>
-<html lang="hr">
-<head>
-    <meta charset="utf-8">
-    <title>Izvještaj - Svi ormarići prve pomoći</title>
-    @include('pdf.partials.styles')
-
-    <style>
-        h1 {
-            font-size: 18px;
-            text-align: center;
-            margin: 0 0 12px 0;
-        }
-
-        .kit {
-            margin: 0 0 18px 0;
-            page-break-inside: avoid;
-        }
-
-        .kit-title {
-            text-align: center;
-            font-weight: 700;
-            font-size: 13px;
-            margin: 6px 0 6px 0;
-        }
-
-        .kit-meta {
-            font-size: 10px;
-            margin: 0 0 6px 0;
-        }
-
-        .kit-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10px;
-        }
-
-        .kit-table th,
-        .kit-table td {
-            border: 1px solid #111;
-            padding: 4px 6px;
-            vertical-align: top;
-        }
-
-        .kit-table th {
-            font-weight: 700;
-            text-align: left;
-            background: #f2f2f2;
-        }
-
-        .center { text-align: center; }
-        .wrap { white-space: normal; }
-
-        /* Rok boje (isto kao tvoj employees template) */
-        .rok-expired { background: #ff0000; } /* crveno */
-        .rok-soon    { background: #fff000; } /* žuto */
-    </style>
-</head>
-<body>
 @php
     use Illuminate\Support\Carbon;
 
     $today = Carbon::today();
-    $fmt = fn($d) => $d ? Carbon::parse($d)->format('d.m.Y.') : '';
+
+    $fmt = fn ($d) => $d ? Carbon::parse($d)->format('d.m.Y.') : '';
 
     $rokClass = function ($d) use ($today) {
-        if (! $d) return '';
-        $dt = $d instanceof \DateTimeInterface ? Carbon::instance($d) : Carbon::parse($d);
+        if (! $d) {
+            return '';
+        }
 
-        if ($dt->lt($today)) return 'rok-expired';
-        if ($dt->lte($today->copy()->addDays(30))) return 'rok-soon';
+        $dt = $d instanceof \DateTimeInterface
+            ? Carbon::instance($d)
+            : Carbon::parse($d);
+
+        if ($dt->lt($today)) {
+            return 'rok-expired';
+        }
+
+        if ($dt->lte($today->copy()->addDays(30))) {
+            return 'rok-soon';
+        }
+
         return '';
     };
+
+    $title = 'Ormarići prve pomoći';
+
+    $extraStyles = '
+        .rok-expired {
+            background: #ff0000;
+            color: #ffffff;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .rok-soon {
+            background: #ffff00;
+            color: #000000;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .kit-location {
+            font-weight: bold;
+        }
+    ';
+
+    $columns = [
+        ['key' => 'location', 'label' => 'Ormarić / lokacija', 'width' => '18%', 'tdClass' => 'wrap kit-location'],
+        ['key' => 'inspected_at', 'label' => 'Pregled obavljen', 'width' => '10%', 'class' => 'center'],
+        ['key' => 'material_type', 'label' => 'Vrsta materijala', 'width' => '24%'],
+        ['key' => 'purpose', 'label' => 'Namjena', 'width' => '24%'],
+        ['key' => 'valid_until', 'label' => 'Vrijedi do', 'width' => '10%', 'class' => 'center'],
+        ['key' => 'items_count', 'label' => 'Stavki', 'width' => '7%', 'class' => 'center'],
+    ];
+
+    $rows = collect();
+
+    foreach ($kits as $kit) {
+        $items = collect($kit->items ?? [])
+            ->sortBy(fn ($i) => $i->valid_until ? Carbon::parse($i->valid_until)->timestamp : PHP_INT_MAX)
+            ->values();
+
+        if ($items->isEmpty()) {
+            $rows->push([
+                'location' => e($kit->location),
+                'inspected_at' => $fmt($kit->inspected_at),
+                'material_type' => '',
+                'purpose' => '',
+                'valid_until' => '',
+                'items_count' => (int) ($kit->items_count ?? 0),
+            ]);
+
+            continue;
+        }
+
+        foreach ($items as $item) {
+            $rows->push([
+                'location' => e($kit->location),
+                'inspected_at' => $fmt($kit->inspected_at),
+                'material_type' => e($item->material_type),
+                'purpose' => e($item->purpose),
+                'valid_until' =>
+                    '<div class="' . $rokClass($item->valid_until) . '">' .
+                        $fmt($item->valid_until) .
+                    '</div>',
+                'items_count' => (int) ($kit->items_count ?? $items->count()),
+            ]);
+        }
+    }
 @endphp
 
-<h1>Izvještaj - Svi ormarići prve pomoći</h1>
-
-@foreach ($kits as $kit)
-    @php
-        $items = collect($kit->items ?? [])
-            ->sortBy(fn($i) => $i->valid_until ? Carbon::parse($i->valid_until)->timestamp : PHP_INT_MAX)
-            ->values();
-    @endphp
-
-    <div class="kit">
-        <div class="kit-title">
-            Ormarić: {{ $kit->location }}
-        </div>
-
-        <div class="kit-meta">
-            <strong>Pregled obavljen:</strong> {{ $fmt($kit->inspected_at) }}
-        </div>
-
-        <table class="kit-table">
-            <thead>
-                <tr>
-                    <th style="width: 38%;">Vrsta materijala</th>
-                    <th style="width: 38%;">Namjena</th>
-                    <th class="center" style="width: 24%;">Vrijedi do</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($items as $item)
-                    <tr>
-                        <td class="wrap">{{ $item->material_type }}</td>
-                        <td class="wrap">{{ $item->purpose }}</td>
-
-                        @php
-                            $until = $item->valid_until;
-                            $cls = $rokClass($until);
-                        @endphp
-
-                        <td class="center {{ $cls }}">
-                            {{ $fmt($until) }}
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="3" class="center">Nema stavki.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-@endforeach
-
-{{-- ✅ Broj stranice + datum ispisa (isto kao Employees/Machines) --}}
-<script type="text/php">
-if (isset($pdf)) {
-    $pdf->page_script('
-        $font = $fontMetrics->get_font("DejaVu Sans", "normal");
-        $size = 9;
-
-        $pageText = "Str. " . $PAGE_NUM . "/" . $PAGE_COUNT;
-        $dateText = "Ispis: {{ now()->format("d.m.Y.") }}";
-
-        $pdf->text(18, 570, $dateText, $font, $size);
-
-        $width = $fontMetrics->get_text_width($pageText, $font, $size);
-        $pdf->text(820 - $width, 570, $pageText, $font, $size);
-    ');
-}
-</script>
-
-</body>
-</html>
+@include('pdf.partials.report-table', [
+    'title' => $title,
+    'columns' => $columns,
+    'rows' => $rows,
+    'extraStyles' => $extraStyles,
+])

@@ -1,125 +1,169 @@
-<!doctype html>
-<html lang="hr">
-<head>
-    <meta charset="utf-8">
-    <title>Zaposlenici</title>
-    @include('pdf.partials.styles')
-</head>
-<body>
 @php
     use Illuminate\Support\Carbon;
+
     $today = Carbon::today();
 
-    $fmt = fn($d) => $d ? Carbon::parse($d)->format('d.m.Y.') : '';
+    $fmt = fn ($d) => $d ? Carbon::parse($d)->format('d.m.Y.') : '';
 
     $rokClass = function ($d) use ($today) {
-        if (! $d) return '';
+        if (! $d) {
+            return '';
+        }
+
         $dt = Carbon::parse($d);
 
-        if ($dt->lt($today)) return 'rok-expired';
-        if ($dt->lte($today->copy()->addDays(30))) return 'rok-soon';
+        if ($dt->lt($today)) {
+            return 'rok-expired';
+        }
+
+        if ($dt->lte($today->copy()->addDays(30))) {
+            return 'rok-soon';
+        }
 
         return '';
     };
 
-    $certSummary = function ($e) {
-        $certs = $e->certificates?->sortBy('valid_until') ?? collect();
-        if ($certs->isEmpty()) return '';
+    $certClass = function ($d) use ($today) {
+        if (! $d) {
+            return '';
+        }
 
-        $parts = [];
+        $dt = Carbon::parse($d);
+
+        if ($dt->lt($today)) {
+            return 'cert-expired';
+        }
+
+        if ($dt->lte($today->copy()->addDays(30))) {
+            return 'cert-soon';
+        }
+
+        return '';
+    };
+
+    $certSummary = function ($e) use ($certClass) {
+        $certs = $e->certificates?->sortBy('valid_until') ?? collect();
+
+        if ($certs->isEmpty()) {
+            return '';
+        }
+
+        $html = '';
+        $length = 0;
+
         foreach ($certs as $c) {
             $title = trim((string) $c->title);
-            if ($title === '') continue;
 
-            $until = $c->valid_until ? \Illuminate\Support\Carbon::parse($c->valid_until) : null;
-            $parts[] = $until ? ($title . ' (do ' . $until->format('d.m.Y.') . ')') : $title;
+            if ($title === '') {
+                continue;
+            }
 
-            // rez da ne pobjegne (PDF)
-            if (mb_strlen(implode(', ', $parts)) > 170) {
-                $parts[] = '…';
+            $until = $c->valid_until
+                ? Carbon::parse($c->valid_until)->format('d.m.Y.')
+                : null;
+
+            $text = $until ? $title . ' (do ' . $until . ')' : $title;
+            $class = $certClass($c->valid_until);
+
+            $html .= '<span class="cert-item ' . $class . '">' . e($text) . '</span>';
+
+            $length += mb_strlen($text);
+
+            if ($length > 170) {
+                $html .= '<span class="cert-item">…</span>';
                 break;
             }
         }
 
-        return implode(', ', $parts);
+        return $html;
     };
+
+    $title = 'Zaposlenici';
+
+    $extraStyles = '
+        .rok-expired {
+            background: #ff0000;
+            color: #ffffff;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .rok-soon {
+            background: #ffff00;
+            color: #000000;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .employee-name {
+            font-weight: bold;
+        }
+
+        .cert-item {
+            display: block;
+            padding: 2px 3px;
+            margin-bottom: 2px;
+            line-height: 1.25;
+        }
+
+        .cert-expired {
+            background: #ff0000;
+            color: #ffffff;
+            font-weight: bold;
+        }
+
+        .cert-soon {
+            background: #ffff00;
+            color: #000000;
+            font-weight: bold;
+        }
+    ';
+
+    $columns = [
+        ['key' => 'name', 'label' => 'Ime i prezime', 'width' => '10%', 'tdClass' => 'wrap employee-name'],
+        ['key' => 'workplace', 'label' => 'Radno mjesto', 'width' => '10%'],
+        ['key' => 'medical_examination_valid_until', 'label' => 'Liječnički (do)', 'width' => '10%', 'class' => 'center'],
+        ['key' => 'article', 'label' => 'Članak 3. točke', 'width' => '10%'],
+        ['key' => 'occupational_safety_valid_from', 'label' => 'Zaštita na radu (od)', 'width' => '10%', 'class' => 'center'],
+        ['key' => 'first_aid_valid_from', 'label' => 'Prva pomoć (od)', 'width' => '10%', 'class' => 'center'],
+        ['key' => 'toxicology_valid_until', 'label' => 'Toksikologija (do)', 'width' => '10%', 'class' => 'center'],
+        ['key' => 'employers_authorization_valid_until', 'label' => 'Ovlaštenik ZNR (do)', 'width' => '10%', 'class' => 'center'],
+        ['key' => 'certificates', 'label' => 'Ostale edukacije', 'width' => '17%'],
+    ];
+
+    $rows = $employees->map(function ($e) use ($fmt, $rokClass, $certSummary) {
+        return [
+            'name' => e($e->name),
+            'workplace' => e($e->workplace),
+
+            'medical_examination_valid_until' =>
+                '<div class="' . $rokClass($e->medical_examination_valid_until) . '">' .
+                    $fmt($e->medical_examination_valid_until) .
+                '</div>',
+
+            'article' => e($e->article),
+
+            'occupational_safety_valid_from' => $fmt($e->occupational_safety_valid_from),
+            'first_aid_valid_from' => $fmt($e->first_aid_valid_from),
+
+            'toxicology_valid_until' =>
+                '<div class="' . $rokClass($e->toxicology_valid_until) . '">' .
+                    $fmt($e->toxicology_valid_until) .
+                '</div>',
+
+            'employers_authorization_valid_until' =>
+                '<div class="' . $rokClass($e->employers_authorization_valid_until) . '">' .
+                    $fmt($e->employers_authorization_valid_until) .
+                '</div>',
+
+            'certificates' => $certSummary($e),
+        ];
+    });
 @endphp
 
-<h1>Zaposlenici</h1>
-<div class="meta">
-    Datum izvoza: {{ now()->format('d.m.Y. H:i') }}
-</div>
-
-<table>
-    <thead>
-    <tr>
-        <th class="center" style="width: 35px;">Red.br.</th>
-
-        <th style="width: 170px;">Ime i prezime</th>
-        <th style="width: 160px;">Radno mjesto</th>
-
-        <th class="center" style="width: 85px;">Liječnički (do)</th>
-        <th style="width: 150px;">Članak 3. točke</th>
-
-        {{-- ✅ nova polja --}}
-        <th class="center" style="width: 85px;">Zaštita na radu (od)</th>
-        <th class="center" style="width: 85px;">Prva pomoć (od)</th>
-
-        <th class="center" style="width: 95px;">Toksikologija (do)</th>
-        <th class="center" style="width: 110px;">Ovlaštenik ZNR (do)</th>
-
-        <th>Ostale edukacije</th>
-    </tr>
-    </thead>
-
-    <tbody>
-    @foreach ($employees as $e)
-        @php
-            $medDo  = $e->medical_examination_valid_until;
-            $toxDo  = $e->toxicology_valid_until;
-            $authDo = $e->employers_authorization_valid_until;
-        @endphp
-
-        <tr>
-            <td class="center">{{ $loop->iteration }}</td>
-
-            <td class="wrap"><strong>{{ $e->name }}</strong></td>
-            <td class="wrap">{{ $e->workplace }}</td>
-
-            <td class="center {{ $rokClass($medDo) }}">{{ $fmt($medDo) }}</td>
-            <td class="wrap">{{ $e->article }}</td>
-
-            <td class="center">{{ $fmt($e->occupational_safety_valid_from) }}</td>
-            <td class="center">{{ $fmt($e->first_aid_valid_from) }}</td>
-
-            <td class="center {{ $rokClass($toxDo) }}">{{ $fmt($toxDo) }}</td>
-            <td class="center {{ $rokClass($authDo) }}">{{ $fmt($authDo) }}</td>
-
-            <td class="wrap">{{ $certSummary($e) }}</td>
-        </tr>
-    @endforeach
-    </tbody>
-</table>
-
-{{-- ✅ Broj stranice bez utjecaja na layout tablice (isto kao Machines) --}}
-<script type="text/php">
-if (isset($pdf)) {
-    $pdf->page_script('
-        $font = $fontMetrics->get_font("DejaVu Sans", "normal");
-        $size = 9;
-
-        $pageText = "Str. " . $PAGE_NUM . "/" . $PAGE_COUNT;
-        $dateText = "Ispis: {{ now()->format("d.m.Y.") }}";
-
-        // lijevo datum
-        $pdf->text(18, 570, $dateText, $font, $size);
-
-        // desno broj stranice
-        $width = $fontMetrics->get_text_width($pageText, $font, $size);
-        $pdf->text(820 - $width, 570, $pageText, $font, $size);
-    ');
-}
-</script>
-
-</body>
-</html>
+@include('pdf.partials.report-table', [
+    'title' => $title,
+    'columns' => $columns,
+    'rows' => $rows,
+    'extraStyles' => $extraStyles,
+])

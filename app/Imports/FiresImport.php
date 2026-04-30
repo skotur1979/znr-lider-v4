@@ -4,82 +4,164 @@ namespace App\Imports;
 
 use App\Models\Fire;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Maatwebsite\Excel\Concerns\ToModel;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
-use DateTimeInterface;
-use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use Maatwebsite\Excel\Concerns\ToCollection;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
-class FiresImport implements ToModel, WithHeadingRow
+class FiresImport implements ToCollection
 {
-    public function headingRow(): int
+    public int $created = 0;
+    public int $updated = 0;
+    public int $unchanged = 0;
+    public int $skipped = 0;
+
+    public function collection(Collection $rows): void
     {
-        return 1;
-    }
+        $headerRowIndex = 3;
+        $dataStartIndex = 4;
 
-    public function model(array $row)
-    {
-        $row = $this->normalizeKeys($row);
+        $headers = $rows->get($headerRowIndex);
 
-        $place  = $row['mjesto'] ?? null;
-        $type   = $row['tip'] ?? null;
-
-        // tvor. broj (export header ti je "Tvor. broj")
-        $factory = $row['tvor_broj'] ?? $row['tvorn_broj'] ?? $row['tvornicki_broj'] ?? null;
-
-        // serijski (export header ti je "Serijski broj")
-        $serial  = $row['serijski_broj'] ?? $row['ser_broj'] ?? null;
-
-        // datumi
-        $serviceFrom = $this->parseDate($row['datum_periodickog_servisa'] ?? null);
-        $validUntil  = $this->parseDate($row['vrijedi_do'] ?? null);
-        $regularFrom = $this->parseDate($row['datum_redovnog_pregleda'] ?? null);
-
-        $service = $row['serviser'] ?? null;
-        $visible = $row['uocljivost'] ?? null;
-        $remark  = $row['uoceni_nedostaci'] ?? null;
-        $action  = $row['postupci_otklanjanja'] ?? null;
-
-        // preskoči prazne retke
-        if (! $place) {
-            return null;
+        if (! $headers) {
+            $this->skipped++;
+            return;
         }
 
-        // ova 3 su NOT NULL u bazi -> ako fale, preskoči red, ali logiraj da znaš zašto
-        if (! $serviceFrom || ! $validUntil || ! $regularFrom) {
-            Log::warning('FiresImport skipped row (missing required dates)', [
-                'place' => $place,
-                'serviceFrom' => $serviceFrom,
-                'validUntil' => $validUntil,
-                'regularFrom' => $regularFrom,
-                'row' => $row,
-            ]);
+        $map = [];
 
-            return null;
+        foreach ($headers as $index => $header) {
+            $key = $this->normalizeKey($header);
+
+            if ($key) {
+                $map[$key] = $index;
+            }
         }
 
-        $userId = Auth::id();
+        for ($i = $dataStartIndex; $i < $rows->count(); $i++) {
+            $row = $rows->get($i);
 
-        return Fire::updateOrCreate(
-            [
+            if (! $row || $this->isEmptyRow($row)) {
+                continue;
+            }
+
+            $place = $this->clean($this->value($row, $map, 'mjesto'));
+
+            if (! $place) {
+                $this->skipped++;
+                continue;
+            }
+
+            $type = $this->clean($this->value($row, $map, 'tip'));
+            $factory = $this->clean($this->value($row, $map, 'tvor_broj'));
+            $serial = $this->clean($this->value($row, $map, 'serijski_broj'));
+
+            $serviceFrom = $this->parseDate($this->value($row, $map, 'datum_periodickog_servisa'));
+            $validUntil = $this->parseDate($this->value($row, $map, 'vrijedi_do'));
+            $regularFrom = $this->parseDate($this->value($row, $map, 'datum_redovnog_pregleda'));
+
+            $service = $this->clean($this->value($row, $map, 'serviser'));
+            $visible = $this->clean($this->value($row, $map, 'uocljivost'));
+            $remarkAction = $this->clean($this->value($row, $map, 'uoceni_nedostaci_postupci_otklanjanja'));
+
+            if (! $serviceFrom || ! $validUntil || ! $regularFrom) {
+                $this->skipped++;
+                continue;
+            }
+
+            $userId = Auth::user()?->ownerId() ?? Auth::id();
+
+            $fire = Fire::query()
+                ->where('user_id', $userId)
+                ->where('place', $place)
+                ->where(function ($query) use ($serial) {
+                    if ($serial) {
+                        $query->where('serial_label_number', $serial);
+                    } else {
+                        $query->whereNull('serial_label_number');
+                    }
+                })
+                ->first();
+
+            $data = [
                 'user_id' => $userId,
                 'place' => $place,
-                'serial_label_number' => $serial,
-            ],
-            [
                 'type' => $type,
                 'factory_number_year_of_production' => $factory,
+                'serial_label_number' => $serial,
                 'examination_valid_from' => $serviceFrom,
                 'examination_valid_until' => $validUntil,
                 'regular_examination_valid_from' => $regularFrom,
                 'service' => $service,
                 'visible' => $visible,
-                'remark' => $remark,
-                'action' => $action,
-            ]
-        );
+                'remark' => $remarkAction,
+                'action' => $remarkAction,
+            ];
+
+            if (! $fire) {
+                Fire::create($data);
+                $this->created++;
+                continue;
+            }
+
+            $changed = [];
+
+            foreach ($data as $field => $value) {
+                if (in_array($field, ['user_id', 'place', 'serial_label_number'], true)) {
+                    continue;
+                }
+
+                if ($value === null) {
+                    continue;
+                }
+
+                $current = $fire->{$field};
+
+                if ($current instanceof \Carbon\CarbonInterface) {
+                    $current = $current->format('Y-m-d');
+                }
+
+                if ((string) ($current ?? '') !== (string) $value) {
+                    $changed[$field] = $value;
+                }
+            }
+
+            if (empty($changed)) {
+                $this->unchanged++;
+                continue;
+            }
+
+            $fire->update($changed);
+            $this->updated++;
+        }
+    }
+
+    private function value($row, array $map, string $key)
+    {
+        return array_key_exists($key, $map) ? ($row[$map[$key]] ?? null) : null;
+    }
+
+    private function isEmptyRow($row): bool
+    {
+        foreach ($row as $value) {
+            if ($this->clean($value) !== null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function clean($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function parseDate($value): ?string
@@ -88,34 +170,24 @@ class FiresImport implements ToModel, WithHeadingRow
             return null;
         }
 
-        // ✅ ako Maatwebsite vrati Carbon/DateTime objekt
-        if ($value instanceof DateTimeInterface) {
-            return Carbon::instance($value)->format('Y-m-d');
-        }
-
-        // Excel serial number (npr. 45231)
         if (is_numeric($value)) {
             try {
-                $dt = ExcelDate::excelToDateTimeObject((float) $value);
-                return Carbon::instance($dt)->format('Y-m-d');
+                return Carbon::instance(Date::excelToDateTimeObject((float) $value))->format('Y-m-d');
             } catch (\Throwable) {
                 return null;
             }
         }
 
-        $value = trim((string) $value);
-        $value = rtrim($value, '.');
+        $value = rtrim(trim((string) $value), '.');
 
-        $formats = ['d.m.Y', 'd/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.y', 'd/m/y', 'd-m-y'];
-
-        foreach ($formats as $format) {
+        foreach (['d.m.Y', 'd/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.y', 'd/m/y', 'd-m-y'] as $format) {
             try {
-                $dt = Carbon::createFromFormat($format, $value);
-                if ($dt !== false) {
-                    return $dt->format('Y-m-d');
+                $date = Carbon::createFromFormat($format, $value);
+
+                if ($date !== false) {
+                    return $date->format('Y-m-d');
                 }
             } catch (\Throwable) {
-                // continue
             }
         }
 
@@ -126,44 +198,36 @@ class FiresImport implements ToModel, WithHeadingRow
         }
     }
 
-    private function normalizeKeys(array $row): array
+    private function normalizeKey($key): ?string
     {
-        $out = [];
-
-        foreach ($row as $key => $val) {
-            $k = Str::of((string) $key)
-                ->lower()
-                ->replace(['š','đ','č','ć','ž'], ['s','d','c','c','z'])
-                ->replace(['/', '-', '.', '(', ')'], ' ')
-                ->replace("\u{00A0}", ' ') // non-breaking space
-                ->trim()
-                ->toString();
-
-            $k = preg_replace('/\s+/', '_', $k);
-
-            // ✅ ciljano mapiranje tvojih headera (bez širokih replace-ova)
-            $aliases = [
-                'tvor_broj' => 'tvor_broj',
-                'tvorn_broj' => 'tvor_broj',
-                'tvornicki_broj' => 'tvor_broj',
-                'serijski_broj' => 'serijski_broj',
-                'ser_broj' => 'serijski_broj',
-
-                'datum_periodickog_servisa' => 'datum_periodickog_servisa',
-                'datum_periodickog_servisa_' => 'datum_periodickog_servisa',
-                'datum_periodickog_servisa__' => 'datum_periodickog_servisa',
-
-                'datum_redovnog_pregleda' => 'datum_redovnog_pregleda',
-
-                'uoceni_nedostaci' => 'uoceni_nedostaci',
-                'postupci_otklanjanja' => 'postupci_otklanjanja',
-            ];
-
-            $k = $aliases[$k] ?? $k;
-
-            $out[$k] = $val;
+        if ($key === null || trim((string) $key) === '') {
+            return null;
         }
 
-        return $out;
+        $key = Str::of((string) $key)
+            ->lower()
+            ->replace(['š', 'đ', 'č', 'ć', 'ž'], ['s', 'd', 'c', 'c', 'z'])
+            ->replace(['/', '-', '.', '(', ')'], ' ')
+            ->replace("\u{00A0}", ' ')
+            ->replaceMatches('/\s+/', ' ')
+            ->trim()
+            ->replace(' ', '_')
+            ->toString();
+
+        return match ($key) {
+            'mjesto' => 'mjesto',
+            'tip' => 'tip',
+            'tvor_broj', 'tvorn_broj', 'tvornicki_broj', 'tvornicki_broj_godina_proizvodnje' => 'tvor_broj',
+            'serijski_broj', 'ser_broj', 'serijski_broj_evidencijske_naljepnice' => 'serijski_broj',
+            'datum_periodickog_servisa' => 'datum_periodickog_servisa',
+            'vrijedi_do' => 'vrijedi_do',
+            'datum_redovnog_pregleda' => 'datum_redovnog_pregleda',
+            'serviser' => 'serviser',
+            'uocljivost' => 'uocljivost',
+            'uoceni_nedostaci_postupci_otklanjanja',
+            'uoceni_nedostaci',
+            'postupci_otklanjanja' => 'uoceni_nedostaci_postupci_otklanjanja',
+            default => $key,
+        };
     }
 }

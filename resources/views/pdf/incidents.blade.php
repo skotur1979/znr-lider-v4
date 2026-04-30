@@ -1,11 +1,3 @@
-<!doctype html>
-<html lang="hr">
-<head>
-    <meta charset="utf-8">
-    <title>Incidenti</title>
-    @include('pdf.partials.styles')
-</head>
-<body>
 @php
     use Illuminate\Support\Carbon;
     use Illuminate\Support\Str;
@@ -19,119 +11,131 @@
         default => (string) $state,
     };
 
-    $employmentLabel = fn ($state) => match ($state) {
-        'Permanent' => 'Stalni',
-        'Temporary' => 'Privremeni',
-        default => (string) $state,
+    $imageDataUri = function (?string $imagePath): ?string {
+        if (! $imagePath) {
+            return null;
+        }
+
+        $fullPath = storage_path('app/public/' . $imagePath);
+
+        if (! file_exists($fullPath)) {
+            return null;
+        }
+
+        $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+
+        $mime = match ($ext) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            default => null,
+        };
+
+        if (! $mime) {
+            return null;
+        }
+
+        return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($fullPath));
     };
+
+    $title = 'Incidenti';
+
+    $extraStyles = '
+        .rok-expired {
+            background: #ff0000;
+            color: #ffffff;
+            font-weight: bold;
+            text-align: center;
+            padding: 4px 2px;
+        }
+
+        .rok-soon {
+            background: #ffff00;
+            color: #000000;
+            font-weight: bold;
+            text-align: center;
+            padding: 4px 2px;
+        }
+
+        .incident-img {
+            width: 42px !important;
+            height: 42px !important;
+            max-width: 42px !important;
+            max-height: 42px !important;
+            object-fit: cover;
+            border-radius: 3px;
+        }
+
+        .incident-type-main {
+            font-weight: bold;
+            display: block;
+        }
+
+        .incident-type-sub {
+            font-size: 6px;
+            color: #6b7280;
+            display: block;
+            margin-top: 2px;
+        }
+    ';
+
+    $columns = [
+        ['key' => 'location', 'label' => 'Lokacija', 'width' => '8%'],
+        ['key' => 'type_of_incident', 'label' => 'Vrsta incidenta', 'width' => '10%'],
+        ['key' => 'date_occurred', 'label' => 'Datum nastanka', 'width' => '8%', 'class' => 'center'],
+        ['key' => 'date_of_return', 'label' => 'Povratak', 'width' => '8%', 'class' => 'center'],
+        ['key' => 'working_days_lost', 'label' => 'Izgubljeni dani', 'width' => '6%', 'class' => 'center'],
+        ['key' => 'injured_body_part', 'label' => 'Ozlijeđeni dio tijela', 'width' => '11%'],
+        ['key' => 'causes_of_injury', 'label' => 'Uzrok', 'width' => '12%'],
+        ['key' => 'accident_injury_type', 'label' => 'Tip ozljede', 'width' => '12%'],
+        ['key' => 'other', 'label' => 'Napomena', 'width' => '11%'],
+        ['key' => 'image', 'label' => 'Slika', 'width' => '6%', 'class' => 'center'],
+        ['key' => 'attachments', 'label' => 'Prilozi', 'width' => '5%', 'class' => 'center'],
+    ];
+
+    $rows = $incidents->map(function ($i) use ($today, $typeLabel, $imageDataUri) {
+        $occurred = $i->date_occurred ? Carbon::parse($i->date_occurred) : null;
+        $return = $i->date_of_return ? Carbon::parse($i->date_of_return) : null;
+
+        $returnClass = '';
+
+        if ($return) {
+            if ($return->lt($today)) {
+                $returnClass = 'rok-expired';
+            } elseif ($return->lte($today->copy()->addDays(30))) {
+                $returnClass = 'rok-soon';
+            }
+        }
+
+        $img = $imageDataUri($i->image_path ?? null);
+
+        $attachmentsCount = is_array($i->investigation_report ?? null)
+            ? count($i->investigation_report)
+            : 0;
+
+        return [
+            'location' => e($i->location),
+            'type_of_incident' =>
+                '<span class="incident-type-main">' . e($i->type_of_incident) . '</span>' .
+                '<span class="incident-type-sub">' . e($typeLabel($i->type_of_incident)) . '</span>',
+
+            'date_occurred' => $occurred ? $occurred->format('d.m.Y.') : '',
+            'date_of_return' => '<div class="' . $returnClass . '">' . ($return ? $return->format('d.m.Y.') : '') . '</div>',
+            'working_days_lost' => e($i->working_days_lost ?? ''),
+            'injured_body_part' => e(Str::limit((string) $i->injured_body_part, 70)),
+            'causes_of_injury' => e(Str::limit((string) $i->causes_of_injury, 90)),
+            'accident_injury_type' => e(Str::limit((string) $i->accident_injury_type, 90)),
+            'other' => e(Str::limit((string) $i->other, 90)),
+            'image' => $img ? '<img src="' . $img . '" class="incident-img" width="42" height="42">' : '',
+            'attachments' => $attachmentsCount,
+        ];
+    });
 @endphp
 
-<h1>Incidenti</h1>
-<div class="meta">
-    Datum izvoza: {{ now()->format('d.m.Y. H:i') }}
-</div>
-
-<table>
-    <thead>
-    <tr>
-        <th class="center" style="width:35px;">Red.br.</th>
-        <th style="width:120px;">Lokacija</th>
-        <th style="width:150px;">Vrsta incidenta</th>
-        <th class="center" style="width:85px;">Datum nastanka</th>
-        <th class="center" style="width:95px;">Povratak</th>
-        <th class="center" style="width:85px;">Izgubljeni dani</th>
-        <th style="width:140px;">Ozlijeđeni dio tijela</th>
-        <th style="width:150px;">Uzrok</th>
-        <th style="width:150px;">Tip ozljede</th>
-        <th style="width:160px;">Napomena</th>
-        <th class="center" style="width:70px;">Slika</th>
-        <th class="center" style="width:70px;">Prilozi</th>
-    </tr>
-    </thead>
-
-    <tbody>
-    @foreach ($incidents as $i)
-        @php
-            $occurred = $i->date_occurred ? Carbon::parse($i->date_occurred) : null;
-            $return   = $i->date_of_return ? Carbon::parse($i->date_of_return) : null;
-
-            // boja povratka (ako postoji) – crveno ako je prošlo, žuto ako je uskoro (30 dana)
-            $returnClass = '';
-            if ($return) {
-                if ($return->lt($today)) {
-                    $returnClass = 'rok-expired';
-                } elseif ($return->lte($today->copy()->addDays(30))) {
-                    $returnClass = 'rok-soon';
-                }
-            }
-
-            // ✅ dompdf-friendly slika (base64) iz storage/app/public/...
-            $imgFullPath = $i->image_path
-                ? storage_path('app/public/' . $i->image_path)
-                : null;
-
-            $imgDataUri = null;
-
-            if ($imgFullPath && file_exists($imgFullPath)) {
-                $ext = strtolower(pathinfo($imgFullPath, PATHINFO_EXTENSION));
-                $mime = match ($ext) {
-                    'jpg', 'jpeg' => 'image/jpeg',
-                    'png' => 'image/png',
-                    'gif' => 'image/gif',
-                    'webp' => 'image/webp',
-                    default => null,
-                };
-
-                if ($mime) {
-                    $imgDataUri = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($imgFullPath));
-                }
-            }
-
-            $attachmentsCount = is_array($i->investigation_report) ? count($i->investigation_report) : 0;
-        @endphp
-
-        <tr>
-            <td class="center">{{ $loop->iteration }}</td>
-            <td>{{ $i->location }}</td>
-            <td>
-                <div style="font-weight:700;">{{ $i->type_of_incident }}</div>
-                <div style="font-size:10px; color:#9ca3af;">{{ $typeLabel($i->type_of_incident) }}</div>
-            </td>
-            <td class="center">{{ $occurred ? $occurred->format('d.m.Y.') : '' }}</td>
-            <td class="center {{ $returnClass }}">{{ $return ? $return->format('d.m.Y.') : '' }}</td>
-            <td class="center">{{ $i->working_days_lost ?? '' }}</td>
-            <td>{{ $i->injured_body_part }}</td>
-            <td>{{ Str::limit((string) $i->causes_of_injury, 110) }}</td>
-            <td>{{ Str::limit((string) $i->accident_injury_type, 110) }}</td>
-            <td>{{ Str::limit((string) $i->other, 120) }}</td>
-            <td class="center">
-                @if ($imgDataUri)
-                    <img src="{{ $imgDataUri }}" style="width:55px; height:auto; border-radius:3px;">
-                @endif
-            </td>
-            <td class="center">{{ $attachmentsCount }}</td>
-        </tr>
-    @endforeach
-    </tbody>
-</table>
-
-{{-- ✅ Broj stranice (kao Observations/Machines) --}}
-<script type="text/php">
-if (isset($pdf)) {
-    $pdf->page_script('
-        $font = $fontMetrics->get_font("DejaVu Sans", "normal");
-        $size = 9;
-
-        $pageText = "Str. " . $PAGE_NUM . "/" . $PAGE_COUNT;
-        $dateText = "Ispis: {{ now()->format("d.m.Y.") }}";
-
-        $pdf->text(18, 570, $dateText, $font, $size);
-
-        $width = $fontMetrics->get_text_width($pageText, $font, $size);
-        $pdf->text(820 - $width, 570, $pageText, $font, $size);
-    ');
-}
-</script>
-
-</body>
-</html>
+@include('pdf.partials.report-table', [
+    'title' => $title,
+    'columns' => $columns,
+    'rows' => $rows,
+    'extraStyles' => $extraStyles,
+])

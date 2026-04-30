@@ -1,91 +1,78 @@
-<!doctype html>
-<html lang="hr">
-<head>
-    <meta charset="utf-8">
-    <title>Radna oprema</title>
-    @include('pdf.partials.styles')
-</head>
-<body>
 @php
     use Illuminate\Support\Carbon;
+
     $today = Carbon::today();
+
+    $fmt = fn ($d) => $d ? Carbon::parse($d)->format('d.m.Y.') : '';
+
+    $rokClass = function ($d) use ($today) {
+        if (! $d) {
+            return '';
+        }
+
+        $dt = Carbon::parse($d);
+
+        if ($dt->lt($today)) {
+            return 'rok-expired';
+        }
+
+        if ($dt->lte($today->copy()->addDays(30))) {
+            return 'rok-soon';
+        }
+
+        return '';
+    };
+
+    $title = 'Radna oprema';
+
+    $extraStyles = '
+        .rok-expired {
+            background: #ff0000;
+            color: #ffffff;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .rok-soon {
+            background: #ffff00;
+            color: #000000;
+            font-weight: bold;
+            text-align: center;
+        }
+    ';
+
+    $columns = [
+        ['key' => 'name', 'label' => 'Naziv', 'width' => '11%'],
+        ['key' => 'manufacturer', 'label' => 'Proizvođač', 'width' => '10%'],
+        ['key' => 'factory_number', 'label' => 'Tvornički broj', 'width' => '9%', 'class' => 'center'],
+        ['key' => 'inventory_number', 'label' => 'Inventarni broj', 'width' => '9%', 'class' => 'center'],
+        ['key' => 'examination_valid_from', 'label' => 'Vrijedi od', 'width' => '8%', 'class' => 'center'],
+        ['key' => 'examination_valid_until', 'label' => 'Vrijedi do', 'width' => '8%', 'class' => 'center'],
+        ['key' => 'examined_by', 'label' => 'Ispitao', 'width' => '10%'],
+        ['key' => 'report_number', 'label' => 'Broj izvještaja', 'width' => '9%', 'class' => 'center'],
+        ['key' => 'location', 'label' => 'Lokacija', 'width' => '10%'],
+        ['key' => 'remark', 'label' => 'Napomena', 'width' => '14%'],
+    ];
+
+    $rows = $machines->map(function ($m) use ($fmt, $rokClass) {
+        return [
+            'name' => e($m->name),
+            'manufacturer' => e($m->manufacturer),
+            'factory_number' => e($m->factory_number),
+            'inventory_number' => e($m->inventory_number),
+            'examination_valid_from' => $fmt($m->examination_valid_from),
+            'examination_valid_until' => '<div class="' . $rokClass($m->examination_valid_until) . '">' . $fmt($m->examination_valid_until) . '</div>',
+            'examined_by' => e($m->examined_by),
+            'report_number' => e($m->report_number),
+            'location' => e($m->location),
+            'remark' => e($m->remark),
+        ];
+    });
 @endphp
 
-<h1>Radna oprema</h1>
-<div class="meta">
-    Datum izvoza: {{ now()->format('d.m.Y. H:i') }}
-</div>
-
-<table>
-    <thead>
-    <tr>
-        <th class="center" style="width: 35px;">Red.br.</th>
-        <th>Naziv</th>
-        <th>Proizvođač</th>
-        <th class="center">Tvornički broj</th>
-        <th class="center">Inventarni broj</th>
-        <th class="center">Vrijedi od</th>
-        <th class="center">Vrijedi do</th>
-        <th>Ispitao</th>
-        <th class="center">Broj izvještaja</th>
-        <th>Lokacija</th>
-        <th>Napomena</th>
-    </tr>
-    </thead>
-
-    <tbody>
-    @foreach ($machines as $m)
-        @php
-            $from  = $m->examination_valid_from ? Carbon::parse($m->examination_valid_from) : null;
-            $until = $m->examination_valid_until ? Carbon::parse($m->examination_valid_until) : null;
-
-            $rokClass = '';
-            if ($until) {
-                if ($until->lt($today)) {
-                    $rokClass = 'rok-expired';
-                } elseif ($until->lte($today->copy()->addDays(30))) {
-                    $rokClass = 'rok-soon';
-                }
-            }
-        @endphp
-
-        <tr>
-            <td class="center">{{ $loop->iteration }}</td>
-            <td>{{ $m->name }}</td>
-            <td>{{ $m->manufacturer }}</td>
-            <td class="center">{{ $m->factory_number }}</td>
-            <td class="center">{{ $m->inventory_number }}</td>
-            <td class="center">{{ $from ? $from->format('d.m.Y.') : '' }}</td>
-            <td class="center {{ $rokClass }}">{{ $until ? $until->format('d.m.Y.') : '' }}</td>
-            <td>{{ $m->examined_by }}</td>
-            <td class="center">{{ $m->report_number }}</td>
-            <td>{{ $m->location }}</td>
-            <td>{{ $m->remark }}</td>
-        </tr>
-    @endforeach
-    </tbody>
-</table>
-
-{{-- ✅ Broj stranice bez utjecaja na layout tablice --}}
-<script type="text/php">
-if (isset($pdf)) {
-    $pdf->page_script('
-        $font = $fontMetrics->get_font("DejaVu Sans", "normal");
-        $size = 9;
-
-        $pageText = "Str. " . $PAGE_NUM . "/" . $PAGE_COUNT;
-        $dateText = "Ispis: {{ now()->format("d.m.Y.") }}";
-
-        // lijevo datum
-        $pdf->text(18, 570, $dateText, $font, $size);
-
-        // desno broj stranice (x/y)
-        $width = $fontMetrics->get_text_width($pageText, $font, $size);
-        $pdf->text(820 - $width, 570, $pageText, $font, $size);
-    ');
-}
-</script>
-
-</body>
-</html>
-
+@include('pdf.partials.report-table', [
+    'title' => $title,
+    'columns' => $columns,
+    'rows' => $rows,
+    'extraStyles' => $extraStyles,
+])

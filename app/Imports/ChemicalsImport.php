@@ -4,87 +4,169 @@ namespace App\Imports;
 
 use App\Models\Chemical;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use Maatwebsite\Excel\Concerns\ToModel;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\ToCollection;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
-class ChemicalsImport implements ToModel, WithHeadingRow
+class ChemicalsImport implements ToCollection
 {
-    public function headingRow(): int
+    public int $created = 0;
+    public int $updated = 0;
+    public int $unchanged = 0;
+    public int $skipped = 0;
+
+    public function collection(Collection $rows): void
     {
-        return 1;
-    }
+        $headerRowIndex = 3;
+        $dataStartIndex = 4;
 
-    public function model(array $row)
-    {
-        $row = $this->normalizeKeys($row);
+        $headers = $rows->get($headerRowIndex);
 
-        $productName = $row['ime_proizvoda'] ?? $row['product_name'] ?? null;
-        $cas         = $row['cas'] ?? $row['cas_broj'] ?? $row['cas_number'] ?? null;
-        $ufi         = $row['ufi'] ?? $row['ufi_broj'] ?? $row['ufi_number'] ?? null;
-
-        $pikt = $this->parseList($row['piktogrami'] ?? $row['hazard_pictograms'] ?? null);
-        $h    = $this->parseList($row['h_oznake'] ?? $row['h_oznaka'] ?? $row['h_statements'] ?? null);
-        $p    = $this->parseList($row['p_oznake'] ?? $row['p_oznaka'] ?? $row['p_statements'] ?? null);
-
-        $usage = $row['mjesto_upotrebe'] ?? $row['usage_location'] ?? null;
-
-        $qty   = $row['kolicina_kg_l'] ?? $row['kolicina'] ?? $row['annual_quantity'] ?? null;
-        $gvi   = $row['gvi_kgvi'] ?? null;
-        $voc   = $row['voc'] ?? null;
-
-        $stl = $this->parseDate($row['stl_hzjz'] ?? $row['stl'] ?? null);
-
-        // Preskoči prazne retke
-        if (! $productName) {
-            return null;
+        if (! $headers) {
+            $this->skipped++;
+            return;
         }
 
-        $userId = Auth::id();
+        $map = [];
 
-        // ✅ update-or-create po (product_name + cas_number) za tog usera
-        return Chemical::updateOrCreate(
-            [
+        foreach ($headers as $index => $header) {
+            $key = $this->normalizeKey($header);
+
+            if ($key) {
+                $map[$key] = $index;
+            }
+        }
+
+        for ($i = $dataStartIndex; $i < $rows->count(); $i++) {
+            $row = $rows->get($i);
+
+            if (! $row || $this->isEmptyRow($row)) {
+                continue;
+            }
+
+            $productName = $this->clean($this->value($row, $map, 'ime_proizvoda'));
+
+            if (! $productName) {
+                $this->skipped++;
+                continue;
+            }
+
+            $userId = Auth::user()?->ownerId() ?? Auth::id();
+
+            $cas = $this->clean($this->value($row, $map, 'cas_broj'));
+
+            $chemical = Chemical::query()
+                ->where('user_id', $userId)
+                ->where('product_name', $productName)
+                ->where(function ($query) use ($cas) {
+                    if ($cas) {
+                        $query->where('cas_number', $cas);
+                    } else {
+                        $query->whereNull('cas_number');
+                    }
+                })
+                ->first();
+
+            $data = [
                 'user_id' => $userId,
                 'product_name' => $productName,
                 'cas_number' => $cas,
-            ],
-            [
-                'ufi_number' => $ufi,
-                'hazard_pictograms' => $pikt,
-                'h_statements' => $h,
-                'p_statements' => $p,
-                'usage_location' => $usage,
-                'annual_quantity' => $qty,
-                'gvi_kgvi' => $gvi,
-                'voc' => $voc,
-                'stl_hzjz' => $stl,
-            ]
-        );
+                'ufi_number' => $this->clean($this->value($row, $map, 'ufi_broj')),
+                'hazard_pictograms' => $this->parseList($this->value($row, $map, 'piktogrami')),
+                'h_statements' => $this->parseList($this->value($row, $map, 'h_oznake')),
+                'p_statements' => $this->parseList($this->value($row, $map, 'p_oznake')),
+                'usage_location' => $this->clean($this->value($row, $map, 'mjesto_upotrebe')),
+                'annual_quantity' => $this->clean($this->value($row, $map, 'kolicina_kg_l')),
+                'gvi_kgvi' => $this->clean($this->value($row, $map, 'gvi_kgvi')),
+                'voc' => $this->clean($this->value($row, $map, 'voc')),
+                'stl_hzjz' => $this->parseDate($this->value($row, $map, 'stl_hzjz')),
+            ];
+
+            if (! $chemical) {
+                Chemical::create($data);
+                $this->created++;
+                continue;
+            }
+
+            $changed = [];
+
+            foreach ($data as $field => $value) {
+                if (in_array($field, ['user_id', 'product_name', 'cas_number'], true)) {
+                    continue;
+                }
+
+                if ($value === null) {
+                    continue;
+                }
+
+                $current = $chemical->{$field};
+
+                if ($current instanceof \Carbon\CarbonInterface) {
+                    $current = $current->format('Y-m-d');
+                }
+
+                if (is_array($current)) {
+                    $current = json_encode(array_values($current));
+                }
+
+                $compareValue = is_array($value)
+                    ? json_encode(array_values($value))
+                    : (string) $value;
+
+                if ((string) ($current ?? '') !== (string) $compareValue) {
+                    $changed[$field] = $value;
+                }
+            }
+
+            if (empty($changed)) {
+                $this->unchanged++;
+                continue;
+            }
+
+            $chemical->update($changed);
+            $this->updated++;
+        }
+    }
+
+    private function value($row, array $map, string $key)
+    {
+        return array_key_exists($key, $map) ? ($row[$map[$key]] ?? null) : null;
+    }
+
+    private function isEmptyRow($row): bool
+    {
+        foreach ($row as $value) {
+            if ($this->clean($value) !== null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function clean($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function parseList($value): array
     {
-        if ($value === null || $value === '') {
+        $value = $this->clean($value);
+
+        if (! $value) {
             return [];
         }
 
-        if (is_array($value)) {
-            return collect($value)
-                ->map(fn ($v) => trim((string) $v))
-                ->filter()
-                ->values()
-                ->all();
-        }
-
-        $str = trim((string) $value);
-        if ($str === '') {
-            return [];
-        }
-
-        return collect(preg_split('/[,\n\r;]+/', $str) ?: [])
-            ->map(fn ($v) => trim((string) $v))
+        return collect(preg_split('/[,\n\r;]+/', $value) ?: [])
+            ->map(fn ($item) => trim((string) $item))
             ->filter()
             ->values()
             ->all();
@@ -96,71 +178,67 @@ class ChemicalsImport implements ToModel, WithHeadingRow
             return null;
         }
 
-        // Excel serial number
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)->format('Y-m-d');
+        }
+
         if (is_numeric($value)) {
             try {
-                $date = Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $value));
-                return $date->format('Y-m-d');
-            } catch (\Throwable $e) {
+                return Carbon::instance(Date::excelToDateTimeObject((float) $value))->format('Y-m-d');
+            } catch (\Throwable) {
                 return null;
             }
         }
 
-        $value = trim((string) $value);
-        $value = rtrim($value, '.');
+        $value = rtrim(trim((string) $value), '.');
 
-        $formats = [
-            'd.m.Y',
-            'd/m/Y',
-            'd-m-Y',
-            'Y-m-d',
-            'd.m.y',
-            'd/m/y',
-            'd-m-y',
-        ];
-
-        foreach ($formats as $format) {
+        foreach (['d.m.Y', 'd/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.y', 'd/m/y', 'd-m-y'] as $format) {
             try {
-                $dt = Carbon::createFromFormat($format, $value);
-                if ($dt !== false) {
-                    return $dt->format('Y-m-d');
+                $date = Carbon::createFromFormat($format, $value);
+
+                if ($date !== false) {
+                    return $date->format('Y-m-d');
                 }
-            } catch (\Throwable $e) {
-                // continue
+            } catch (\Throwable) {
             }
         }
 
         try {
             return Carbon::parse($value)->format('Y-m-d');
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return null;
         }
     }
 
-    private function normalizeKeys(array $row): array
+    private function normalizeKey($key): ?string
     {
-        $out = [];
-
-        foreach ($row as $key => $val) {
-            $k = (string) $key;
-
-            $k = Str::of($k)
-                ->lower()
-                ->replace(['š','đ','č','ć','ž'], ['s','d','c','c','z'])
-                ->replace(['/', '-', '.', '(', ')'], ' ')
-                ->replace(['  '], ' ')
-                ->trim()
-                ->toString();
-
-            $k = preg_replace('/\s+/', '_', $k);
-
-            // pomoćne normalizacije
-            $k = str_replace('ime_proizvoda', 'ime_proizvoda', $k);
-            $k = str_replace('stl_hzjz', 'stl_hzjz', $k);
-
-            $out[$k] = $val;
+        if ($key === null || trim((string) $key) === '') {
+            return null;
         }
 
-        return $out;
+        $key = Str::of((string) $key)
+            ->lower()
+            ->replace(['š', 'đ', 'č', 'ć', 'ž'], ['s', 'd', 'c', 'c', 'z'])
+            ->replace(['/', '-', '.', '(', ')'], ' ')
+            ->replace("\u{00A0}", ' ')
+            ->replaceMatches('/\s+/', ' ')
+            ->trim()
+            ->replace(' ', '_')
+            ->toString();
+
+        return match ($key) {
+            'ime_proizvoda', 'product_name' => 'ime_proizvoda',
+            'cas', 'cas_broj', 'cas_number' => 'cas_broj',
+            'ufi', 'ufi_broj', 'ufi_number' => 'ufi_broj',
+            'piktogrami', 'hazard_pictograms' => 'piktogrami',
+            'h_oznake', 'h_oznaka', 'h_statements' => 'h_oznake',
+            'p_oznake', 'p_oznaka', 'p_statements' => 'p_oznake',
+            'mjesto_upotrebe', 'usage_location' => 'mjesto_upotrebe',
+            'kolicina', 'kolicina_kg_l', 'annual_quantity' => 'kolicina_kg_l',
+            'gvi_kgvi' => 'gvi_kgvi',
+            'voc' => 'voc',
+            'stl', 'stl_hzjz' => 'stl_hzjz',
+            default => $key,
+        };
     }
 }

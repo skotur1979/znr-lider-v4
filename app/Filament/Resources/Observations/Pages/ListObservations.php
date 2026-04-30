@@ -25,22 +25,28 @@ class ListObservations extends ListRecords
                 ->label('Novo zapažanje'),
 
             Actions\Action::make('export_pdf')
-                ->label('Izvoz u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('warning')
-                ->action(function () {
-                    $observations = ObservationResource::getEloquentQuery()
-                        ->orderByDesc('incident_date')
-                        ->get();
+    ->label('Izvoz u PDF')
+    ->icon('heroicon-o-arrow-down-tray')
+    ->color('warning')
+    ->action(function () {
+        // ✅ izvozi samo ono što je trenutno filtrirano / pretraženo / sortirano u tablici
+        $observations = $this->getFilteredSortedTableQuery()
+            ->get();
 
-                    $pdf = Pdf::loadView('pdf.observations', compact('observations'))
-                        ->setPaper('a4', 'landscape');
-
-                    return response()->streamDownload(
-                        fn () => print($pdf->output()),
-                        'zapazanja-' . now()->format('Y-m-d') . '.pdf'
-                    );
-                }),
+        $pdf = Pdf::loadView('pdf.observations', compact('observations'))
+    ->setPaper('a4', 'landscape')
+    ->setOptions([
+        'isHtml5ParserEnabled' => true,
+        'isRemoteEnabled' => true,
+        'isPhpEnabled' => true,
+        'dpi' => 96,
+        'defaultFont' => 'DejaVu Sans',
+    ]);
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            'zapazanja-' . now()->format('Y-m-d') . '.pdf'
+        );
+    }),
 
             Actions\Action::make('export_excel')
                 ->label('Izvoz u Excel')
