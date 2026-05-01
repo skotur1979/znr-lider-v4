@@ -10,6 +10,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 class ObservationStatsBottomRow extends StatsOverviewWidget
 {
     use InteractsWithPageTable;
+    
+    protected static bool $isLazy = true;
 
     protected function getTablePage(): string
     {

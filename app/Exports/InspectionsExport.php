@@ -4,17 +4,21 @@ namespace App\Exports;
 
 use App\Filament\Resources\Inspections\InspectionResource;
 use App\Models\Inspection;
+use App\Models\InspectionFinding;
+use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithDrawings;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
-class InspectionsExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithEvents
+class InspectionsExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithEvents, WithDrawings
 {
-    protected $inspections;
+    protected Collection $rows;
 
     protected bool $showUserColumn = false;
 
@@ -26,16 +30,36 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
             (bool) $user?->isSuperAdmin()
             || (bool) $user?->canCreateSubusers();
 
-        $this->inspections = InspectionResource::getEloquentQuery()
-            ->with('user')
+        $inspections = InspectionResource::getEloquentQuery()
+            ->with(['user', 'findings'])
             ->withCount(['findings', 'zones'])
             ->orderByDesc('performed_at')
             ->get();
+
+        $this->rows = collect();
+
+        foreach ($inspections as $inspection) {
+            if ($inspection->findings->isEmpty()) {
+                $this->rows->push([
+                    'inspection' => $inspection,
+                    'finding' => null,
+                ]);
+
+                continue;
+            }
+
+            foreach ($inspection->findings as $finding) {
+                $this->rows->push([
+                    'inspection' => $inspection,
+                    'finding' => $finding,
+                ]);
+            }
+        }
     }
 
     public function collection()
     {
-        return $this->inspections;
+        return $this->rows;
     }
 
     public function headings(): array
@@ -54,46 +78,122 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
             'Naziv nadzora',
             'Lokacija',
             'Proveo nadzor',
-            'Prisutne osobe',
             'Status',
             'Opći status',
             '5S rezultat',
             'Broj nalaza',
             'Broj 5S zona',
-            'Opis',
+
+            'Područje / kategorija',
+            'Što je uočeno / pronađeno',
+            'Opis nalaza',
+            'Vrsta nalaza',
+            'Status postupanja',
+            'Potrebna akcija',
+            'Odgovorna osoba',
+            'Rok',
+            'Napomena rješenja',
+
+            'Slika nalaza',
             'Zaključak',
         ]);
     }
 
-    public function map($inspection): array
+    public function map($row): array
     {
         /** @var Inspection $inspection */
+        $inspection = $row['inspection'];
+
+        /** @var InspectionFinding|null $finding */
+        $finding = $row['finding'];
 
         $fiveSScore = $inspection->calculateFiveSScore();
 
-        $row = [
+        $data = [
             $inspection->number,
         ];
 
         if ($this->showUserColumn) {
-            $row[] = $inspection->user?->name ?? '';
+            $data[] = $inspection->user?->name ?? '';
         }
 
-        return array_merge($row, [
+        return array_merge($data, [
             $this->inspectionTypeLabel($inspection->inspection_type),
             $inspection->performed_at ? $inspection->performed_at->format('d.m.Y.') : '',
             $inspection->title,
             $inspection->location,
             $inspection->performed_by,
-            $inspection->present_persons,
             $inspection->status,
             $inspection->overall_status,
             filled($fiveSScore) ? $fiveSScore . '%' : '-',
             $inspection->findings_count ?? $inspection->findings()->count(),
             $inspection->zones_count ?? $inspection->zones()->count(),
-            $inspection->description,
+
+            $finding?->category ?? '',
+            $finding?->title ?? '',
+            $finding?->description ?? '',
+            $this->findingTypeLabel($finding?->finding_status),
+            $this->workflowStatusLabel($finding?->workflow_status),
+            $finding?->action_required ? 'Da' : 'Ne',
+            $finding?->responsible_person ?? '',
+            $finding?->due_date ? $finding->due_date->format('d.m.Y.') : '',
+            $finding?->resolution_note ?? '',
+
+            '', // slika se ubacuje preko drawings()
             $inspection->conclusion,
         ]);
+    }
+
+    public function drawings(): array
+    {
+        $drawings = [];
+
+        $imageColumn = $this->showUserColumn ? 'V' : 'U';
+
+        foreach ($this->rows->values() as $index => $row) {
+            /** @var InspectionFinding|null $finding */
+            $finding = $row['finding'];
+
+            if (! $finding || blank($finding->photo_path)) {
+                continue;
+            }
+
+            $path = $this->photoFullPath($finding->photo_path);
+
+            if (! $path || ! file_exists($path)) {
+                continue;
+            }
+
+            $excelRow = $index + 2;
+
+            $drawing = new Drawing();
+            $drawing->setName('Slika nalaza');
+            $drawing->setDescription('Slika nalaza');
+            $drawing->setPath($path);
+            $drawing->setCoordinates($imageColumn . $excelRow);
+            $drawing->setHeight(85);
+            $drawing->setOffsetX(8);
+            $drawing->setOffsetY(5);
+
+            $drawings[] = $drawing;
+        }
+
+        return $drawings;
+    }
+
+    private function photoFullPath(?string $photoPath): ?string
+    {
+        if (blank($photoPath)) {
+            return null;
+        }
+
+        $photoPath = ltrim($photoPath, '/');
+
+        if (str_starts_with($photoPath, 'storage/')) {
+            $photoPath = str_replace('storage/', '', $photoPath);
+        }
+
+        return storage_path('app/public/' . $photoPath);
     }
 
     public function registerEvents(): array
@@ -102,8 +202,8 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                $lastRow = $this->inspections->count() + 1;
-                $lastCol = $this->showUserColumn ? 'O' : 'N';
+                $lastRow = $this->rows->count() + 1;
+                $lastCol = $this->showUserColumn ? 'W' : 'V';
 
                 $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
@@ -130,74 +230,82 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
 
                 $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setVertical(Alignment::VERTICAL_TOP)
                     ->setWrapText(true);
 
                 $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-                if ($this->showUserColumn) {
-                    $sheet->getStyle("D2:D{$lastRow}")
+                $centerColumns = $this->showUserColumn
+                    ? ['D', 'I', 'J', 'K', 'L', 'M', 'Q', 'R', 'T', 'V']
+                    : ['C', 'H', 'I', 'J', 'K', 'L', 'P', 'Q', 'S', 'U'];
+
+                foreach ($centerColumns as $column) {
+                    $sheet->getStyle("{$column}2:{$column}{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                }
 
-                    $sheet->getStyle("K2:M{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-                    $widths = [
+                $widths = $this->showUserColumn
+                    ? [
                         'A' => 16,
                         'B' => 20,
-                        'C' => 18,
-                        'D' => 16,
-                        'E' => 34,
-                        'F' => 24,
-                        'G' => 24,
-                        'H' => 36,
-                        'I' => 18,
-                        'J' => 18,
-                        'K' => 14,
-                        'L' => 14,
-                        'M' => 14,
-                        'N' => 45,
-                        'O' => 45,
-                    ];
-                } else {
-                    $sheet->getStyle("C2:C{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-                    $sheet->getStyle("J2:L{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-                    $widths = [
-                        'A' => 16,
-                        'B' => 18,
                         'C' => 16,
-                        'D' => 34,
-                        'E' => 24,
-                        'F' => 24,
-                        'G' => 36,
+                        'D' => 16,
+                        'E' => 28,
+                        'F' => 22,
+                        'G' => 22,
                         'H' => 18,
                         'I' => 18,
                         'J' => 14,
                         'K' => 14,
                         'L' => 14,
-                        'M' => 45,
+                        'M' => 22,
+                        'N' => 38,
+                        'O' => 45,
+                        'P' => 20,
+                        'Q' => 22,
+                        'R' => 14,
+                        'S' => 24,
+                        'T' => 16,
+                        'U' => 38,
+                        'V' => 24,
+                        'W' => 45,
+                    ]
+                    : [
+                        'A' => 16,
+                        'B' => 16,
+                        'C' => 16,
+                        'D' => 28,
+                        'E' => 22,
+                        'F' => 22,
+                        'G' => 18,
+                        'H' => 18,
+                        'I' => 14,
+                        'J' => 14,
+                        'K' => 14,
+                        'L' => 22,
+                        'M' => 38,
                         'N' => 45,
+                        'O' => 20,
+                        'P' => 22,
+                        'Q' => 14,
+                        'R' => 24,
+                        'S' => 16,
+                        'T' => 38,
+                        'U' => 24,
+                        'V' => 45,
                     ];
-                }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
 
-                $sheet->getRowDimension(1)->setRowHeight(28);
+                $sheet->getRowDimension(1)->setRowHeight(34);
 
                 for ($row = 2; $row <= $lastRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(36);
+                    $sheet->getRowDimension($row)->setRowHeight(78);
                 }
 
                 $sheet->freezePane('A2');
@@ -211,6 +319,32 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
         return match ($state) {
             'five_s' => '5S nadzor',
             default => 'Nadzor',
+        };
+    }
+
+    private function findingTypeLabel(?string $state): string
+    {
+        return match ($state) {
+            'ok' => 'Uredno',
+            'noncompliance' => 'Nepravilnost',
+            'recommendation' => 'Preporuka',
+            'critical' => 'Kritična nepravilnost',
+            'positive' => 'Pozitivno zapažanje',
+            default => $state ?? '',
+        };
+    }
+
+    private function workflowStatusLabel(?string $state): string
+    {
+        return match ($state) {
+            'open' => 'Nije započeto',
+            'in_progress' => 'U tijeku',
+            'resolved' => 'Riješeno',
+            'resolved_no_action' => 'Riješeno bez akcija',
+            'closed' => 'Zatvoreno',
+            'converted_to_observation' => 'Pretvoreno u zapažanje',
+            'rejected' => 'Odbačeno',
+            default => $state ?? '',
         };
     }
 }

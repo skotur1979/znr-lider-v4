@@ -6,6 +6,7 @@ use App\Filament\Resources\Kpis\KpiResource;
 use App\Services\KpiCalculationService;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\Page;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class KpiReports extends Page
 {
@@ -36,21 +37,49 @@ class KpiReports extends Page
     }
 
     protected function getHeaderActions(): array
-    {
-        return [
-            Action::make('dashboard')
-                ->label('KPI Dashboard')
-                ->icon('heroicon-o-chart-bar-square')
-                ->color('warning')
-                ->url(KpiResource::getUrl('dashboard')),
+{
+    return [
+        Action::make('export_pdf')
+            ->label('Izvoz u PDF')
+            ->icon('heroicon-o-arrow-down-tray')
+            ->color('warning')
+            ->action(function () {
+                $groups = app(KpiCalculationService::class)
+                    ->yearlyReportGrouped($this->year)
+                    ->toArray();
 
-            Action::make('bulk_entry')
-                ->label('Bulk unos')
-                ->icon('heroicon-o-table-cells')
-                ->color('success')
-                ->url(KpiResource::getUrl('bulk-entry')),
-        ];
-    }
+                $pdf = Pdf::loadView('pdf.kpi-reports', [
+                    'groups' => $groups,
+                    'year' => $this->year,
+                ])
+                    ->setPaper('a4', 'landscape')
+                    ->setOptions([
+                        'isHtml5ParserEnabled' => true,
+                        'isRemoteEnabled' => true,
+                        'isPhpEnabled' => true,
+                        'dpi' => 96,
+                        'defaultFont' => 'DejaVu Sans',
+                    ]);
+
+                return response()->streamDownload(
+                    fn () => print($pdf->output()),
+                    'kpi-izvjestaji-' . $this->year . '-' . now()->format('Y-m-d') . '.pdf'
+                );
+            }),
+
+        Action::make('dashboard')
+            ->label('KPI Dashboard')
+            ->icon('heroicon-o-chart-bar-square')
+            ->color('warning')
+            ->url(KpiResource::getUrl('dashboard')),
+
+        Action::make('bulk_entry')
+            ->label('Bulk unos')
+            ->icon('heroicon-o-table-cells')
+            ->color('success')
+            ->url(KpiResource::getUrl('bulk-entry')),
+    ];
+}
 
     public function getTitle(): string
     {

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\InspectionZones\Pages;
 use App\Filament\Resources\InspectionZones\InspectionZoneResource;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\EditRecord;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class EditInspectionZone extends EditRecord
 {
@@ -32,6 +33,34 @@ class EditInspectionZone extends EditRecord
                 ->extraAttributes([
                     'type' => 'button',
                 ]),
+
+                Action::make('export_5s_pdf')
+    ->label('Izvoz u PDF')
+    ->icon('heroicon-o-arrow-down-tray')
+    ->color('warning')
+    ->action(function () {
+        $zone = $this->record->load([
+            'questions',
+            'answers.question',
+        ]);
+
+        $pdf = Pdf::loadView('pdf.inspection-zone-5s', [
+            'zone' => $zone,
+        ])
+            ->setPaper('a4', 'landscape')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'isPhpEnabled' => true,
+                'dpi' => 96,
+                'defaultFont' => 'DejaVu Sans',
+            ]);
+
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            '5s-zona-' . str($zone->name)->slug() . '-' . now()->format('Y-m-d') . '.pdf'
+        );
+    }),
 
             Action::make('back')
                 ->label('Povratak')

@@ -11,6 +11,8 @@ class ObservationStatsTopRow extends StatsOverviewWidget
 {
     use InteractsWithPageTable;
 
+    protected static bool $isLazy = true;
+
     protected function getTablePage(): string
     {
         return ListObservations::class;

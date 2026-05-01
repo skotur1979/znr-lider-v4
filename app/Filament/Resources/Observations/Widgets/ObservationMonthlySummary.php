@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 class ObservationMonthlySummary extends Widget
 {
     use InteractsWithPageTable;
+    
+    protected static bool $isLazy = true;
 
     protected string $view = 'filament.resources.observations.widgets.observation-monthly-summary';
 
