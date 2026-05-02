@@ -70,6 +70,7 @@ class TestAttemptResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->columns([
                 TextColumn::make('user.name')
                     ->label('Korisnik')
