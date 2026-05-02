@@ -79,6 +79,7 @@ class WorkTaskResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->modifyQueryUsing(fn (Builder $query) => $query->latest('due_date')->latest('id'))
             ->columns([
                 TextColumn::make('title')

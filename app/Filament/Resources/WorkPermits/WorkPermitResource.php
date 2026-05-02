@@ -32,6 +32,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use UnitEnum;
+use Filament\Actions\BulkAction;
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 class WorkPermitResource extends BaseResource
 {
@@ -395,20 +398,68 @@ static::userTableColumn(),
                     ->label(''),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Deaktiviraj označeno')
-                    ->requiresConfirmation()
-                    ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire)),
+    DeleteBulkAction::make()
+        ->label('Deaktiviraj označeno')
+        ->requiresConfirmation()
+        ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire)),
 
-                RestoreBulkAction::make()
-                    ->label('Vrati označeno')
-                    ->requiresConfirmation()
-                    ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
+    RestoreBulkAction::make()
+        ->label('Vrati označeno')
+        ->requiresConfirmation()
+        ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
 
-                ForceDeleteBulkAction::make()
-                    ->label('Trajno obriši označeno')
-                    ->requiresConfirmation(),
+    BulkAction::make('copyAndCreateNew')
+        ->label('Kopiraj i napravi novi')
+        ->icon(Heroicon::DocumentDuplicate)
+        ->requiresConfirmation()
+        ->modalHeading('Kopiraj dozvolu za rad')
+        ->modalDescription('Kopirat će se odabrana dozvola za rad i otvoriti nova za uređivanje. Broj dozvole će se automatski postaviti na sljedeći broj.')
+        ->modalSubmitActionLabel('Kopiraj i otvori')
+        ->modalCancelActionLabel('Odustani')
+        ->action(function (EloquentCollection $records) {
+            if ($records->count() !== 1) {
+                Notification::make()
+                    ->title('Odaberi samo jednu dozvolu')
+                    ->body('Za kopiranje može biti označena samo jedna dozvola za rad.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            /** @var WorkPermit $record */
+            $record = $records->first();
+
+            $newRecord = $record->replicate([
+                'permit_number',
+                'issue_date',
+                'created_at',
+                'updated_at',
+                'deleted_at',
             ]);
+
+            $newRecord->permit_number = static::generateNextPermitNumber();
+            $newRecord->issue_date = now()->toDateString();
+
+            $newRecord->user_id = static::isSuperAdmin()
+                ? $record->user_id
+                : static::ownerId();
+
+            $newRecord->save();
+
+            Notification::make()
+                ->title('Dozvola za rad je kopirana')
+                ->body('Otvara se nova kopirana dozvola za rad za uređivanje.')
+                ->success()
+                ->send();
+
+            return redirect(static::getUrl('edit', ['record' => $newRecord]));
+        }),
+
+    ForceDeleteBulkAction::make()
+        ->label('Trajno obriši označeno')
+        ->requiresConfirmation(),
+]);
     }
 
     private static function isOnlyTrashed(HasTable $livewire): bool

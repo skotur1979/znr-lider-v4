@@ -11,10 +11,16 @@ class ViewFirstAidKit extends ViewRecord
 {
     protected static string $resource = FirstAidKitResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Pregled Prva pomoć';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
             EditAction::make()->label('Uredi'),
+
             DeleteAction::make()
                 ->label('Obriši')
                 ->modalHeading('Obriši Prvu pomoć')

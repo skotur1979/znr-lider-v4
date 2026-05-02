@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use App\Support\ExpiryBadge;
 
 class ObservationResource extends BaseResource
 {
@@ -366,28 +367,27 @@ protected static function priorityIcon(?string $state): ?string
                     ->wrap(),
 
                 TextColumn::make('target_date')
-                    ->label('Rok za provedbu')
-                    ->alignment(Alignment::Center)
-                    ->sortable()
-                    ->formatStateUsing(fn ($state) => $state ? Carbon::parse($state)->format('d.m.Y.') : null)
-                    ->color(function (Observation $record) {
-                        if (! $record->target_date || $record->status === 'Complete') {
-                            return null;
-                        }
-
-                        $datum = Carbon::parse($record->target_date);
-                        $danas = Carbon::today();
-
-                        if ($datum->isPast()) {
-                            return 'danger';
-                        }
-
-                        if ($datum->greaterThanOrEqualTo($danas) && $datum->diffInDays($danas) <= 30) {
-                            return 'warning';
-                        }
-
-                        return null;
-                    }),
+    ->label('Rok za provedbu')
+    ->alignment(Alignment::Center)
+    ->sortable()
+    ->date('d.m.Y.')
+    ->badge()
+    ->color(fn (Observation $record) =>
+        $record->status === 'Complete'
+            ? 'success'
+            : ExpiryBadge::color($record->target_date)
+    )
+    ->icon(fn (Observation $record) =>
+        $record->status === 'Complete'
+            ? 'heroicon-o-check-circle'
+            : ExpiryBadge::icon($record->target_date)
+    )
+    ->iconPosition('before')
+    ->tooltip(fn (Observation $record) =>
+        $record->status === 'Complete'
+            ? 'Zapažanje je završeno'
+            : ExpiryBadge::tooltip($record->target_date)
+    ),
 
                 TextColumn::make('status')
                     ->label('Status')

@@ -13,54 +13,51 @@ use Illuminate\Support\Facades\Auth;
 
 class ExpenseForm
 {
+    protected static function ownerId(): ?int
+    {
+        return Auth::user()?->ownerId() ?? Auth::id();
+    }
+
+    protected static function isSuperAdmin(): bool
+    {
+        return Auth::user()?->isSuperAdmin() ?? false;
+    }
+
     public static function schema(): array
     {
         return [
-            // ✅ Jedan user_id (admin bira, ostali hidden)
-            Select::make('user_id')
-    ->label('Korisnik')
-    ->relationship('user', 'name')
-    ->searchable()
-    ->preload()
-    ->required()
-    ->visible(fn () => static::isSuperAdmin())
-    ->dehydrated(fn () => static::isSuperAdmin())
-    ->hiddenOn(['edit', 'view']),
-
-            Hidden::make('user_id')
-                ->default(fn () => Auth::id())
-                ->visible(fn () => ! Auth::user()?->isAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isAdmin()),
+           Hidden::make('user_id')
+    ->default(fn () => auth()->id())
+    ->dehydrated(),
 
             Section::make('Unos troška')
                 ->columns(2)
                 ->schema([
-                    // ✅ Kategorija (iz Categories) + kreiranje nove iz selecta
                     Select::make('category_id')
                         ->label('Kategorija')
                         ->required()
                         ->searchable()
                         ->preload()
                         ->options(function () {
-                            $q = Category::query()->orderBy('name');
+                            $query = Category::query()->orderBy('name');
 
-                            if (! Auth::user()?->isAdmin()) {
-                                $q->where('user_id', Auth::id());
+                            if (! static::isSuperAdmin()) {
+                                $query->where('user_id', static::ownerId());
                             }
 
-                            return $q->pluck('name', 'id')->toArray();
+                            return $query->pluck('name', 'id')->toArray();
                         })
                         ->getSearchResultsUsing(function (string $search) {
-                            $q = Category::query()
+                            $query = Category::query()
                                 ->where('name', 'like', "%{$search}%")
                                 ->orderBy('name')
                                 ->limit(50);
 
-                            if (! Auth::user()?->isAdmin()) {
-                                $q->where('user_id', Auth::id());
+                            if (! static::isSuperAdmin()) {
+                                $query->where('user_id', static::ownerId());
                             }
 
-                            return $q->pluck('name', 'id')->toArray();
+                            return $query->pluck('name', 'id')->toArray();
                         })
                         ->getOptionLabelUsing(fn ($value) => Category::find($value)?->name)
                         ->createOptionForm([
@@ -71,27 +68,26 @@ class ExpenseForm
                         ])
                         ->createOptionUsing(function (array $data): int {
                             $category = Category::create([
-                                'name'    => $data['name'],
-                                'user_id' => Auth::id(),
+                                'name' => $data['name'],
+                                'user_id' => static::ownerId(),
                             ]);
 
                             return $category->id;
                         }),
 
-                    // ✅ Godina = budget_id (prikazuje godinu, sprema budget_id)
                     Select::make('budget_id')
                         ->label('Godina')
                         ->required()
                         ->searchable()
                         ->preload()
                         ->options(function () {
-                            $qb = Budget::query()->orderByDesc('godina');
+                            $query = Budget::query()->orderByDesc('godina');
 
-                            if (! Auth::user()?->isAdmin()) {
-                                $qb->where('user_id', Auth::id());
+                            if (! static::isSuperAdmin()) {
+                                $query->where('user_id', static::ownerId());
                             }
 
-                            return $qb->pluck('godina', 'id')->toArray();
+                            return $query->pluck('godina', 'id')->toArray();
                         }),
 
                     Select::make('mjesec')
@@ -126,16 +122,16 @@ class ExpenseForm
     {
         return [
             'Siječanj' => 'Siječanj',
-            'Veljača'  => 'Veljača',
-            'Ožujak'   => 'Ožujak',
-            'Travanj'  => 'Travanj',
-            'Svibanj'  => 'Svibanj',
-            'Lipanj'   => 'Lipanj',
-            'Srpanj'   => 'Srpanj',
-            'Kolovoz'  => 'Kolovoz',
-            'Rujan'    => 'Rujan',
+            'Veljača' => 'Veljača',
+            'Ožujak' => 'Ožujak',
+            'Travanj' => 'Travanj',
+            'Svibanj' => 'Svibanj',
+            'Lipanj' => 'Lipanj',
+            'Srpanj' => 'Srpanj',
+            'Kolovoz' => 'Kolovoz',
+            'Rujan' => 'Rujan',
             'Listopad' => 'Listopad',
-            'Studeni'  => 'Studeni',
+            'Studeni' => 'Studeni',
             'Prosinac' => 'Prosinac',
         ];
     }

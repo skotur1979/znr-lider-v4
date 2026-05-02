@@ -40,6 +40,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use UnitEnum;
+use Filament\Actions\BulkAction;
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 class NightWorkReferralResource extends BaseResource
 {
@@ -405,6 +408,7 @@ class NightWorkReferralResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->columns([
                 TextColumn::make('display_name')
                     ->label('Zaposlenik')
@@ -492,32 +496,78 @@ static::userTableColumn(),
                     ->label(''),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Deaktiviraj označeno')
-                    ->requiresConfirmation()
-                    ->modalHeading('Deaktiviraj odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-                    ->modalSubmitActionLabel('Deaktiviraj')
-                    ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire)),
+    DeleteBulkAction::make()
+        ->label('Deaktiviraj označeno')
+        ->requiresConfirmation()
+        ->modalHeading('Deaktiviraj odabrano')
+        ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+        ->modalSubmitActionLabel('Deaktiviraj')
+        ->modalCancelActionLabel('Odustani')
+        ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire)),
 
-                RestoreBulkAction::make()
-                    ->label('Vrati označeno')
-                    ->requiresConfirmation()
-                    ->modalHeading('Vrati odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-                    ->modalSubmitActionLabel('Vrati')
-                    ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
+    RestoreBulkAction::make()
+        ->label('Vrati označeno')
+        ->requiresConfirmation()
+        ->modalHeading('Vrati odabrano')
+        ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+        ->modalSubmitActionLabel('Vrati')
+        ->modalCancelActionLabel('Odustani')
+        ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
 
-                ForceDeleteBulkAction::make()
-                    ->label('Trajno obriši označeno')
-                    ->requiresConfirmation()
-                    ->modalHeading('Trajno obriši odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
-                    ->modalSubmitActionLabel('Trajno obriši')
-                    ->modalCancelActionLabel('Odustani'),
+    BulkAction::make('copyAndCreateNew')
+        ->label('Kopiraj i napravi novi')
+        ->icon(Heroicon::DocumentDuplicate)
+        ->requiresConfirmation()
+        ->modalHeading('Kopiraj NR-1 uputnicu')
+        ->modalDescription('Kopirat će se odabrana uputnica i otvoriti nova za uređivanje. Broj uputnice će ostati prazan, a datum će biti današnji.')
+        ->modalSubmitActionLabel('Kopiraj i otvori')
+        ->modalCancelActionLabel('Odustani')
+        ->action(function (EloquentCollection $records) {
+            if ($records->count() !== 1) {
+                Notification::make()
+                    ->title('Odaberi samo jednu uputnicu')
+                    ->body('Za kopiranje može biti označena samo jedna NR-1 uputnica.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            /** @var NightWorkReferral $record */
+            $record = $records->first();
+
+            $newRecord = $record->replicate([
+                'referral_number',
+                'referral_date',
+                'created_at',
+                'updated_at',
+                'deleted_at',
             ]);
+
+            $newRecord->referral_number = null;
+            $newRecord->referral_date = now()->toDateString();
+            $newRecord->user_id = static::isSuperAdmin()
+                ? $record->user_id
+                : static::ownerId();
+
+            $newRecord->save();
+
+            Notification::make()
+                ->title('NR-1 uputnica je kopirana')
+                ->success()
+                ->send();
+
+            return redirect(static::getUrl('edit', ['record' => $newRecord]));
+        }),
+
+    ForceDeleteBulkAction::make()
+        ->label('Trajno obriši označeno')
+        ->requiresConfirmation()
+        ->modalHeading('Trajno obriši odabrano')
+        ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+        ->modalSubmitActionLabel('Trajno obriši')
+        ->modalCancelActionLabel('Odustani'),
+]);
     }
 
     public static function getPages(): array

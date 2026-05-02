@@ -6,17 +6,17 @@ use App\Filament\Resources\Answers\Pages;
 use App\Filament\Resources\Answers\Schemas\AnswerForm;
 use App\Filament\Resources\BaseResource;
 use App\Models\Answer;
+use App\Models\Question;
+use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use BackedEnum;
 use UnitEnum;
 
 class AnswerResource extends BaseResource
@@ -44,27 +44,72 @@ class AnswerResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50, 100, 200, 'all'])
             ->columns([
+                TextColumn::make('question.test.naziv')
+                    ->label('Test')
+                    ->limit(35)
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('question_number')
+                    ->label('Br. pitanja')
+                    ->alignCenter()
+                    ->badge()
+                    ->color('warning')
+                    ->state(function (Answer $record): string {
+                        if (! $record->question) {
+                            return '—';
+                        }
+
+                        $number = Question::query()
+                            ->where('test_id', $record->question->test_id)
+                            ->where('id', '<=', $record->question_id)
+                            ->orderBy('id')
+                            ->count();
+
+                        return (string) $number;
+                    }),
+
                 TextColumn::make('question.tekst')
                     ->label('Pitanje')
                     ->limit(60)
                     ->searchable()
                     ->sortable(),
-static::userTableColumn(),
+
+                static::userTableColumn(),
+
                 TextColumn::make('tekst')
-                    ->label('Odgovor')
-                    ->wrap()
-                    ->searchable(),
+    ->label('Odgovor')
+    ->searchable()
+    ->limit(120) // skrati tekst
+    ->tooltip(fn ($record) => $record->tekst) // full tekst na hover
+    ->extraAttributes([
+        'style' => '
+            min-width: 420px;
+            max-width: 520px;
+            white-space: normal;
+            line-height: 1.3;
+        ',
+    ]),
 
                 IconColumn::make('is_correct')
                     ->label('Točno?')
                     ->boolean()
                     ->alignCenter(),
             ])
+            ->defaultSort('question_id')
             ->actions([
                 EditAction::make()->label('Uredi'),
                 DeleteAction::make()->label('Obriši'),
             ])
+            ->filters([
+    \Filament\Tables\Filters\SelectFilter::make('test_id')
+        ->label('Test')
+        ->relationship('question.test', 'naziv')
+        ->searchable()
+        ->preload(),
+])
             ->bulkActions([
                 DeleteBulkAction::make()->label('Obriši označeno'),
             ]);
@@ -72,7 +117,8 @@ static::userTableColumn(),
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()
+            ->with(['question.test']);
 
         if (Auth::user()?->isSuperAdmin()) {
             return $query;

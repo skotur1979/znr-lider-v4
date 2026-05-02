@@ -50,6 +50,7 @@ class CategoryResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->defaultSort('name')
             ->columns([
                 TextColumn::make('name')

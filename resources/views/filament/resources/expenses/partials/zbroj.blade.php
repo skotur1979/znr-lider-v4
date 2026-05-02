@@ -16,33 +16,31 @@
     .znr-cards .muted{ color:#475569 !important; }
     .dark .znr-cards .muted{ color:#94a3b8 !important; }
 
-    /* Grid */
     .znr-cards-grid{
-        display: grid !important;
-        grid-template-columns: 1fr !important;
-        gap: 1rem !important;
+        display:grid !important;
+        grid-template-columns:1fr !important;
+        gap:1rem !important;
     }
-    @media (min-width: 768px){
+
+    @media (min-width:768px){
         .znr-cards-grid{
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            grid-template-columns:repeat(3, minmax(0, 1fr)) !important;
         }
     }
 
-    /* ✅ Veće i jače brojke */
     .znr-big-number{
-        font-size: 2rem !important;
-        font-weight: 600 !important;
-        letter-spacing: 0.5px;
+        font-size:2rem !important;
+        font-weight:600 !important;
+        letter-spacing:.5px;
     }
 
-    /* ✅ Preostalo */
     .znr-preostalo-pos{
         color:#047857 !important;
         font-weight:600 !important;
     }
 
     .znr-preostalo-neg{
-        color:#dc2626 !important;   /* jače crveno */
+        color:#dc2626 !important;
         font-weight:600 !important;
     }
 
@@ -52,6 +50,59 @@
 
     .dark .znr-preostalo-neg{
         color:#f87171 !important;
+    }
+
+    .znr-month-list{
+        list-style:none;
+        margin:0;
+        padding:0;
+    }
+
+    .znr-month-row{
+        display:flex;
+        align-items:center;
+        gap:14px;
+        padding:14px 16px;
+        border-bottom:1px solid #e2e8f0;
+    }
+
+    .znr-month-row:last-child{
+        border-bottom:0;
+    }
+
+    .dark .znr-month-row{
+        border-bottom-color:#334155;
+    }
+
+    .znr-month-name{
+        min-width:120px;
+        color:#475569;
+        font-weight:600;
+    }
+
+    .dark .znr-month-name{
+        color:#94a3b8;
+    }
+
+    .znr-month-line{
+        flex:1;
+        height:1px;
+        background:#cbd5e1;
+    }
+
+    .dark .znr-month-line{
+        background:#475569;
+    }
+
+    .znr-month-amount{
+        min-width:140px;
+        text-align:right;
+        font-weight:700;
+        color:#0f172a;
+    }
+
+    .dark .znr-month-amount{
+        color:#f8fafc;
     }
 </style>
 
@@ -63,7 +114,6 @@
 <h2 class="text-xl font-bold mb-4">Godina: {{ $godina ?: 'Sve' }}</h2>
 
 <div class="znr-cards znr-cards-grid mb-6">
-
     <div class="card shadow-sm">
         <div class="text-sm font-medium muted mb-2">Ukupno troškova:</div>
         <div class="znr-big-number">
@@ -84,19 +134,19 @@
             {{ $fmt($razlika) }}
         </div>
     </div>
-
 </div>
 
 @if (! empty($grupiraniTroskovi) && $grupiraniTroskovi->count())
-    <h3 class="text-lg font-semibold mb-2">Troškovi po mjesecima</h3>
+    <h3 class="text-lg font-semibold mb-3">Troškovi po mjesecima</h3>
 
-    <div class="znr-cards">
+    <div class="znr-cards mb-6">
         <div class="card p-0 overflow-hidden">
-            <ul class="divide-y" style="border-color:#e2e8f0">
+            <ul class="znr-month-list">
                 @foreach ($grupiraniTroskovi as $mjesec)
-                    <li class="flex items-center justify-between p-3">
-                        <span class="muted">{{ $mjesec->mjesec }}</span>
-                        <span class="font-medium">{{ $fmt($mjesec->ukupno) }}</span>
+                    <li class="znr-month-row">
+                        <span class="znr-month-name">{{ $mjesec->mjesec }}</span>
+                        <span class="znr-month-line"></span>
+                        <span class="znr-month-amount">{{ $fmt($mjesec->ukupno) }}</span>
                     </li>
                 @endforeach
             </ul>

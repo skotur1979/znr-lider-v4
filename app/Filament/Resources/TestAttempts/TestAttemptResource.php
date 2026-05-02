@@ -10,6 +10,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -73,10 +74,13 @@ class TestAttemptResource extends BaseResource
                 TextColumn::make('user.name')
                     ->label('Korisnik')
                     ->searchable(),
-static::userTableColumn(),
+
+                static::userTableColumn(),
+
                 TextColumn::make('test.naziv')
                     ->label('Naziv testa')
-                    ->searchable(),
+                    ->searchable()
+                    ->sortable(),
 
                 TextColumn::make('ime_prezime')
                     ->label('Ime i prezime')
@@ -105,8 +109,15 @@ static::userTableColumn(),
 
                 TextColumn::make('created_at')
                     ->label('Datum slanja')
-                    ->dateTime('d.m.Y. H:i')
+                    ->date('d.m.Y.')
                     ->sortable(),
+            ])
+            ->filters([
+                SelectFilter::make('test_id')
+                    ->label('Vrsta testa')
+                    ->relationship('test', 'naziv')
+                    ->searchable()
+                    ->preload(),
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([

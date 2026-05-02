@@ -185,6 +185,7 @@ class KpiResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->columns([
                 TextColumn::make('name')
                     ->label('Naziv KPI-a')

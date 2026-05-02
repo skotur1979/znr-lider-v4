@@ -34,6 +34,9 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Filament\Actions\BulkAction;
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 class MachineResource extends BaseResource
 {
@@ -373,32 +376,78 @@ class MachineResource extends BaseResource
                     ->label(''),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Deaktiviraj označeno')
-                    ->requiresConfirmation()
-                    ->modalHeading('Deaktiviraj odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-                    ->modalSubmitActionLabel('Deaktiviraj')
-                    ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+    DeleteBulkAction::make()
+        ->label('Deaktiviraj označeno')
+        ->requiresConfirmation()
+        ->modalHeading('Deaktiviraj odabrano')
+        ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+        ->modalSubmitActionLabel('Deaktiviraj')
+        ->modalCancelActionLabel('Odustani')
+        ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
 
-                RestoreBulkAction::make()
-                    ->label('Vrati označeno')
-                    ->requiresConfirmation()
-                    ->modalHeading('Vrati odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-                    ->modalSubmitActionLabel('Vrati')
-                    ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+    RestoreBulkAction::make()
+        ->label('Vrati označeno')
+        ->requiresConfirmation()
+        ->modalHeading('Vrati odabrano')
+        ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+        ->modalSubmitActionLabel('Vrati')
+        ->modalCancelActionLabel('Odustani')
+        ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
 
-                ForceDeleteBulkAction::make()
-                    ->label('Trajno obriši označeno')
-                    ->requiresConfirmation()
-                    ->modalHeading('Trajno obriši odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
-                    ->modalSubmitActionLabel('Trajno obriši')
-                    ->modalCancelActionLabel('Odustani'),
+    BulkAction::make('copyAndCreateNew')
+        ->label('Kopiraj i napravi novi')
+        ->icon(Heroicon::DocumentDuplicate)
+        ->requiresConfirmation()
+        ->modalHeading('Kopiraj radnu opremu')
+        ->modalDescription('Kopirat će se odabrana radna oprema i otvoriti novi zapis za uređivanje.')
+        ->modalSubmitActionLabel('Kopiraj i otvori')
+        ->modalCancelActionLabel('Odustani')
+        ->action(function (EloquentCollection $records) {
+            if ($records->count() !== 1) {
+                Notification::make()
+                    ->title('Odaberi samo jednu radnu opremu')
+                    ->body('Za kopiranje može biti označena samo jedna radna oprema.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            /** @var Machine $record */
+            $record = $records->first();
+
+            $newRecord = $record->replicate([
+                'created_at',
+                'updated_at',
+                'deleted_at',
             ]);
+
+            // NE kopiraj priloge
+            $newRecord->pdf = [];
+
+            $newRecord->user_id = static::isSuperAdmin()
+                ? $record->user_id
+                : static::ownerId();
+
+            $newRecord->save();
+
+            Notification::make()
+                ->title('Radna oprema je kopirana')
+                ->body('Otvara se novi kopirani zapis za uređivanje.')
+                ->success()
+                ->send();
+
+            return redirect(static::getUrl('edit', ['record' => $newRecord]));
+        }),
+
+    ForceDeleteBulkAction::make()
+        ->label('Trajno obriši označeno')
+        ->requiresConfirmation()
+        ->modalHeading('Trajno obriši odabrano')
+        ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+        ->modalSubmitActionLabel('Trajno obriši')
+        ->modalCancelActionLabel('Odustani'),
+]);
     }
 
     private static function isOnlyTrashed(HasTable $livewire): bool

@@ -44,11 +44,27 @@ class QuestionResource extends BaseResource
     {
         return $table
             ->columns([
+                TextColumn::make('question_number')
+                    ->label('Br. pitanja')
+                    ->alignCenter()
+                    ->badge()
+                    ->color('warning')
+                    ->state(function (Question $record): int {
+                        return Question::query()
+                            ->where('test_id', $record->test_id)
+                            ->where('id', '<=', $record->id)
+                            ->orderBy('id')
+                            ->count();
+                    })
+                    ->sortable(false),
+
                 TextColumn::make('test.naziv')
                     ->label('Test')
                     ->sortable()
                     ->searchable(),
-static::userTableColumn(),
+
+                static::userTableColumn(),
+
                 TextColumn::make('tekst')
                     ->label('Pitanje')
                     ->limit(80)
@@ -57,11 +73,13 @@ static::userTableColumn(),
                 TextColumn::make('answers_count')
                     ->label('Broj odgovora')
                     ->counts('answers')
-                    ->sortable(),
+                    ->sortable()
+                    ->alignCenter(),
 
                 IconColumn::make('visestruki_odgovori')
                     ->label('Više odgovora')
-                    ->boolean(),
+                    ->boolean()
+                    ->alignCenter(),
             ])
             ->filters([
                 SelectFilter::make('test_id')
@@ -89,7 +107,11 @@ static::userTableColumn(),
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()
+            ->with('test')
+            ->withCount('answers')
+            ->orderBy('test_id')
+            ->orderBy('id');
 
         if (Auth::user()?->isSuperAdmin()) {
             return $query;

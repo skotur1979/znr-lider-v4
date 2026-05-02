@@ -49,6 +49,7 @@ class ExpenseResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->modifyQueryUsing(function (Builder $query): Builder {
                 return $query->orderByRaw("
                     FIELD(
@@ -194,15 +195,33 @@ static::userTableColumn(),
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery();
+{
+    $query = parent::getEloquentQuery();
 
-        if (Auth::user()?->isSuperAdmin()) {
-            return $query;
-        }
+    $user = Auth::user();
 
-        return $query->where('user_id', Auth::user()?->ownerId());
+    if ($user?->isSuperAdmin()) {
+        return $query;
     }
+
+    if ($user?->can_manage_subusers) {
+        $organizationUserIds = \App\Models\User::query()
+            ->where('id', $user->id)
+            ->orWhere('parent_user_id', $user->id)
+            ->pluck('id');
+
+        return $query->whereIn('user_id', $organizationUserIds);
+    }
+
+    $ownerId = $user?->parent_user_id ?: $user?->id;
+
+    $organizationUserIds = \App\Models\User::query()
+        ->where('id', $ownerId)
+        ->orWhere('parent_user_id', $ownerId)
+        ->pluck('id');
+
+    return $query->whereIn('user_id', $organizationUserIds);
+}
 
     public static function getNavigationBadge(): ?string
     {

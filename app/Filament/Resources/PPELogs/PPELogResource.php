@@ -50,7 +50,12 @@ class PPELogResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['items']);
+        return parent::getEloquentQuery()
+            ->with([
+                'items' => fn ($query) => $query
+                    ->whereNull('return_date')
+                    ->orderBy('end_date'),
+            ]);
     }
 
     public static function form(Schema $schema): Schema
@@ -172,7 +177,12 @@ class PPELogResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with('items'))
+        ->paginated([10, 25, 50,'all'])
+            ->modifyQueryUsing(fn (Builder $query) => $query->with([
+                'items' => fn ($subQuery) => $subQuery
+                    ->whereNull('return_date')
+                    ->orderBy('end_date'),
+            ]))
             ->columns([
                 TextColumn::make('user_last_name')
                     ->label('Ime i prezime')
@@ -224,13 +234,15 @@ static::userTableColumn(),
                             'isteklo' => $query
                                 ->withoutTrashed()
                                 ->whereHas('items', function ($subQuery) {
-                                    $subQuery->whereNotNull('end_date')
+                                                                       $subQuery->whereNull('return_date')
+                                        ->whereNotNull('end_date')
                                         ->whereDate('end_date', '<', now()->startOfDay());
                                 }),
                             'istek' => $query
                                 ->withoutTrashed()
                                 ->whereHas('items', function ($subQuery) {
-                                    $subQuery->whereNotNull('end_date')
+                                        $subQuery->whereNull('return_date')
+                                        ->whereNotNull('end_date')
                                         ->whereBetween('end_date', [now()->startOfDay(), now()->copy()->addDays(30)->endOfDay()]);
                                 }),
                             'deaktivirani' => $query->onlyTrashed(),

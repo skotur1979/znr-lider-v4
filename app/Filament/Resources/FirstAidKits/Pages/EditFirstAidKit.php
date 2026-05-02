@@ -8,4 +8,9 @@ use Filament\Resources\Pages\EditRecord;
 class EditFirstAidKit extends EditRecord
 {
     protected static string $resource = FirstAidKitResource::class;
+
+    public function getTitle(): string
+    {
+        return 'Uredi Prva pomoć';
+    }
 }

@@ -116,6 +116,19 @@
         @foreach($cards as $column)
             <div class="znr-dashboard-column">
                 @foreach($column['items'] as $item)
+
+                    @php
+                        // 🔥 FIX: ako je "Zatvoreni" ili "Zatvoreno" → uvijek zeleno
+                        $color = $item['color'];
+
+                        if (
+                            str_contains(strtolower($item['label']), 'zatvor') ||
+                            str_contains(strtolower($item['label']), 'zavr')
+                        ) {
+                            $color = 'success';
+                        }
+                    @endphp
+
                     <a href="{{ $item['url'] }}" class="znr-card">
                         <div class="znr-title">{{ $column['title'] }}</div>
 
@@ -123,12 +136,12 @@
                             <div class="znr-left">
                                 <div class="znr-value">{{ $item['value'] }}</div>
 
-                                <div class="znr-meta znr-{{ $item['color'] }}">
+                                <div class="znr-meta znr-{{ $color }}">
                                     {{ $item['label'] }}
                                 </div>
                             </div>
 
-                            <div class="znr-{{ $item['color'] }}">
+                            <div class="znr-{{ $color }}">
                                 @svg($item['icon'], 'znr-icon')
                             </div>
                         </div>

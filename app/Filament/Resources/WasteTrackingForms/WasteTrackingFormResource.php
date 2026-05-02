@@ -43,6 +43,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use RuntimeException;
+use Filament\Support\Icons\Heroicon;
 
 class WasteTrackingFormResource extends BaseResource
 {
@@ -514,6 +515,7 @@ class WasteTrackingFormResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->modifyQueryUsing(fn (Builder $query) => $query
                 ->orderByDesc('handover_date')
                 ->orderByDesc('created_at')
@@ -697,77 +699,79 @@ static::userTableColumn(),
                 ]),
             ])
             ->bulkActions([
-                BulkAction::make('copyToNew')
-                    ->label('Kopiraj i napravi novi')
-                    ->icon('heroicon-o-document-duplicate')
-                    ->color('gray')
-                    ->requiresConfirmation()
-                    ->modalHeading('Kopiraj označeni prateći list')
-                    ->modalDescription('Od označenog pratećeg lista napravit će se novi nacrt s kopiranim podacima.')
-                    ->action(function (Collection $records, $livewire): void {
-                        if ($records->count() !== 1) {
-                            Notification::make()
-                                ->title('Označi točno jedan prateći list.')
-                                ->danger()
-                                ->send();
+    DeleteBulkAction::make()
+        ->label('Deaktiviraj označeno')
+        ->requiresConfirmation()
+        ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire))
+        ->modalHeading('Deaktiviraj odabrano')
+        ->modalDescription('Jesi li siguran/a da želiš to učiniti?'),
 
-                            return;
-                        }
+    BulkAction::make('copyToNew')
+        ->label('Kopiraj i napravi novi')
+        ->icon(Heroicon::DocumentDuplicate)
+        ->color('warning')
+        ->requiresConfirmation()
+        ->modalHeading('Kopiraj označeni prateći list')
+        ->modalDescription('Od označenog pratećeg lista napravit će se novi nacrt s kopiranim podacima.')
+        ->action(function (Collection $records, $livewire): void {
+            if ($records->count() !== 1) {
+                Notification::make()
+                    ->title('Označi točno jedan prateći list.')
+                    ->danger()
+                    ->send();
 
-                        /** @var WasteTrackingForm $source */
-                        $source = $records->first();
+                return;
+            }
 
-                        $source->loadMissing([
-                            'ontoRecord.wasteType',
-                            'ontoRecord.organizationLocation.organization',
-                        ]);
+            /** @var WasteTrackingForm $source */
+            $source = $records->first();
 
-                        $new = $source->replicate([
-                            'document_number',
-                            'status',
-                            'locked_at',
-                            'deleted_at',
-                            'created_at',
-                            'updated_at',
-                        ]);
-
-                        $new->document_number = static::generateDocumentNumberFromOnto($source->ontoRecord);
-                        $new->status = 'draft';
-                        $new->locked_at = null;
-                        $new->deleted_at = null;
-
-                        if (! static::isSuperAdmin()) {
-                            $new->user_id = static::defaultUserId();
-                        }
-
-                        $new->save();
-
-                        Notification::make()
-                            ->title('Novi prateći list je napravljen iz kopije.')
-                            ->success()
-                            ->send();
-
-                        $livewire->redirect(static::getUrl('edit', ['record' => $new]));
-                    }),
-
-                DeleteBulkAction::make()
-                    ->label('Deaktiviraj označeno')
-                    ->requiresConfirmation()
-                    ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire))
-                    ->modalHeading('Deaktiviraj odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?'),
-
-                RestoreBulkAction::make()
-                    ->label('Vrati označeno')
-                    ->requiresConfirmation()
-                    ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
-
-                ForceDeleteBulkAction::make()
-                    ->label('Trajno izbriši označeno')
-                    ->requiresConfirmation()
-                    ->modalHeading('Trajno izbriši odabrano')
-                    ->modalDescription('Jesi li siguran/a? Ova radnja je nepovratna.'),
+            $source->loadMissing([
+                'ontoRecord.wasteType',
+                'ontoRecord.organizationLocation.organization',
             ]);
+
+            $new = $source->replicate([
+                'document_number',
+                'status',
+                'locked_at',
+                'attachments',
+                'deleted_at',
+                'created_at',
+                'updated_at',
+            ]);
+
+            $new->document_number = static::generateDocumentNumberFromOnto($source->ontoRecord);
+            $new->status = 'draft';
+            $new->locked_at = null;
+            $new->deleted_at = null;
+            $new->attachments = [];
+
+            if (! static::isSuperAdmin()) {
+                $new->user_id = static::defaultUserId();
+            }
+
+            $new->save();
+
+            Notification::make()
+                ->title('Novi prateći list je napravljen iz kopije.')
+                ->success()
+                ->send();
+
+            $livewire->redirect(static::getUrl('edit', ['record' => $new]));
+        }),
+
+    RestoreBulkAction::make()
+        ->label('Vrati označeno')
+        ->requiresConfirmation()
+        ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
+
+    ForceDeleteBulkAction::make()
+        ->label('Trajno izbriši označeno')
+        ->requiresConfirmation()
+        ->modalHeading('Trajno izbriši odabrano')
+        ->modalDescription('Jesi li siguran/a? Ova radnja je nepovratna.'),
+]);
     }
 
     protected static function getOntoRecordOptions(): array

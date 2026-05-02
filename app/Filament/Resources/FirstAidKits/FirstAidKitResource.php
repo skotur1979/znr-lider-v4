@@ -25,6 +25,9 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use UnitEnum;
+use Filament\Actions\BulkAction;
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 class FirstAidKitResource extends BaseResource
 {
@@ -96,6 +99,7 @@ class FirstAidKitResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->modifyQueryUsing(fn (Builder $query) => $query->with('items'))
             ->columns([
                 TextColumn::make('location')
@@ -151,12 +155,67 @@ static::userTableColumn(),
                 ]),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Obriši označeno')
-                    ->modalHeading('Obriši Prve pomoći')
-                    ->modalDescription('Jeste li sigurni da želite obrisati odabrane zapise?')
-                    ->successNotificationTitle('Prve pomoći su obrisane.'),
-            ])
+    BulkAction::make('copyAndCreateNew')
+        ->label('Kopiraj i napravi novi')
+        ->icon('heroicon-o-document-duplicate')
+        ->requiresConfirmation()
+        ->modalHeading('Kopiraj zapis prve pomoći')
+        ->modalDescription('Kopirat će se odabrani ormarić prve pomoći zajedno sa svim stavkama i otvoriti novi zapis za uređivanje.')
+        ->modalSubmitActionLabel('Kopiraj i otvori')
+        ->modalCancelActionLabel('Odustani')
+        ->action(function (EloquentCollection $records) {
+            if ($records->count() !== 1) {
+                Notification::make()
+                    ->title('Odaberi samo jedan zapis')
+                    ->body('Za kopiranje može biti označen samo jedan ormarić prve pomoći.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            /** @var FirstAidKit $record */
+            $record = $records->first();
+            $record->loadMissing('items');
+
+            $newRecord = $record->replicate([
+            'items_count',
+            'created_at',
+            'updated_at',
+            ]);
+
+            $newRecord->user_id = Auth::user()?->isSuperAdmin()
+                ? $record->user_id
+                : Auth::user()?->ownerId();
+
+            $newRecord->save();
+
+            foreach ($record->items as $item) {
+                $newItem = $item->replicate([
+                    'first_aid_kit_id',
+                    'created_at',
+                    'updated_at',
+                ]);
+
+                $newItem->first_aid_kit_id = $newRecord->id;
+                $newItem->save();
+            }
+
+            Notification::make()
+                ->title('Zapis je kopiran')
+                ->body('Otvara se novi kopirani zapis prve pomoći za uređivanje.')
+                ->success()
+                ->send();
+
+            return redirect(static::getUrl('edit', ['record' => $newRecord]));
+        }),
+
+    DeleteBulkAction::make()
+        ->label('Obriši označeno')
+        ->modalHeading('Obriši Prve pomoći')
+        ->modalDescription('Jeste li sigurni da želite obrisati odabrane zapise?')
+        ->successNotificationTitle('Prve pomoći su obrisane.'),
+])
             ->defaultSort('inspected_at', 'desc');
     }
 

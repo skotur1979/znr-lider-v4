@@ -175,6 +175,7 @@ class OntoRecordResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->paginated([10, 25, 50,'all'])
             ->defaultSort('year', 'desc')
             ->columns([
                 TextColumn::make('organization.company_name')

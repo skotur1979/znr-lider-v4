@@ -99,6 +99,14 @@ class ItemsRelationManager extends RelationManager
 
     protected static function recalcEndDate(callable $set, callable $get): void
     {
+        $returnDate = $get('return_date');
+
+        if (! blank($returnDate)) {
+            $set('end_date', null);
+
+            return;
+        }
+
         $issue = $get('issue_date');
         $months = (int) ($get('duration_months') ?? 0);
 
@@ -124,6 +132,12 @@ class ItemsRelationManager extends RelationManager
             $data['signature'] = SignatureStorage::storeDataUrl($data['signature']);
         }
 
+        if (! empty($data['return_date'])) {
+            $data['end_date'] = null;
+
+            return $data;
+        }
+
         $issue = $data['issue_date'] ?? null;
         $months = (int) ($data['duration_months'] ?? 0);
 
@@ -143,6 +157,10 @@ class ItemsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query
+    ->orderByRaw('return_date IS NOT NULL')
+    ->orderBy('end_date')
+)
             ->emptyStateIcon('heroicon-o-shield-check')
             ->emptyStateHeading('Nema Osobne zaštitne opreme')
             ->emptyStateDescription('Stvori OZO kako bi započeo')
@@ -207,7 +225,7 @@ class ItemsRelationManager extends RelationManager
                     ->label('Datum vraćanja')
                     ->date('d.m.Y.')
                     ->alignCenter()
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 ImageColumn::make('signature')
                     ->label('Potpis')
@@ -224,17 +242,16 @@ class ItemsRelationManager extends RelationManager
                 Filter::make('isteklo')
                     ->label('Isteklo')
                     ->query(fn (Builder $query) => $query
+                        ->whereNull('return_date')
                         ->whereNotNull('end_date')
-                        ->where('end_date', '<', today())),
+                        ->whereDate('end_date', '<', today())),
 
                 Filter::make('uskoro')
                     ->label('Uskoro ističe (≤30d)')
                     ->query(fn (Builder $query) => $query
+                        ->whereNull('return_date')
+                        ->whereNotNull('end_date')
                         ->whereBetween('end_date', [today(), today()->addDays(30)])),
-
-                Filter::make('vraceno')
-                    ->label('Vraćeno')
-                    ->query(fn (Builder $query) => $query->whereNotNull('return_date')),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -247,6 +264,7 @@ class ItemsRelationManager extends RelationManager
 
                 Action::make('extend3')
                     ->label('Produži +3 mj')
+                    ->visible(fn ($record) => blank($record->return_date))
                     ->requiresConfirmation()
                     ->action(function ($record) {
                         $record->duration_months = max(0, (int) $record->duration_months) + 3;
@@ -261,11 +279,27 @@ class ItemsRelationManager extends RelationManager
                     }),
 
                 Action::make('returnedToday')
-                    ->label('Označi vraćeno danas')
-                    ->requiresConfirmation()
-                    ->action(fn ($record) => $record->update([
-                        'return_date' => today(),
-                    ])),
+    ->label('Označi vraćeno')
+    ->color('success')
+    ->icon('heroicon-o-check-circle')
+    ->modalHeading('Označi OZO kao vraćen')
+    ->modalSubmitActionLabel('Spremi datum vraćanja')
+    ->schema([
+        DatePicker::make('return_date')
+            ->label('Datum vraćanja')
+            ->default(today())
+            ->required()
+            ->native(false)
+            ->displayFormat('d/m/Y')
+            ->format('Y-m-d')
+            ->closeOnDateSelection(),
+    ])
+    ->action(function ($record, array $data) {
+        $record->update([
+            'return_date' => $data['return_date'],
+            'end_date' => null,
+        ]);
+    }),
 
                 DeleteAction::make()
                     ->label('Deaktiviraj'),
