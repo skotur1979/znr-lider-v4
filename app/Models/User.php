@@ -119,6 +119,10 @@ class User extends Authenticatable
 
         return $this->isOrgAdmin() && $this->can_manage_subusers;
     }
+    public function operationalLogs()
+{
+    return $this->hasMany(\App\Models\OperationalLog::class);
+}
 }
 
 

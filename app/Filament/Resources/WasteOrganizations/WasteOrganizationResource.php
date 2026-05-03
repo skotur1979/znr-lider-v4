@@ -49,20 +49,22 @@ class WasteOrganizationResource extends BaseResource
     }
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->components([
+{
+    return $schema
+        ->schema([
             Hidden::make('user_id')
                 ->default(fn () => static::defaultUserId())
                 ->dehydrated(fn () => ! static::isSuperAdmin())
                 ->visible(fn () => ! static::isSuperAdmin()),
 
             FormSection::make('Podaci o organizaciji')
+                ->columnSpanFull()
+                ->columns(2)
                 ->schema([
                     TextInput::make('company_name')
                         ->label('Tvrtka')
                         ->required()
-                        ->maxLength(255)
-                        ->columnSpan(2),
+                        ->maxLength(255),
 
                     TextInput::make('oib')
                         ->label('OIB')
@@ -80,76 +82,76 @@ class WasteOrganizationResource extends BaseResource
 
                     TextInput::make('contact_details')
                         ->label('Kontakt podaci')
-                        ->maxLength(255)
-                        ->columnSpan(2),
+                        ->maxLength(255),
 
                     TextInput::make('registered_office')
                         ->label('Sjedište')
-                        ->maxLength(255)
-                        ->columnSpanFull(),
+                        ->maxLength(255),
 
                     Toggle::make('is_active')
                         ->label('Aktivna')
                         ->default(true)
                         ->inline(false),
-                ])
-                ->columns(3),
+                ]),
 
             FormSection::make('Lokacije / organizacijske jedinice')
+                ->columnSpanFull()
                 ->description('Jedna organizacija može imati više lokacija. Za svaku lokaciju kasnije će se voditi zaseban ONTO.')
                 ->schema([
                     Repeater::make('locations')
-                        ->label('Lokacije')
-                        ->relationship()
-                        ->defaultItems(0)
-                        ->addActionLabel('Dodaj lokaciju')
-                        ->reorderable(true)
-                        ->collapsible()
-                        ->cloneable()
-                        ->itemLabel(function (array $state): ?string {
-                            $name = $state['name'] ?? null;
-                            $internal = $state['internal_code'] ?? null;
+    ->label('Lokacije')
+    ->relationship()
+    ->defaultItems(0)
+    ->addActionLabel('Dodaj lokaciju')
+    ->reorderable(true)
+    ->collapsible()
+    ->cloneable()
+    ->grid(2)
+    ->itemLabel(function (array $state): ?string {
+        $name = $state['name'] ?? null;
+        $internal = $state['internal_code'] ?? null;
 
-                            if ($name && $internal) {
-                                return "{$name} ({$internal})";
-                            }
+        if ($name && $internal) {
+            return "{$name} ({$internal})";
+        }
 
-                            return $name ?: 'Nova lokacija';
-                        })
-                        ->schema([
-                            TextInput::make('name')
-                                ->label('Naziv lokacije')
-                                ->required()
-                                ->maxLength(255)
-                                ->columnSpan(2),
+        return $name ?: 'Nova lokacija';
+    })
+    ->schema([
+        TextInput::make('name')
+            ->label('Naziv lokacije')
+            ->required()
+            ->maxLength(255)
+            ->columnSpanFull(),
 
-                            TextInput::make('unit_code')
-                                ->label('Oznaka organizacijske jedinice')
-                                ->helperText('Ako nije određena, kasnije možeš koristiti 000.')
-                                ->maxLength(20),
+        TextInput::make('unit_code')
+            ->label('Oznaka organizacijske jedinice')
+            ->helperText('Ako nije određena, kasnije možeš koristiti 000.')
+            ->maxLength(20),
 
-                            TextInput::make('internal_code')
-                                ->label('Interni broj')
-                                ->placeholder('npr. 001')
-                                ->maxLength(20),
+        TextInput::make('internal_code')
+            ->label('Interni broj')
+            ->placeholder('npr. 001')
+            ->maxLength(20),
 
-                            TextInput::make('address')
-                                ->label('Adresa / polazište')
-                                ->maxLength(255)
-                                ->columnSpan(2),
+        TextInput::make('address')
+            ->label('Adresa / polazište')
+            ->maxLength(255)
+            ->columnSpanFull(),
 
-                            Toggle::make('is_active')
-                                ->label('Aktivna lokacija')
-                                ->default(true)
-                                ->inline(false),
-                        ])
-                        ->columns(4)
-                        ->columnSpanFull(),
+        Toggle::make('is_active')
+            ->label('Aktivna lokacija')
+            ->default(true)
+            ->inline(false)
+            ->columnSpanFull(),
+    ])
+    ->columns(2)
+    ->columnSpanFull(),
                 ])
-                ->collapsible()
-                ->columns(1),
-        ]);
-    }
+                ->collapsible(),
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {

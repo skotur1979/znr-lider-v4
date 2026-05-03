@@ -5,203 +5,180 @@
     <title>ZNR LIDER - Izvještaj o stanju sustava</title>
 
     <style>
-        @page { margin: 22px; }
+        @page { margin: 14px; }
 
-        * {
-            font-family: "DejaVu Sans", sans-serif;
-            box-sizing: border-box;
-        }
+        * { font-family: "DejaVu Sans", sans-serif; box-sizing: border-box; }
 
         body {
             margin: 0;
-            background: #eef2f7;
             color: #0f172a;
-            font-size: 12px;
-            line-height: 1.45;
+            font-size: 10.5px;
+            line-height: 1.35;
         }
 
         .container {
             width: 100%;
             background: #ffffff;
-            border-radius: 18px;
-            overflow: hidden;
             border: 1px solid #dbe2ea;
+            border-radius: 14px;
+            overflow: hidden;
         }
 
         .header {
             background: #111827;
-            padding: 28px 34px 24px;
             color: #ffffff;
+            padding: 18px 24px 16px;
         }
 
         .brand {
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 1.4px;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1.3px;
             color: #f59e0b;
             text-transform: uppercase;
         }
 
         .title {
-            margin-top: 8px;
-            font-size: 28px;
+            margin-top: 6px;
+            font-size: 23px;
+            line-height: 28px;
             font-weight: 900;
-            line-height: 34px;
         }
 
         .meta {
-            margin-top: 8px;
-            font-size: 13px;
+            margin-top: 5px;
+            font-size: 11px;
             color: #cbd5e1;
         }
 
-        .content {
-            padding: 28px 34px 30px;
-        }
+        .content { padding: 16px 24px 18px; }
 
         .intro {
-            font-size: 14px;
-            line-height: 22px;
+            font-size: 11.5px;
+            line-height: 17px;
             color: #334155;
-            margin-bottom: 18px;
-        }
-
-        .label {
-            font-size: 12px;
-            font-weight: 900;
-            letter-spacing: .8px;
-            text-transform: uppercase;
-            color: #92400e;
-            margin-bottom: 8px;
+            margin-bottom: 9px;
         }
 
         .smart-box {
             background: #fef3c7;
             border: 1px solid #f59e0b;
-            border-radius: 15px;
-            padding: 17px 18px;
-            margin-bottom: 18px;
-            color: #111827;
+            border-radius: 12px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
         }
 
-        .smart-box p {
-            margin: 0;
-            font-size: 14px;
-            line-height: 22px;
+        .label {
+            font-size: 10px;
+            font-weight: 900;
+            color: #92400e;
+            text-transform: uppercase;
+            letter-spacing: .7px;
+            margin-bottom: 5px;
         }
 
         .status-box {
-            border-radius: 16px;
-            padding: 18px 20px;
-            margin: 18px 0 20px;
+            border-radius: 13px;
+            padding: 12px 14px;
+            margin: 10px 0 11px;
             text-align: center;
+            page-break-inside: avoid;
         }
 
-        .status-critical {
-            background: #dc2626;
-            color: #ffffff;
-            border: 2px solid #991b1b;
-        }
-
-        .status-warning {
-            background: #f97316;
-            color: #ffffff;
-            border: 2px solid #c2410c;
-        }
-
-        .status-ok {
-            background: #16a34a;
-            color: #ffffff;
-            border: 2px solid #15803d;
-        }
+        .status-critical { background: #dc2626; color: #ffffff; border: 2px solid #991b1b; }
+        .status-warning { background: #f97316; color: #ffffff; border: 2px solid #c2410c; }
+        .status-ok { background: #16a34a; color: #ffffff; border: 2px solid #15803d; }
 
         .status-small {
-            font-size: 13px;
+            font-size: 10px;
             font-weight: 900;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
         .status-main {
-            font-size: 30px;
+            font-size: 22px;
             font-weight: 900;
-            margin-top: 7px;
+            margin-top: 5px;
         }
 
         .status-text {
-            margin-top: 8px;
-            font-size: 14px;
+            margin-top: 5px;
+            font-size: 11.5px;
             font-weight: 700;
         }
 
         .stats {
             width: 100%;
             border-collapse: separate;
-            border-spacing: 10px;
-            margin: 0 -10px 20px -10px;
+            border-spacing: 8px;
+            margin: 0 -8px 8px -8px;
         }
 
         .stat {
             width: 33.33%;
-            border-radius: 16px;
-            padding: 16px;
+            border-radius: 12px;
+            padding: 9px 10px;
             border: 1px solid #e2e8f0;
             background: #f8fafc;
+            page-break-inside: avoid;
         }
 
-        .stat-red {
-            background: #fff1f2;
-            border-color: #fecdd3;
-        }
-
-        .stat-yellow {
-            background: #fffbeb;
-            border-color: #fde68a;
-        }
-
-        .stat-blue {
-            background: #eff6ff;
-            border-color: #bfdbfe;
-        }
+        .stat-red { background: #fff1f2; border-color: #fecdd3; }
+        .stat-yellow { background: #fffbeb; border-color: #fde68a; }
+        .stat-blue { background: #eff6ff; border-color: #bfdbfe; }
+        .stat-green { background: #ecfdf5; border-color: #bbf7d0; }
+        .stat-purple { background: #f5f3ff; border-color: #ddd6fe; }
+        .stat-slate { background: #f8fafc; border-color: #cbd5e1; }
 
         .stat-label {
-            font-size: 12px;
+            font-size: 9.5px;
             font-weight: 900;
             color: #64748b;
             text-transform: uppercase;
-            margin-bottom: 7px;
+            margin-bottom: 4px;
         }
 
         .stat-value {
-            font-size: 30px;
-            line-height: 32px;
+            font-size: 22px;
+            line-height: 24px;
             font-weight: 900;
-            color: #0f172a;
+        }
+
+        .stat-note {
+            margin-top: 3px;
+            font-size: 9.5px;
+            color: #64748b;
+            font-weight: 700;
         }
 
         .red { color: #dc2626; }
         .yellow { color: #d97706; }
         .blue { color: #2563eb; }
+        .green { color: #16a34a; }
+        .purple { color: #7c3aed; }
+        .slate { color: #334155; }
 
         .section-title {
-            font-size: 19px;
+            font-size: 15px;
             font-weight: 900;
-            color: #0f172a;
-            margin: 24px 0 12px;
+            margin: 13px 0 7px;
+            page-break-after: avoid;
         }
 
         table.data {
             width: 100%;
             border-collapse: collapse;
             border: 1px solid #e2e8f0;
-            border-radius: 14px;
+            border-radius: 10px;
             overflow: hidden;
+            page-break-inside: auto;
         }
 
         table.data th {
             background: #f1f5f9;
-            padding: 12px 14px;
-            font-size: 13px;
+            padding: 7px 9px;
+            font-size: 10px;
             font-weight: 900;
             color: #334155;
             border-bottom: 1px solid #e2e8f0;
@@ -209,76 +186,67 @@
         }
 
         table.data td {
-            padding: 11px 14px;
-            font-size: 13px;
+            padding: 6px 9px;
+            font-size: 10.5px;
             color: #0f172a;
             border-bottom: 1px solid #e2e8f0;
+            vertical-align: middle;
         }
 
-        table.data tr:nth-child(even) td {
-            background: #f8fafc;
-        }
+        table.data tr { page-break-inside: avoid; }
 
-        .center {
-            text-align: center;
-        }
+        table.data tr:nth-child(even) td { background: #f8fafc; }
+
+        .center { text-align: center; }
 
         .badge {
             display: inline-block;
-            min-width: 42px;
+            min-width: 34px;
             border-radius: 999px;
-            padding: 5px 12px;
+            padding: 3px 8px;
             font-weight: 900;
             text-align: center;
         }
 
-        .badge-red {
-            background: #fee2e2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
-        }
-
-        .badge-yellow {
-            background: #fef3c7;
-            color: #d97706;
-            border: 1px solid #fde68a;
-        }
+        .badge-red { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+        .badge-yellow { background: #fef3c7; color: #d97706; border: 1px solid #fde68a; }
+        .badge-green { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .badge-blue { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
 
         .actions-box {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            padding: 14px 18px;
+            border-radius: 11px;
+            padding: 9px 12px;
+            page-break-inside: avoid;
         }
 
-        .actions {
-            margin: 0;
-            padding-left: 18px;
-        }
+        .actions { margin: 0; padding-left: 16px; }
 
         .actions li {
-            margin-bottom: 7px;
-            font-size: 13px;
-            line-height: 20px;
+            margin-bottom: 4px;
+            font-size: 10.5px;
+            line-height: 16px;
         }
 
         .conclusion {
             background: #eff6ff;
             border: 1px solid #bfdbfe;
-            border-left: 6px solid #2563eb;
-            border-radius: 14px;
-            padding: 15px 17px;
+            border-left: 5px solid #2563eb;
+            border-radius: 11px;
+            padding: 10px 12px;
             color: #1e3a8a;
-            font-size: 13px;
-            line-height: 21px;
+            font-size: 10.5px;
+            line-height: 16px;
+            page-break-inside: avoid;
         }
 
         .footer {
-            margin-top: 24px;
-            padding-top: 16px;
+            margin-top: 12px;
+            padding-top: 9px;
             border-top: 1px solid #e2e8f0;
-            font-size: 11px;
-            line-height: 18px;
+            font-size: 9.5px;
+            line-height: 14px;
             color: #64748b;
             text-align: center;
         }
@@ -292,39 +260,43 @@
         : ($totalSoon > 0 ? 'status-warning' : 'status-ok');
 
     $statusIcon = $totalExpired > 0
-        ? '🚨'
-        : ($totalSoon > 0 ? '⚠️' : '✅');
+        ? '!'
+        : ($totalSoon > 0 ? '!' : 'OK');
 
     $statusMessage = $totalExpired > 0
         ? 'Sustav zahtijeva hitnu reakciju zbog isteklih stavki.'
         : ($totalSoon > 0
             ? 'Sustav zahtijeva planiranje aktivnosti koje uskoro istječu.'
             : 'Trenutno nema kritičnih isteklih stavki.');
+
+    $daysWithoutLta = $daysWithoutLta ?? 0;
+    $ltaRecordDays = $ltaRecordDays ?? 0;
+    $ltaCount = $ltaCount ?? 0;
+    $mtaCount = $mtaCount ?? 0;
+    $faaCount = $faaCount ?? 0;
+    $openObservations = $openObservations ?? 0;
+    $openWorkTasks = $openWorkTasks ?? 0;
+    $closedWorkTasks = $closedWorkTasks ?? 0;
 @endphp
 
 <div class="container">
-
     <div class="header">
         <div class="brand">ZNR LIDER</div>
         <div class="title">Izvještaj o stanju sustava</div>
-        <div class="meta">
-            Datum izvještaja: {{ $reportDate }} · Automatski PDF izvještaj
-        </div>
+        <div class="meta">Datum izvještaja: {{ $reportDate }} · Automatski PDF izvještaj</div>
     </div>
 
     <div class="content">
-
         <div class="intro">
-            Profesionalni pregled trenutnog stanja sustava, rokova, valjanosti i preporučenih aktivnosti.
+            Profesionalni pregled stanja ZNR sustava, rokova, operativnih aktivnosti i ključnih pokazatelja sigurnosti.
         </div>
 
         <div class="smart-box">
             <div class="label">Pametni sažetak</div>
-            <p>
-                Sustav je trenutno u statusu <strong>{{ $systemStatus }}</strong>.
-                Evidentirano je <strong>{{ $totalExpired }}</strong> isteklih stavki i
-                <strong>{{ $totalSoon }}</strong> stavki koje uskoro istječu.
-            </p>
+            Sustav je trenutno u statusu <strong>{{ $systemStatus }}</strong>.
+            Evidentirano je <strong>{{ $totalExpired }}</strong> isteklih stavki i
+            <strong>{{ $totalSoon }}</strong> stavki koje uskoro istječu.
+            Trenutno je <strong>{{ $daysWithoutLta }}</strong> dana bez LTA.
         </div>
 
         <div class="status-box {{ $statusClass }}">
@@ -338,18 +310,83 @@
                 <td class="stat stat-red">
                     <div class="stat-label">Isteklo</div>
                     <div class="stat-value red">{{ $totalExpired }}</div>
+                    <div class="stat-note">hitno postupanje</div>
                 </td>
-
                 <td class="stat stat-yellow">
                     <div class="stat-label">U 30 dana</div>
                     <div class="stat-value yellow">{{ $totalSoon }}</div>
+                    <div class="stat-note">planirati</div>
                 </td>
+                <td class="stat stat-green">
+                    <div class="stat-label">Bez LTA</div>
+                    <div class="stat-value green">{{ $daysWithoutLta }}</div>
+                    <div class="stat-note">dana</div>
+                </td>
+            </tr>
+        </table>
 
+        <table class="stats">
+            <tr>
+                <td class="stat stat-purple">
+                    <div class="stat-label">Rekord bez LTA</div>
+                    <div class="stat-value purple">{{ $ltaRecordDays }}</div>
+                    <div class="stat-note">dana</div>
+                </td>
                 <td class="stat stat-blue">
                     <div class="stat-label">Kategorije</div>
                     <div class="stat-value blue">{{ count($rows) }}</div>
+                    <div class="stat-note">praćenih područja</div>
+                </td>
+                <td class="stat stat-slate">
+                    <div class="stat-label">Otvorene aktivnosti</div>
+                    <div class="stat-value slate">{{ $openObservations + $openWorkTasks }}</div>
+                    <div class="stat-note">zapažanja i zadaci</div>
                 </td>
             </tr>
+        </table>
+
+        <div class="section-title">Sigurnosni pokazatelji</div>
+
+        <table class="data">
+            <thead>
+            <tr>
+                <th>Pokazatelj</th>
+                <th class="center" style="width:90px;">Vrijednost</th>
+                <th>Napomena</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><strong>LTA ozljede</strong></td>
+                <td class="center"><span class="badge badge-red">{{ $ltaCount }}</span></td>
+                <td>Ozljede na radu s izgubljenim radnim danima.</td>
+            </tr>
+            <tr>
+                <td><strong>MTA događaji</strong></td>
+                <td class="center"><span class="badge badge-yellow">{{ $mtaCount }}</span></td>
+                <td>Pružanje prve pomoći / medicinska obrada izvan tvrtke.</td>
+            </tr>
+            <tr>
+                <td><strong>FAA događaji</strong></td>
+                <td class="center"><span class="badge badge-blue">{{ $faaCount }}</span></td>
+                <td>Pružanje prve pomoći unutar tvrtke.</td>
+            </tr>
+            <tr>
+                <td><strong>Otvorena zapažanja</strong></td>
+                <td class="center"><span class="badge badge-yellow">{{ $openObservations }}</span></td>
+                <td>Zapažanja u statusu nije započeto ili u tijeku.</td>
+            </tr>
+            <tr>
+                <td><strong>Otvoreni radni zadaci</strong></td>
+                <td class="center"><span class="badge badge-yellow">{{ $openWorkTasks }}</span></td>
+                <td>Dodijeljene aktivnosti koje još nisu zatvorene.</td>
+            </tr>
+            <tr>
+                <td><strong>Zatvoreni radni zadaci</strong></td>
+                <td class="center"><span class="badge badge-green">{{ $closedWorkTasks }}</span></td>
+                <td>Završene aktivnosti i provedene mjere.</td>
+            </tr>
+            </tbody>
         </table>
 
         <div class="section-title">Rokovi i valjanosti</div>
@@ -358,20 +395,16 @@
             <thead>
             <tr>
                 <th>Stavka</th>
-                <th class="center" style="width:110px;">Isteklo</th>
-                <th class="center" style="width:110px;">U 30 dana</th>
+                <th class="center" style="width:90px;">Isteklo</th>
+                <th class="center" style="width:90px;">U 30 dana</th>
             </tr>
             </thead>
             <tbody>
             @foreach ($rows as $row)
                 <tr>
                     <td><strong>{{ $row['label'] }}</strong></td>
-                    <td class="center">
-                        <span class="badge badge-red">{{ $row['expired'] }}</span>
-                    </td>
-                    <td class="center">
-                        <span class="badge badge-yellow">{{ $row['soon'] }}</span>
-                    </td>
+                    <td class="center"><span class="badge badge-red">{{ $row['expired'] }}</span></td>
+                    <td class="center"><span class="badge badge-yellow">{{ $row['soon'] }}</span></td>
                 </tr>
             @endforeach
             </tbody>
@@ -391,15 +424,14 @@
 
         <div class="conclusion">
             {{ $summary }}
-            <br><br>
-            Preporučuje se prioritetno rješavanje isteklih stavki, a zatim planiranje aktivnosti koje istječu unutar 30 dana.
+            <br>
+            Preporučuje se prioritetno rješavanje isteklih stavki, zatim planiranje aktivnosti koje istječu unutar 30 dana te redovito zatvaranje otvorenih zapažanja i radnih zadataka.
         </div>
 
         <div class="footer">
             Ovaj izvještaj je automatski generiran iz sustava <strong>ZNR LIDER</strong>.<br>
             Ako podaci odstupaju od očekivanih, provjerite evidencije i statuse unutar aplikacije.
         </div>
-
     </div>
 </div>
 </body>

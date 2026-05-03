@@ -29,6 +29,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use UnitEnum;
+use Filament\Support\Enums\MaxWidth;
 
 class PPELogResource extends BaseResource
 {
@@ -47,7 +48,10 @@ class PPELogResource extends BaseResource
     {
         return 'ppe_logs';
     }
-
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
@@ -59,9 +63,12 @@ class PPELogResource extends BaseResource
     }
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->schema([
+{
+    return $schema
+        ->schema([
             Section::make('Podaci o zaposleniku')
+                ->columnSpanFull()
+                ->columns(2)
                 ->schema([
                     Select::make('employee_lookup')
                         ->label('Zaposlenik')
@@ -169,10 +176,10 @@ class PPELogResource extends BaseResource
                     TextInput::make('organization_unit')
                         ->label('Organizacijska jedinica')
                         ->maxLength(255),
-                ])
-                ->columns(2),
-        ]);
-    }
+                ]),
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {

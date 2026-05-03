@@ -37,6 +37,8 @@ use Illuminate\Validation\Rule;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Filament\Schemas\Components\Grid;
+use Filament\Support\Enums\MaxWidth;
 
 class MachineResource extends BaseResource
 {
@@ -57,159 +59,172 @@ class MachineResource extends BaseResource
     {
         return 'machines';
     }
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->schema([
-           Select::make('user_id')
-            ->label('Korisnik')
-            ->relationship('user', 'name')
-            ->searchable()
-            ->preload()
-            ->required()
-            ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
-            ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
+{
+    return $schema
+        ->schema([
+            Select::make('user_id')
+                ->label('Korisnik')
+                ->relationship('user', 'name')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+                ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
 
-        Hidden::make('user_id')
-            ->default(fn () => static::ownerId())
-            ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
-            ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
+            Hidden::make('user_id')
+                ->default(fn () => static::ownerId())
+                ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+                ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
 
-            Section::make('OCR / Auto popunjavanje iz zapisnika')
-                ->description('Učitaj PDF ili sliku zapisnika pa zatim klikni OCR gumb gore desno.')
+            Section::make('Podaci o radnoj opremi')
+                ->columnSpanFull()
                 ->columns(2)
                 ->schema([
-                    FormFileUpload::make('ocr_source')
-                        ->label('Zapisnik za OCR')
-                        ->disk('local')
-                        ->directory('tmp/machine-ocr')
-                        ->visibility('private')
-                        ->multiple(false)
-                        ->acceptedFileTypes([
-                            'application/pdf',
-                            'image/jpeg',
-                            'image/png',
-                            'image/webp',
-                            'application/msword',
-                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            'application/rtf',
-                            'text/plain',
-                            'application/vnd.oasis.opendocument.text',
-                        ])
-                        ->preserveFilenames()
-                        ->openable()
-                        ->downloadable()
-                        ->live()
-                        ->columnSpan(1),
+                    Section::make('OCR / Auto popunjavanje iz zapisnika')
+                        ->description('Učitaj PDF ili sliku zapisnika pa zatim klikni OCR gumb gore desno.')
+                        ->columns(2)
+                        ->schema([
+                            FormFileUpload::make('ocr_source')
+                                ->label('Zapisnik za OCR')
+                                ->disk('local')
+                                ->directory('tmp/machine-ocr')
+                                ->visibility('private')
+                                ->multiple(false)
+                                ->acceptedFileTypes([
+                                    'application/pdf',
+                                    'image/jpeg',
+                                    'image/png',
+                                    'image/webp',
+                                    'application/msword',
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                    'application/rtf',
+                                    'text/plain',
+                                    'application/vnd.oasis.opendocument.text',
+                                ])
+                                ->preserveFilenames()
+                                ->openable()
+                                ->downloadable()
+                                ->live(),
 
-                    Placeholder::make('ocr_help')
-                        ->label('Kako radi')
-                        ->content('1. Učitaj PDF ili sliku. 2. Klikni gore desno "OCR analiza". 3. Sustav će pokušati popuniti prazna polja.')
-                        ->columnSpan(1),
-                ]),
+                            Placeholder::make('ocr_help')
+                                ->label('Kako radi')
+                                ->content('1. Učitaj PDF ili sliku. 2. Klikni gore desno "OCR analiza". 3. Sustav će pokušati popuniti prazna polja.'),
+                        ]),
 
-            Section::make('Podatci o radnoj opremi')
-                ->columns(2)
-                ->schema([
-                    TextInput::make('name')
-                        ->label('Naziv (obavezno)')
-                        ->required()
-                        ->maxLength(255),
+                    Section::make('Osnovni podaci')
+                        ->columns(2)
+                        ->schema([
+                            TextInput::make('name')
+                                ->label('Naziv (obavezno)')
+                                ->required()
+                                ->maxLength(255),
 
-                    TextInput::make('manufacturer')
-                        ->label('Proizvođač')
-                        ->maxLength(255),
+                            TextInput::make('manufacturer')
+                                ->label('Proizvođač')
+                                ->maxLength(255),
 
-                    TextInput::make('factory_number')
-                        ->label('Tvornički broj')
-                        ->maxLength(255),
+                            TextInput::make('factory_number')
+                                ->label('Tvornički broj')
+                                ->maxLength(255),
 
-                    TextInput::make('inventory_number')
-                        ->label('Inventarni broj')
-                        ->maxLength(255),
-                ]),
+                            TextInput::make('inventory_number')
+                                ->label('Inventarni broj')
+                                ->maxLength(255),
+                        ]),
 
-            Section::make('Ispitivanje')
-                ->columns(2)
-                ->schema([
-                    DatePicker::make('examination_valid_from')
-                        ->label('Vrijedi od (obavezno)')
-                        ->required()
-                        ->displayFormat('d.m.Y.')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb'),
+                    Section::make('Ispitivanje')
+                        ->columns(2)
+                        ->schema([
+                            DatePicker::make('examination_valid_from')
+                                ->label('Vrijedi od (obavezno)')
+                                ->required()
+                                ->displayFormat('d.m.Y.')
+                                ->weekStartsOnMonday()
+                                ->timezone('Europe/Zagreb'),
 
-                    DatePicker::make('examination_valid_until')
-                        ->label('Vrijedi do (obavezno)')
-                        ->required()
-                        ->displayFormat('d.m.Y.')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb'),
+                            DatePicker::make('examination_valid_until')
+                                ->label('Vrijedi do (obavezno)')
+                                ->required()
+                                ->displayFormat('d.m.Y.')
+                                ->weekStartsOnMonday()
+                                ->timezone('Europe/Zagreb'),
 
-                    TextInput::make('examined_by')
-                        ->label('Ispitao')
-                        ->maxLength(255),
+                            TextInput::make('examined_by')
+                                ->label('Ispitao')
+                                ->maxLength(255),
 
-                    TextInput::make('report_number')
-                        ->label('Broj izvještaja')
-                        ->maxLength(255)
-                        ->rule(function ($record) {
-                            return Rule::unique('machines', 'report_number')
-                                ->where(function ($query) {
-                                    $ownerId = static::ownerId();
+                            TextInput::make('report_number')
+                                ->label('Broj izvještaja')
+                                ->maxLength(255)
+                                ->rule(function ($record) {
+                                    return Rule::unique('machines', 'report_number')
+                                        ->where(function ($query) {
+                                            $ownerId = static::ownerId();
 
-                                    if ($ownerId) {
-                                        $query->where('user_id', $ownerId);
-                                    }
+                                            if ($ownerId) {
+                                                $query->where('user_id', $ownerId);
+                                            }
 
-                                    $query->whereNull('deleted_at');
+                                            $query->whereNull('deleted_at');
+                                        })
+                                        ->ignore($record?->id);
                                 })
-                                ->ignore($record?->id);
-                        })
-                        ->validationMessages([
-                            'unique' => 'Već postoji zapis s istim brojem izvještaja.',
+                                ->validationMessages([
+                                    'unique' => 'Već postoji zapis s istim brojem izvještaja.',
+                                ]),
+                        ]),
+
+                    Section::make('Ostalo')
+                        ->columns(2)
+                        ->schema([
+                            TextInput::make('location')
+                                ->label('Lokacija (obavezno)')
+                                ->required()
+                                ->maxLength(255),
+
+                            Textarea::make('remark')
+                                ->label('Napomena')
+                                ->rows(3)
+                                ->columnSpanFull(),
+                        ]),
+
+                    Section::make('Prilozi')
+                        ->columnSpanFull()
+                        ->schema([
+                            FormFileUpload::make('pdf')
+                                ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
+                                ->disk('public')
+                                ->directory('pdfs')
+                                ->multiple()
+                                ->maxFiles(5)
+                                ->maxSize(30720)
+                                ->preserveFilenames()
+                                ->openable()
+                                ->downloadable()
+                                ->acceptedFileTypes([
+                                    'application/pdf',
+                                    'application/msword',
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                    'application/vnd.ms-excel',
+                                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                    'image/jpeg',
+                                    'image/png',
+                                    'image/gif',
+                                    'image/webp',
+                                    'application/zip',
+                                    'application/x-rar-compressed',
+                                ]),
                         ]),
                 ]),
-
-            Section::make('Ostalo')
-                ->columns(2)
-                ->schema([
-                    TextInput::make('location')
-                        ->label('Lokacija (obavezno)')
-                        ->required()
-                        ->maxLength(255),
-
-                    Textarea::make('remark')
-                        ->label('Napomena')
-                        ->rows(3)
-                        ->columnSpanFull(),
-                ]),
-
-            FormFileUpload::make('pdf')
-                ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
-                ->disk('public')
-                ->directory('pdfs')
-                ->multiple()
-                ->maxFiles(5)
-                ->maxSize(30720)
-                ->preserveFilenames()
-                ->openable()
-                ->downloadable()
-                ->acceptedFileTypes([
-                    'application/pdf',
-                    'application/msword',
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    'application/vnd.ms-excel',
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    'image/jpeg',
-                    'image/png',
-                    'image/gif',
-                    'image/webp',
-                    'application/zip',
-                    'application/x-rar-compressed',
-                ]),
-        ]);
-    }
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {

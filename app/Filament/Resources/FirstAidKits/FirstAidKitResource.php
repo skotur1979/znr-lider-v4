@@ -28,6 +28,7 @@ use UnitEnum;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Filament\Support\Enums\MaxWidth;
 
 class FirstAidKitResource extends BaseResource
 {
@@ -43,58 +44,91 @@ class FirstAidKitResource extends BaseResource
     {
         return 'first_aid';
     }
-
+public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
     public static function form(Schema $schema): Schema
-    {
-        return $schema->schema([
+{
+    return $schema
+        ->schema([
             Hidden::make('user_id')
                 ->default(fn () => Auth::user()?->ownerId())
                 ->dehydrated(),
 
-            Section::make('Sanitetski materijal za prvu pomoć')
+            Section::make('Prva pomoć')
+                ->columnSpanFull()
+                ->columns(1)
                 ->schema([
-                    TextInput::make('location')
-                        ->label('Lokacija ormarića PP')
-                        ->required()
-                        ->maxLength(255),
-
-                    DatePicker::make('inspected_at')
-                        ->label('Pregled obavljen dana')
-                        ->required()
-                        ->displayFormat('d.m.Y.'),
-
-                    Textarea::make('note')
-                        ->label('Napomena')
-                        ->rows(2),
-                ])
-                ->columns(1),
-
-            Section::make('Sadržaj ormarića prve pomoći')
-                ->schema([
-                    Repeater::make('items')
-                        ->relationship()
-                        ->label('Sanitetski materijal')
+                    Section::make('Podaci o ormariću')
+                        ->columnSpanFull()
+                        ->columns(2)
                         ->schema([
-                            TextInput::make('material_type')
-                                ->label('Vrsta sanitetskog materijala')
+                            TextInput::make('location')
+                                ->label('Lokacija ormarića PP')
                                 ->required()
                                 ->maxLength(255),
 
-                            TextInput::make('purpose')
-                                ->label('Namjena')
+                            DatePicker::make('inspected_at')
+                                ->label('Pregled obavljen dana')
                                 ->required()
-                                ->maxLength(255),
+                                ->displayFormat('d.m.Y.')
+                                ->native(false),
 
-                            DatePicker::make('valid_until')
-                                ->label('Vrijedi do')
-                                ->displayFormat('d.m.Y.'),
-                        ])
-                        ->columns(3)
-                        ->defaultItems(1)
-                        ->addActionLabel('Dodaj stavku'),
+                            Textarea::make('note')
+                                ->label('Napomena')
+                                ->rows(3)
+                                ->columnSpanFull(),
+                        ]),
+
+                    Section::make('Sadržaj ormarića prve pomoći')
+                        ->columnSpanFull()
+                        ->schema([
+                            Repeater::make('items')
+                                ->relationship()
+                                ->label('Sanitetski materijal')
+                                ->addActionLabel('Dodaj stavku')
+                                ->defaultItems(1)
+                                ->collapsible()
+                                ->itemLabel(function (array $state): string {
+                                    $material = $state['material_type'] ?? null;
+                                    $purpose = $state['purpose'] ?? null;
+
+                                    if (filled($material) && filled($purpose)) {
+                                        return $material . ' — ' . $purpose;
+                                    }
+
+                                    if (filled($material)) {
+                                        return $material;
+                                    }
+
+                                    return 'Nova stavka';
+                                })
+                                ->schema([
+                                    Section::make('Stavka sanitetskog materijala')
+                                        ->columns(3)
+                                        ->schema([
+                                            TextInput::make('material_type')
+                                                ->label('Vrsta sanitetskog materijala')
+                                                ->required()
+                                                ->maxLength(255),
+
+                                            TextInput::make('purpose')
+                                                ->label('Namjena')
+                                                ->required()
+                                                ->maxLength(255),
+
+                                            DatePicker::make('valid_until')
+                                                ->label('Vrijedi do')
+                                                ->displayFormat('d.m.Y.')
+                                                ->native(false),
+                                        ]),
+                                ]),
+                        ]),
                 ]),
-        ]);
-    }
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {

@@ -33,6 +33,8 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Filament\Schemas\Components\Grid;
+use Filament\Support\Enums\MaxWidth;
 
 class IncidentResource extends BaseResource
 {
@@ -53,6 +55,10 @@ class IncidentResource extends BaseResource
     {
         return 'incidents';
     }
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     protected static function incidentTypes(): array
     {
@@ -86,145 +92,154 @@ class IncidentResource extends BaseResource
     }
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->schema([
+{
+    return $schema
+        ->schema([
             Hidden::make('user_id')
                 ->default(fn () => static::defaultUserId())
                 ->dehydrated(),
 
-            Section::make('Osnovno')
+            Section::make('Podaci o incidentu')
+                ->columnSpanFull()
                 ->columns(2)
                 ->schema([
-                    TextInput::make('location')
-                        ->label('Lokacija (obavezno)')
-                        ->required()
-                        ->maxLength(255),
+                    Section::make('Osnovno')
+                        ->columns(2)
+                        ->schema([
+                            TextInput::make('location')
+                                ->label('Lokacija (obavezno)')
+                                ->required()
+                                ->maxLength(255),
 
-                    Select::make('type_of_incident')
-                        ->label('Vrsta incidenta (obavezno)')
-                        ->options(static::incidentTypes())
-                        ->required(),
+                            Select::make('type_of_incident')
+                                ->label('Vrsta incidenta (obavezno)')
+                                ->options(static::incidentTypes())
+                                ->required(),
 
-                    Select::make('permanent_or_temporary')
-                        ->label('Vrsta zaposlenja (obavezno)')
-                        ->options([
-                            'Permanent' => 'Stalni',
-                            'Temporary' => 'Privremeni',
-                        ])
-                        ->required(),
+                            Select::make('permanent_or_temporary')
+                                ->label('Vrsta zaposlenja (obavezno)')
+                                ->options([
+                                    'Permanent' => 'Stalni',
+                                    'Temporary' => 'Privremeni',
+                                ])
+                                ->required(),
 
-                    DatePicker::make('date_occurred')
-                        ->label('Datum nastanka (obavezno)')
-                        ->required()
-                        ->displayFormat('d.m.Y.')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb')
-                        ->reactive(),
+                            DatePicker::make('date_occurred')
+                                ->label('Datum nastanka (obavezno)')
+                                ->required()
+                                ->displayFormat('d.m.Y.')
+                                ->weekStartsOnMonday()
+                                ->timezone('Europe/Zagreb')
+                                ->reactive(),
 
-                    DatePicker::make('date_of_return')
-                        ->label('Datum povratka na posao')
-                        ->displayFormat('d.m.Y.')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb')
-                        ->reactive()
-                        ->after('date_occurred')
-                        ->afterStateUpdated(function ($state, $context, $set, $get) {
-                            $set(
-                                'working_days_lost',
-                                static::calculateWorkingDaysLost(
-                                    $get('date_occurred'),
-                                    $state,
-                                )
-                            );
-                        }),
+                            DatePicker::make('date_of_return')
+                                ->label('Datum povratka na posao')
+                                ->displayFormat('d.m.Y.')
+                                ->weekStartsOnMonday()
+                                ->timezone('Europe/Zagreb')
+                                ->reactive()
+                                ->after('date_occurred')
+                                ->afterStateUpdated(function ($state, $context, $set, $get) {
+                                    $set(
+                                        'working_days_lost',
+                                        static::calculateWorkingDaysLost(
+                                            $get('date_occurred'),
+                                            $state,
+                                        )
+                                    );
+                                }),
 
-                    TextInput::make('working_days_lost')
-                        ->label('Izgubljeni radni dani')
-                        ->numeric(),
-                ]),
+                            TextInput::make('working_days_lost')
+                                ->label('Izgubljeni radni dani')
+                                ->numeric(),
+                        ]),
 
-            Section::make('Detalji')
-                ->columns(2)
-                ->schema([
-                    Textarea::make('causes_of_injury')
-                        ->label('Uzrok ozljede')
-                        ->rows(2),
+                    Section::make('Detalji')
+                        ->columns(2)
+                        ->schema([
+                            Textarea::make('causes_of_injury')
+                                ->label('Uzrok ozljede')
+                                ->rows(2),
 
-                    Textarea::make('accident_injury_type')
-                        ->label('Tip ozljede')
-                        ->rows(2),
+                            Textarea::make('accident_injury_type')
+                                ->label('Tip ozljede')
+                                ->rows(2),
 
-                    TextInput::make('injured_body_part')
-                        ->label('Ozlijeđeni dio tijela')
-                        ->maxLength(255),
+                            TextInput::make('injured_body_part')
+                                ->label('Ozlijeđeni dio tijela')
+                                ->maxLength(255)
+                                ->columnSpanFull(),
 
-                    TextInput::make('other')
-                        ->label('Napomena - Podaci o ozlijeđenom radniku')
-                        ->columnSpanFull(),
-                ]),
+                            TextInput::make('other')
+                                ->label('Napomena - Podaci o ozlijeđenom radniku')
+                                ->columnSpanFull(),
+                        ]),
 
-            Section::make('Prilozi')
-                ->columns(2)
-                ->schema([
-                    FileUpload::make('image_path')
-                        ->label('Slika')
-                        ->image()
-                        ->disk('public')
-                        ->directory('incidents')
-                        ->visibility('public')
-                        ->preserveFilenames()
-                        ->openable()
-                        ->downloadable(),
+                    Section::make('Prilozi')
+                        ->columns(2)
+                        ->columnSpanFull()
+                        ->schema([
+                            FileUpload::make('image_path')
+                                ->label('Slika')
+                                ->image()
+                                ->disk('public')
+                                ->directory('incidents')
+                                ->visibility('public')
+                                ->preserveFilenames()
+                                ->openable()
+                                ->downloadable(),
 
-                    FileUpload::make('investigation_report')
-                        ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
-                        ->disk('public')
-                        ->directory('pdfs')
-                        ->multiple()
-                        ->maxFiles(5)
-                        ->maxSize(30720)
-                        ->preserveFilenames()
-                        ->openable()
-                        ->downloadable()
-                        ->acceptedFileTypes([
-                            'application/pdf',
-                            'application/msword',
-                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            'application/vnd.ms-excel',
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'image/jpeg',
-                            'image/png',
-                            'image/gif',
-                            'image/webp',
-                            'application/zip',
-                            'application/x-rar-compressed',
-                        ])
-                        ->reactive()
-                        ->afterStateUpdated(function ($state, callable $set) {
-                            $maxTotalMB = 150;
-                            $totalBytes = 0;
+                            FileUpload::make('investigation_report')
+                                ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
+                                ->disk('public')
+                                ->directory('pdfs')
+                                ->multiple()
+                                ->maxFiles(5)
+                                ->maxSize(30720)
+                                ->preserveFilenames()
+                                ->openable()
+                                ->downloadable()
+                                ->acceptedFileTypes([
+                                    'application/pdf',
+                                    'application/msword',
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                    'application/vnd.ms-excel',
+                                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                    'image/jpeg',
+                                    'image/png',
+                                    'image/gif',
+                                    'image/webp',
+                                    'application/zip',
+                                    'application/x-rar-compressed',
+                                ])
+                                ->reactive()
+                                ->afterStateUpdated(function ($state, callable $set) {
+                                    $maxTotalMB = 150;
+                                    $totalBytes = 0;
 
-                            if (is_array($state)) {
-                                foreach ($state as $file) {
-                                    if ($file instanceof UploadedFile) {
-                                        $totalBytes += $file->getSize();
+                                    if (is_array($state)) {
+                                        foreach ($state as $file) {
+                                            if ($file instanceof UploadedFile) {
+                                                $totalBytes += $file->getSize();
+                                            }
+                                        }
                                     }
-                                }
-                            }
 
-                            if ($totalBytes > $maxTotalMB * 1024 * 1024) {
-                                $set('investigation_report', []);
+                                    if ($totalBytes > $maxTotalMB * 1024 * 1024) {
+                                        $set('investigation_report', []);
 
-                                Notification::make()
-                                    ->title("Ukupna veličina svih datoteka ne smije biti veća od {$maxTotalMB} MB.")
-                                    ->danger()
-                                    ->persistent()
-                                    ->send();
-                            }
-                        }),
+                                        Notification::make()
+                                            ->title("Ukupna veličina svih datoteka ne smije biti veća od {$maxTotalMB} MB.")
+                                            ->danger()
+                                            ->persistent()
+                                            ->send();
+                                    }
+                                }),
+                        ]),
                 ]),
-        ]);
-    }
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {

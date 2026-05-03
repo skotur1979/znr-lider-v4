@@ -70,9 +70,16 @@ class UserStatusSummaryService
         $workPermits = $this->workPermitQuery($user);
         $firstAidItems = $this->firstAidItemsQuery($user);
 
-        $employeeCertificates = $employees->with('certificates')->get()->flatMap(function ($employee) {
-            return $employee->certificates ?? collect();
-        });
+        $employeeCertificates = $employees->clone()
+            ->with('certificates')
+            ->get()
+            ->flatMap(fn ($employee) => $employee->certificates ?? collect());
+
+        $closedWorkTasksTotal = $workTasks->clone()
+            ->where('is_done', true)
+            ->count();
+
+        $safetyMetrics = $this->safetyMetrics($user);
 
         return [
             'deadlines' => [
@@ -95,26 +102,32 @@ class UserStatusSummaryService
                     ->count(),
 
                 'machines_expired' => $machines->clone()
+                    ->whereNotNull('examination_valid_until')
                     ->whereDate('examination_valid_until', '<', $today)
                     ->count(),
 
                 'machines_expiring_30' => $machines->clone()
+                    ->whereNotNull('examination_valid_until')
                     ->whereBetween('examination_valid_until', [$today, $future30])
                     ->count(),
 
                 'fires_expired' => $fires->clone()
+                    ->whereNotNull('examination_valid_until')
                     ->whereDate('examination_valid_until', '<', $today)
                     ->count(),
 
                 'fires_expiring_30' => $fires->clone()
+                    ->whereNotNull('examination_valid_until')
                     ->whereBetween('examination_valid_until', [$today, $future30])
                     ->count(),
 
                 'miscellaneous_expired' => $miscellaneous->clone()
+                    ->whereNotNull('examination_valid_until')
                     ->whereDate('examination_valid_until', '<', $today)
                     ->count(),
 
                 'miscellaneous_expiring_30' => $miscellaneous->clone()
+                    ->whereNotNull('examination_valid_until')
                     ->whereBetween('examination_valid_until', [$today, $future30])
                     ->count(),
 
@@ -128,13 +141,25 @@ class UserStatusSummaryService
                     ->whereBetween('valid_until', [$today, $future30])
                     ->count(),
 
-                'first_aid_expired' => $firstAidItems->filter(
-                    fn ($item) => $item->valid_until && Carbon::parse($item->valid_until)->lt($today)
-                )->count(),
+                'first_aid_expired' => $firstAidItems
+                    ->filter(fn ($item) => $item->valid_until && Carbon::parse($item->valid_until)->lt($today))
+                    ->count(),
 
-                'first_aid_expiring_30' => $firstAidItems->filter(
-                    fn ($item) => $item->valid_until && Carbon::parse($item->valid_until)->between($today, $future30)
-                )->count(),
+                'first_aid_expiring_30' => $firstAidItems
+                    ->filter(fn ($item) => $item->valid_until && Carbon::parse($item->valid_until)->between($today, $future30))
+                    ->count(),
+
+                'observations_expired' => $observations->clone()
+                    ->whereIn('status', ['Not started', 'In progress'])
+                    ->whereNotNull('target_date')
+                    ->whereDate('target_date', '<', $today)
+                    ->count(),
+
+                'observations_expiring_30' => $observations->clone()
+                    ->whereIn('status', ['Not started', 'In progress'])
+                    ->whereNotNull('target_date')
+                    ->whereBetween('target_date', [$today, $future30])
+                    ->count(),
             ],
 
             'actions' => [
@@ -175,6 +200,10 @@ class UserStatusSummaryService
                     ->count(),
             ],
 
+            'closed' => [
+                'work_tasks_closed_total' => $closedWorkTasksTotal,
+            ],
+
             'totals' => [
                 'employees' => $employees->clone()->count(),
                 'machines' => $machines->clone()->count(),
@@ -188,6 +217,73 @@ class UserStatusSummaryService
                 'work_permits' => $workPermits->clone()->count(),
                 'first_aid_items' => $firstAidItems->count(),
             ],
+
+            'safety_metrics' => $safetyMetrics,
+        ];
+    }
+
+    protected function safetyMetrics(User $user): array
+    {
+        $today = Carbon::today();
+
+        $incidents = $this->incidentQuery($user);
+
+        $lastLtaDate = $incidents->clone()
+            ->where('type_of_incident', 'LTA')
+            ->whereNotNull('date_occurred')
+            ->max('date_occurred');
+
+        $firstIncidentDate = $incidents->clone()
+            ->whereNotNull('date_occurred')
+            ->min('date_occurred');
+
+        if ($lastLtaDate) {
+            $daysWithoutLta = Carbon::parse($lastLtaDate)->startOfDay()->diffInDays($today);
+        } elseif ($firstIncidentDate) {
+            $daysWithoutLta = Carbon::parse($firstIncidentDate)->startOfDay()->diffInDays($today);
+        } else {
+            $daysWithoutLta = 0;
+        }
+
+        $ltaDates = $incidents->clone()
+            ->where('type_of_incident', 'LTA')
+            ->whereNotNull('date_occurred')
+            ->orderBy('date_occurred')
+            ->pluck('date_occurred')
+            ->map(fn ($date) => Carbon::parse($date)->startOfDay())
+            ->values();
+
+        $recordLtaDays = $daysWithoutLta;
+
+        if ($ltaDates->count() >= 2) {
+            foreach ($ltaDates as $index => $date) {
+                if ($index === 0) {
+                    continue;
+                }
+
+                $diff = $ltaDates[$index - 1]->diffInDays($date);
+
+                if ($diff > $recordLtaDays) {
+                    $recordLtaDays = $diff;
+                }
+            }
+        }
+
+        return [
+            'days_without_lta' => (int) $daysWithoutLta,
+            'record_lta_days' => (int) $recordLtaDays,
+
+            'lta_count' => $incidents->clone()
+                ->where('type_of_incident', 'LTA')
+                ->count(),
+
+            'mta_count' => $incidents->clone()
+                ->where('type_of_incident', 'MTA')
+                ->count(),
+
+            'faa_count' => $incidents->clone()
+                ->where('type_of_incident', 'FAA')
+                ->count(),
         ];
     }
 
@@ -258,7 +354,8 @@ class UserStatusSummaryService
             ($summary['deadlines']['fires_expired'] ?? 0) +
             ($summary['deadlines']['miscellaneous_expired'] ?? 0) +
             ($summary['deadlines']['work_permits_expired'] ?? 0) +
-            ($summary['deadlines']['first_aid_expired'] ?? 0);
+            ($summary['deadlines']['first_aid_expired'] ?? 0) +
+            ($summary['deadlines']['observations_expired'] ?? 0);
 
         $soon =
             ($summary['deadlines']['employees_expiring_30'] ?? 0) +
@@ -267,7 +364,8 @@ class UserStatusSummaryService
             ($summary['deadlines']['fires_expiring_30'] ?? 0) +
             ($summary['deadlines']['miscellaneous_expiring_30'] ?? 0) +
             ($summary['deadlines']['work_permits_expiring_30'] ?? 0) +
-            ($summary['deadlines']['first_aid_expiring_30'] ?? 0);
+            ($summary['deadlines']['first_aid_expiring_30'] ?? 0) +
+            ($summary['deadlines']['observations_expiring_30'] ?? 0);
 
         $actions =
             ($summary['actions']['observations_open_total'] ?? 0) +
@@ -277,23 +375,25 @@ class UserStatusSummaryService
             ($summary['actions']['work_tasks_open'] ?? 0) +
             ($summary['actions']['work_permits_open'] ?? 0);
 
+        $daysWithoutLta = $summary['safety_metrics']['days_without_lta'] ?? 0;
+
         if ($expired > 0) {
-            return "Danas je prioritet rješavanje isteklih evidencija. Trenutno imate {$expired} isteklih stavki koje zahtijevaju hitnu reakciju, uz {$actions} otvorenih aktivnosti u sustavu.";
+            return "Danas je prioritet rješavanje isteklih evidencija. Trenutno imate {$expired} isteklih stavki koje zahtijevaju hitnu reakciju, uz {$actions} otvorenih aktivnosti u sustavu. Trenutno stanje sigurnosti: {$daysWithoutLta} dana bez LTA.";
         }
 
         if ($soon > 0 && $actions > 0) {
-            return "Sustav je stabilan, ali traži pravovremenu obradu. U sljedećih 30 dana istječe {$soon} stavki, a trenutno je otvoreno {$actions} aktivnosti koje je preporučeno riješiti što prije.";
+            return "Sustav je stabilan, ali traži pravovremenu obradu. U sljedećih 30 dana istječe {$soon} stavki, a trenutno je otvoreno {$actions} aktivnosti koje je preporučeno riješiti što prije. Trenutno je {$daysWithoutLta} dana bez LTA.";
         }
 
         if ($soon > 0) {
-            return "Trenutno nema kritičnih isteklih stavki. Fokus je na preventivi jer u sljedećih 30 dana istječe {$soon} evidencija.";
+            return "Trenutno nema kritičnih isteklih stavki. Fokus je na preventivi jer u sljedećih 30 dana istječe {$soon} evidencija. Trenutno je {$daysWithoutLta} dana bez LTA.";
         }
 
         if ($actions > 0) {
-            return "Valjanosti su trenutno pod kontrolom, ali i dalje imate {$actions} otvorenih aktivnosti koje čekaju obradu u sustavu.";
+            return "Valjanosti su trenutno pod kontrolom, ali i dalje imate {$actions} otvorenih aktivnosti koje čekaju obradu u sustavu. Trenutno je {$daysWithoutLta} dana bez LTA.";
         }
 
-        return "Trenutno stanje izgleda uredno. Nema kritičnih isteklih stavki ni otvorenih obveza koje traže hitnu reakciju.";
+        return "Trenutno stanje izgleda uredno. Nema kritičnih isteklih stavki ni otvorenih obveza koje traže hitnu reakciju. Trenutno je {$daysWithoutLta} dana bez LTA.";
     }
 
     protected function generateWeeklyInsightText(array $summary): string
@@ -310,7 +410,8 @@ class UserStatusSummaryService
             ($current['deadlines']['fires_expired'] ?? 0) +
             ($current['deadlines']['miscellaneous_expired'] ?? 0) +
             ($current['deadlines']['work_permits_expired'] ?? 0) +
-            ($current['deadlines']['first_aid_expired'] ?? 0);
+            ($current['deadlines']['first_aid_expired'] ?? 0) +
+            ($current['deadlines']['observations_expired'] ?? 0);
 
         $actions =
             ($current['actions']['observations_open_total'] ?? 0) +
@@ -320,19 +421,21 @@ class UserStatusSummaryService
             ($current['actions']['work_tasks_open'] ?? 0) +
             ($current['actions']['work_permits_open'] ?? 0);
 
+        $daysWithoutLta = $current['safety_metrics']['days_without_lta'] ?? 0;
+
         if ($created > $closed && $expired > 0) {
-            return "Tijekom prošlog tjedna otvoreno je više stavki nego što ih je zatvoreno. Uz to trenutno postoji {$expired} isteklih evidencija, pa je preporuka fokusirati se na zatvaranje zaostataka i usklađivanje rokova.";
+            return "Tijekom prošlog tjedna otvoreno je više stavki nego što ih je zatvoreno. Uz to trenutno postoji {$expired} isteklih evidencija, pa je preporuka fokusirati se na zatvaranje zaostataka i usklađivanje rokova. Trenutno je {$daysWithoutLta} dana bez LTA.";
         }
 
         if ($closed >= $created && $actions > 0) {
-            return "Tjedan pokazuje dobar operativni ritam jer je zatvoreno {$closed} stavki, uz {$created} novootvorenih. Ipak, u sustavu je još uvijek aktivno {$actions} otvorenih aktivnosti koje traže daljnju obradu.";
+            return "Tjedan pokazuje dobar operativni ritam jer je zatvoreno {$closed} stavki, uz {$created} novootvorenih. Ipak, u sustavu je još uvijek aktivno {$actions} otvorenih aktivnosti koje traže daljnju obradu. Trenutno je {$daysWithoutLta} dana bez LTA.";
         }
 
         if ($closed >= $created && $expired === 0 && $actions === 0) {
-            return "Prošli tjedan pokazuje uredno i stabilno stanje. Zatvaranje aktivnosti prati ili nadmašuje novi unos, a trenutno nema kritičnih evidencija ni otvorenih obveza.";
+            return "Prošli tjedan pokazuje uredno i stabilno stanje. Zatvaranje aktivnosti prati ili nadmašuje novi unos, a trenutno nema kritičnih evidencija ni otvorenih obveza. Trenutno je {$daysWithoutLta} dana bez LTA.";
         }
 
-        return "Prošli tjedan donio je {$created} novih i {$closed} zatvorenih stavki. Trenutno stanje sustava traži praćenje otvorenih aktivnosti i pravovremeno zatvaranje obveza.";
+        return "Prošli tjedan donio je {$created} novih i {$closed} zatvorenih stavki. Trenutno stanje sustava traži praćenje otvorenih aktivnosti i pravovremeno zatvaranje obveza. Trenutno je {$daysWithoutLta} dana bez LTA.";
     }
 
     protected function employeeQuery(User $user): Builder

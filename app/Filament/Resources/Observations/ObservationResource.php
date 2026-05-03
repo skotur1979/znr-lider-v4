@@ -39,6 +39,10 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ExpiryBadge;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Support\Enums\MaxWidth;
 
 class ObservationResource extends BaseResource
 {
@@ -59,6 +63,11 @@ class ObservationResource extends BaseResource
     {
         return 'observations';
     }
+
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     protected static function observationTypeOptions(): array
     {
@@ -174,126 +183,151 @@ protected static function priorityIcon(?string $state): ?string
     }
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->schema([
+{
+    return $schema
+        ->schema([
             Hidden::make('user_id')
                 ->default(fn () => static::defaultUserId())
                 ->dehydrated(),
 
-            Section::make('Zapažanje')
-                ->columns(2)
-                ->schema([
-                    DatePicker::make('incident_date')
-                        ->label('Datum')
-                        ->required()
-                        ->displayFormat('d.m.Y.')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb'),
+            Tabs::make('ObservationTabs')
+                ->columnSpanFull()
+                ->tabs([
+                    Tab::make('Zapažanje')
+                        ->schema([
+                            Grid::make(2)
+                                ->schema([
+                                    Section::make('Osnovni podatci')
+                                        ->columns(2)
+                                        ->columnSpan(1)
+                                        ->schema([
+                                            DatePicker::make('incident_date')
+                                                ->label('Datum')
+                                                ->required()
+                                                ->displayFormat('d.m.Y.')
+                                                ->weekStartsOnMonday()
+                                                ->timezone('Europe/Zagreb'),
 
-                    Select::make('observation_type')
-                        ->label('Vrsta zapažanja')
-                        ->options(static::observationTypeOptions())
-                        ->required(),
+                                            Select::make('observation_type')
+                                                ->label('Vrsta zapažanja')
+                                                ->options(static::observationTypeOptions())
+                                                ->required(),
 
-                    Select::make('priority')
-    ->label('Prioritet')
-    ->options(static::priorityOptions())
-    ->default('medium')
-    ->required()
-    ->native(false)
-    ->helperText('Kritično označi samo za zapažanja koja zahtijevaju hitnu reakciju.')
-    ->extraAttributes(fn ($state) => [
-        'style' => match ($state) {
-            'critical' => 'border:2px solid #ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.20); border-radius:10px;',
-            'high' => 'border:2px solid #f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.18); border-radius:10px;',
-            'medium' => 'border:2px solid #0ea5e9; box-shadow:0 0 0 3px rgba(14,165,233,.14); border-radius:10px;',
-            'low' => 'border:2px solid #6b7280; border-radius:10px;',
-            default => '',
-        },
-    ]),
+                                            Select::make('priority')
+                                                ->label('Prioritet')
+                                                ->options(static::priorityOptions())
+                                                ->default('medium')
+                                                ->required()
+                                                ->native(false)
+                                                ->helperText('Kritično označi samo za zapažanja koja zahtijevaju hitnu reakciju.')
+                                                ->extraAttributes(fn ($state) => [
+                                                    'style' => match ($state) {
+                                                        'critical' => 'border:2px solid #ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.20); border-radius:10px;',
+                                                        'high' => 'border:2px solid #f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.18); border-radius:10px;',
+                                                        'medium' => 'border:2px solid #0ea5e9; box-shadow:0 0 0 3px rgba(14,165,233,.14); border-radius:10px;',
+                                                        'low' => 'border:2px solid #6b7280; border-radius:10px;',
+                                                        default => '',
+                                                    },
+                                                ]),
 
-                    TextInput::make('location')
-                        ->label('Lokacija')
-                        ->required()
-                        ->maxLength(255),
+                                            TextInput::make('location')
+                                                ->label('Lokacija')
+                                                ->required()
+                                                ->maxLength(255),
 
-                    Textarea::make('item')
-                        ->label('Opis zapažanja')
-                        ->required()
-                        ->rows(3)
-                        ->maxLength(2000)
-                        ->extraAttributes([
-                            'data-voice-target' => 'observation-item',
+                                            TextInput::make('potential_incident_type')
+                                                ->label('Vrsta opasnosti')
+                                                ->datalist(static::potentialIncidentTypes())
+                                                ->required()
+                                                ->maxLength(255)
+                                                ->columnSpanFull(),
+                                        ]),
+
+                                    Section::make('Odgovornost i rok')
+                                        ->columns(2)
+                                        ->columnSpan(1)
+                                        ->schema([
+                                            TextInput::make('responsible')
+                                                ->label('Odgovorna osoba')
+                                                ->datalist(fn () => static::responsiblePersonOptions())
+                                                ->placeholder('Upiši ime')
+                                                ->maxLength(255),
+
+                                            DatePicker::make('target_date')
+                                                ->label('Rok za provedbu')
+                                                ->displayFormat('d.m.Y.')
+                                                ->weekStartsOnMonday()
+                                                ->timezone('Europe/Zagreb'),
+
+                                            Select::make('status')
+                                                ->label('Status')
+                                                ->options(static::statusOptions())
+                                                ->default('Not started')
+                                                ->required()
+                                                ->columnSpanFull(),
+
+                                            TagsInput::make('notification_emails')
+                                                ->label('E-mail primatelji')
+                                                ->placeholder('Upiši e-mail i pritisni Enter')
+                                                ->helperText('Možeš upisati više adresa: direktor, voditelj, odgovorna osoba...')
+                                                ->columnSpanFull(),
+                                        ]),
+                                ]),
+
+                            Section::make('Opis i potrebna radnja')
+                                ->columns(2)
+                                ->schema([
+                                    Textarea::make('item')
+                                        ->label('Opis zapažanja')
+                                        ->required()
+                                        ->rows(4)
+                                        ->maxLength(2000)
+                                        ->extraAttributes([
+                                            'data-voice-target' => 'observation-item',
+                                        ]),
+
+                                    Textarea::make('action')
+                                        ->label('Potrebna radnja')
+                                        ->rows(4)
+                                        ->extraAttributes([
+                                            'data-voice-target' => 'observation-action',
+                                        ]),
+
+                                    View::make('filament.components.observation-voice-button')
+                                        ->viewData([
+                                            'target' => 'observation-item',
+                                            'label' => 'Govori opis zapažanja',
+                                        ]),
+
+                                    View::make('filament.components.observation-voice-button')
+                                        ->viewData([
+                                            'target' => 'observation-action',
+                                            'label' => 'Govori potrebnu radnju',
+                                        ]),
+                                ]),
+
+                            Section::make('Slika i komentar')
+                                ->columns(2)
+                                ->schema([
+                                    FileUpload::make('picture_path')
+                                        ->label('Slika')
+                                        ->image()
+                                        ->disk('public')
+                                        ->directory('observations')
+                                        ->visibility('public')
+                                        ->preserveFilenames()
+                                        ->openable()
+                                        ->downloadable(),
+
+                                    Textarea::make('comments')
+                                        ->label('Komentar')
+                                        ->rows(4),
+                                ]),
                         ]),
-
-                    View::make('filament.components.observation-voice-button')
-                        ->viewData([
-                            'target' => 'observation-item',
-                            'label' => 'Govori opis zapažanja',
-                        ]),
-
-                    TextInput::make('potential_incident_type')
-                        ->label('Vrsta opasnosti')
-                        ->datalist(static::potentialIncidentTypes())
-                        ->required()
-                        ->maxLength(255)
-                        ->columnSpanFull(),
-
-                    FileUpload::make('picture_path')
-                        ->label('Slika')
-                        ->image()
-                        ->disk('public')
-                        ->directory('observations')
-                        ->visibility('public')
-                        ->preserveFilenames()
-                        ->openable()
-                        ->downloadable()
-                        ->columnSpanFull(),
-
-                    Textarea::make('action')
-                        ->label('Potrebna radnja')
-                        ->rows(3)
-                        ->extraAttributes([
-                            'data-voice-target' => 'observation-action',
-                        ]),
-
-                    View::make('filament.components.observation-voice-button')
-                        ->viewData([
-                            'target' => 'observation-action',
-                            'label' => 'Govori potrebnu radnju',
-                        ]),
-
-                    TextInput::make('responsible')
-                        ->label('Odgovorna osoba')
-                        ->datalist(fn () => static::responsiblePersonOptions())
-                        ->placeholder('Upiši ime')
-                        ->maxLength(255),
-
-                    DatePicker::make('target_date')
-                        ->label('Rok za provedbu')
-                        ->displayFormat('d.m.Y.')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb'),
-
-                    TagsInput::make('notification_emails')
-                        ->label('E-mail primatelji')
-                        ->placeholder('Upiši e-mail i pritisni Enter')
-                        ->helperText('Možeš upisati više adresa: direktor, voditelj, odgovorna osoba...')
-                        ->columnSpanFull(),
-
-                    Select::make('status')
-                        ->label('Status')
-                        ->options(static::statusOptions())
-                        ->default('Not started')
-                        ->required(),
-
-                    Textarea::make('comments')
-                        ->label('Komentar')
-                        ->rows(3)
-                        ->columnSpanFull(),
                 ]),
-        ]);
-    }
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {

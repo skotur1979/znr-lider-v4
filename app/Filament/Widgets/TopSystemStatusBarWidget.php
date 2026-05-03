@@ -5,10 +5,12 @@ namespace App\Filament\Widgets;
 use App\Models\Employee;
 use App\Models\Fire;
 use App\Models\FirstAidItem;
+use App\Models\Incident;
 use App\Models\Machine;
 use App\Models\Miscellaneous;
 use App\Models\Observation;
 use App\Models\PPEItem;
+use App\Models\User;
 use Carbon\Carbon;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,74 +26,68 @@ class TopSystemStatusBarWidget extends Widget
 
     protected static ?int $sort = -100;
 
+    public const CRITICAL_EXPIRED_THRESHOLD = 10;
+
     protected function getViewData(): array
+    {
+        return static::makeSystemStatusData(Auth::user());
+    }
+
+    public static function makeSystemStatusData(?User $user = null): array
     {
         $today = Carbon::today();
         $soonDate = Carbon::today()->addDays(30);
+
+        $self = app(static::class);
 
         $rows = [
             [
                 'label' => 'Liječnički',
                 'icon' => '🩺',
-                'expired_url' => $this->resolveEmployeesMedicalExpiredUrl(),
-                ...$this->countEmployeeMedicalDeadlines($today, $soonDate),
+                'expired_url' => $self->resolveEmployeesMedicalExpiredUrl(),
+                ...$self->countEmployeeMedicalDeadlines($today, $soonDate, $user),
             ],
             [
                 'label' => 'Edukacije',
                 'icon' => '🎓',
-                'expired_url' => $this->resolveEmployeesCertificatesExpiredUrl(),
-                ...$this->countEmployeeCertificateDeadlines($today, $soonDate),
+                'expired_url' => $self->resolveEmployeesCertificatesExpiredUrl(),
+                ...$self->countEmployeeCertificateDeadlines($today, $soonDate, $user),
             ],
             [
                 'label' => 'Radna oprema',
                 'icon' => '⚙️',
-                'expired_url' => $this->resolveMachinesExpiredUrl(),
-                ...$this->countSimpleDateDeadline(
-                    Machine::class,
-                    ['examination_valid_until'],
-                    $today,
-                    $soonDate
-                ),
+                'expired_url' => $self->resolveMachinesExpiredUrl(),
+                ...$self->countSimpleDateDeadline(Machine::class, ['examination_valid_until'], $today, $soonDate, $user),
             ],
             [
                 'label' => 'Aparati',
                 'icon' => '🧯',
-                'expired_url' => $this->resolveFiresExpiredUrl(),
-                ...$this->countSimpleDateDeadline(
-                    Fire::class,
-                    ['examination_valid_until'],
-                    $today,
-                    $soonDate
-                ),
+                'expired_url' => $self->resolveFiresExpiredUrl(),
+                ...$self->countSimpleDateDeadline(Fire::class, ['examination_valid_until'], $today, $soonDate, $user),
             ],
             [
                 'label' => 'Ostala ispit.',
                 'icon' => '🛠️',
-                'expired_url' => $this->resolveMiscellaneousExpiredUrl(),
-                ...$this->countSimpleDateDeadline(
-                    Miscellaneous::class,
-                    ['examination_valid_until'],
-                    $today,
-                    $soonDate
-                ),
+                'expired_url' => $self->resolveMiscellaneousExpiredUrl(),
+                ...$self->countSimpleDateDeadline(Miscellaneous::class, ['examination_valid_until'], $today, $soonDate, $user),
             ],
             [
                 'label' => 'OZO',
                 'icon' => '🦺',
-                'expired_url' => $this->resolvePpeExpiredUrl(),
-                ...$this->countPpeDeadline($today, $soonDate),
+                'expired_url' => $self->resolvePpeExpiredUrl(),
+                ...$self->countPpeDeadline($today, $soonDate, $user),
             ],
             [
                 'label' => 'Prva pomoć',
                 'icon' => '🩹',
-                'expired_url' => $this->resolveFirstAidExpiredUrl(),
-                ...$this->countFirstAidDeadline($today, $soonDate),
+                'expired_url' => $self->resolveFirstAidExpiredUrl(),
+                ...$self->countFirstAidDeadline($today, $soonDate, $user),
             ],
             [
                 'label' => 'Zapažanja',
                 'icon' => '👁️',
-                'expired_url' => $this->resolveObservationsExpiredUrl(),
-                ...$this->countObservationDeadline($today, $soonDate),
+                'expired_url' => $self->resolveObservationsExpiredUrl(),
+                ...$self->countObservationDeadline($today, $soonDate, $user),
             ],
         ];
 
@@ -103,19 +99,23 @@ class TopSystemStatusBarWidget extends Widget
         $totalExpired = collect($rows)->sum('expired_count');
         $totalSoon = collect($rows)->sum('soon_count');
 
-        if ($totalExpired > 0) {
+        if ($totalExpired >= static::CRITICAL_EXPIRED_THRESHOLD) {
             $state = 'critical';
             $title = 'KRITIČNO';
             $message = "Isteklo: {$totalExpired}";
-        } elseif ($totalSoon > 0) {
+        } elseif ($totalExpired > 0 || $totalSoon > 0) {
             $state = 'warning';
             $title = 'UPOZORENJE';
-            $message = "Uskoro istječe: {$totalSoon}";
+            $message = $totalExpired > 0
+                ? "Isteklo: {$totalExpired}"
+                : "Uskoro istječe: {$totalSoon}";
         } else {
             $state = 'ok';
             $title = 'SVE U REDU';
             $message = 'Nema isteklih ni uskoro isteklih rokova';
         }
+
+        $lta = $self->calculateLtaMetrics($user);
 
         return [
             'state' => $state,
@@ -124,11 +124,58 @@ class TopSystemStatusBarWidget extends Widget
             'totalExpired' => $totalExpired,
             'totalSoon' => $totalSoon,
             'rows' => $rows,
-            'blink' => $totalExpired > 0,
+            'blink' => $totalExpired >= static::CRITICAL_EXPIRED_THRESHOLD,
+            'daysWithoutLta' => $lta['days_without_lta'],
+            'recordDaysWithoutLta' => $lta['record_days_without_lta'],
+            'recordIsActive' => $lta['record_is_active'],
         ];
     }
 
-    protected function countEmployeeMedicalDeadlines(Carbon $today, Carbon $soonDate): array
+    protected function organizationUserIds(?User $user): ?array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return null;
+        }
+
+        $ownerId = method_exists($user, 'ownerId')
+            ? $user->ownerId()
+            : ($user->parent_user_id ?: $user->id);
+
+        return User::query()
+            ->where('id', $ownerId)
+            ->orWhere('parent_user_id', $ownerId)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    protected function applyOrganizationScope(Builder $query, string $table, ?User $user): bool
+    {
+        $userIds = $this->organizationUserIds($user);
+
+        if ($userIds === null) {
+            return true;
+        }
+
+        if (! $userIds) {
+            $query->whereRaw('1 = 0');
+            return true;
+        }
+
+        if (Schema::hasColumn($table, 'user_id')) {
+            $query->whereIn($table . '.user_id', $userIds);
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function countEmployeeMedicalDeadlines(Carbon $today, Carbon $soonDate, ?User $user): array
     {
         if (! class_exists(Employee::class)) {
             return $this->unsupportedRow();
@@ -141,29 +188,15 @@ class TopSystemStatusBarWidget extends Widget
             return $this->unsupportedRow();
         }
 
-        $query = Employee::query()
-            ->whereNotNull($table . '.medical_examination_valid_until');
+        $query = Employee::query()->whereNotNull($table . '.medical_examination_valid_until');
 
         $this->applyCommonScopes($query, $model);
-        $this->applyDirectUserScope($query, $table);
+        $this->applyOrganizationScope($query, $table, $user);
 
-        $expired = (clone $query)
-            ->whereDate($table . '.medical_examination_valid_until', '<', $today)
-            ->count();
-
-        $soon = (clone $query)
-            ->whereDate($table . '.medical_examination_valid_until', '>=', $today)
-            ->whereDate($table . '.medical_examination_valid_until', '<=', $soonDate)
-            ->count();
-
-        return [
-            'expired_count' => (int) $expired,
-            'soon_count' => (int) $soon,
-            'supported' => true,
-        ];
+        return $this->countDateQuery($query, $table . '.medical_examination_valid_until', $today, $soonDate);
     }
 
-    protected function countEmployeeCertificateDeadlines(Carbon $today, Carbon $soonDate): array
+    protected function countEmployeeCertificateDeadlines(Carbon $today, Carbon $soonDate, ?User $user): array
     {
         if (! class_exists(Employee::class)) {
             return $this->unsupportedRow();
@@ -183,8 +216,7 @@ class TopSystemStatusBarWidget extends Widget
                 return $this->unsupportedRow();
             }
 
-            $query = $relatedModel::query()
-                ->whereNotNull($certTable . '.valid_until');
+            $query = $relatedModel::query()->whereNotNull($certTable . '.valid_until');
 
             if (Schema::hasColumn($certTable, 'active')) {
                 $query->where($certTable . '.active', true);
@@ -194,34 +226,19 @@ class TopSystemStatusBarWidget extends Widget
                 $query->whereNull($certTable . '.deleted_at');
             }
 
-            $user = Auth::user();
+            $userIds = $this->organizationUserIds($user);
 
-            if ($user && (! method_exists($user, 'isAdmin') || ! $user->isAdmin())) {
-                if (method_exists($relatedModel, 'employee')) {
-                    $query->whereHas('employee', function (Builder $q) use ($user): void {
-                        $employeeTable = $q->getModel()->getTable();
+            if ($userIds !== null && method_exists($relatedModel, 'employee')) {
+                $query->whereHas('employee', function (Builder $q) use ($userIds): void {
+                    $employeeTable = $q->getModel()->getTable();
 
-                        if (Schema::hasColumn($employeeTable, 'user_id')) {
-                            $q->where($employeeTable . '.user_id', $user->id);
-                        }
-                    });
-                }
+                    if (Schema::hasColumn($employeeTable, 'user_id')) {
+                        $q->whereIn($employeeTable . '.user_id', $userIds);
+                    }
+                });
             }
 
-            $expired = (clone $query)
-                ->whereDate($certTable . '.valid_until', '<', $today)
-                ->count();
-
-            $soon = (clone $query)
-                ->whereDate($certTable . '.valid_until', '>=', $today)
-                ->whereDate($certTable . '.valid_until', '<=', $soonDate)
-                ->count();
-
-            return [
-                'expired_count' => (int) $expired,
-                'soon_count' => (int) $soon,
-                'supported' => true,
-            ];
+            return $this->countDateQuery($query, $certTable . '.valid_until', $today, $soonDate);
         } catch (\Throwable $e) {
             return $this->unsupportedRow();
         }
@@ -232,6 +249,7 @@ class TopSystemStatusBarWidget extends Widget
         array $dateColumns,
         Carbon $today,
         Carbon $soonDate,
+        ?User $user,
     ): array {
         if (! class_exists($modelClass)) {
             return $this->unsupportedRow();
@@ -251,29 +269,15 @@ class TopSystemStatusBarWidget extends Widget
             return $this->unsupportedRow();
         }
 
-        $query = $modelClass::query()
-            ->whereNotNull($table . '.' . $dateColumn);
+        $query = $modelClass::query()->whereNotNull($table . '.' . $dateColumn);
 
         $this->applyCommonScopes($query, $model);
-        $this->applyDirectUserScope($query, $table);
+        $this->applyOrganizationScope($query, $table, $user);
 
-        $expired = (clone $query)
-            ->whereDate($table . '.' . $dateColumn, '<', $today)
-            ->count();
-
-        $soon = (clone $query)
-            ->whereDate($table . '.' . $dateColumn, '>=', $today)
-            ->whereDate($table . '.' . $dateColumn, '<=', $soonDate)
-            ->count();
-
-        return [
-            'expired_count' => (int) $expired,
-            'soon_count' => (int) $soon,
-            'supported' => true,
-        ];
+        return $this->countDateQuery($query, $table . '.' . $dateColumn, $today, $soonDate);
     }
 
-    protected function countPpeDeadline(Carbon $today, Carbon $soonDate): array
+    protected function countPpeDeadline(Carbon $today, Carbon $soonDate, ?User $user): array
     {
         if (! class_exists(PPEItem::class)) {
             return $this->unsupportedRow();
@@ -286,36 +290,26 @@ class TopSystemStatusBarWidget extends Widget
             return $this->unsupportedRow();
         }
 
-        $query = PPEItem::query()
-            ->whereNotNull($table . '.end_date');
+        $query = PPEItem::query()->whereNotNull($table . '.end_date');
 
-        if (! $this->applyDirectUserScope($query, $table)) {
-            $query->whereHas('log', function (Builder $relatedQuery): void {
-                $relatedTable = $relatedQuery->getModel()->getTable();
+        if (! $this->applyOrganizationScope($query, $table, $user)) {
+            $userIds = $this->organizationUserIds($user);
 
-                if (Schema::hasColumn($relatedTable, 'user_id')) {
-                    $relatedQuery->where($relatedTable . '.user_id', Auth::id());
-                }
-            });
+            if ($userIds !== null) {
+                $query->whereHas('log', function (Builder $relatedQuery) use ($userIds): void {
+                    $relatedTable = $relatedQuery->getModel()->getTable();
+
+                    if (Schema::hasColumn($relatedTable, 'user_id')) {
+                        $relatedQuery->whereIn($relatedTable . '.user_id', $userIds);
+                    }
+                });
+            }
         }
 
-        $expired = (clone $query)
-            ->whereDate($table . '.end_date', '<', $today)
-            ->count();
-
-        $soon = (clone $query)
-            ->whereDate($table . '.end_date', '>=', $today)
-            ->whereDate($table . '.end_date', '<=', $soonDate)
-            ->count();
-
-        return [
-            'expired_count' => (int) $expired,
-            'soon_count' => (int) $soon,
-            'supported' => true,
-        ];
+        return $this->countDateQuery($query, $table . '.end_date', $today, $soonDate);
     }
 
-    protected function countFirstAidDeadline(Carbon $today, Carbon $soonDate): array
+    protected function countFirstAidDeadline(Carbon $today, Carbon $soonDate, ?User $user): array
     {
         if (! class_exists(FirstAidItem::class)) {
             return $this->unsupportedRow();
@@ -328,36 +322,26 @@ class TopSystemStatusBarWidget extends Widget
             return $this->unsupportedRow();
         }
 
-        $query = FirstAidItem::query()
-            ->whereNotNull($table . '.valid_until');
+        $query = FirstAidItem::query()->whereNotNull($table . '.valid_until');
 
-        if (! $this->applyDirectUserScope($query, $table)) {
-            $query->whereHas('kit', function (Builder $relatedQuery): void {
-                $relatedTable = $relatedQuery->getModel()->getTable();
+        if (! $this->applyOrganizationScope($query, $table, $user)) {
+            $userIds = $this->organizationUserIds($user);
 
-                if (Schema::hasColumn($relatedTable, 'user_id')) {
-                    $relatedQuery->where($relatedTable . '.user_id', Auth::id());
-                }
-            });
+            if ($userIds !== null) {
+                $query->whereHas('kit', function (Builder $relatedQuery) use ($userIds): void {
+                    $relatedTable = $relatedQuery->getModel()->getTable();
+
+                    if (Schema::hasColumn($relatedTable, 'user_id')) {
+                        $relatedQuery->whereIn($relatedTable . '.user_id', $userIds);
+                    }
+                });
+            }
         }
 
-        $expired = (clone $query)
-            ->whereDate($table . '.valid_until', '<', $today)
-            ->count();
-
-        $soon = (clone $query)
-            ->whereDate($table . '.valid_until', '>=', $today)
-            ->whereDate($table . '.valid_until', '<=', $soonDate)
-            ->count();
-
-        return [
-            'expired_count' => (int) $expired,
-            'soon_count' => (int) $soon,
-            'supported' => true,
-        ];
+        return $this->countDateQuery($query, $table . '.valid_until', $today, $soonDate);
     }
 
-    protected function countObservationDeadline(Carbon $today, Carbon $soonDate): array
+    protected function countObservationDeadline(Carbon $today, Carbon $soonDate, ?User $user): array
     {
         if (! class_exists(Observation::class)) {
             return $this->unsupportedRow();
@@ -375,21 +359,82 @@ class TopSystemStatusBarWidget extends Widget
             ->whereIn($table . '.status', ['Not started', 'In progress']);
 
         $this->applyCommonScopes($query, $model);
-        $this->applyDirectUserScope($query, $table);
+        $this->applyOrganizationScope($query, $table, $user);
 
+        return $this->countDateQuery($query, $table . '.target_date', $today, $soonDate);
+    }
+
+    protected function countDateQuery(Builder $query, string $dateColumn, Carbon $today, Carbon $soonDate): array
+    {
         $expired = (clone $query)
-            ->whereDate($table . '.target_date', '<', $today)
+            ->whereDate($dateColumn, '<', $today)
             ->count();
 
         $soon = (clone $query)
-            ->whereDate($table . '.target_date', '>=', $today)
-            ->whereDate($table . '.target_date', '<=', $soonDate)
+            ->whereDate($dateColumn, '>=', $today)
+            ->whereDate($dateColumn, '<=', $soonDate)
             ->count();
 
         return [
             'expired_count' => (int) $expired,
             'soon_count' => (int) $soon,
             'supported' => true,
+        ];
+    }
+
+    protected function calculateLtaMetrics(?User $user): array
+    {
+        $baseQuery = Incident::query()->withoutTrashed();
+
+        $userIds = $this->organizationUserIds($user);
+
+        if ($userIds !== null) {
+            $baseQuery->whereIn('user_id', $userIds);
+        }
+
+        $ltaDates = (clone $baseQuery)
+            ->where('type_of_incident', 'like', '%LTA%')
+            ->whereNotNull('date_occurred')
+            ->orderBy('date_occurred')
+            ->pluck('date_occurred')
+            ->map(fn ($date) => Carbon::parse($date)->startOfDay())
+            ->values();
+
+        $daysWithoutLta = null;
+        $recordDaysWithoutLta = null;
+
+        $lastLtaDate = $ltaDates->last();
+
+        if ($lastLtaDate) {
+            $daysWithoutLta = $lastLtaDate->diffInDays(Carbon::today());
+        }
+
+        if ($ltaDates->count() > 0) {
+            $record = 0;
+
+            for ($i = 0; $i < $ltaDates->count() - 1; $i++) {
+                $daysBetween = $ltaDates[$i]->diffInDays($ltaDates[$i + 1]);
+
+                if ($daysBetween > $record) {
+                    $record = $daysBetween;
+                }
+            }
+
+            if ($daysWithoutLta !== null && $daysWithoutLta > $record) {
+                $record = $daysWithoutLta;
+            }
+
+            $recordDaysWithoutLta = $record;
+        }
+
+        $recordIsActive = $daysWithoutLta !== null
+            && $recordDaysWithoutLta !== null
+            && $daysWithoutLta >= $recordDaysWithoutLta;
+
+        return [
+            'days_without_lta' => $daysWithoutLta,
+            'record_days_without_lta' => $recordDaysWithoutLta,
+            'record_is_active' => $recordIsActive,
         ];
     }
 
@@ -415,26 +460,6 @@ class TopSystemStatusBarWidget extends Widget
         if (Schema::hasColumn($table, 'deleted_at')) {
             $query->whereNull($table . '.deleted_at');
         }
-    }
-
-    protected function applyDirectUserScope(Builder $query, string $table): bool
-    {
-        $user = Auth::user();
-
-        if (! $user) {
-            return true;
-        }
-
-        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
-            return true;
-        }
-
-        if (Schema::hasColumn($table, 'user_id')) {
-            $query->where($table . '.user_id', $user->id);
-            return true;
-        }
-
-        return false;
     }
 
     protected function unsupportedRow(): array

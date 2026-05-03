@@ -2,53 +2,88 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Filament\Widgets\TopSystemStatusBarWidget;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ZnrGeneralReportController extends Controller
 {
     public function pdf(Request $request)
     {
-        // OVDJE kasnije možeš zamijeniti s pravim podacima iz baze.
-        // Za početak šaljemo strukturu koju već imaš na dashboardu.
+        $user = Auth::user();
+
+        abort_unless($user, 403);
+
+        $statusData = TopSystemStatusBarWidget::makeSystemStatusData($user);
+
+        $rows = collect($statusData['rows'] ?? [])
+            ->map(fn (array $row) => [
+                'label' => $row['label'],
+                'expired' => $row['expired_count'] ?? 0,
+                'soon' => $row['soon_count'] ?? 0,
+            ])
+            ->values()
+            ->all();
+
+        $totalExpired = $statusData['totalExpired'] ?? 0;
+        $totalSoon = $statusData['totalSoon'] ?? 0;
+
+        $systemStatus = $statusData['title'] ?? 'SVE U REDU';
+
+        $actions = [];
+
+        foreach ($rows as $row) {
+            if (($row['expired'] ?? 0) > 0) {
+                $actions[] = "Pregledati i riješiti istekle stavke: {$row['label']} ({$row['expired']}).";
+            }
+        }
+
+        if ($totalSoon > 0) {
+            $actions[] = "Planirati aktivnosti za stavke koje istječu u sljedećih 30 dana ({$totalSoon}).";
+        }
+
+        if (empty($actions)) {
+            $actions[] = 'Nastaviti redovito praćenje rokova i preventivno održavati sustav.';
+        }
+
+        $summary = match ($statusData['state'] ?? 'ok') {
+            'critical' => "Sustav je kritičan zbog {$totalExpired} isteklih stavki. Potrebno je prioritetno riješiti istekle obveze kako bi se osigurala usklađenost i smanjili rizici.",
+            'warning' => $totalExpired > 0
+                ? "Sustav zahtijeva pažnju jer postoji {$totalExpired} isteklih stavki. Potrebno ih je planirati i riješiti prema prioritetu."
+                : "Sustav zahtijeva pažnju jer {$totalSoon} stavki istječe unutar 30 dana. Potrebno je pravovremeno planirati aktivnosti.",
+            default => 'Sustav je trenutno uredan. Nema isteklih stavki ni kritičnih rokova u sljedećih 30 dana.',
+        };
 
         $data = [
             'reportDate' => now()->format('d.m.Y. H:i'),
-            'systemStatus' => 'KRITIČNO',
-            'totalExpired' => 219,
-            'totalSoon' => 23,
+            'systemStatus' => $systemStatus,
+            'totalExpired' => $totalExpired,
+            'totalSoon' => $totalSoon,
+            'summary' => $summary,
+            'rows' => $rows,
+            'actions' => $actions,
 
-            'summary' => 'Sustav je kritičan zbog 219 isteklih stavki. Potrebno je pregledati i riješiti istekle obveze kako bi se osigurala usklađenost i smanjili rizici.',
+            'daysWithoutLta' => $statusData['daysWithoutLta'] ?? null,
+            'ltaRecordDays' => $statusData['recordDaysWithoutLta'] ?? null,
 
-            'rows' => [
-                ['label' => 'Liječnički pregledi', 'expired' => 31, 'soon' => 2],
-                ['label' => 'Edukacije', 'expired' => 72, 'soon' => 4],
-                ['label' => 'Radna oprema', 'expired' => 18, 'soon' => 11],
-                ['label' => 'Aparati', 'expired' => 2, 'soon' => 0],
-                ['label' => 'Ostala ispitivanja', 'expired' => 62, 'soon' => 5],
-                ['label' => 'OZO', 'expired' => 25, 'soon' => 1],
-                ['label' => 'Prva pomoć', 'expired' => 7, 'soon' => 0],
-                ['label' => 'Zapažanja', 'expired' => 2, 'soon' => 0],
-            ],
-
-            'actions' => [
-                'Pregledati i riješiti istekle edukacije.',
-                'Provjeriti ostala ispitivanja s isteklim rokom.',
-                'Ažurirati liječničke preglede zaposlenika.',
-                'Pregledati stavke radne opreme koje uskoro istječu.',
-                'Riješiti otvorene kritične stavke po prioritetu.',
-            ],
+            'ltaCount' => 0,
+            'mtaCount' => 0,
+            'faaCount' => 0,
+            'openObservations' => 0,
+            'openWorkTasks' => 0,
+            'closedWorkTasks' => 0,
         ];
 
         $pdf = Pdf::loadView('pdf.znr-general-report', $data)
-    ->setPaper('a4', 'portrait')
-    ->setOptions([
-        'defaultFont' => 'DejaVu Sans',
-        'isHtml5ParserEnabled' => true,
-        'isRemoteEnabled' => true,
-        'isFontSubsettingEnabled' => false,
-    ]);
+            ->setPaper('a4', 'portrait')
+            ->setOptions([
+                'defaultFont' => 'DejaVu Sans',
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'isFontSubsettingEnabled' => false,
+            ]);
 
-return $pdf->stream('ZNR-izvjestaj-o-stanju-sustava.pdf');
+        return $pdf->stream('ZNR-izvjestaj-o-stanju-sustava.pdf');
     }
 }

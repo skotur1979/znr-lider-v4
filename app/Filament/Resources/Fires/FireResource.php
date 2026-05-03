@@ -36,6 +36,7 @@ use Filament\Forms\Components\Select;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Filament\Support\Enums\MaxWidth;
 
 class FireResource extends BaseResource
 {
@@ -56,134 +57,147 @@ class FireResource extends BaseResource
     {
         return 'fires';
     }
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->components([
+{
+    return $schema
+        ->schema([
             Select::make('user_id')
-    ->label('Korisnik')
-    ->relationship('user', 'name')
-    ->searchable()
-    ->preload()
-    ->required()
-    ->visible(fn () => static::isSuperAdmin())
-    ->dehydrated(fn () => static::isSuperAdmin())
-    ->hiddenOn('view'),
+                ->label('Korisnik')
+                ->relationship('user', 'name')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->visible(fn () => static::isSuperAdmin())
+                ->dehydrated(fn () => static::isSuperAdmin())
+                ->hiddenOn('view'),
 
-Hidden::make('user_id')
-    ->default(fn () => static::defaultUserId())
-    ->visible(fn () => ! static::isSuperAdmin())
-    ->dehydrated(fn () => ! static::isSuperAdmin()),
+            Hidden::make('user_id')
+                ->default(fn () => static::defaultUserId())
+                ->visible(fn () => ! static::isSuperAdmin())
+                ->dehydrated(fn () => ! static::isSuperAdmin()),
 
-            Section::make('Podatci o vatrogasnom aparatu')
+            Section::make('Podaci o vatrogasnom aparatu')
+                ->columnSpanFull()
+                ->columns(2)
                 ->schema([
-                    TextInput::make('place')
-                        ->label('Mjesto gdje se aparat nalazi (obavezno)')
-                        ->required()
-                        ->maxLength(255),
+                    Section::make('Osnovni podaci')
+                        ->columns(2)
+                        ->schema([
+                            TextInput::make('place')
+                                ->label('Mjesto gdje se aparat nalazi (obavezno)')
+                                ->required()
+                                ->maxLength(255),
 
-                    TextInput::make('type')
-                        ->label('Tip aparata')
-                        ->maxLength(255),
+                            TextInput::make('type')
+                                ->label('Tip aparata')
+                                ->maxLength(255),
 
-                    TextInput::make('factory_number_year_of_production')
-                        ->label('Tvornički broj/Godina proizvodnje')
-                        ->maxLength(255)
-                        ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
-                        ->dehydrateStateUsing(fn ($state) => $state)
-                        ->rule(function ($record) {
-                            return Rule::unique('fires', 'factory_number/year_of_production')
-                                ->where(function ($query) {
-                                    $ownerId = static::ownerId();
+                            TextInput::make('factory_number_year_of_production')
+                                ->label('Tvornički broj/Godina proizvodnje')
+                                ->maxLength(255)
+                                ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
+                                ->dehydrateStateUsing(fn ($state) => $state)
+                                ->rule(function ($record) {
+                                    return Rule::unique('fires', 'factory_number/year_of_production')
+                                        ->where(function ($query) {
+                                            $ownerId = static::ownerId();
 
-                                    if ($ownerId) {
-                                        $query->where('user_id', $ownerId);
-                                    }
+                                            if ($ownerId) {
+                                                $query->where('user_id', $ownerId);
+                                            }
 
-                                    $query->whereNull('deleted_at');
+                                            $query->whereNull('deleted_at');
+                                        })
+                                        ->ignore($record?->id);
                                 })
-                                ->ignore($record?->id);
-                        })
-                        ->validationMessages([
-                            'unique' => 'Već postoji vatrogasni aparat s istim tvorničkim brojem / godinom proizvodnje.',
+                                ->validationMessages([
+                                    'unique' => 'Već postoji vatrogasni aparat s istim tvorničkim brojem / godinom proizvodnje.',
+                                ]),
+
+                            TextInput::make('serial_label_number')
+                                ->label('Serijski broj evidencijske naljepnice')
+                                ->maxLength(255),
                         ]),
 
-                    TextInput::make('serial_label_number')
-                        ->label('Serijski broj evidencijske naljepnice')
-                        ->maxLength(255),
-                ])
-                ->columns(2),
+                    Section::make('Ispitivanje')
+                        ->columns(2)
+                        ->schema([
+                            DatePicker::make('examination_valid_from')
+                                ->label('Datum periodičkog servisa (obavezno)')
+                                ->required()
+                                ->displayFormat('d.m.Y.')
+                                ->native(false),
 
-            Section::make('Ispitivanje vatrogasnog aparata')
-                ->schema([
-                    DatePicker::make('examination_valid_from')
-                        ->label('Datum periodičkog servisa (obavezno)')
-                        ->required()
-                        ->displayFormat('d.m.Y.')
-                        ->native(false),
+                            DatePicker::make('examination_valid_until')
+                                ->label('Vrijedi do (obavezno)')
+                                ->required()
+                                ->displayFormat('d.m.Y.')
+                                ->native(false),
 
-                    DatePicker::make('examination_valid_until')
-                        ->label('Vrijedi do (obavezno)')
-                        ->required()
-                        ->displayFormat('d.m.Y.')
-                        ->native(false),
+                            TextInput::make('service')
+                                ->label('Naziv servisera koji je servisirao aparat')
+                                ->maxLength(255),
 
-                    TextInput::make('service')
-                        ->label('Naziv servisera koji je servisirao aparat')
-                        ->maxLength(255),
+                            DatePicker::make('regular_examination_valid_from')
+                                ->label('Datum redovnog pregleda (obavezno)')
+                                ->required()
+                                ->displayFormat('d.m.Y.')
+                                ->native(false),
+                        ]),
 
-                    DatePicker::make('regular_examination_valid_from')
-                        ->label('Datum redovnog pregleda (obavezno)')
-                        ->required()
-                        ->displayFormat('d.m.Y.')
-                        ->native(false),
-                ])
-                ->columns(2),
+                    Section::make('Ostalo')
+                        ->columns(2)
+                        ->schema([
+                            TextInput::make('visible')
+                                ->label('Uočljivost i dostupnost aparata')
+                                ->maxLength(255),
 
-            Section::make('Ostalo')
-                ->schema([
-                    TextInput::make('visible')
-                        ->label('Uočljivost i dostupnost aparata')
-                        ->maxLength(255),
+                            TextInput::make('remark')
+                                ->label('Uočeni nedostatci')
+                                ->maxLength(255),
 
-                    TextInput::make('remark')
-                        ->label('Uočeni nedostatci')
-                        ->maxLength(255),
+                            TextInput::make('action')
+                                ->label('Postupci otklanjanja')
+                                ->maxLength(255)
+                                ->columnSpanFull(),
+                        ]),
 
-                    TextInput::make('action')
-                        ->label('Postupci otklanjanja')
-                        ->maxLength(255),
-                ])
-                ->columns(2),
-
-            Section::make('Prilozi')
-                ->schema([
-                    FileUpload::make('pdf')
-                        ->label('Dodaj Prilog (max. 10)')
-                        ->disk('public')
-                        ->directory('fires')
-                        ->multiple()
-                        ->maxFiles(10)
-                        ->maxSize(30720)
-                        ->preserveFilenames()
-                        ->openable()
-                        ->downloadable()
-                        ->acceptedFileTypes([
-                            'application/pdf',
-                            'application/msword',
-                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            'application/vnd.ms-excel',
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'image/jpeg',
-                            'image/png',
-                            'image/gif',
-                            'image/webp',
-                            'application/zip',
-                            'application/x-rar-compressed',
+                    Section::make('Prilozi')
+                        ->columnSpan(1)
+                        ->schema([
+                            FileUpload::make('pdf')
+                                ->label('Dodaj prilog (max. 10)')
+                                ->disk('public')
+                                ->directory('fires')
+                                ->multiple()
+                                ->maxFiles(10)
+                                ->maxSize(30720)
+                                ->preserveFilenames()
+                                ->openable()
+                                ->downloadable()
+                                ->acceptedFileTypes([
+                                    'application/pdf',
+                                    'application/msword',
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                    'application/vnd.ms-excel',
+                                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                    'image/jpeg',
+                                    'image/png',
+                                    'image/gif',
+                                    'image/webp',
+                                    'application/zip',
+                                    'application/x-rar-compressed',
+                                ]),
                         ]),
                 ]),
-        ]);
-    }
+        ])
+        ->columns(1);
+}
 
     public static function infolist(Schema $schema): Schema
     {

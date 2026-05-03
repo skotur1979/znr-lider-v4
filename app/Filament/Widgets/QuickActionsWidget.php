@@ -11,6 +11,7 @@ use App\Filament\Resources\Machines\MachineResource;
 use App\Filament\Resources\MedicalReferrals\MedicalReferralResource;
 use App\Filament\Resources\Miscellaneouses\MiscellaneousResource;
 use App\Filament\Resources\Observations\ObservationResource;
+use App\Filament\Resources\OperationalLogs\OperationalLogResource;
 use App\Filament\Resources\PersonalProtectiveEquipmentLogs\PersonalProtectiveEquipmentLogResource;
 use App\Filament\Resources\WasteTrackingForms\WasteTrackingFormResource;
 use App\Filament\Resources\WorkTasks\WorkTaskResource;
@@ -63,6 +64,14 @@ class QuickActionsWidget extends Widget
     protected function getAllActions(): array
     {
         $actions = [
+            'operational_log' => [
+                'label' => 'Operativni dnevnik',
+                'description' => 'Brzi zapis, bilješka ili dnevni unos',
+                'icon' => 'heroicon-o-clipboard-document-list',
+                'url' => $this->resourceCreateUrl(OperationalLogResource::class),
+                'color' => 'blue',
+            ],
+
             'employee' => [
                 'label' => 'Novi zaposlenik',
                 'description' => 'Dodaj novog zaposlenika',
@@ -204,6 +213,7 @@ class QuickActionsWidget extends Widget
                 $selection,
                 fn ($item) => $item !== $key
             ));
+
             return;
         }
 
@@ -212,6 +222,7 @@ class QuickActionsWidget extends Widget
         }
 
         $selection[] = $key;
+
         $this->editorSelection = array_values(array_unique($selection));
     }
 

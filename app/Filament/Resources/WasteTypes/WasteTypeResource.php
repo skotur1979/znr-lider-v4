@@ -60,9 +60,12 @@ class WasteTypeResource extends BaseResource
     }
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->components([
+{
+    return $schema
+        ->schema([
             FormSection::make('Podaci o vrsti otpada')
+                ->columnSpanFull()
+                ->columns(2)
                 ->schema([
                     Select::make('catalog_select')
                         ->label('Katalog otpada')
@@ -147,16 +150,17 @@ class WasteTypeResource extends BaseResource
                     TextInput::make('name')
                         ->label('Naziv')
                         ->required()
-                        ->columnSpan(2),
+                        ->maxLength(255),
 
                     Toggle::make('is_hazardous')
                         ->label('Opasan otpad')
                         ->default(false)
+                        ->inline(false)
                         ->columnSpanFull(),
-                ])
-                ->columns(3),
-        ]);
-    }
+                ]),
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {

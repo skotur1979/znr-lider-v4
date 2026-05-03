@@ -28,6 +28,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Auth;
+use Filament\Support\Enums\MaxWidth;
 
 class WorkTaskResource extends BaseResource
 {
@@ -44,37 +45,43 @@ class WorkTaskResource extends BaseResource
     {
         return 'work_tasks';
     }
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->components([
+{
+    return $schema
+        ->schema([
             Hidden::make('user_id')
                 ->default(fn () => Auth::user()?->ownerId())
                 ->dehydrated(),
 
             Section::make('Radni zadatak')
+                ->columnSpanFull()
+                ->columns(2)
                 ->schema([
                     TextInput::make('title')
                         ->label('Naziv zadatka')
                         ->required()
-                        ->maxLength(120)
-                        ->columnSpanFull(),
-
-                    Textarea::make('description')
-                        ->label('Opis')
-                        ->rows(4)
-                        ->maxLength(1000)
-                        ->columnSpanFull(),
+                        ->maxLength(120),
 
                     DatePicker::make('due_date')
                         ->label('Datum')
                         ->required()
                         ->native(false)
                         ->displayFormat('d.m.Y.'),
-                ])
-                ->columns(1),
-        ]);
-    }
+
+                    Textarea::make('description')
+                        ->label('Opis')
+                        ->rows(5)
+                        ->maxLength(1000)
+                        ->columnSpanFull(),
+                ]),
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {

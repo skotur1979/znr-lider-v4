@@ -23,10 +23,6 @@
             margin-bottom:12px;
         }
 
-        .znr-quick-top-left{
-            min-width:0;
-        }
-
         .znr-quick-title{
             margin:0;
             font-size:1rem;
@@ -72,11 +68,6 @@
             color:#bfdbfe;
         }
 
-        .dark .znr-quick-edit-btn:hover{
-            background:rgba(59,130,246,.18);
-            border-color:rgba(96,165,250,.40);
-        }
-
         .znr-quick-grid{
             display:grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -119,10 +110,6 @@
             border:1px solid rgba(148,163,184,.14);
             background:rgba(7,18,40,.80);
             box-shadow:none;
-        }
-
-        .dark .znr-quick-card:hover{
-            box-shadow:0 10px 18px rgba(0,0,0,.14);
         }
 
         .znr-quick-icon{
@@ -172,137 +159,29 @@
             color:#93c5fd;
         }
 
-        .znr-quick-card.sky .znr-quick-icon{
-            background: rgba(56, 189, 248, .10);
-            color: #0284c7;
-            border: 1px solid rgba(56, 189, 248, .20);
-        }
+        .znr-quick-card.sky .znr-quick-icon{ background: rgba(56,189,248,.10); color:#0284c7; border:1px solid rgba(56,189,248,.20); }
+        .znr-quick-card.indigo .znr-quick-icon{ background: rgba(99,102,241,.10); color:#4f46e5; border:1px solid rgba(99,102,241,.20); }
+        .znr-quick-card.amber .znr-quick-icon{ background: rgba(245,158,11,.10); color:#d97706; border:1px solid rgba(245,158,11,.20); }
+        .znr-quick-card.emerald .znr-quick-icon{ background: rgba(34,197,94,.10); color:#16a34a; border:1px solid rgba(34,197,94,.20); }
+        .znr-quick-card.rose .znr-quick-icon{ background: rgba(244,63,94,.10); color:#e11d48; border:1px solid rgba(244,63,94,.20); }
+        .znr-quick-card.violet .znr-quick-icon{ background: rgba(139,92,246,.10); color:#7c3aed; border:1px solid rgba(139,92,246,.20); }
+        .znr-quick-card.blue .znr-quick-icon{ background: rgba(59,130,246,.10); color:#2563eb; border:1px solid rgba(59,130,246,.20); }
+        .znr-quick-card.teal .znr-quick-icon{ background: rgba(20,184,166,.10); color:#0f766e; border:1px solid rgba(20,184,166,.20); }
+        .znr-quick-card.orange .znr-quick-icon{ background: rgba(249,115,22,.10); color:#ea580c; border:1px solid rgba(249,115,22,.20); }
+        .znr-quick-card.lime .znr-quick-icon{ background: rgba(132,204,22,.10); color:#65a30d; border:1px solid rgba(132,204,22,.20); }
+        .znr-quick-card.purple .znr-quick-icon{ background: rgba(168,85,247,.10); color:#9333ea; border:1px solid rgba(168,85,247,.20); }
 
-        .znr-quick-card.indigo .znr-quick-icon{
-            background: rgba(99, 102, 241, .10);
-            color: #4f46e5;
-            border: 1px solid rgba(99, 102, 241, .20);
-        }
-
-        .znr-quick-card.amber .znr-quick-icon{
-            background: rgba(245, 158, 11, .10);
-            color: #d97706;
-            border: 1px solid rgba(245, 158, 11, .20);
-        }
-
-        .znr-quick-card.emerald .znr-quick-icon{
-            background: rgba(34, 197, 94, .10);
-            color: #16a34a;
-            border: 1px solid rgba(34, 197, 94, .20);
-        }
-
-        .znr-quick-card.rose .znr-quick-icon{
-            background: rgba(244, 63, 94, .10);
-            color: #e11d48;
-            border: 1px solid rgba(244, 63, 94, .20);
-        }
-
-        .znr-quick-card.violet .znr-quick-icon{
-            background: rgba(139, 92, 246, .10);
-            color: #7c3aed;
-            border: 1px solid rgba(139, 92, 246, .20);
-        }
-
-        .znr-quick-card.blue .znr-quick-icon{
-            background: rgba(59, 130, 246, .10);
-            color: #2563eb;
-            border: 1px solid rgba(59, 130, 246, .20);
-        }
-
-        .znr-quick-card.teal .znr-quick-icon{
-            background: rgba(20, 184, 166, .10);
-            color: #0f766e;
-            border: 1px solid rgba(20, 184, 166, .20);
-        }
-
-        .znr-quick-card.orange .znr-quick-icon{
-            background: rgba(249, 115, 22, .10);
-            color: #ea580c;
-            border: 1px solid rgba(249, 115, 22, .20);
-        }
-
-        .znr-quick-card.lime .znr-quick-icon{
-            background: rgba(132, 204, 22, .10);
-            color: #65a30d;
-            border: 1px solid rgba(132, 204, 22, .20);
-        }
-
-        .znr-quick-card.purple .znr-quick-icon{
-            background: rgba(168, 85, 247, .10);
-            color: #9333ea;
-            border: 1px solid rgba(168, 85, 247, .20);
-        }
-
-        .dark .znr-quick-card.sky .znr-quick-icon{
-            background: rgba(56, 189, 248, .15);
-            color: #38bdf8;
-            border: 1px solid rgba(56, 189, 248, .25);
-        }
-
-        .dark .znr-quick-card.indigo .znr-quick-icon{
-            background: rgba(99, 102, 241, .15);
-            color: #818cf8;
-            border: 1px solid rgba(129, 140, 248, .25);
-        }
-
-        .dark .znr-quick-card.amber .znr-quick-icon{
-            background: rgba(245, 158, 11, .15);
-            color: #f59e0b;
-            border: 1px solid rgba(245, 158, 11, .25);
-        }
-
-        .dark .znr-quick-card.emerald .znr-quick-icon{
-            background: rgba(34, 197, 94, .15);
-            color: #22c55e;
-            border: 1px solid rgba(34, 197, 94, .25);
-        }
-
-        .dark .znr-quick-card.rose .znr-quick-icon{
-            background: rgba(244, 63, 94, .15);
-            color: #f43f5e;
-            border: 1px solid rgba(244, 63, 94, .25);
-        }
-
-        .dark .znr-quick-card.violet .znr-quick-icon{
-            background: rgba(139, 92, 246, .15);
-            color: #8b5cf6;
-            border: 1px solid rgba(139, 92, 246, .25);
-        }
-
-        .dark .znr-quick-card.blue .znr-quick-icon{
-            background: rgba(59, 130, 246, .15);
-            color: #60a5fa;
-            border: 1px solid rgba(96, 165, 250, .25);
-        }
-
-        .dark .znr-quick-card.teal .znr-quick-icon{
-            background: rgba(20, 184, 166, .15);
-            color: #2dd4bf;
-            border: 1px solid rgba(45, 212, 191, .25);
-        }
-
-        .dark .znr-quick-card.orange .znr-quick-icon{
-            background: rgba(249, 115, 22, .15);
-            color: #fb923c;
-            border: 1px solid rgba(251, 146, 60, .25);
-        }
-
-        .dark .znr-quick-card.lime .znr-quick-icon{
-            background: rgba(132, 204, 22, .15);
-            color: #a3e635;
-            border: 1px solid rgba(163, 230, 53, .25);
-        }
-
-        .dark .znr-quick-card.purple .znr-quick-icon{
-            background: rgba(168, 85, 247, .15);
-            color: #c084fc;
-            border: 1px solid rgba(192, 132, 252, .25);
-        }
+        .dark .znr-quick-card.sky .znr-quick-icon{ background: rgba(56,189,248,.15); color:#38bdf8; border:1px solid rgba(56,189,248,.25); }
+        .dark .znr-quick-card.indigo .znr-quick-icon{ background: rgba(99,102,241,.15); color:#818cf8; border:1px solid rgba(129,140,248,.25); }
+        .dark .znr-quick-card.amber .znr-quick-icon{ background: rgba(245,158,11,.15); color:#f59e0b; border:1px solid rgba(245,158,11,.25); }
+        .dark .znr-quick-card.emerald .znr-quick-icon{ background: rgba(34,197,94,.15); color:#22c55e; border:1px solid rgba(34,197,94,.25); }
+        .dark .znr-quick-card.rose .znr-quick-icon{ background: rgba(244,63,94,.15); color:#f43f5e; border:1px solid rgba(244,63,94,.25); }
+        .dark .znr-quick-card.violet .znr-quick-icon{ background: rgba(139,92,246,.15); color:#8b5cf6; border:1px solid rgba(139,92,246,.25); }
+        .dark .znr-quick-card.blue .znr-quick-icon{ background: rgba(59,130,246,.15); color:#60a5fa; border:1px solid rgba(96,165,250,.25); }
+        .dark .znr-quick-card.teal .znr-quick-icon{ background: rgba(20,184,166,.15); color:#2dd4bf; border:1px solid rgba(45,212,191,.25); }
+        .dark .znr-quick-card.orange .znr-quick-icon{ background: rgba(249,115,22,.15); color:#fb923c; border:1px solid rgba(251,146,60,.25); }
+        .dark .znr-quick-card.lime .znr-quick-icon{ background: rgba(132,204,22,.15); color:#a3e635; border:1px solid rgba(163,230,53,.25); }
+        .dark .znr-quick-card.purple .znr-quick-icon{ background: rgba(168,85,247,.15); color:#c084fc; border:1px solid rgba(192,132,252,.25); }
 
         .znr-quick-modal{
             position:fixed;
@@ -320,7 +199,7 @@
         }
 
         .znr-quick-modal-box{
-            width:min(680px, 100%);
+            width:min(720px, 100%);
             border-radius:18px;
             border:1px solid #dbe3f0;
             background:#ffffff;
@@ -372,6 +251,9 @@
             display:grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap:10px;
+            max-height:60vh;
+            overflow:auto;
+            padding-right:4px;
         }
 
         @media (max-width: 700px){
@@ -389,6 +271,12 @@
             border-radius:14px;
             padding:12px;
             cursor:pointer;
+            transition:all .15s ease;
+        }
+
+        .znr-quick-option:hover{
+            border-color:#bfdbfe;
+            background:#f8fbff;
         }
 
         .dark .znr-quick-option{
@@ -477,9 +365,11 @@
 
     <div class="znr-quick-wrap">
         <div class="znr-quick-top">
-            <div class="znr-quick-top-left">
+            <div>
                 <div class="znr-quick-title">Moje brze akcije</div>
-                <div class="znr-quick-subtitle">Odaberi do 4 gumba koje želiš imati gore.</div>
+                <div class="znr-quick-subtitle">
+                    Odaberi do 4 gumba koje želiš imati gore. Operativni dnevnik je vidljiv samo ako ga ovdje uključiš.
+                </div>
             </div>
 
             <button type="button" class="znr-quick-edit-btn" wire:click="openEditor">
@@ -492,7 +382,7 @@
                 <a
                     href="{{ $action['url'] }}"
                     class="znr-quick-card {{ $action['color'] }}"
-                    title="Napravi novo: {{ $action['label'] }}"
+                    title="{{ $action['label'] }}"
                 >
                     <div class="znr-quick-icon">
                         <x-filament::icon :icon="$action['icon']" class="h-5 w-5" />
@@ -512,7 +402,7 @@
     </div>
 
     @if ($showEditor)
-        <div class="znr-quick-modal">
+        <div class="znr-quick-modal" wire:click.self="closeEditor">
             <div class="znr-quick-modal-box">
                 <div class="znr-quick-modal-head">
                     <h3 class="znr-quick-modal-title">Uredi brze akcije</h3>
@@ -526,6 +416,7 @@
                         @foreach ($this->availableActions as $action)
                             @php
                                 $active = in_array($action['key'], $editorSelection, true);
+                                $disabled = ! $active && count($editorSelection) >= 4;
                             @endphp
 
                             <label class="znr-quick-option {{ $active ? 'active' : '' }}">
@@ -533,6 +424,7 @@
                                     type="checkbox"
                                     wire:click="toggleAction('{{ $action['key'] }}')"
                                     @checked($active)
+                                    @disabled($disabled)
                                 >
 
                                 <div>

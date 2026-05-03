@@ -70,48 +70,61 @@ class TestAttemptResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
-        ->paginated([10, 25, 50,'all'])
+            ->paginated([10, 25, 50, 'all'])
             ->columns([
-                TextColumn::make('user.name')
-                    ->label('Korisnik')
-                    ->searchable(),
-
-                static::userTableColumn(),
+                static::userTableColumn()
+                    ->toggleable(isToggledHiddenByDefault: ! Auth::user()?->isSuperAdmin()),
 
                 TextColumn::make('test.naziv')
                     ->label('Naziv testa')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->limit(30)
+                    ->wrap()
+                    ->extraAttributes(['style' => 'max-width:220px;']),
 
                 TextColumn::make('ime_prezime')
                     ->label('Ime i prezime')
-                    ->searchable(),
+                    ->searchable()
+                    ->limit(22)
+                    ->wrap()
+                    ->extraAttributes(['style' => 'max-width:145px;']),
 
                 TextColumn::make('radno_mjesto')
                     ->label('Radno mjesto')
-                    ->searchable(),
+                    ->searchable()
+                    ->limit(18)
+                    ->wrap()
+                    ->toggleable()
+                    ->extraAttributes(['style' => 'max-width:120px;']),
 
                 TextColumn::make('datum_rodjenja')
-                    ->label('Datum rođenja')
-                    ->date('d.m.Y.'),
+                    ->label('Rođen')
+                    ->date('d.m.Y.')
+                    ->alignCenter()
+                    ->toggleable(),
 
                 TextColumn::make('bodovi_osvojeni')
-                    ->label('Bodovi')
-                    ->sortable(),
+                    ->label('Bod.')
+                    ->sortable()
+                    ->alignCenter(),
 
                 TextColumn::make('rezultat')
-                    ->label('Rezultat (%)')
-                    ->suffix('%')
-                    ->sortable(),
+                    ->label('Rez. %')
+                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.') . '%')
+                    ->sortable()
+                    ->alignCenter(),
 
                 IconColumn::make('prolaz')
                     ->label('Prolaz')
-                    ->boolean(),
+                    ->boolean()
+                    ->alignCenter(),
 
                 TextColumn::make('created_at')
-                    ->label('Datum slanja')
+                    ->label('Slanje')
                     ->date('d.m.Y.')
-                    ->sortable(),
+                    ->sortable()
+                    ->alignCenter(),
             ])
             ->filters([
                 SelectFilter::make('test_id')

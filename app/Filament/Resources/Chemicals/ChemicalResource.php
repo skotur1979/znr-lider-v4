@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use UnitEnum;
+use Filament\Support\Enums\MaxWidth;
 
 class ChemicalResource extends BaseResource
 {
@@ -44,6 +45,10 @@ class ChemicalResource extends BaseResource
     {
         return 'chemicals';
     }
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     public static function form(Schema $schema): Schema
     {

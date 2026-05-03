@@ -26,13 +26,14 @@ class ExpenseForm
     public static function schema(): array
     {
         return [
-           Hidden::make('user_id')
-    ->default(fn () => auth()->id())
-    ->dehydrated(),
+    Hidden::make('user_id')
+        ->default(fn () => auth()->id())
+        ->dehydrated(),
 
-            Section::make('Unos troška')
-                ->columns(2)
-                ->schema([
+    Section::make('Unos troška')
+        ->columnSpanFull()
+        ->columns(2)
+        ->schema([
                     Select::make('category_id')
                         ->label('Kategorija')
                         ->required()

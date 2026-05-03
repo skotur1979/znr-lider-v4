@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
+use Filament\Support\Enums\MaxWidth;
 
 class ExpenseResource extends BaseResource
 {
@@ -45,6 +46,10 @@ class ExpenseResource extends BaseResource
     {
         return $schema->schema(ExpenseForm::schema());
     }
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     public static function table(Table $table): Table
     {

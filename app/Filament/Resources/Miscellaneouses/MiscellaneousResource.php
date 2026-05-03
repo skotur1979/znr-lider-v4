@@ -34,6 +34,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Filament\Forms\Components\Hidden;
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\MaxWidth;
+use Filament\Schemas\Components\Grid;
 
 class MiscellaneousResource extends BaseResource
 {
@@ -50,130 +52,154 @@ class MiscellaneousResource extends BaseResource
     {
         return 'miscellaneous';
     }
+    public static function getMaxContentWidth(): MaxWidth|string|null
+{
+    return MaxWidth::Full;
+}
 
     public static function form(Schema $schema): Schema
-    {
-        return $schema->schema([
+{
+    return $schema
+        ->schema([
             Select::make('user_id')
-            ->label('Korisnik')
-            ->relationship('user', 'name')
-            ->searchable()
-            ->preload()
-            ->required()
-            ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
-            ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
+                ->label('Korisnik')
+                ->relationship('user', 'name')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+                ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
 
-        Hidden::make('user_id')
-            ->default(fn () => static::ownerId())
-            ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
-            ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
-    
-            Section::make('Podatci o predmetu')
+            Hidden::make('user_id')
+                ->default(fn () => static::ownerId())
+                ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+                ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
+
+            Section::make('Podaci o ispitivanju')
+                ->columnSpanFull()
+                ->columns(2)
                 ->schema([
-                    TextInput::make('name')
-                        ->label('Naziv (obavezno)')
-                        ->required()
-                        ->maxLength(255),
-
-                    Select::make('category_id')
-                        ->label('Kategorija')
-                        ->required()
-                        ->searchable()
-                        ->preload()
-                        ->options(fn () => static::getCategoryOptions())
-                        ->getSearchResultsUsing(fn (string $search) => static::getCategorySearchResults($search))
-                        ->getOptionLabelUsing(fn ($value) => Category::find($value)?->name)
-                        ->createOptionForm([
+                    Section::make('Podaci o predmetu')
+                        ->columns(2)
+                        ->schema([
                             TextInput::make('name')
-                                ->label('Naziv kategorije')
+                                ->label('Naziv (obavezno)')
                                 ->required()
                                 ->maxLength(255),
-                        ])
-                        ->createOptionUsing(function (array $data): int {
-                            $category = Category::create([
-                                'name' => $data['name'],
-                                'user_id' => Auth::user()?->ownerId(),
-                            ]);
 
-                            return $category->id;
-                        }),
+                            Select::make('category_id')
+                                ->label('Kategorija')
+                                ->required()
+                                ->searchable()
+                                ->preload()
+                                ->options(fn () => static::getCategoryOptions())
+                                ->getSearchResultsUsing(fn (string $search) => static::getCategorySearchResults($search))
+                                ->getOptionLabelUsing(fn ($value) => Category::find($value)?->name)
+                                ->createOptionForm([
+                                    TextInput::make('name')
+                                        ->label('Naziv kategorije')
+                                        ->required()
+                                        ->maxLength(255),
+                                ])
+                                ->createOptionUsing(function (array $data): int {
+                                    $category = Category::create([
+                                        'name' => $data['name'],
+                                        'user_id' => Auth::user()?->ownerId(),
+                                    ]);
 
-                    TextInput::make('examiner')
-                        ->label('Ispitao')
-                        ->maxLength(255),
+                                    return $category->id;
+                                }),
 
-                    TextInput::make('report_number')
-                        ->label('Broj izvještaja')
-                        ->maxLength(255)
-                        ->nullable()
-                        ->rule(function ($record) {
-                            return Rule::unique('miscellaneouses', 'report_number')
-                                ->where(function ($query) {
-                                    $query->where('user_id', Auth::user()?->ownerId())
-                                        ->whereNull('deleted_at');
+                            TextInput::make('examiner')
+                                ->label('Ispitao')
+                                ->maxLength(255),
+
+                            TextInput::make('report_number')
+                                ->label('Broj izvještaja')
+                                ->maxLength(255)
+                                ->nullable()
+                                ->rule(function ($record) {
+                                    return Rule::unique('miscellaneouses', 'report_number')
+                                        ->where(function ($query) {
+                                            $query->where('user_id', Auth::user()?->ownerId())
+                                                ->whereNull('deleted_at');
+                                        })
+                                        ->ignore($record?->id);
                                 })
-                                ->ignore($record?->id);
-                        })
-                        ->validationMessages([
-                            'unique' => 'Već postoji zapis s istim brojem izvještaja.',
+                                ->validationMessages([
+                                    'unique' => 'Već postoji zapis s istim brojem izvještaja.',
+                                ]),
                         ]),
-                ])
-                ->columns(2),
 
-            Section::make('Ispitivanje')
-                ->schema([
-                    DatePicker::make('examination_valid_from')
-                        ->label('Vrijedi od (obavezno)')
-                        ->required()
-                        ->displayFormat('d.m.Y')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb'),
+                    Section::make('Ispitivanje')
+                        ->columns(2)
+                        ->schema([
+                            DatePicker::make('examination_valid_from')
+                                ->label('Vrijedi od (obavezno)')
+                                ->required()
+                                ->displayFormat('d.m.Y.')
+                                ->weekStartsOnMonday()
+                                ->timezone('Europe/Zagreb')
+                                ->native(false),
 
-                    DatePicker::make('examination_valid_until')
-                        ->label('Vrijedi do (obavezno)')
-                        ->required()
-                        ->displayFormat('d.m.Y')
-                        ->weekStartsOnMonday()
-                        ->timezone('Europe/Zagreb'),
-                ])
-                ->columns(2),
+                            DatePicker::make('examination_valid_until')
+                                ->label('Vrijedi do (obavezno)')
+                                ->required()
+                                ->displayFormat('d.m.Y.')
+                                ->weekStartsOnMonday()
+                                ->timezone('Europe/Zagreb')
+                                ->native(false),
+                        ]),
 
-            Section::make('Napomena')
-                ->schema([
-                    Textarea::make('remark')
-                        ->label('Napomena')
-                        ->rows(3)
-                        ->columnSpanFull(),
-                ]),
+                    Grid::make(2)
+                        ->columnSpanFull()
+                        ->schema([
+                            Section::make('Napomena')
+                                ->extraAttributes([
+                                    'style' => 'height:100%;',
+                                ])
+                                ->schema([
+                                    Textarea::make('remark')
+                                        ->label('Napomena')
+                                        ->rows(7)
+                                        ->columnSpanFull(),
+                                ]),
 
-            Section::make('Prilozi')
-                ->schema([
-                    FileUpload::make('pdf')
-                        ->label('Dodaj priloge (max. 5)')
-                        ->disk('public')
-                        ->directory('pdfs')
-                        ->multiple()
-                        ->maxFiles(5)
-                        ->maxSize(30720)
-                        ->preserveFilenames()
-                        ->openable()
-                        ->downloadable()
-                        ->acceptedFileTypes([
-                            'application/pdf',
-                            'application/msword',
-                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            'application/vnd.ms-excel',
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'image/jpeg',
-                            'image/png',
-                            'image/gif',
-                            'image/webp',
-                            'application/zip',
-                            'application/x-rar-compressed',
+                            Section::make('Prilozi')
+                                ->extraAttributes([
+                                    'style' => 'height:100%;',
+                                ])
+                                ->schema([
+                                    FileUpload::make('pdf')
+                                        ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
+                                        ->disk('public')
+                                        ->directory('pdfs')
+                                        ->multiple()
+                                        ->maxFiles(5)
+                                        ->maxSize(30720)
+                                        ->preserveFilenames()
+                                        ->openable()
+                                        ->downloadable()
+                                        ->acceptedFileTypes([
+                                            'application/pdf',
+                                            'application/msword',
+                                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                            'application/vnd.ms-excel',
+                                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                            'image/jpeg',
+                                            'image/png',
+                                            'image/gif',
+                                            'image/webp',
+                                            'application/zip',
+                                            'application/x-rar-compressed',
+                                        ])
+                                        ->columnSpanFull(),
+                                ]),
                         ]),
                 ]),
-        ]);
-    }
+        ])
+        ->columns(1);
+}
 
     public static function table(Table $table): Table
     {
