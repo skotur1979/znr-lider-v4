@@ -240,6 +240,31 @@
             line-height: 16px;
             page-break-inside: avoid;
         }
+        .page-break-before {
+    page-break-before: always;
+}
+
+.avoid-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+table.data {
+    page-break-inside: auto;
+}
+
+table.data tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+table.data thead {
+    display: table-header-group;
+}
+
+table.data tfoot {
+    display: table-row-group;
+}
 
         .footer {
             margin-top: 12px;
@@ -389,9 +414,10 @@
             </tbody>
         </table>
 
-        <div class="section-title">Rokovi i valjanosti</div>
+        <div class="page-break-before avoid-break">
+    <div class="section-title">Rokovi i valjanosti</div>
 
-        <table class="data">
+    <table class="data">
             <thead>
             <tr>
                 <th>Stavka</th>
