@@ -3,9 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class OperationalLog extends Model
 {
@@ -16,6 +16,7 @@ class OperationalLog extends Model
         'log_date',
         'title',
         'note',
+        'items',
         'location',
         'type',
         'status',
@@ -26,6 +27,7 @@ class OperationalLog extends Model
 
     protected $casts = [
         'log_date' => 'date',
+        'items' => 'array',
         'attachments' => 'array',
     ];
 
@@ -39,8 +41,17 @@ class OperationalLog extends Model
         return $this->morphTo();
     }
 
-    public function isConverted(): bool
+    public function itemsCount(): int
     {
-        return filled($this->converted_type) && filled($this->converted_id);
+        return collect($this->items ?? [])
+            ->filter(fn ($item) => filled($item['note'] ?? null))
+            ->count();
+    }
+
+    public function tasksCount(): int
+    {
+        return collect($this->items ?? [])
+            ->filter(fn ($item) => ! empty($item['create_task']))
+            ->count();
     }
 }

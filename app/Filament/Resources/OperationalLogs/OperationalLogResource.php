@@ -8,16 +8,18 @@ use App\Models\OperationalLog;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,6 +30,11 @@ class OperationalLogResource extends BaseResource
     protected static ?string $model = OperationalLog::class;
 
     protected static bool $shouldRegisterNavigation = false;
+
+    protected static function getModuleKey(): ?string
+    {
+        return 'operational_logs';
+    }
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
     protected static ?string $slug = 'operativni-dnevnik';
@@ -44,32 +51,50 @@ class OperationalLogResource extends BaseResource
                 ->dehydrated(),
 
             Section::make('Operativni dnevnik')
-                ->description('Brzi zapis iz pogona. Ako odabereš radni zadatak, zapis će se automatski dodati i u Radne zadatke.')
-                ->columns(1)
+                ->description('Jedan dnevni unos s više natuknica. Označene natuknice automatski se spremaju kao radni zadaci.')
+                ->columns(12)
                 ->schema([
                     DatePicker::make('log_date')
                         ->label('Datum')
                         ->default(now())
                         ->required()
                         ->native(false)
-                        ->displayFormat('d.m.Y.'),
+                        ->displayFormat('d.m.Y.')
+                        ->columnSpan([
+                            'default' => 12,
+                            'md' => 4,
+                            'xl' => 3,
+                        ]),
 
-                    Textarea::make('note')
-                        ->label('Bilješka')
-                        ->rows(6)
-                        ->required()
-                        ->columnSpanFull(),
+                    Repeater::make('items')
+                        ->label('Bilješke / natuknice')
+                        ->schema([
+                            Textarea::make('note')
+                                ->label('Bilješka')
+                                ->rows(2)
+                                ->required()
+                                ->placeholder('Npr. vagan otpad, obaviješten radnik za rukavice, nazvati dr. medicine rada...')
+                                ->columnSpan([
+                                    'default' => 12,
+                                    'md' => 9,
+                                ]),
 
-                    Select::make('type')
-                        ->label('Vrsta zapisa')
-                        ->options([
-                            'note' => 'Samo zapis',
-                            'task' => 'Radni zadatak',
+                            Checkbox::make('create_task')
+                                ->label('Radni zadatak')
+                                ->helperText('Označi ako ova bilješka treba ići u Radne zadatke.')
+                                ->columnSpan([
+                                    'default' => 12,
+                                    'md' => 3,
+                                ]),
                         ])
-                        ->default('note')
-                        ->native(false)
-                        ->required(),
-                ]),
+                        ->columns(12)
+                        ->defaultItems(3)
+                        ->minItems(1)
+                        ->addActionLabel('Dodaj još bilješku')
+                        ->reorderable(false)
+                        ->columnSpanFull(),
+                ])
+                ->columnSpanFull(),
         ]);
     }
 
@@ -91,29 +116,34 @@ class OperationalLogResource extends BaseResource
 
                 static::userTableColumn(),
 
-                TextColumn::make('note')
-                    ->label('Bilješka')
-                    ->limit(140)
-                    ->searchable()
-                    ->wrap(),
-
-                TextColumn::make('type')
-                    ->label('Vrsta')
+                TextColumn::make('items_count')
+                    ->label('Bilješke')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'task' => 'Radni zadatak',
-                        default => 'Samo zapis',
+                    ->getStateUsing(fn (OperationalLog $record): string => (string) $record->itemsCount())
+                    ->color('info'),
+
+                TextColumn::make('items_preview')
+                    ->label('Sažetak')
+                    ->getStateUsing(function (OperationalLog $record): string {
+                        $items = collect($record->items ?? [])
+                            ->pluck('note')
+                            ->filter()
+                            ->take(3)
+                            ->implode(' • ');
+
+                        return $items ?: '-';
                     })
-                    ->color(fn (?string $state) => match ($state) {
-                        'task' => 'warning',
-                        default => 'info',
+                    ->limit(160)
+                    ->wrap()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where('items', 'like', "%{$search}%");
                     }),
 
-                TextColumn::make('converted_type')
-                    ->label('Pretvoreno')
+                TextColumn::make('tasks_count')
+                    ->label('Radni zadaci')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => filled($state) ? 'Da' : 'Ne')
-                    ->color(fn ($state) => filled($state) ? 'success' : 'gray'),
+                    ->getStateUsing(fn (OperationalLog $record): string => (string) $record->tasksCount())
+                    ->color(fn (OperationalLog $record): string => $record->tasksCount() > 0 ? 'warning' : 'gray'),
 
                 TextColumn::make('created_at')
                     ->label('Uneseno')
@@ -122,13 +152,6 @@ class OperationalLogResource extends BaseResource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('type')
-                    ->label('Vrsta')
-                    ->options([
-                        'note' => 'Samo zapis',
-                        'task' => 'Radni zadatak',
-                    ]),
-
                 Filter::make('log_date')
                     ->label('Datum')
                     ->form([
@@ -155,6 +178,12 @@ class OperationalLogResource extends BaseResource
                     }),
             ])
             ->recordActions([
+                ViewAction::make()
+                    ->label('Prikaži'),
+
+                EditAction::make()
+                    ->label('Uredi'),
+
                 DeleteAction::make()
                     ->label('Obriši'),
             ])
@@ -177,35 +206,13 @@ class OperationalLogResource extends BaseResource
         return $query->where('user_id', Auth::user()?->ownerId());
     }
 
-    public static function mutateFormDataBeforeCreate(array $data): array
-    {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId();
-        }
-
-        $data['log_date'] = $data['log_date'] ?? now()->toDateString();
-        $data['status'] = $data['type'] === 'task' ? 'converted' : 'recorded';
-
-        return $data;
-    }
-
-    public static function mutateFormDataBeforeSave(array $data): array
-    {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId();
-        }
-
-        $data['status'] = $data['type'] === 'task' ? 'converted' : 'recorded';
-
-        return $data;
-    }
-
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListOperationalLogs::route('/'),
             'create' => Pages\CreateOperationalLog::route('/create'),
             'edit' => Pages\EditOperationalLog::route('/{record}/edit'),
+            'view' => Pages\ViewOperationalLog::route('/{record}'),
         ];
     }
 }
