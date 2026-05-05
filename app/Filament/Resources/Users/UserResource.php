@@ -63,11 +63,16 @@ class UserResource extends Resource
     'kpis',
 ],
             'zaposlenici' => [
-                'employees',
-                'medical_referrals_ra1',
-                'medical_referrals_nr1',
-                'ppe_logs',
-            ],
+    'employees',
+    'medical_referrals_ra1',
+    'medical_referrals_nr1',
+    'ppe_logs',
+],
+
+'edukacija' => [
+    'education_categories',
+    'education_center',
+],
             'ispitivanja' => [
                 'machines',
                 'fires',
@@ -107,6 +112,7 @@ class UserResource extends Resource
         return [
             'upravljanje' => array_values(array_intersect($selected, $groups['upravljanje'])),
             'zaposlenici' => array_values(array_intersect($selected, $groups['zaposlenici'])),
+            'edukacija' => array_values(array_intersect($selected, $groups['edukacija'])),
             'ispitivanja' => array_values(array_intersect($selected, $groups['ispitivanja'])),
             'okolis' => array_values(array_intersect($selected, $groups['okolis'])),
             'testiranje' => array_values(array_intersect($selected, $groups['testiranje'])),
@@ -117,19 +123,21 @@ class UserResource extends Resource
     public static function mergeQuickActions(array $data): array
     {
         $merged = array_merge(
-            $data['quick_actions_upravljanje'] ?? [],
-            $data['quick_actions_zaposlenici'] ?? [],
-            $data['quick_actions_ispitivanja'] ?? [],
-            $data['quick_actions_okolis'] ?? [],
-            $data['quick_actions_testiranje'] ?? [],
-            $data['quick_actions_zadaci'] ?? [],
-        );
+    $data['quick_actions_upravljanje'] ?? [],
+    $data['quick_actions_zaposlenici'] ?? [],
+    $data['quick_actions_edukacija'] ?? [],
+    $data['quick_actions_ispitivanja'] ?? [],
+    $data['quick_actions_okolis'] ?? [],
+    $data['quick_actions_testiranje'] ?? [],
+    $data['quick_actions_zadaci'] ?? [],
+);
 
         $data['quick_actions'] = array_values(array_unique($merged));
 
         unset(
             $data['quick_actions_upravljanje'],
             $data['quick_actions_zaposlenici'],
+            $data['quick_actions_edukacija'],
             $data['quick_actions_ispitivanja'],
             $data['quick_actions_okolis'],
             $data['quick_actions_testiranje'],
@@ -291,7 +299,19 @@ class UserResource extends Resource
                                 4
                             ),
                         ]),
-
+                        Section::make('Edukacija')
+    ->compact()
+    ->schema([
+        static::moduleCheckboxList(
+            'quick_actions_edukacija',
+            [
+                'education_categories' => 'Kategorije edukacije',
+                'education_center' => 'Edukacijski centar',
+            ],
+            'edukacija',
+            2
+        ),
+    ]),
                     Section::make('Ispitivanja')
                         ->compact()
                         ->schema([

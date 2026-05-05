@@ -143,4 +143,8 @@ class LearningCategoryResource extends Resource
             'edit' => Pages\EditLearningCategory::route('/{record}/edit'),
         ];
     }
+    protected static function getModuleKey(): ?string
+    {
+        return 'learning_categories';
+    }
 }
