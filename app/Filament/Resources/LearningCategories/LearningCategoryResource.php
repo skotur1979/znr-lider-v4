@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LearningCategories;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\LearningCategories\Pages;
 use App\Models\LearningCategory;
 use Filament\Actions\DeleteAction;
@@ -10,17 +11,17 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 
-class LearningCategoryResource extends Resource
+class LearningCategoryResource extends BaseResource
 {
     protected static ?string $model = LearningCategory::class;
+
+    protected static bool $hasOwnership = false;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-folder-open';
     protected static \UnitEnum|string|null $navigationGroup = 'Edukacija';
@@ -30,11 +31,16 @@ class LearningCategoryResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    protected static function getModuleKey(): ?string
+    {
+        return null;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             Hidden::make('user_id')
-                ->default(fn () => self::ownerId()),
+                ->default(fn () => static::ownerId()),
 
             TextInput::make('name')
                 ->label('Naziv kategorije')
@@ -54,7 +60,7 @@ class LearningCategoryResource extends Resource
             Toggle::make('is_global')
                 ->label('Globalna kategorija')
                 ->helperText('Globalne kategorije vide svi korisnici.')
-                ->visible(fn () => self::isSuperAdmin()),
+                ->visible(fn () => static::isSuperAdmin()),
 
             Toggle::make('is_active')
                 ->label('Aktivno')
@@ -103,13 +109,13 @@ class LearningCategoryResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = static::getModel()::query();
 
-        if (self::isSuperAdmin()) {
+        if (static::isSuperAdmin()) {
             return $query;
         }
 
-        $ownerId = self::ownerId();
+        $ownerId = static::ownerId();
 
         return $query->where(function (Builder $q) use ($ownerId) {
             $q->where('is_global', true)
@@ -117,22 +123,29 @@ class LearningCategoryResource extends Resource
         });
     }
 
-    protected static function isSuperAdmin(): bool
+    public static function getNavigationBadge(): ?string
     {
-        $user = Auth::user();
-
-        return (bool) (
-            $user?->isSuperAdmin()
-            || $user?->is_admin
-            || $user?->role === 'admin'
-        );
+        return (string) static::getEloquentQuery()->count();
     }
 
-    protected static function ownerId(): ?int
+    public static function mutateFormDataBeforeCreate(array $data): array
     {
-        $user = Auth::user();
+        if (! static::isSuperAdmin()) {
+            $data['user_id'] = static::ownerId();
+            $data['is_global'] = false;
+        }
 
-        return $user?->parent_user_id ?: $user?->id;
+        return $data;
+    }
+
+    public static function mutateFormDataBeforeSave(array $data): array
+    {
+        if (! static::isSuperAdmin()) {
+            $data['user_id'] = static::ownerId();
+            $data['is_global'] = false;
+        }
+
+        return $data;
     }
 
     public static function getPages(): array
@@ -142,9 +155,5 @@ class LearningCategoryResource extends Resource
             'create' => Pages\CreateLearningCategory::route('/create'),
             'edit' => Pages\EditLearningCategory::route('/{record}/edit'),
         ];
-    }
-    protected static function getModuleKey(): ?string
-    {
-        return 'learning_categories';
     }
 }

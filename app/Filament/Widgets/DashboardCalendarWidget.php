@@ -34,14 +34,35 @@ class DashboardCalendarWidget extends Widget
     public ?string $selected_date = null;
 
     public bool $showTaskModal = false;
-
     public ?int $editingTaskId = null;
-
     public ?string $taskDate = null;
-
     public string $taskTitle = '';
-
     public ?string $taskDescription = null;
+
+    protected function ownerId(): ?int
+    {
+        return Auth::user()?->ownerId();
+    }
+
+    protected function isSuperAdmin(): bool
+    {
+        return Auth::user()?->isSuperAdmin() === true;
+    }
+
+    protected function applyOwnerScope(Builder $query): Builder
+    {
+        if ($this->isSuperAdmin()) {
+            return $query;
+        }
+
+        $ownerId = $this->ownerId();
+
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('user_id', $ownerId);
+    }
 
     public function mount(): void
     {
@@ -78,10 +99,7 @@ class DashboardCalendarWidget extends Widget
     public function openTaskEditModal(int $taskId): void
     {
         $query = WorkTask::query()->whereKey($taskId);
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
+        $this->applyOwnerScope($query);
 
         $task = $query->first();
 
@@ -116,10 +134,7 @@ class DashboardCalendarWidget extends Widget
 
         if ($this->editingTaskId) {
             $query = WorkTask::query()->whereKey($this->editingTaskId);
-
-            if (! Auth::user()?->isAdmin()) {
-                $query->where('user_id', Auth::id());
-            }
+            $this->applyOwnerScope($query);
 
             $task = $query->first();
 
@@ -132,7 +147,7 @@ class DashboardCalendarWidget extends Widget
             }
         } else {
             WorkTask::create([
-                'user_id' => Auth::id(),
+                'user_id' => $this->ownerId(),
                 'title' => $data['taskTitle'],
                 'description' => $data['taskDescription'],
                 'due_date' => $data['taskDate'],
@@ -148,10 +163,7 @@ class DashboardCalendarWidget extends Widget
     public function completeTask(int $taskId): void
     {
         $query = WorkTask::query()->whereKey($taskId);
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
+        $this->applyOwnerScope($query);
 
         $task = $query->first();
 
@@ -170,10 +182,7 @@ class DashboardCalendarWidget extends Widget
     public function reopenTask(int $taskId): void
     {
         $query = WorkTask::query()->whereKey($taskId);
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
+        $this->applyOwnerScope($query);
 
         $task = $query->first();
 
@@ -192,10 +201,7 @@ class DashboardCalendarWidget extends Widget
     public function deleteTask(int $taskId): void
     {
         $query = WorkTask::query()->whereKey($taskId);
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
+        $this->applyOwnerScope($query);
 
         $task = $query->first();
 
@@ -215,10 +221,7 @@ class DashboardCalendarWidget extends Widget
     public function getOpenWorkTasksCountProperty(): int
     {
         $query = WorkTask::query()->where('is_done', false);
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
+        $this->applyOwnerScope($query);
 
         return $query->count();
     }
@@ -226,64 +229,61 @@ class DashboardCalendarWidget extends Widget
     public function getClosedWorkTasksCountProperty(): int
     {
         $query = WorkTask::query()->where('is_done', true);
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
+        $this->applyOwnerScope($query);
 
         return $query->count();
     }
 
     public function getViewData(): array
-{
-    $current = Carbon::create($this->calendar_year, $this->calendar_month, 1)->startOfMonth();
+    {
+        $current = Carbon::create($this->calendar_year, $this->calendar_month, 1)->startOfMonth();
 
-    $start = $current->copy()->startOfWeek(Carbon::MONDAY);
-    $end = $current->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
+        $start = $current->copy()->startOfWeek(Carbon::MONDAY);
+        $end = $current->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
 
-    $selectedDate = $this->selected_date
-        ? Carbon::parse($this->selected_date)->toDateString()
-        : null;
+        $selectedDate = $this->selected_date
+            ? Carbon::parse($this->selected_date)->toDateString()
+            : null;
 
-    $days = collect(CarbonPeriod::create($start, $end))
-        ->map(function (Carbon $day) use ($current, $selectedDate) {
-            return [
-                'date' => $day->copy(),
-                'in_month' => $day->month === $current->month,
-                'is_selected' => $selectedDate === $day->toDateString(),
-                'items' => [],
-                'all_items' => [],
-                'extra_count' => 0,
-                'total_count' => 0,
-                'day_url' => url('/admin?calendar_month=' . $this->calendar_month
-                    . '&calendar_year=' . $this->calendar_year
-                    . '&selected_date=' . $day->toDateString()),
-            ];
-        })
-        ->values();
+        $days = collect(CarbonPeriod::create($start, $end))
+            ->map(function (Carbon $day) use ($current, $selectedDate) {
+                return [
+                    'date' => $day->copy(),
+                    'in_month' => $day->month === $current->month,
+                    'is_selected' => $selectedDate === $day->toDateString(),
+                    'items' => [],
+                    'all_items' => [],
+                    'extra_count' => 0,
+                    'total_count' => 0,
+                    'day_url' => url('/admin?calendar_month=' . $this->calendar_month
+                        . '&calendar_year=' . $this->calendar_year
+                        . '&selected_date=' . $day->toDateString()),
+                ];
+            })
+            ->values();
 
-    $itemsByDate = $this->buildItems($start, $end)
-        ->groupBy(fn (array $item) => $item['date']->format('Y-m-d'));
+        $itemsByDate = $this->buildItems($start, $end)
+            ->groupBy(fn (array $item) => $item['date']->format('Y-m-d'));
 
-    $days = $days->map(function (array $day) use ($itemsByDate) {
-        $key = $day['date']->format('Y-m-d');
-        $collection = $itemsByDate->get($key, collect());
+        $days = $days->map(function (array $day) use ($itemsByDate) {
+            $key = $day['date']->format('Y-m-d');
+            $collection = $itemsByDate->get($key, collect());
 
-        $day['all_items'] = $collection->values()->all();
-        $day['items'] = $collection->take(5)->values()->all();
-        $day['total_count'] = $collection->count();
-        $day['extra_count'] = max(0, $collection->count() - 5);
+            $day['all_items'] = $collection->values()->all();
+            $day['items'] = $collection->take(5)->values()->all();
+            $day['total_count'] = $collection->count();
+            $day['extra_count'] = max(0, $collection->count() - 5);
 
-        return $day;
-    });
+            return $day;
+        });
 
-    return [
-        'monthLabel' => $current->translatedFormat('F Y'),
-        'days' => $days->chunk(7),
-        'weekdays' => ['pon.', 'uto.', 'sri.', 'čet.', 'pet.', 'sub.', 'ned.'],
-        'selectedDate' => $selectedDate,
-    ];
-}
+        return [
+            'monthLabel' => $current->translatedFormat('F Y'),
+            'days' => $days->chunk(7),
+            'weekdays' => ['pon.', 'uto.', 'sri.', 'čet.', 'pet.', 'sub.', 'ned.'],
+            'selectedDate' => $selectedDate,
+        ];
+    }
 
     protected function buildItems(Carbon $start, Carbon $end): Collection
     {
@@ -305,56 +305,31 @@ class DashboardCalendarWidget extends Widget
     protected function employeeBaseQuery(): Builder
     {
         $query = Employee::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope($query);
     }
 
     protected function machineBaseQuery(): Builder
     {
         $query = Machine::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope($query);
     }
 
     protected function fireBaseQuery(): Builder
     {
         $query = Fire::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope($query);
     }
 
     protected function miscellaneousBaseQuery(): Builder
     {
         $query = Miscellaneous::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope($query);
     }
 
     protected function workTaskBaseQuery(): Builder
     {
         $query = WorkTask::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope($query);
     }
 
     protected function employeeMedicalItems(Carbon $start, Carbon $end): Collection
@@ -386,9 +361,11 @@ class DashboardCalendarWidget extends Widget
             ->whereBetween('valid_until', [$start->toDateString(), $end->toDateString()])
             ->orderBy('valid_until');
 
-        if (! Auth::user()?->isAdmin()) {
-            $query->whereHas('employee', function (Builder $q) {
-                $q->where('user_id', Auth::id());
+        if (! $this->isSuperAdmin()) {
+            $ownerId = $this->ownerId();
+
+            $query->whereHas('employee', function (Builder $q) use ($ownerId) {
+                $q->where('user_id', $ownerId);
             });
         }
 

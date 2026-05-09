@@ -12,6 +12,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\FileUpload as FormFileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -20,7 +21,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
@@ -32,13 +32,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use Filament\Forms\Components\CheckboxList;
 
 class LearningMaterialResource extends BaseResource
 {
     protected static ?string $model = LearningMaterial::class;
+
+    protected static bool $hasOwnership = false;
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedAcademicCap;
 
@@ -52,7 +52,7 @@ class LearningMaterialResource extends BaseResource
 
     protected static function getModuleKey(): ?string
     {
-        return 'learning_materials';
+        return null;
     }
 
     public static function getMaxContentWidth(): MaxWidth|string|null
@@ -61,143 +61,144 @@ class LearningMaterialResource extends BaseResource
     }
 
     public static function form(Schema $schema): Schema
-{
-    return $schema
-        ->schema([
-            Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
-                ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
+    {
+        return $schema
+            ->schema([
+                Select::make('user_id')
+                    ->label('Korisnik')
+                    ->relationship('user', 'name')
+                    ->searchable()
+                    ->preload()
+                    ->required()
+                    ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+                    ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
 
-            Hidden::make('user_id')
-                ->default(fn () => static::ownerId())
-                ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
-                ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
+                Hidden::make('user_id')
+                    ->default(fn () => static::ownerId())
+                    ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+                    ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
 
-            Section::make('Edukacijski materijal')
-                ->columnSpanFull()
-                ->columns(2)
-                ->schema([
-                    Section::make('Osnovni podaci')
-                        ->columns(2)
-                        ->schema([
-                            TextInput::make('title')
-                                ->label('Naziv materijala')
-                                ->required()
-                                ->maxLength(255),
+                Section::make('Edukacijski materijal')
+                    ->columnSpanFull()
+                    ->columns(2)
+                    ->schema([
+                        Section::make('Osnovni podaci')
+                            ->columns(2)
+                            ->schema([
+                                TextInput::make('title')
+                                    ->label('Naziv materijala')
+                                    ->required()
+                                    ->maxLength(255),
 
-                            Select::make('learning_category_id')
-                                ->label('Kategorija')
-                                ->options(fn () => static::categoryOptions())
-                                ->searchable()
-                                ->preload()
-                                ->required(),
+                                Select::make('learning_category_id')
+                                    ->label('Kategorija')
+                                    ->options(fn () => static::categoryOptions())
+                                    ->searchable()
+                                    ->preload()
+                                    ->required(),
 
-                            CheckboxList::make('content_types')
-                                ->label('Sadržaj uključuje')
-                                ->options([
-                                    'document' => '📄 Dokument',
-                                    'video' => '🎥 Video',
-                                    'website' => '🌐 Stručni link / web stranica',
-                                    'instruction' => '📘 Uputa',
-                                    'other' => '📚 Ostalo',
-                                ])
-                                ->columns(3)
-                                ->bulkToggleable()
-                                ->required()
-                                ->helperText('Možeš označiti više opcija. Npr. ako materijal ima Napo video i PDF dokument, označi Video i Dokument.')
-                                ->columnSpanFull(),
+                                CheckboxList::make('content_types')
+                                    ->label('Sadržaj uključuje')
+                                    ->options([
+                                        'document' => '📄 Dokument',
+                                        'video' => '🎥 Video',
+                                        'website' => '🌐 Stručni link / web stranica',
+                                        'instruction' => '📘 Uputa',
+                                        'other' => '📚 Ostalo',
+                                    ])
+                                    ->columns(3)
+                                    ->bulkToggleable()
+                                    ->required()
+                                    ->helperText('Možeš označiti više opcija. Npr. ako materijal ima Napo video i PDF dokument, označi Video i Dokument.')
+                                    ->columnSpanFull(),
 
-                            Textarea::make('description')
-                                ->label('Kratki opis')
-                                ->rows(3)
-                                ->columnSpanFull(),
+                                Textarea::make('description')
+                                    ->label('Kratki opis')
+                                    ->rows(3)
+                                    ->columnSpanFull(),
 
-                            Section::make('Postavke prikaza')
-                                ->columns(3)
-                                ->schema([
-                                    TextInput::make('sort_order')
-                                        ->label('Redoslijed')
-                                        ->numeric()
-                                        ->default(0),
+                                Section::make('Postavke prikaza')
+                                    ->columns(3)
+                                    ->schema([
+                                        TextInput::make('sort_order')
+                                            ->label('Redoslijed')
+                                            ->numeric()
+                                            ->default(0),
 
-                                    Toggle::make('is_global')
-                                        ->label('Globalni materijal')
-                                        ->helperText('Globalne materijale vide svi korisnici.')
-                                        ->visible(fn () => static::isSuperAdmin()),
+                                        Toggle::make('is_global')
+                                            ->label('Globalni materijal')
+                                            ->helperText('Globalne materijale vide svi korisnici.')
+                                            ->visible(fn () => static::isSuperAdmin()),
 
-                                    Toggle::make('is_active')
-                                        ->label('Aktivno')
-                                        ->default(true),
-                                ])
-                                ->columnSpanFull(),
-                        ]),
+                                        Toggle::make('is_active')
+                                            ->label('Aktivno')
+                                            ->default(true),
+                                    ])
+                                    ->columnSpanFull(),
+                            ]),
 
-                    Section::make('Linkovi i dokumenti')
-                        ->columns(1)
-                        ->schema([
-                            Placeholder::make('info')
-                                ->label('Napomena')
-                                ->content('Možeš dodati više linkova i više dokumenata. Video se ne uploada već ide kao link, npr. YouTube, Napo i sl.'),
+                        Section::make('Linkovi i dokumenti')
+                            ->columns(1)
+                            ->schema([
+                                Placeholder::make('info')
+                                    ->label('Napomena')
+                                    ->content('Možeš dodati više linkova i više dokumenata. Video se ne uploada već ide kao link, npr. YouTube, Napo i sl.'),
 
-                            Repeater::make('links')
-                                ->label('Linkovi')
-                                ->schema([
-                                    TextInput::make('label')
-                                        ->label('Naziv linka')
-                                        ->placeholder('npr. Napo film, EU-OSHA, interna stranica...')
-                                        ->maxLength(255),
+                                Repeater::make('links')
+                                    ->label('Linkovi')
+                                    ->schema([
+                                        TextInput::make('label')
+                                            ->label('Naziv linka')
+                                            ->placeholder('npr. Napo film, EU-OSHA, interna stranica...')
+                                            ->maxLength(255),
 
-                                    TextInput::make('url')
-                                        ->label('Link')
-                                        ->url()
-                                        ->placeholder('https://...')
-                                        ->maxLength(2048),
-                                ])
-                                ->columns(2)
-                                ->defaultItems(0)
-                                ->addActionLabel('Dodaj link')
-                                ->collapsible()
-                                ->columnSpanFull(),
+                                        TextInput::make('url')
+                                            ->label('Link')
+                                            ->url()
+                                            ->placeholder('https://...')
+                                            ->maxLength(2048),
+                                    ])
+                                    ->columns(2)
+                                    ->defaultItems(0)
+                                    ->addActionLabel('Dodaj link')
+                                    ->collapsible()
+                                    ->columnSpanFull(),
 
-                            FormFileUpload::make('files')
-                                ->label('Dokumenti / materijali')
-                                ->disk('public')
-                                ->directory('learning-materials')
-                                ->visibility('public')
-                                ->multiple()
-                                ->maxFiles(10)
-                                ->maxSize(30720)
-                                ->preserveFilenames()
-                                ->openable()
-                                ->downloadable()
-                                ->previewable()
-                                ->acceptedFileTypes([
-                                    'application/pdf',
-                                    'application/msword',
-                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                    'application/vnd.ms-excel',
-                                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                    'application/vnd.ms-powerpoint',
-                                    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                                    'image/jpeg',
-                                    'image/png',
-                                    'image/gif',
-                                    'image/webp',
-                                    'application/zip',
-                                    'application/x-rar-compressed',
-                                ])
-                                ->helperText('Možeš dodati najviše 10 dokumenata. Svaki dokument može biti maksimalno 30 MB. Video datoteke se ne uploadaju.')
-                                ->columnSpanFull(),
-                        ]),
-                ]),
-        ])
-        ->columns(1);
-}
+                                FormFileUpload::make('files')
+                                    ->label('Dokumenti / materijali')
+                                    ->disk('public')
+                                    ->directory('learning-materials')
+                                    ->visibility('public')
+                                    ->multiple()
+                                    ->maxFiles(10)
+                                    ->maxSize(30720)
+                                    ->preserveFilenames()
+                                    ->openable()
+                                    ->downloadable()
+                                    ->previewable()
+                                    ->acceptedFileTypes([
+                                        'application/pdf',
+                                        'application/msword',
+                                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                        'application/vnd.ms-excel',
+                                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                        'application/vnd.ms-powerpoint',
+                                        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                                        'image/jpeg',
+                                        'image/png',
+                                        'image/gif',
+                                        'image/webp',
+                                        'application/zip',
+                                        'application/x-rar-compressed',
+                                    ])
+                                    ->helperText('Možeš dodati najviše 10 dokumenata. Svaki dokument može biti maksimalno 30 MB. Video datoteke se ne uploadaju.')
+                                    ->columnSpanFull(),
+                            ]),
+                    ]),
+            ])
+            ->columns(1);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -217,25 +218,27 @@ class LearningMaterialResource extends BaseResource
                     ->sortable()
                     ->alignment(Alignment::Center),
 
-                TextColumn::make('type')
-                    ->label('Vrsta')
+                TextColumn::make('content_types')
+                    ->label('Sadržaj')
                     ->badge()
                     ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'document' => 'Dokument',
-                        'video' => 'Video',
-                        'website' => 'Stručna stranica',
-                        'instruction' => 'Uputa',
-                        'other' => 'Ostalo',
-                        default => 'Materijal',
+                    ->formatStateUsing(function ($state, LearningMaterial $record) {
+                        $types = is_array($record->content_types) && count($record->content_types)
+                            ? $record->content_types
+                            : [$record->type ?: 'document'];
+
+                        return collect($types)
+                            ->map(fn ($type) => match ($type) {
+                                'document' => 'Dokument',
+                                'video' => 'Video',
+                                'website' => 'Stručna stranica',
+                                'instruction' => 'Uputa',
+                                'other' => 'Ostalo',
+                                default => 'Materijal',
+                            })
+                            ->implode(', ');
                     })
-                    ->color(fn (?string $state) => match ($state) {
-                        'video' => 'danger',
-                        'website' => 'info',
-                        'instruction' => 'warning',
-                        'document' => 'success',
-                        default => 'gray',
-                    }),
+                    ->color('info'),
 
                 TextColumn::make('sources')
                     ->label('Materijali')
@@ -320,7 +323,7 @@ class LearningMaterialResource extends BaseResource
                     ->label('Kategorija')
                     ->options(fn () => static::categoryOptions()),
 
-                SelectFilter::make('type')
+                SelectFilter::make('content_type')
                     ->label('Vrsta')
                     ->options([
                         'document' => 'Dokument',
@@ -328,7 +331,19 @@ class LearningMaterialResource extends BaseResource
                         'website' => 'Stručna stranica',
                         'instruction' => 'Uputa',
                         'other' => 'Ostalo',
-                    ]),
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
+
+                        if (! $value) {
+                            return $query;
+                        }
+
+                        return $query->where(function (Builder $q) use ($value) {
+                            $q->whereJsonContains('content_types', $value)
+                                ->orWhere('type', $value);
+                        });
+                    }),
             ])
             ->actions([
                 ActionGroup::make([
@@ -370,7 +385,8 @@ class LearningMaterialResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with(['category', 'user']);
+        $query = static::getModel()::query()
+            ->with(['category', 'user']);
 
         if (static::isSuperAdmin()) {
             return $query;
@@ -429,22 +445,29 @@ class LearningMaterialResource extends BaseResource
         return $first ? Storage::disk('public')->url($first) : null;
     }
 
-    protected static function isSuperAdmin(): bool
+    public static function getNavigationBadge(): ?string
     {
-        $user = Auth::user();
-
-        return (bool) (
-            $user?->isSuperAdmin()
-            || $user?->is_admin
-            || $user?->role === 'admin'
-        );
+        return (string) static::getEloquentQuery()->count();
     }
 
-    protected static function ownerId(): ?int
+    public static function mutateFormDataBeforeCreate(array $data): array
     {
-        $user = Auth::user();
+        if (! static::isSuperAdmin()) {
+            $data['user_id'] = static::ownerId();
+            $data['is_global'] = false;
+        }
 
-        return $user?->parent_user_id ?: $user?->id;
+        return $data;
+    }
+
+    public static function mutateFormDataBeforeSave(array $data): array
+    {
+        if (! static::isSuperAdmin()) {
+            $data['user_id'] = static::ownerId();
+            $data['is_global'] = false;
+        }
+
+        return $data;
     }
 
     public static function getPages(): array

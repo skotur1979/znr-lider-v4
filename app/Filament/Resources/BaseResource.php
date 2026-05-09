@@ -2,22 +2,24 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Resources\Concerns\HasUserTableColumn;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
-use App\Filament\Resources\Concerns\HasUserTableColumn;
+use Illuminate\Support\Facades\Schema;
 
 abstract class BaseResource extends Resource
 {
     use HasUserTableColumn;
+
     /**
-     * Uključi na true ako resource koristi SoftDeletes
+     * Uključi na true ako resource koristi SoftDeletes.
      */
     protected static bool $usesSoftDeletes = false;
 
     /**
-     * Uključi na false ako tablica nema user_id i nije owner scoped
+     * Uključi na false ako tablica nema user_id i nije owner scoped.
      */
     protected static bool $hasOwnership = true;
 
@@ -45,28 +47,30 @@ abstract class BaseResource extends Resource
         return static::user()?->ownerId();
     }
 
-    /**
-     * Default user_id koji se sprema na zapis
-     */
-    protected static function defaultUserId(): ?int
+    protected static function modelHasColumn(string $column): bool
     {
-        if (! static::$hasOwnership) {
-            return null;
+        $model = static::getModel();
+
+        if (! $model) {
+            return false;
         }
 
-        if (static::isSuperAdmin()) {
-            return Auth::id();
-        }
-
-        return static::ownerId();
+        return Schema::hasColumn((new $model)->getTable(), $column);
     }
 
     /**
-     * Scope za organizacijske podatke
+     * Scope za organizacijske podatke.
+     *
+     * Super admin vidi sve.
+     * Glavni korisnik i podkorisnik vide sve zapise svoje organizacije.
      */
     protected static function scopeToOwner(Builder $query, string $column = 'user_id'): Builder
     {
         if (! static::$hasOwnership) {
+            return $query;
+        }
+
+        if (! static::modelHasColumn($column)) {
             return $query;
         }
 
@@ -80,7 +84,10 @@ abstract class BaseResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->where($column, $ownerId);
+        $model = static::getModel();
+        $table = (new $model)->getTable();
+
+        return $query->where($table . '.' . $column, $ownerId);
     }
 
     public static function shouldRegisterNavigation(): bool
@@ -122,6 +129,11 @@ abstract class BaseResource extends Resource
         return static::scopeToOwner($query);
     }
 
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return static::getEloquentQuery();
+    }
+
     public static function getGlobalSearchEloquentQuery(): Builder
     {
         return static::getEloquentQuery();
@@ -137,27 +149,37 @@ abstract class BaseResource extends Resource
             ]);
         }
 
-        $query = static::scopeToOwner($query);
-
-        return (string) $query->count();
+        return (string) static::scopeToOwner($query)->count();
     }
 
-    public static function mutateFormDataBeforeCreate(array $data): array
+    /**
+     * Pomoćna metoda ako ju negdje želiš ručno pozvati.
+     * Glavno automatsko spremanje user_id sada radi preko AppServiceProvider-a.
+     */
+    public static function defaultUserId(): ?int
     {
-        if (static::$hasOwnership && ! static::isSuperAdmin()) {
-            $data['user_id'] = static::defaultUserId();
+        if (! static::$hasOwnership) {
+            return null;
         }
 
-        return $data;
+        if (static::isSuperAdmin()) {
+            return Auth::id();
+        }
+
+        return static::ownerId();
     }
 
-    public static function mutateFormDataBeforeSave(array $data): array
+    public static function fillOwnershipData(array $data): array
     {
-        if (
-            static::$hasOwnership &&
-            ! static::isSuperAdmin() &&
-            array_key_exists('user_id', $data)
-        ) {
+        if (! static::$hasOwnership) {
+            return $data;
+        }
+
+        if (! static::modelHasColumn('user_id')) {
+            return $data;
+        }
+
+        if (! static::isSuperAdmin()) {
             $data['user_id'] = static::defaultUserId();
         }
 

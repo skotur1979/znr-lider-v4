@@ -71,12 +71,12 @@ class ListLearningMaterials extends Page
 
     public function getMaterialsProperty(): LengthAwarePaginator
     {
+        $ownerId = $this->ownerId();
+
         return LearningMaterial::query()
             ->with(['category', 'user'])
             ->where('is_active', true)
-            ->when(! $this->isSuperAdmin(), function (Builder $query) {
-                $ownerId = $this->ownerId();
-
+            ->when(! $this->isSuperAdmin(), function (Builder $query) use ($ownerId) {
                 $query->where(function (Builder $q) use ($ownerId) {
                     $q->where('is_global', true)
                         ->orWhere('user_id', $ownerId);
@@ -88,12 +88,16 @@ class ListLearningMaterials extends Page
                 $query->where(function (Builder $q) use ($search) {
                     $q->where('title', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%")
-                        ->orWhere('url', 'like', "%{$search}%")
-                        ->orWhereJsonContains('links', [['url' => $search]]);
+                        ->orWhere('url', 'like', "%{$search}%");
                 });
             })
             ->when($this->category, fn (Builder $query) => $query->where('learning_category_id', $this->category))
-            ->when($this->type, fn (Builder $query) => $query->where('type', $this->type))
+            ->when($this->type, function (Builder $query) {
+                $query->where(function (Builder $q) {
+                    $q->whereJsonContains('content_types', $this->type)
+                        ->orWhere('type', $this->type);
+                });
+            })
             ->orderBy('sort_order')
             ->orderByDesc('created_at')
             ->paginate(12);
@@ -101,11 +105,11 @@ class ListLearningMaterials extends Page
 
     public function getCategoriesProperty()
     {
+        $ownerId = $this->ownerId();
+
         return LearningCategory::query()
             ->where('is_active', true)
-            ->when(! $this->isSuperAdmin(), function (Builder $query) {
-                $ownerId = $this->ownerId();
-
+            ->when(! $this->isSuperAdmin(), function (Builder $query) use ($ownerId) {
                 $query->where(function (Builder $q) use ($ownerId) {
                     $q->where('is_global', true)
                         ->orWhere('user_id', $ownerId);
@@ -199,9 +203,7 @@ class ListLearningMaterials extends Page
         $user = Auth::user();
 
         return (bool) (
-            $user?->isSuperAdmin()
-            || $user?->is_admin
-            || $user?->role === 'admin'
+            $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()
         );
     }
 

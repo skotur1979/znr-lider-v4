@@ -16,9 +16,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Auth;
 
 class EmployeeResource extends BaseResource
 {
@@ -34,6 +31,9 @@ class EmployeeResource extends BaseResource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Zaposlenici';
     protected static ?int $navigationSort = 1;
+
+    protected static bool $usesSoftDeletes = true;
+    protected static bool $hasOwnership = true;
 
     protected static function getModuleKey(): ?string
     {
@@ -68,44 +68,6 @@ class EmployeeResource extends BaseResource
             'view' => ViewEmployee::route('/{record}'),
             'edit' => EditEmployee::route('/{record}/edit'),
         ];
-    }
-
-    public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ]);
-
-        if (Auth::user()?->isSuperAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::user()?->ownerId());
-    }
-
-    public static function getRecordRouteBindingEloquentQuery(): Builder
-{
-$query = parent::getRecordRouteBindingEloquentQuery()
-->withoutGlobalScopes([
-SoftDeletingScope::class,
-]);
-
-if (Auth::user()?->isSuperAdmin()) {
-return $query;
-}
-
-return $query->where('user_id', Auth::user()?->ownerId());
-}
-    public static function getNavigationBadge(): ?string
-    {
-        $query = static::getModel()::query();
-
-        if (! Auth::user()?->isSuperAdmin()) {
-            $query->where('user_id', Auth::user()?->ownerId());
-        }
-
-        return (string) $query->count();
     }
 }
 

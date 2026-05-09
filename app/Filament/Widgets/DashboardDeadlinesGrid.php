@@ -26,6 +26,31 @@ class DashboardDeadlinesGrid extends Widget
         //
     }
 
+    protected function isSuperAdmin(): bool
+    {
+        return Auth::user()?->isSuperAdmin() === true;
+    }
+
+    protected function ownerId(): ?int
+    {
+        return Auth::user()?->ownerId();
+    }
+
+    protected function applyOwnerScope(Builder $query): Builder
+    {
+        if ($this->isSuperAdmin()) {
+            return $query;
+        }
+
+        $ownerId = $this->ownerId();
+
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('user_id', $ownerId);
+    }
+
     public function getViewData(): array
     {
         $today = Carbon::today();
@@ -226,57 +251,27 @@ class DashboardDeadlinesGrid extends Widget
 
     protected function employeeBaseQuery(): Builder
     {
-        $query = Employee::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope(Employee::query());
     }
 
     protected function machineBaseQuery(): Builder
     {
-        $query = Machine::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope(Machine::query());
     }
 
     protected function fireBaseQuery(): Builder
     {
-        $query = Fire::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope(Fire::query());
     }
 
     protected function miscellaneousBaseQuery(): Builder
     {
-        $query = Miscellaneous::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope(Miscellaneous::query());
     }
 
     protected function workTaskBaseQuery(): Builder
     {
-        $query = WorkTask::query();
-
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
-        }
-
-        return $query;
+        return $this->applyOwnerScope(WorkTask::query());
     }
 
     protected function countEmployees(): int
@@ -308,9 +303,11 @@ class DashboardDeadlinesGrid extends Widget
             ->whereDate('valid_until', '>=', $today)
             ->whereDate('valid_until', '<=', $soon);
 
-        if (! Auth::user()?->isAdmin()) {
-            $query->whereHas('employee', function (Builder $q) {
-                $q->where('user_id', Auth::id());
+        if (! $this->isSuperAdmin()) {
+            $ownerId = $this->ownerId();
+
+            $query->whereHas('employee', function (Builder $q) use ($ownerId): void {
+                $q->where('user_id', $ownerId);
             });
         }
 
@@ -323,9 +320,11 @@ class DashboardDeadlinesGrid extends Widget
             ->whereNotNull('valid_until')
             ->whereDate('valid_until', '<', $today);
 
-        if (! Auth::user()?->isAdmin()) {
-            $query->whereHas('employee', function (Builder $q) {
-                $q->where('user_id', Auth::id());
+        if (! $this->isSuperAdmin()) {
+            $ownerId = $this->ownerId();
+
+            $query->whereHas('employee', function (Builder $q) use ($ownerId): void {
+                $q->where('user_id', $ownerId);
             });
         }
 
