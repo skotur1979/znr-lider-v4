@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PpeLogs\PPELogResource\RelationManagers;
 
+use App\Models\PPEEquipment;
 use App\Support\ExpiryBadge;
 use App\Support\SignatureStorage;
 use Filament\Actions\Action;
@@ -10,6 +11,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ViewField;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -30,28 +32,72 @@ class ItemsRelationManager extends RelationManager
     public function form(Schema $schema): Schema
     {
         return $schema->schema([
+            Select::make('equipment_lookup')
+    ->label('Odaberi OZO iz registra')
+    ->searchable()
+    ->live()
+    ->dehydrated(false)
+    ->placeholder('Odaberi OZO ili ručno upiši u polje ispod')
+    ->getSearchResultsUsing(function (string $search): array {
+        return PPEEquipment::query()
+            ->where('is_active', true)
+            ->where(function (Builder $query) use ($search) {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('standard', 'like', "%{$search}%");
+            })
+            ->orderBy('name')
+            ->limit(50)
+            ->get()
+            ->mapWithKeys(fn (PPEEquipment $equipment) => [
+                $equipment->id => trim(
+                    $equipment->name .
+                    ($equipment->standard ? ' — ' . $equipment->standard : '')
+                ),
+            ])
+            ->toArray();
+    })
+    ->getOptionLabelUsing(function ($value): ?string {
+        if (! $value) {
+            return null;
+        }
+
+        $equipment = PPEEquipment::find($value);
+
+        return $equipment
+            ? trim(
+                $equipment->name .
+                ($equipment->standard ? ' — ' . $equipment->standard : '')
+            )
+            : null;
+    })
+    ->afterStateUpdated(function ($state, callable $set, callable $get): void {
+        if (! $state) {
+            return;
+        }
+
+        $equipment = PPEEquipment::find($state);
+
+        if (! $equipment) {
+            return;
+        }
+
+        $set('equipment_name', $equipment->name);
+        $set('standard', $equipment->standard);
+        $set('duration_months', $equipment->duration_months);
+
+        static::recalcEndDate($set, $get);
+    }),
+
             TextInput::make('equipment_name')
                 ->label('Naziv OZO')
                 ->required()
-                ->datalist([
-                    'Zaštitna Kaciga',
-                    'Zaštitne naočale prozirne',
-                    'Zaštitne Rukavice',
-                    'Reflektirajući prsluk',
-                    'Zaštitne cipele s kapicom',
-                    'Zaštitne gumene čizme',
-                    'Radne hlače',
-                    'Radna jakna',
-                    'Majca s kratkim rukavima',
-                    'Majca s dugim rukavima',
-                    'Zimska jakna sa rukavima',
-                    'Manžeta za zaštitu podlaktice',
-                    'Zaštitna polumaska s filterima',
-                ]),
+                ->maxLength(255)
+                ->helperText('Možeš promijeniti naziv ili ručno upisati OZO ako nije u registru.'),
 
             TextInput::make('standard')
                 ->label('HRN EN')
-                ->maxLength(64),
+                ->maxLength(64)
+                ->helperText('Automatski se povlači iz registra, ali ga možeš ručno promijeniti.'),
 
             TextInput::make('size')
                 ->label('Veličina')
@@ -63,6 +109,7 @@ class ItemsRelationManager extends RelationManager
                 ->minValue(0)
                 ->maxValue(120)
                 ->live()
+                ->helperText('Automatski se povlači iz registra, ali ga možeš ručno promijeniti.')
                 ->afterStateUpdated(fn ($state, $set, $get) => static::recalcEndDate($set, $get)),
 
             DatePicker::make('issue_date')
@@ -93,7 +140,9 @@ class ItemsRelationManager extends RelationManager
                 ->native(false)
                 ->displayFormat('d/m/Y')
                 ->format('Y-m-d')
-                ->closeOnDateSelection(),
+                ->closeOnDateSelection()
+                ->live()
+                ->afterStateUpdated(fn ($state, $set, $get) => static::recalcEndDate($set, $get)),
         ])->columns(4);
     }
 
@@ -117,10 +166,7 @@ class ItemsRelationManager extends RelationManager
         }
 
         try {
-            $set(
-                'end_date',
-                Carbon::parse($issue)->addMonths($months)->format('Y-m-d')
-            );
+            $set('end_date', Carbon::parse($issue)->addMonths($months)->format('Y-m-d'));
         } catch (\Throwable $e) {
             $set('end_date', null);
         }
@@ -128,6 +174,8 @@ class ItemsRelationManager extends RelationManager
 
     protected static function prepareFormData(array $data): array
     {
+        unset($data['equipment_lookup']);
+
         if (! empty($data['signature']) && str_starts_with($data['signature'], 'data:image')) {
             $data['signature'] = SignatureStorage::storeDataUrl($data['signature']);
         }
@@ -158,11 +206,11 @@ class ItemsRelationManager extends RelationManager
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query
-    ->orderByRaw('return_date IS NOT NULL')
-    ->orderBy('end_date')
-)
+                ->orderByRaw('return_date IS NOT NULL')
+                ->orderBy('end_date')
+            )
             ->emptyStateIcon('heroicon-o-shield-check')
-            ->emptyStateHeading('Nema Osobne zaštitne opreme')
+            ->emptyStateHeading('Nema osobne zaštitne opreme')
             ->emptyStateDescription('Stvori OZO kako bi započeo')
             ->columns([
                 TextColumn::make('equipment_name')
@@ -191,34 +239,10 @@ class ItemsRelationManager extends RelationManager
                 TextColumn::make('end_date')
                     ->label('Istek')
                     ->badge()
-                    ->formatStateUsing(function ($state) {
-                        if (blank($state)) {
-                            return '—';
-                        }
-
-                        return Carbon::parse($state)->format('d.m.Y.');
-                    })
-                    ->color(function ($state) {
-                        if (blank($state)) {
-                            return 'gray';
-                        }
-
-                        return ExpiryBadge::color($state, 30);
-                    })
-                    ->icon(function ($state) {
-                        if (blank($state)) {
-                            return null;
-                        }
-
-                        return ExpiryBadge::icon($state, 30);
-                    })
-                    ->tooltip(function ($state) {
-                        if (blank($state)) {
-                            return null;
-                        }
-
-                        return ExpiryBadge::tooltip($state, 30);
-                    })
+                    ->formatStateUsing(fn ($state) => blank($state) ? '—' : Carbon::parse($state)->format('d.m.Y.'))
+                    ->color(fn ($state) => blank($state) ? 'gray' : ExpiryBadge::color($state, 30))
+                    ->icon(fn ($state) => blank($state) ? null : ExpiryBadge::icon($state, 30))
+                    ->tooltip(fn ($state) => blank($state) ? null : ExpiryBadge::tooltip($state, 30))
                     ->sortable(),
 
                 TextColumn::make('return_date')
@@ -260,6 +284,7 @@ class ItemsRelationManager extends RelationManager
             ])
             ->actions([
                 EditAction::make()
+                    ->label('Uredi')
                     ->mutateFormDataUsing(fn (array $data) => static::prepareFormData($data)),
 
                 Action::make('extend3')
@@ -279,27 +304,27 @@ class ItemsRelationManager extends RelationManager
                     }),
 
                 Action::make('returnedToday')
-    ->label('Označi vraćeno')
-    ->color('success')
-    ->icon('heroicon-o-check-circle')
-    ->modalHeading('Označi OZO kao vraćen')
-    ->modalSubmitActionLabel('Spremi datum vraćanja')
-    ->schema([
-        DatePicker::make('return_date')
-            ->label('Datum vraćanja')
-            ->default(today())
-            ->required()
-            ->native(false)
-            ->displayFormat('d/m/Y')
-            ->format('Y-m-d')
-            ->closeOnDateSelection(),
-    ])
-    ->action(function ($record, array $data) {
-        $record->update([
-            'return_date' => $data['return_date'],
-            'end_date' => null,
-        ]);
-    }),
+                    ->label('Označi vraćeno')
+                    ->color('success')
+                    ->icon('heroicon-o-check-circle')
+                    ->modalHeading('Označi OZO kao vraćen')
+                    ->modalSubmitActionLabel('Spremi datum vraćanja')
+                    ->schema([
+                        DatePicker::make('return_date')
+                            ->label('Datum vraćanja')
+                            ->default(today())
+                            ->required()
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->format('Y-m-d')
+                            ->closeOnDateSelection(),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $record->update([
+                            'return_date' => $data['return_date'],
+                            'end_date' => null,
+                        ]);
+                    }),
 
                 DeleteAction::make()
                     ->label('Deaktiviraj'),
