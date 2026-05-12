@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
+use App\Models\OperationalLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
@@ -47,6 +48,20 @@ class AppServiceProvider extends ServiceProvider
 
             $user = Auth::user();
 
+            /*
+             * Operativni dnevnik je privatni zapis korisnika.
+             * Ne smije se spremati na ownerId(), nego na stvarnog prijavljenog korisnika.
+             */
+            if ($model instanceof OperationalLog) {
+                if (! $user?->isSuperAdmin()) {
+                    $model->user_id = $user->id;
+                } elseif (! $model->exists && empty($model->user_id)) {
+                    $model->user_id = $user->id;
+                }
+
+                return;
+            }
+
             if ($user?->isSuperAdmin()) {
                 if (! $model->exists && empty($model->user_id)) {
                     $model->user_id = $user->id;
@@ -55,6 +70,10 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
+            /*
+             * Svi ostali moduli ostaju organizacijski:
+             * glavni korisnik i podkorisnici spremaju na ownerId().
+             */
             $model->user_id = $user->ownerId();
         });
     }

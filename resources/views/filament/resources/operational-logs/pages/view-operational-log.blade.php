@@ -252,14 +252,14 @@
                 </div>
 
                 <div class="oplog-stat">
-                    <div class="oplog-stat-label">Označeno</div>
-                    <div class="oplog-stat-value">{{ $taskItems }}</div>
-                </div>
+    <div class="oplog-stat-label">Za zadatak</div>
+    <div class="oplog-stat-value">{{ $taskItems }}</div>
+</div>
 
-                <div class="oplog-stat">
-                    <div class="oplog-stat-label">Zadataka</div>
-                    <div class="oplog-stat-value">{{ $createdTasks }}</div>
-                </div>
+<div class="oplog-stat">
+    <div class="oplog-stat-label">Kreirano</div>
+    <div class="oplog-stat-value">{{ $createdTasks }}</div>
+</div>
             </div>
         </div>
 

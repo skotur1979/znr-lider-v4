@@ -7,10 +7,10 @@ use App\Models\OperationalLog;
 use App\Models\WorkTask;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
+use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use Filament\Support\Enums\Width;
 
 class CreateOperationalLog extends CreateRecord
 {
@@ -20,7 +20,9 @@ class CreateOperationalLog extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        $userId = Auth::user()?->isSuperAdmin()
+        $logUserId = Auth::id();
+
+        $taskUserId = Auth::user()?->isSuperAdmin()
             ? ($data['user_id'] ?? Auth::id())
             : Auth::user()?->ownerId();
 
@@ -39,7 +41,7 @@ class CreateOperationalLog extends CreateRecord
             ->toArray();
 
         $log = OperationalLog::create([
-            'user_id' => $userId,
+            'user_id' => $logUserId,
             'log_date' => $logDate,
             'title' => 'Operativni dnevnik - ' . now()->parse($logDate)->format('d.m.Y.'),
             'note' => collect($items)->pluck('note')->implode("\n"),
@@ -54,7 +56,7 @@ class CreateOperationalLog extends CreateRecord
         foreach ($updatedItems as $index => $item) {
             if (! empty($item['create_task'])) {
                 $task = WorkTask::create([
-                    'user_id' => $userId,
+                    'user_id' => $taskUserId,
                     'title' => Str::limit($item['note'], 80),
                     'description' => $item['note'],
                     'due_date' => $logDate,

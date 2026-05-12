@@ -24,12 +24,15 @@ use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Model;
 
 class OperationalLogResource extends BaseResource
 {
     protected static ?string $model = OperationalLog::class;
 
-    protected static bool $shouldRegisterNavigation = false;
+    protected static bool $hasOwnership = false;
+
+    protected static bool $usesSoftDeletes = false;
 
     protected static function getModuleKey(): ?string
     {
@@ -47,7 +50,7 @@ class OperationalLogResource extends BaseResource
     {
         return $schema->components([
             Hidden::make('user_id')
-                ->default(fn () => Auth::user()?->ownerId())
+                ->default(fn () => Auth::id())
                 ->dehydrated(),
 
             Section::make('Operativni dnevnik')
@@ -196,15 +199,30 @@ class OperationalLogResource extends BaseResource
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery();
+{
+    $query = parent::getEloquentQuery();
 
-        if (Auth::user()?->isSuperAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::user()?->ownerId());
+    if (Auth::user()?->isSuperAdmin()) {
+        return $query;
     }
+
+    return $query->where('user_id', Auth::id());
+}
+
+public static function getRecordRouteBindingEloquentQuery(): Builder
+{
+    return static::getEloquentQuery();
+}
+
+public static function getGlobalSearchEloquentQuery(): Builder
+{
+    return static::getEloquentQuery();
+}
+
+public static function getNavigationBadge(): ?string
+{
+    return (string) static::getEloquentQuery()->count();
+}
 
     public static function getPages(): array
     {
