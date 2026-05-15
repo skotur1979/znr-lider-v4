@@ -136,27 +136,34 @@ public static function getMaxContentWidth(): MaxWidth|string|null
         ->paginated([10, 25, 50,'all'])
             ->modifyQueryUsing(fn (Builder $query) => $query->with('items'))
             ->columns([
-                TextColumn::make('location')
-                    ->label('Lokacija ormarića')
-                    ->sortable()
-                    ->searchable(),
-static::userTableColumn(),
-                TextColumn::make('inspected_at')
-                    ->label('Pregled obavljen')
-                    ->date('d.m.Y.')
-                    ->alignCenter()
-                    ->sortable(),
+    TextColumn::make('location')
+        ->label('Lokacija ormarića')
+        ->sortable()
+        ->searchable()
+        ->toggleable(),
 
-                TextColumn::make('items_count')
-                    ->label('Ukupan broj stavki')
-                    ->counts('items')
-                    ->alignCenter(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                ViewColumn::make('items_summary')
-                    ->label('Rok ističe/istekao')
-                    ->alignCenter()
-                    ->view('filament.resources.first-aid-kits.items-summary'),
-            ])
+    TextColumn::make('inspected_at')
+        ->label('Pregled obavljen')
+        ->date('d.m.Y.')
+        ->alignCenter()
+        ->sortable()
+        ->toggleable(),
+
+    TextColumn::make('items_count')
+        ->label('Ukupan broj stavki')
+        ->counts('items')
+        ->alignCenter()
+        ->toggleable(),
+
+    ViewColumn::make('items_summary')
+        ->label('Rok ističe/istekao')
+        ->alignCenter()
+        ->view('filament.resources.first-aid-kits.items-summary')
+        ->toggleable(),
+])
             ->filters([
                 SelectFilter::make('expired_items')
                     ->label('Stavke')

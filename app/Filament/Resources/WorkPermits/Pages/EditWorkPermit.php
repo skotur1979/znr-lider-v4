@@ -34,4 +34,8 @@ class EditWorkPermit extends EditRecord
             Actions\ForceDeleteAction::make()->label('Trajno obriši'),
         ];
     }
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
 }

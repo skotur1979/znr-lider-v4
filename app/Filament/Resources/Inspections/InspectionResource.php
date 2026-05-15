@@ -93,51 +93,62 @@ class InspectionResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+            ->recordUrl(fn (Inspection $record): string => static::getUrl('edit', ['record' => $record]))
             ->modifyQueryUsing(fn (Builder $query) => $query->withCount(['findings', 'zones']))
             ->columns([
-                TextColumn::make('number')
-                    ->label('Broj')
-                    ->weight('bold'),
-static::userTableColumn(),
-                TextColumn::make('inspection_type')
-                    ->label('Tip')
-                    ->badge()
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'five_s' => '5S nadzor',
-                        default => 'Nadzor',
-                    })
-                    ->alignment(Alignment::Center),
+    TextColumn::make('number')
+        ->label('Broj')
+        ->weight('bold')
+        ->toggleable(),
 
-                TextColumn::make('performed_at')
-                    ->label('Datum')
-                    ->date('d.m.Y.')
-                    ->alignment(Alignment::Center),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('title')
-                    ->label('Naziv')
-                    ->wrap(),
+    TextColumn::make('inspection_type')
+        ->label('Tip')
+        ->badge()
+        ->formatStateUsing(fn (?string $state) => match ($state) {
+            'five_s' => '5S nadzor',
+            default => 'Nadzor',
+        })
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('location')
-                    ->label('Lokacija')
-                    ->wrap(),
+    TextColumn::make('performed_at')
+        ->label('Datum')
+        ->date('d.m.Y.')
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('five_s_score')
-                    ->label('5S rezultat')
-                    ->state(fn (Inspection $record) => $record->calculateFiveSScore())
-                    ->formatStateUsing(fn ($state) => filled($state) ? $state . '%' : '-')
-                    ->badge()
-                    ->color(fn ($state) => match (true) {
-                        blank($state) => 'gray',
-                        $state < 40 => 'danger',
-                        $state < 60 => 'warning',
-                        default => 'success',
-                    })
-                    ->alignment(Alignment::Center),
+    TextColumn::make('title')
+        ->label('Naziv')
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('findings_count')
-                    ->label('Nalaza')
-                    ->alignment(Alignment::Center),
-            ])
+    TextColumn::make('location')
+        ->label('Lokacija')
+        ->wrap()
+        ->toggleable(),
+
+    TextColumn::make('five_s_score')
+        ->label('5S rezultat')
+        ->state(fn (Inspection $record) => $record->calculateFiveSScore())
+        ->formatStateUsing(fn ($state) => filled($state) ? $state . '%' : '-')
+        ->badge()
+        ->color(fn ($state) => match (true) {
+            blank($state) => 'gray',
+            $state < 40 => 'danger',
+            $state < 60 => 'warning',
+            default => 'success',
+        })
+        ->alignment(Alignment::Center)
+        ->toggleable(isToggledHiddenByDefault: true),
+
+    TextColumn::make('findings_count')
+        ->label('Nalaza')
+        ->alignment(Alignment::Center)
+        ->toggleable(),
+])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaz'),
@@ -163,7 +174,6 @@ static::userTableColumn(),
         return [
             'index' => Pages\ListInspections::route('/'),
             'create' => Pages\CreateInspection::route('/create'),
-            'view' => Pages\ViewInspection::route('/{record}'),
             'edit' => Pages\EditInspection::route('/{record}/edit'),
         ];
     }

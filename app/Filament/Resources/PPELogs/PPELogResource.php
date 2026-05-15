@@ -191,41 +191,49 @@ class PPELogResource extends BaseResource
                     ->orderBy('end_date'),
             ]))
             ->columns([
-                TextColumn::make('user_last_name')
-                    ->label('Ime i prezime')
-                    ->searchable()
-                    ->extraAttributes([
-                        'style' => 'vertical-align: top;',
-                    ]),
-static::userTableColumn(),
-                TextColumn::make('user_oib')
-                    ->label('OIB')
-                    ->alignCenter()
-                    ->extraAttributes([
-                        'style' => 'vertical-align: top;',
-                    ]),
+    TextColumn::make('user_last_name')
+        ->label('Ime i prezime')
+        ->searchable()
+        ->extraAttributes([
+            'style' => 'vertical-align: top;',
+        ])
+        ->toggleable(),
 
-                ViewColumn::make('nazivi')
-                    ->label('Naziv OZO')
-                    ->view('filament.columns.ozo-nazivi')
-                    ->extraAttributes([
-                        'style' => 'vertical-align: top; min-width: 260px;',
-                    ]),
+    static::userTableColumn()
+        ->toggleable(),
 
-                ViewColumn::make('izdano')
-                    ->label('Izdano')
-                    ->view('filament.columns.ozo-izdano')
-                    ->extraAttributes([
-                        'style' => 'vertical-align: top; min-width: 120px;',
-                    ]),
+    TextColumn::make('user_oib')
+        ->label('OIB')
+        ->alignCenter()
+        ->extraAttributes([
+            'style' => 'vertical-align: top;',
+        ])
+        ->toggleable(),
 
-                ViewColumn::make('istek')
-                    ->label('Istek')
-                    ->view('filament.columns.ozo-items-expiring')
-                    ->extraAttributes([
-                        'style' => 'vertical-align: top; min-width: 150px;',
-                    ]),
-            ])
+    ViewColumn::make('nazivi')
+        ->label('Naziv OZO')
+        ->view('filament.columns.ozo-nazivi')
+        ->extraAttributes([
+            'style' => 'vertical-align: top; min-width: 260px;',
+        ])
+        ->toggleable(),
+
+    ViewColumn::make('izdano')
+        ->label('Izdano')
+        ->view('filament.columns.ozo-izdano')
+        ->extraAttributes([
+            'style' => 'vertical-align: top; min-width: 120px;',
+        ])
+        ->toggleable(),
+
+    ViewColumn::make('istek')
+        ->label('Istek')
+        ->view('filament.columns.ozo-items-expiring')
+        ->extraAttributes([
+            'style' => 'vertical-align: top; min-width: 150px;',
+        ])
+        ->toggleable(),
+])
             ->filters([
                 SelectFilter::make('pregled')
                     ->label('Prikaz')

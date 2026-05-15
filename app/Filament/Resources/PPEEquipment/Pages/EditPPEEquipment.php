@@ -17,4 +17,8 @@ class EditPPEEquipment extends EditRecord
                 ->label('Izbriši'),
         ];
     }
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
 }

@@ -5,6 +5,8 @@ namespace App\Filament\Resources\Inspections\RelationManagers;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Models\Employee;
 use App\Models\InspectionFinding;
+use App\Services\ActivityLogger;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
@@ -27,7 +29,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class FindingsRelationManager extends RelationManager
 {
@@ -402,40 +403,40 @@ class FindingsRelationManager extends RelationManager
                     ->alignment(Alignment::Center),
             ])
             ->headerActions([
-    Action::make('export_findings_pdf')
-        ->label('Izvoz u PDF')
-        ->icon('heroicon-o-arrow-down-tray')
-        ->color('warning')
-        ->action(function () {
-            $inspection = $this->getOwnerRecord();
+                Action::make('export_findings_pdf')
+                    ->label('Izvoz u PDF')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('warning')
+                    ->action(function () {
+                        $inspection = $this->getOwnerRecord();
 
-            $findings = $inspection->findings()
-                ->orderByDesc('id')
-                ->get();
+                        $findings = $inspection->findings()
+                            ->orderByDesc('id')
+                            ->get();
 
-            $pdf = Pdf::loadView('pdf.inspection-findings', [
-                'inspection' => $inspection,
-                'findings' => $findings,
+                        $pdf = Pdf::loadView('pdf.inspection-findings', [
+                            'inspection' => $inspection,
+                            'findings' => $findings,
+                        ])
+                            ->setPaper('a4', 'landscape')
+                            ->setOptions([
+                                'isHtml5ParserEnabled' => true,
+                                'isRemoteEnabled' => true,
+                                'isPhpEnabled' => true,
+                                'dpi' => 96,
+                                'defaultFont' => 'DejaVu Sans',
+                            ]);
+
+                        return response()->streamDownload(
+                            fn () => print($pdf->output()),
+                            'nalazi-nadzora-' . now()->format('Y-m-d') . '.pdf'
+                        );
+                    }),
+
+                CreateAction::make()
+                    ->label('Dodaj nalaz')
+                    ->mutateDataUsing(fn (array $data): array => $this->mutateFindingData($data)),
             ])
-                ->setPaper('a4', 'landscape')
-                ->setOptions([
-                    'isHtml5ParserEnabled' => true,
-                    'isRemoteEnabled' => true,
-                    'isPhpEnabled' => true,
-                    'dpi' => 96,
-                    'defaultFont' => 'DejaVu Sans',
-                ]);
-
-            return response()->streamDownload(
-                fn () => print($pdf->output()),
-                'nalazi-nadzora-' . now()->format('Y-m-d') . '.pdf'
-            );
-        }),
-
-    CreateAction::make()
-        ->label('Dodaj nalaz')
-        ->mutateDataUsing(fn (array $data): array => $this->mutateFindingData($data)),
-])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaz'),
@@ -464,6 +465,13 @@ class FindingsRelationManager extends RelationManager
                                 'resolved_at' => now(),
                             ]);
 
+                            ActivityLogger::status(
+                                module: 'Nalazi nadzora',
+                                title: 'Nalaz nadzora zatvoren',
+                                description: 'Zatvoren je nalaz: ' . str($record->description)->limit(120),
+                                record: $record,
+                            );
+
                             Notification::make()
                                 ->title('Nalaz je označen kao zatvoren.')
                                 ->success()
@@ -480,6 +488,13 @@ class FindingsRelationManager extends RelationManager
                                 'workflow_status' => 'in_progress',
                                 'resolved_at' => null,
                             ]);
+
+                            ActivityLogger::status(
+                                module: 'Nalazi nadzora',
+                                title: 'Nalaz nadzora označen kao u tijeku',
+                                description: 'Nalaz je označen kao u tijeku: ' . str($record->description)->limit(120),
+                                record: $record,
+                            );
 
                             Notification::make()
                                 ->title('Nalaz je označen kao u tijeku.')
@@ -498,6 +513,13 @@ class FindingsRelationManager extends RelationManager
                                 'workflow_status' => 'rejected',
                                 'resolved_at' => null,
                             ]);
+
+                            ActivityLogger::status(
+                                module: 'Nalazi nadzora',
+                                title: 'Nalaz nadzora odbačen',
+                                description: 'Odbačen je nalaz: ' . str($record->description)->limit(120),
+                                record: $record,
+                            );
 
                             Notification::make()
                                 ->title('Nalaz je odbačen.')

@@ -5,6 +5,10 @@ namespace App\Providers;
 use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
 use App\Models\OperationalLog;
+use App\Services\ActivityLogger;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
@@ -31,6 +35,35 @@ class AppServiceProvider extends ServiceProvider
             DashboardCalendarWidget::class
         );
 
+        Event::listen(Login::class, function (Login $event): void {
+            ActivityLogger::log(
+                module: 'Sustav',
+                action: 'login',
+                title: 'Korisnik se prijavio',
+                description: 'Korisnik: ' . ($event->user?->name ?? $event->user?->email ?? '-'),
+                record: $event->user,
+            );
+        });
+
+        Event::listen(Logout::class, function (Logout $event): void {
+            ActivityLogger::log(
+                module: 'Sustav',
+                action: 'logout',
+                title: 'Korisnik se odjavio',
+                description: 'Korisnik: ' . ($event->user?->name ?? $event->user?->email ?? '-'),
+                record: $event->user,
+            );
+        });
+
+        Event::listen(Failed::class, function (Failed $event): void {
+            ActivityLogger::log(
+                module: 'Sustav',
+                action: 'failed_login',
+                title: 'Neuspješna prijava',
+                description: 'Pokušaj prijave za e-mail: ' . ($event->credentials['email'] ?? '-'),
+            );
+        });
+
         Event::listen('eloquent.saving: *', function (string $eventName, array $data) {
             $model = $data[0] ?? null;
 
@@ -48,10 +81,6 @@ class AppServiceProvider extends ServiceProvider
 
             $user = Auth::user();
 
-            /*
-             * Operativni dnevnik je privatni zapis korisnika.
-             * Ne smije se spremati na ownerId(), nego na stvarnog prijavljenog korisnika.
-             */
             if ($model instanceof OperationalLog) {
                 if (! $user?->isSuperAdmin()) {
                     $model->user_id = $user->id;
@@ -70,10 +99,6 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
-            /*
-             * Svi ostali moduli ostaju organizacijski:
-             * glavni korisnik i podkorisnici spremaju na ownerId().
-             */
             $model->user_id = $user->ownerId();
         });
     }

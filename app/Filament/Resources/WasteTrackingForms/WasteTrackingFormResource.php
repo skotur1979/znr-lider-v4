@@ -10,6 +10,7 @@ use App\Filament\Resources\WasteTrackingForms\Pages\ViewWasteTrackingForm;
 use App\Models\OntoRecord;
 use App\Models\WasteTrackingForm;
 use App\Services\OntoService;
+use App\Services\ActivityLogger;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
@@ -44,6 +45,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use RuntimeException;
 use Filament\Support\Icons\Heroicon;
+
 
 class WasteTrackingFormResource extends BaseResource
 {
@@ -521,83 +523,86 @@ class WasteTrackingFormResource extends BaseResource
                 ->orderByDesc('created_at')
                 ->orderByDesc('id'))
             ->columns([
-                TextColumn::make('document_number')
-                    ->label('Broj PL-O')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->toggleable(),
-static::userTableColumn(),
-                TextColumn::make('handover_date')
-                    ->label('Datum')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->toggleable(),
+    TextColumn::make('document_number')
+        ->label('Broj PL-O')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->toggleable(),
 
-                TextColumn::make('ontoRecord.organizationLocation.name')
-                    ->label('Lokacija')
-                    ->formatStateUsing(fn ($state, WasteTrackingForm $record) => $record->ontoRecord?->organizationLocation?->display_name
-                        ?? $record->ontoRecord?->organizationLocation?->name
-                        ?? $record->ontoRecord?->organizationLocation?->location_name
-                        ?? '-')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('ontoRecord.wasteType.waste_code')
-                    ->label('K.B.')
-                    ->html()
-                    ->formatStateUsing(function ($state) {
-                        if (! $state) {
-                            return '-';
-                        }
+    TextColumn::make('handover_date')
+        ->label('Datum')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(),
 
-                        $star = str_contains($state, '*') ? '<sup>*</sup>' : '';
-                        $code = str_replace('*', '', $state);
-                        $code = preg_replace('/\D/', '', $code);
-                        $formatted = trim(chunk_split($code, 2, ' '));
+    TextColumn::make('ontoRecord.organizationLocation.name')
+        ->label('Lokacija')
+        ->formatStateUsing(fn ($state, WasteTrackingForm $record) => $record->ontoRecord?->organizationLocation?->display_name
+            ?? $record->ontoRecord?->organizationLocation?->name
+            ?? $record->ontoRecord?->organizationLocation?->location_name
+            ?? '-')
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                        return $formatted . $star;
-                    })
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
+    TextColumn::make('ontoRecord.wasteType.waste_code')
+        ->label('K.B.')
+        ->html()
+        ->formatStateUsing(function ($state) {
+            if (! $state) {
+                return '-';
+            }
 
-                TextColumn::make('ontoRecord.wasteType.name')
-                    ->label('Naziv otpada')
-                    ->searchable()
-                    ->sortable()
-                    ->wrap()
-                    ->toggleable(),
+            $star = str_contains($state, '*') ? '<sup>*</sup>' : '';
+            $code = str_replace('*', '', $state);
+            $code = preg_replace('/\D/', '', $code);
+            $formatted = trim(chunk_split($code, 2, ' '));
 
-                TextColumn::make('quantity_kg')
-                    ->label('Količina (kg)')
-                    ->sortable()
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.'))
-                    ->toggleable(),
+            return $formatted . $star;
+        })
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                BadgeColumn::make('status')
-                    ->label('Status')
-                    ->formatStateUsing(fn (string $state) => $state === 'locked' ? 'Zaključen' : 'Nacrt')
-                    ->colors([
-                        'gray' => 'draft',
-                        'success' => 'locked',
-                    ])
-                    ->toggleable(),
+    TextColumn::make('ontoRecord.wasteType.name')
+        ->label('Naziv otpada')
+        ->searchable()
+        ->sortable()
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('locked_at')
-                    ->label('Zaključan')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+    TextColumn::make('quantity_kg')
+        ->label('Količina (kg)')
+        ->sortable()
+        ->badge()
+        ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.'))
+        ->toggleable(),
 
-                TextColumn::make('deleted_at')
-                    ->label('Deaktivirano')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
+    BadgeColumn::make('status')
+        ->label('Status')
+        ->formatStateUsing(fn (string $state) => $state === 'locked' ? 'Zaključen' : 'Nacrt')
+        ->colors([
+            'gray' => 'draft',
+            'success' => 'locked',
+        ])
+        ->toggleable(),
+
+    TextColumn::make('locked_at')
+        ->label('Zaključan')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+
+    TextColumn::make('deleted_at')
+        ->label('Deaktivirano')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+])
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status')
@@ -665,7 +670,12 @@ static::userTableColumn(),
                         ->action(function (WasteTrackingForm $record): void {
                             try {
                                 app(OntoService::class)->lockTrackingForm($record);
-
+                                 ActivityLogger::status(
+                                module: 'Prateći listovi otpada',
+                                title: 'Prateći list zaključen',
+                                description: 'Zaključen je prateći list: ' . ($record->document_number ?: $record->display_name),
+                                record: $record,
+                                );
                                 Notification::make()
                                     ->title('Prateći list je zaključen.')
                                     ->success()
@@ -752,6 +762,13 @@ static::userTableColumn(),
             }
 
             $new->save();
+
+            ActivityLogger::status(
+            module: 'Prateći listovi otpada',
+            title: 'Kopiran prateći list',
+            description: 'Iz pratećeg lista ' . ($source->document_number ?: $source->display_name) . ' napravljen je novi nacrt.',
+            record: $new,
+            );
 
             Notification::make()
                 ->title('Novi prateći list je napravljen iz kopije.')

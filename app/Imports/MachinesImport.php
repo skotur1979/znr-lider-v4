@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
+use App\Services\ActivityLogger;
 
 class MachinesImport implements ToCollection
 {
@@ -132,6 +133,14 @@ class MachinesImport implements ToCollection
             $machine->update($changed);
             $this->updated++;
         }
+
+        ActivityLogger::import(
+            module: 'Radna oprema',
+            created: $this->created,
+            updated: $this->updated,
+            unchanged: $this->unchanged,
+            skipped: $this->skipped,
+        );
     }
 
     private function value($row, array $map, string $key)

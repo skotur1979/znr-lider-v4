@@ -44,43 +44,49 @@ class QuestionResource extends BaseResource
     {
         return $table
             ->columns([
-                TextColumn::make('question_number')
-                    ->label('Br. pitanja')
-                    ->alignCenter()
-                    ->badge()
-                    ->color('warning')
-                    ->state(function (Question $record): int {
-                        return Question::query()
-                            ->where('test_id', $record->test_id)
-                            ->where('id', '<=', $record->id)
-                            ->orderBy('id')
-                            ->count();
-                    })
-                    ->sortable(false),
+    TextColumn::make('question_number')
+        ->label('Br. pitanja')
+        ->alignCenter()
+        ->badge()
+        ->color('warning')
+        ->state(function (Question $record): int {
+            return Question::query()
+                ->where('test_id', $record->test_id)
+                ->where('id', '<=', $record->id)
+                ->orderBy('id')
+                ->count();
+        })
+        ->sortable(false)
+        ->toggleable(),
 
-                TextColumn::make('test.naziv')
-                    ->label('Test')
-                    ->sortable()
-                    ->searchable(),
+    TextColumn::make('test.naziv')
+        ->label('Test')
+        ->sortable()
+        ->searchable()
+        ->toggleable(),
 
-                static::userTableColumn(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('tekst')
-                    ->label('Pitanje')
-                    ->limit(80)
-                    ->searchable(),
+    TextColumn::make('tekst')
+        ->label('Pitanje')
+        ->limit(80)
+        ->searchable()
+        ->toggleable(),
 
-                TextColumn::make('answers_count')
-                    ->label('Broj odgovora')
-                    ->counts('answers')
-                    ->sortable()
-                    ->alignCenter(),
+    TextColumn::make('answers_count')
+        ->label('Broj odgovora')
+        ->counts('answers')
+        ->sortable()
+        ->alignCenter()
+        ->toggleable(),
 
-                IconColumn::make('visestruki_odgovori')
-                    ->label('Više odgovora')
-                    ->boolean()
-                    ->alignCenter(),
-            ])
+    IconColumn::make('visestruki_odgovori')
+        ->label('Više odgovora')
+        ->boolean()
+        ->alignCenter()
+        ->toggleable(),
+])
             ->filters([
                 SelectFilter::make('test_id')
                     ->label('Test')

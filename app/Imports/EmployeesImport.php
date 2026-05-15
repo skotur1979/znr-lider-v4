@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
+use App\Services\ActivityLogger;
 
 class EmployeesImport implements ToCollection
 {
@@ -159,6 +160,13 @@ class EmployeesImport implements ToCollection
             }
 
             $this->importCertificates($employee, $row, $map);
+            ActivityLogger::import(
+            module: 'Zaposlenici',
+            created: $this->created,
+            updated: $this->updated,
+            unchanged: $this->unchanged,
+            skipped: $this->skipped,
+        );
         }
     }
 

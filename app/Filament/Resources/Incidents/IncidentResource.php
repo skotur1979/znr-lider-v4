@@ -245,63 +245,72 @@ class IncidentResource extends BaseResource
     {
         return $table
             ->columns([
-                TextColumn::make('location')
-                    ->label('Lokacija')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->wrap(),
-                    
-                    static::userTableColumn(),
+    TextColumn::make('location')
+        ->label('Lokacija')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('type_of_incident')
-                    ->label('Vrsta incidenta')
-                    ->alignment(Alignment::Center)
-                    ->weight('bold')
-                    ->description(
-                        fn (Incident $record) => static::incidentTypeDescription($record->type_of_incident),
-                        position: 'below'
-                    )
-                    ->wrap(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('date_occurred')
-                    ->label('Datum nastanka')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('type_of_incident')
+        ->label('Vrsta incidenta')
+        ->alignment(Alignment::Center)
+        ->weight('bold')
+        ->description(
+            fn (Incident $record) => static::incidentTypeDescription($record->type_of_incident),
+            position: 'below'
+        )
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('working_days_lost')
-                    ->label('Izgubljeni radni dani')
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('date_occurred')
+        ->label('Datum nastanka')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('injured_body_part')
-                    ->label('Ozlijeđeni dio tijela')
-                    ->wrap()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('working_days_lost')
+        ->label('Izgubljeni radni dani')
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                ImageColumn::make('image_path')
-                    ->label('Slika')
-                    ->disk('public')
-                    ->circular()
-                    ->height(36)
-                    ->width(36),
+    TextColumn::make('injured_body_part')
+        ->label('Ozlijeđeni dio tijela')
+        ->wrap()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('other')
-                    ->label('Napomena')
-                    ->wrap(),
+    ImageColumn::make('image_path')
+        ->label('Slika')
+        ->disk('public')
+        ->circular()
+        ->height(36)
+        ->width(36)
+        ->toggleable(),
 
-                TextColumn::make('investigation_report')
-                    ->label('Izvještaji')
-                    ->badge()
-                    ->alignment(Alignment::Center)
-                    ->icon(fn (Incident $record) => is_array($record->investigation_report) && count($record->investigation_report) ? Heroicon::PaperClip : null)
-                    ->color(fn (Incident $record) => is_array($record->investigation_report) && count($record->investigation_report) ? 'info' : 'gray')
-                    ->formatStateUsing(fn ($state, Incident $record) => is_array($record->investigation_report) ? (string) count($record->investigation_report) : '0')
-                    ->tooltip(fn (Incident $record) => is_array($record->investigation_report) && count($record->investigation_report)
-                        ? implode("\n", $record->investigation_report)
-                        : 'Nema izvještaja'),
-            ])
+    TextColumn::make('other')
+        ->label('Napomena')
+        ->wrap()
+        ->toggleable(isToggledHiddenByDefault: true),
+
+    TextColumn::make('investigation_report')
+        ->label('Izvještaji')
+        ->badge()
+        ->alignment(Alignment::Center)
+        ->icon(fn (Incident $record) => is_array($record->investigation_report) && count($record->investigation_report) ? Heroicon::PaperClip : null)
+        ->color(fn (Incident $record) => is_array($record->investigation_report) && count($record->investigation_report) ? 'info' : 'gray')
+        ->formatStateUsing(fn ($state, Incident $record) => is_array($record->investigation_report) ? (string) count($record->investigation_report) : '0')
+        ->tooltip(fn (Incident $record) => is_array($record->investigation_report) && count($record->investigation_report)
+            ? implode("\n", $record->investigation_report)
+            : 'Nema izvještaja')
+        ->toggleable(),
+])
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status zapisa')

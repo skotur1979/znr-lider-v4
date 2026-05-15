@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\PPEEquipment;
+use App\Services\ActivityLogger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
@@ -12,23 +13,34 @@ class PPEEquipmentImport implements ToCollection
     public int $created = 0;
     public int $updated = 0;
     public int $skipped = 0;
+    public int $unchanged = 0;
 
     public function collection(Collection $rows): void
     {
         $user = auth()->user();
 
-       $isSuperAdmin =
-    (bool) ($user?->is_admin ?? false)
-    || in_array($user?->role, ['super_admin', 'admin'], true)
-    || (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin());
+        $isSuperAdmin =
+            (bool) ($user?->is_admin ?? false)
+            || in_array($user?->role, ['super_admin', 'admin'], true)
+            || (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin());
 
-$ownerId = $isSuperAdmin
-    ? null
-    : ($user && method_exists($user, 'ownerId') ? $user->ownerId() : $user?->id);
+        $ownerId = $isSuperAdmin
+            ? null
+            : ($user && method_exists($user, 'ownerId') ? $user->ownerId() : $user?->id);
 
         $header = $rows->first();
 
         if (! $header) {
+            $this->skipped++;
+
+            ActivityLogger::import(
+                module: 'Registar OZO',
+                created: $this->created,
+                updated: $this->updated,
+                unchanged: $this->unchanged,
+                skipped: $this->skipped,
+            );
+
             return;
         }
 
@@ -64,20 +76,52 @@ $ownerId = $isSuperAdmin
                 'duration_months',
             ]);
 
-            $record = PPEEquipment::updateOrCreate(
-                [
+            $record = PPEEquipment::query()
+                ->where('user_id', $ownerId)
+                ->where('name', $name)
+                ->first();
+
+            $data = [
+                'standard' => $standard !== '' ? $standard : null,
+                'duration_months' => is_numeric($duration) ? (int) $duration : null,
+                'is_active' => true,
+            ];
+
+            if (! $record) {
+                PPEEquipment::create([
                     'user_id' => $ownerId,
                     'name' => $name,
-                ],
-                [
-                    'standard' => $standard !== '' ? $standard : null,
-                    'duration_months' => is_numeric($duration) ? (int) $duration : null,
-                    'is_active' => true,
-                ]
-            );
+                    ...$data,
+                ]);
 
-            $record->wasRecentlyCreated ? $this->created++ : $this->updated++;
+                $this->created++;
+                continue;
+            }
+
+            $changed = [];
+
+            foreach ($data as $field => $value) {
+                if ((string) ($record->{$field} ?? '') !== (string) ($value ?? '')) {
+                    $changed[$field] = $value;
+                }
+            }
+
+            if (empty($changed)) {
+                $this->unchanged++;
+                continue;
+            }
+
+            $record->update($changed);
+            $this->updated++;
         }
+
+        ActivityLogger::import(
+            module: 'Registar OZO',
+            created: $this->created,
+            updated: $this->updated,
+            unchanged: $this->unchanged,
+            skipped: $this->skipped,
+        );
     }
 
     protected function value($row, array $map, array $keys): mixed

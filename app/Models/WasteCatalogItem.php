@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 
 class WasteCatalogItem extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'Katalog otpada';
+
     protected $fillable = [
         'waste_code',
         'name',

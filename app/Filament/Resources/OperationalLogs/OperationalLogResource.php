@@ -112,48 +112,53 @@ class OperationalLogResource extends BaseResource
                     ->date(),
             ])
             ->columns([
-                TextColumn::make('log_date')
-                    ->label('Datum')
-                    ->date('d.m.Y.')
-                    ->sortable(),
+    TextColumn::make('log_date')
+        ->label('Datum')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(),
 
-                static::userTableColumn(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('items_count')
-                    ->label('Bilješke')
-                    ->badge()
-                    ->getStateUsing(fn (OperationalLog $record): string => (string) $record->itemsCount())
-                    ->color('info'),
+    TextColumn::make('items_count')
+        ->label('Bilješke')
+        ->badge()
+        ->getStateUsing(fn (OperationalLog $record): string => (string) $record->itemsCount())
+        ->color('info')
+        ->toggleable(),
 
-                TextColumn::make('items_preview')
-                    ->label('Sažetak')
-                    ->getStateUsing(function (OperationalLog $record): string {
-                        $items = collect($record->items ?? [])
-                            ->pluck('note')
-                            ->filter()
-                            ->take(3)
-                            ->implode(' • ');
+    TextColumn::make('items_preview')
+        ->label('Sažetak')
+        ->getStateUsing(function (OperationalLog $record): string {
+            $items = collect($record->items ?? [])
+                ->pluck('note')
+                ->filter()
+                ->take(3)
+                ->implode(' • ');
 
-                        return $items ?: '-';
-                    })
-                    ->limit(160)
-                    ->wrap()
-                    ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->where('items', 'like', "%{$search}%");
-                    }),
+            return $items ?: '-';
+        })
+        ->limit(160)
+        ->wrap()
+        ->searchable(query: function (Builder $query, string $search): Builder {
+            return $query->where('items', 'like', "%{$search}%");
+        })
+        ->toggleable(),
 
-                TextColumn::make('tasks_count')
-                    ->label('Radni zadaci')
-                    ->badge()
-                    ->getStateUsing(fn (OperationalLog $record): string => (string) $record->tasksCount())
-                    ->color(fn (OperationalLog $record): string => $record->tasksCount() > 0 ? 'warning' : 'gray'),
+    TextColumn::make('tasks_count')
+        ->label('Radni zadaci')
+        ->badge()
+        ->getStateUsing(fn (OperationalLog $record): string => (string) $record->tasksCount())
+        ->color(fn (OperationalLog $record): string => $record->tasksCount() > 0 ? 'warning' : 'gray')
+        ->toggleable(),
 
-                TextColumn::make('created_at')
-                    ->label('Uneseno')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
+    TextColumn::make('created_at')
+        ->label('Uneseno')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+])
             ->filters([
                 Filter::make('log_date')
                     ->label('Datum')

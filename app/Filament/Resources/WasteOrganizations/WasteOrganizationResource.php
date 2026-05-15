@@ -158,59 +158,65 @@ class WasteOrganizationResource extends BaseResource
         return $table
             ->defaultSort('company_name')
             ->columns([
-                TextColumn::make('company_name')
-                    ->label('Tvrtka')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold'),
-static::userTableColumn(),
-                TextColumn::make('oib')
-                    ->label('OIB')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
+    TextColumn::make('company_name')
+        ->label('Tvrtka')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->toggleable(),
 
-                TextColumn::make('nkd_code')
-                    ->label('NKD')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('contact_person')
-                    ->label('Kontakt osoba')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
+    TextColumn::make('oib')
+        ->label('OIB')
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('registered_office')
-                    ->label('Sjedište')
-                    ->searchable()
-                    ->limit(40)
-                    ->toggleable(),
+    TextColumn::make('nkd_code')
+        ->label('NKD')
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('locations_count')
-                    ->label('Broj lokacija')
-                    ->counts('locations')
-                    ->badge()
-                    ->sortable(),
+    TextColumn::make('contact_person')
+        ->label('Kontakt osoba')
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                IconColumn::make('is_active')
-                    ->label('Aktivna')
-                    ->boolean()
-                    ->sortable(),
+    TextColumn::make('registered_office')
+        ->label('Sjedište')
+        ->searchable()
+        ->limit(40)
+        ->toggleable(),
 
-                TextColumn::make('created_at')
-                    ->label('Kreirano')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+    TextColumn::make('locations_count')
+        ->label('Broj lokacija')
+        ->counts('locations')
+        ->badge()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('deleted_at')
-                    ->label('Deaktivirano')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
+    IconColumn::make('is_active')
+        ->label('Aktivna')
+        ->boolean()
+        ->sortable()
+        ->toggleable(),
+
+    TextColumn::make('created_at')
+        ->label('Kreirano')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+
+    TextColumn::make('deleted_at')
+        ->label('Deaktivirano')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+])
             ->filters([
                 SelectFilter::make('is_active')
                     ->label('Status')

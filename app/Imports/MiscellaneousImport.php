@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Category;
 use App\Models\Miscellaneous;
+use App\Services\ActivityLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -27,6 +28,15 @@ class MiscellaneousImport implements ToCollection
 
         if (! $headers) {
             $this->skipped++;
+
+            ActivityLogger::import(
+                module: 'Ostala ispitivanja',
+                created: $this->created,
+                updated: $this->updated,
+                unchanged: $this->unchanged,
+                skipped: $this->skipped,
+            );
+
             return;
         }
 
@@ -126,6 +136,14 @@ class MiscellaneousImport implements ToCollection
             $record->update($changed);
             $this->updated++;
         }
+
+        ActivityLogger::import(
+            module: 'Ostala ispitivanja',
+            created: $this->created,
+            updated: $this->updated,
+            unchanged: $this->unchanged,
+            skipped: $this->skipped,
+        );
     }
 
     private function value($row, array $map, string $key)

@@ -2,14 +2,18 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use App\Models\Category;
+use App\Models\Concerns\LogsActivity;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Miscellaneous extends Model
 {
     use SoftDeletes;
+    use LogsActivity;
+
+    protected static string $activityModule = 'Ostala ispitivanja';
 
     protected $table = 'miscellaneouses';
 
@@ -35,6 +39,7 @@ class Miscellaneous extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

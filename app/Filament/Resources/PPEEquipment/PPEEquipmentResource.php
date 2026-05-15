@@ -119,37 +119,43 @@ class PPEEquipmentResource extends BaseResource
             ->paginated([10, 25, 50, 'all'])
             ->defaultSort('name')
             ->columns([
-                TextColumn::make('name')
-                    ->label('Naziv OZO')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('semibold'),
+    TextColumn::make('name')
+        ->label('Naziv OZO')
+        ->searchable()
+        ->sortable()
+        ->weight('semibold')
+        ->toggleable(),
 
-                TextColumn::make('standard')
-                    ->label('HRN EN / Norma')
-                    ->searchable()
-                    ->sortable()
-                    ->wrap(),
+    TextColumn::make('standard')
+        ->label('HRN EN / Norma')
+        ->searchable()
+        ->sortable()
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('duration_months')
-                    ->label('Rok uporabe (mj.)')
-                    ->alignCenter()
-                    ->sortable(),
+    TextColumn::make('duration_months')
+        ->label('Rok uporabe (mj.)')
+        ->alignCenter()
+        ->sortable()
+        ->toggleable(),
 
-                IconColumn::make('is_active')
-                    ->label('Aktivno')
-                    ->boolean()
-                    ->alignCenter(),
+    IconColumn::make('is_active')
+        ->label('Aktivno')
+        ->boolean()
+        ->alignCenter()
+        ->toggleable(),
 
-                TextColumn::make('scope_label')
-                    ->label('Vrsta zapisa')
-                    ->badge()
-                    ->alignCenter()
-                    ->state(fn (PPEEquipment $record): string => $record->user_id === null ? 'Globalno' : 'Organizacija')
-                    ->color(fn (PPEEquipment $record): string => $record->user_id === null ? 'success' : 'info'),
+    TextColumn::make('scope_label')
+        ->label('Vrsta zapisa')
+        ->badge()
+        ->alignCenter()
+        ->state(fn (PPEEquipment $record): string => $record->user_id === null ? 'Globalno' : 'Organizacija')
+        ->color(fn (PPEEquipment $record): string => $record->user_id === null ? 'success' : 'info')
+        ->toggleable(),
 
-                static::userTableColumn(),
-            ])
+    static::userTableColumn()
+        ->toggleable(),
+])
             ->filters([
         SelectFilter::make('scope')
             ->label('Vrsta zapisa')

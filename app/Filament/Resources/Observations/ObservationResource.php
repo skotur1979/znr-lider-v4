@@ -333,114 +333,127 @@ protected static function priorityIcon(?string $state): ?string
     {
         return $table
             ->columns([
-                TextColumn::make('incident_date')
-                    ->label('Datum')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->alignment(Alignment::Center)
-                    ->wrap(),
+    TextColumn::make('incident_date')
+        ->label('Datum')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->wrap()
+        ->toggleable(),
 
-                static::userTableColumn(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('observation_type')
-                    ->label('Vrsta zapažanja')
-                    ->alignment(Alignment::Center)
-                    ->wrap()
-                    ->formatStateUsing(fn (?string $state) => static::observationTypeLabel($state)),
+    TextColumn::make('observation_type')
+        ->label('Vrsta zapažanja')
+        ->alignment(Alignment::Center)
+        ->wrap()
+        ->formatStateUsing(fn (?string $state) => static::observationTypeLabel($state))
+        ->toggleable(),
 
-                TextColumn::make('priority')
-    ->label('Prioritet')
-    ->badge()
-    ->icon(fn (?string $state) => static::priorityIcon($state))
-    ->alignment(Alignment::Center)
-    ->color(fn (?string $state) => static::priorityColor($state))
-    ->formatStateUsing(fn (?string $state) => static::priorityOptions()[$state] ?? $state)
-    ->sortable()
-    ->extraAttributes(fn (Observation $record) => [
-        'style' => $record->priority === 'critical'
-            ? 'font-weight:900; text-transform:uppercase;'
-            : '',
-    ]),
+    TextColumn::make('priority')
+        ->label('Prioritet')
+        ->badge()
+        ->icon(fn (?string $state) => static::priorityIcon($state))
+        ->alignment(Alignment::Center)
+        ->color(fn (?string $state) => static::priorityColor($state))
+        ->formatStateUsing(fn (?string $state) => static::priorityOptions()[$state] ?? $state)
+        ->sortable()
+        ->extraAttributes(fn (Observation $record) => [
+            'style' => $record->priority === 'critical'
+                ? 'font-weight:900; text-transform:uppercase;'
+                : '',
+        ])
+        ->toggleable(),
 
-                TextColumn::make('location')
-                    ->label('Lokacija')
-                    ->alignment(Alignment::Center)
-                    ->wrap(),
+    TextColumn::make('location')
+        ->label('Lokacija')
+        ->alignment(Alignment::Center)
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('item')
-    ->label('Opis')
-    ->wrap()
-    ->limit(70),
+    TextColumn::make('item')
+        ->label('Opis')
+        ->wrap()
+        ->limit(70)
+        ->toggleable(),
 
-                TextColumn::make('potential_incident_type')
-                    ->label('Vrsta opasnosti')
-                    ->alignment(Alignment::Center)
-                    ->wrap(),
+    TextColumn::make('potential_incident_type')
+        ->label('Vrsta opasnosti')
+        ->alignment(Alignment::Center)
+        ->wrap()
+        ->toggleable(),
 
-                ImageColumn::make('picture_path')
-                    ->label('Slika')
-                    ->disk('public')
-                    ->visibility('public')
-                    ->height(50)
-                    ->width(80)
-                    ->extraImgAttributes(['style' => 'object-fit: cover; border-radius: 6px;'])
-                    ->getStateUsing(fn (Observation $record) => $record->picture_path ?: null)
-                    ->url(fn (Observation $record) => $record->picture_path
-                        ? Storage::disk('public')->url($record->picture_path)
-                        : null)
-                    ->openUrlInNewTab(),
+    ImageColumn::make('picture_path')
+        ->label('Slika')
+        ->disk('public')
+        ->visibility('public')
+        ->height(50)
+        ->width(80)
+        ->extraImgAttributes(['style' => 'object-fit: cover; border-radius: 6px;'])
+        ->getStateUsing(fn (Observation $record) => $record->picture_path ?: null)
+        ->url(fn (Observation $record) => $record->picture_path
+            ? Storage::disk('public')->url($record->picture_path)
+            : null)
+        ->openUrlInNewTab()
+        ->toggleable(),
 
-                TextColumn::make('action')
-    ->label('Potrebna radnja')
-    ->wrap()
-    ->limit(70),
+    TextColumn::make('action')
+        ->label('Potrebna radnja')
+        ->wrap()
+        ->limit(70)
+        ->toggleable(),
 
-                TextColumn::make('responsible')
-                    ->label('Odgovorna osoba')
-                    ->alignment(Alignment::Center)
-                    ->wrap(),
+    TextColumn::make('responsible')
+        ->label('Odgovorna osoba')
+        ->alignment(Alignment::Center)
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('target_date')
-    ->label('Rok za provedbu')
-    ->alignment(Alignment::Center)
-    ->sortable()
-    ->date('d.m.Y.')
-    ->badge()
-    ->color(fn (Observation $record) =>
-        $record->status === 'Complete'
-            ? 'success'
-            : ExpiryBadge::color($record->target_date)
-    )
-    ->icon(fn (Observation $record) =>
-        $record->status === 'Complete'
-            ? 'heroicon-o-check-circle'
-            : ExpiryBadge::icon($record->target_date)
-    )
-    ->iconPosition('before')
-    ->tooltip(fn (Observation $record) =>
-        $record->status === 'Complete'
-            ? 'Zapažanje je završeno'
-            : ExpiryBadge::tooltip($record->target_date)
-    ),
+    TextColumn::make('target_date')
+        ->label('Rok za provedbu')
+        ->alignment(Alignment::Center)
+        ->sortable()
+        ->date('d.m.Y.')
+        ->badge()
+        ->color(fn (Observation $record) =>
+            $record->status === 'Complete'
+                ? 'success'
+                : ExpiryBadge::color($record->target_date)
+        )
+        ->icon(fn (Observation $record) =>
+            $record->status === 'Complete'
+                ? 'heroicon-o-check-circle'
+                : ExpiryBadge::icon($record->target_date)
+        )
+        ->iconPosition('before')
+        ->tooltip(fn (Observation $record) =>
+            $record->status === 'Complete'
+                ? 'Zapažanje je završeno'
+                : ExpiryBadge::tooltip($record->target_date)
+        )
+        ->toggleable(),
 
-                TextColumn::make('status')
-                    ->label('Status')
-                    ->alignment(Alignment::Center)
-                    ->badge()
-                    ->color(fn (?string $state) => static::statusColor($state))
-                    ->formatStateUsing(fn (?string $state) => static::statusOptions()[$state] ?? $state),
+    TextColumn::make('status')
+        ->label('Status')
+        ->alignment(Alignment::Center)
+        ->badge()
+        ->color(fn (?string $state) => static::statusColor($state))
+        ->formatStateUsing(fn (?string $state) => static::statusOptions()[$state] ?? $state)
+        ->toggleable(),
 
-                TextColumn::make('sent_at')
-                    ->label('Poslano')
-                    ->dateTime('d.m.Y. H:i')
-                    ->alignment(Alignment::Center)
-                    ->toggleable(isToggledHiddenByDefault: true),
+    TextColumn::make('sent_at')
+        ->label('Poslano')
+        ->dateTime('d.m.Y. H:i')
+        ->alignment(Alignment::Center)
+        ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('comments')
-                    ->label('Komentar')
-                    ->limit(20)
-                    ->wrap(),
-            ])
+    TextColumn::make('comments')
+        ->label('Komentar')
+        ->limit(20)
+        ->wrap()
+        ->toggleable(isToggledHiddenByDefault: true),
+])
             ->filters([
                 SelectFilter::make('record_state')
                     ->label('Status zapisa')

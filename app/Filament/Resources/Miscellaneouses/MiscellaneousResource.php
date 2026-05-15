@@ -206,100 +206,110 @@ class MiscellaneousResource extends BaseResource
         return $table
             ->defaultSort('examination_valid_until', 'desc')
             ->columns([
-                TextColumn::make('name')
-                    ->label('Naziv')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->wrap(),
-static::userTableColumn(),
-                TextColumn::make('category.name')
-                    ->label('Kategorija')
-                    ->sortable()
-                    ->searchable()
-                    ->wrap()
-                    ->alignCenter(),
+    TextColumn::make('name')
+        ->label('Naziv')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('examiner')
-                    ->label('Ispitao')
-                    ->sortable()
-                    ->alignCenter(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('examination_valid_from')
-                    ->label('Datum ispitivanja')
-                    ->date('d.m.Y')
-                    ->sortable()
-                    ->alignCenter(),
+    TextColumn::make('category.name')
+        ->label('Kategorija')
+        ->sortable()
+        ->searchable()
+        ->wrap()
+        ->alignCenter()
+        ->toggleable(),
 
-                TextColumn::make('examination_valid_until')
-                    ->label('Ispitivanje vrijedi do')
-                    ->date('d.m.Y')
-                    ->badge()
-                    ->icon(fn ($state) => static::expiryIcon($state))
-                    ->color(fn ($state) => static::expiryColor($state))
-                    ->tooltip(fn ($state) => static::expiryTooltip($state))
-                    ->sortable()
-                    ->alignCenter(),
+    TextColumn::make('examiner')
+        ->label('Ispitao')
+        ->sortable()
+        ->alignCenter()
+        ->toggleable(),
 
-                TextColumn::make('remark')
-                    ->label('Napomena')
-                    ->searchable()
-                    ->limit(60),
+    TextColumn::make('examination_valid_from')
+        ->label('Datum ispitivanja')
+        ->date('d.m.Y')
+        ->sortable()
+        ->alignCenter()
+        ->toggleable(),
 
-                TextColumn::make('pdf')
-    ->label('Prilozi')
-    ->alignment(Alignment::Center)
-    ->html()
-    ->state(function (Miscellaneous $record): string {
-        if (! is_array($record->pdf) || count($record->pdf) === 0) {
-            return '<span style="color:#6b7280;">0</span>';
-        }
+    TextColumn::make('examination_valid_until')
+        ->label('Ispitivanje vrijedi do')
+        ->date('d.m.Y')
+        ->badge()
+        ->icon(fn ($state) => static::expiryIcon($state))
+        ->color(fn ($state) => static::expiryColor($state))
+        ->tooltip(fn ($state) => static::expiryTooltip($state))
+        ->sortable()
+        ->alignCenter()
+        ->toggleable(),
 
-        return collect($record->pdf)
-            ->map(function ($file, $index) {
-                $url = route('file.preview', [
-                    'file' => ltrim($file, '/'),
-                ]);
+    TextColumn::make('remark')
+        ->label('Napomena')
+        ->searchable()
+        ->limit(60)
+        ->toggleable(isToggledHiddenByDefault: true),
 
-                $name = e(basename($file));
-                $number = $index + 1;
+    TextColumn::make('pdf')
+        ->label('Prilozi')
+        ->alignment(Alignment::Center)
+        ->html()
+        ->state(function (Miscellaneous $record): string {
+            if (! is_array($record->pdf) || count($record->pdf) === 0) {
+                return '<span style="color:#6b7280;">0</span>';
+            }
 
-                return '<a href="' . e($url) . '"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="' . $name . '"
-                    onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
-                    style="
-                        display:inline-flex;
-                        align-items:center;
-                        justify-content:center;
-                        min-width:28px;
-                        height:24px;
-                        padding:0 8px;
-                        margin:1px 2px;
-                        border-radius:7px;
-                        background:rgba(59,130,246,.15);
-                        border:1px solid rgba(59,130,246,.35);
-                        color:#93c5fd;
-                        font-size:12px;
-                        font-weight:700;
-                        text-decoration:none;
-                        cursor:pointer;
-                    "
-                >📎 ' . $number . '</a>';
-            })
-            ->implode('');
-    })
-    ->tooltip(function (Miscellaneous $record): string {
-        if (! is_array($record->pdf) || count($record->pdf) === 0) {
-            return 'Nema priloga';
-        }
+            return collect($record->pdf)
+                ->map(function ($file, $index) {
+                    $url = route('file.preview', [
+                        'file' => ltrim($file, '/'),
+                    ]);
 
-        return collect($record->pdf)
-            ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
-            ->implode("\n");
-    }),
-            ])
+                    $name = e(basename($file));
+                    $number = $index + 1;
+
+                    return '<a href="' . e($url) . '"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="' . $name . '"
+                        onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                        style="
+                            display:inline-flex;
+                            align-items:center;
+                            justify-content:center;
+                            min-width:28px;
+                            height:24px;
+                            padding:0 8px;
+                            margin:1px 2px;
+                            border-radius:7px;
+                            background:rgba(59,130,246,.15);
+                            border:1px solid rgba(59,130,246,.35);
+                            color:#93c5fd;
+                            font-size:12px;
+                            font-weight:700;
+                            text-decoration:none;
+                            cursor:pointer;
+                        "
+                    >📎 ' . $number . '</a>';
+                })
+                ->implode('');
+        })
+        ->tooltip(function (Miscellaneous $record): string {
+            if (! is_array($record->pdf) || count($record->pdf) === 0) {
+                return 'Nema priloga';
+            }
+
+            return collect($record->pdf)
+                ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+                ->implode("\n");
+        })
+        ->toggleable(),
+])
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status zapisa')

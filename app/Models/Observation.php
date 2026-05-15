@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,9 @@ use App\Models\User;
 class Observation extends Model
 {
     use SoftDeletes;
+    use LogsActivity;
+
+    protected static string $activityModule = 'Zapažanja';
 
     protected $table = 'observations';
 

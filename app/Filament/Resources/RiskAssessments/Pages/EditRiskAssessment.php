@@ -11,4 +11,9 @@ class EditRiskAssessment extends EditRecord
     protected static string $resource = RiskAssessmentResource::class;
 
     protected Width|string|null $maxContentWidth = Width::Full;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
 }

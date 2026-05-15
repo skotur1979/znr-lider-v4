@@ -34,146 +34,156 @@ class EmployeesTable
     {
         return $table
             ->columns([
-                TextColumn::make('name')
-                    ->label('Prezime i ime')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold'),
-                    
-TextColumn::make('user.name')
-    ->label('Korisnik')
-    ->badge()
-    ->visible(fn () => auth()->user()?->isSuperAdmin()),
+    TextColumn::make('name')
+        ->label('Prezime i ime')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->toggleable(),
 
-                TextColumn::make('workplace')
-                    ->label('Radno mjesto')
-                    ->searchable()
-                    ->sortable()
-                    ->wrap(),
+    TextColumn::make('user.name')
+        ->label('Korisnik')
+        ->badge()
+        ->visible(fn () => auth()->user()?->isSuperAdmin())
+        ->toggleable(),
 
-                TextColumn::make('medical_examination_valid_until')
-                    ->label('Liječnički (do)')
-                    ->date('d.m.Y.')
-                    ->badge()
-                    ->color(fn ($state) => ExpiryBadge::color($state))
-                    ->icon(fn ($state) => ExpiryBadge::icon($state))
-                    ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('workplace')
+        ->label('Radno mjesto')
+        ->searchable()
+        ->sortable()
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('article')
-                    ->label('Članak 3. točke')
-                    ->sortable()
-                    ->searchable()
-                    ->wrap()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('medical_examination_valid_until')
+        ->label('Liječnički (do)')
+        ->date('d.m.Y.')
+        ->badge()
+        ->color(fn ($state) => ExpiryBadge::color($state))
+        ->icon(fn ($state) => ExpiryBadge::icon($state))
+        ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('occupational_safety_valid_from')
-                    ->label('ZNR (od)')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('article')
+        ->label('Članak 3. točke')
+        ->sortable()
+        ->searchable()
+        ->wrap()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('toxicology_valid_until')
-                    ->label('Toksikologija (do)')
-                    ->date('d.m.Y.')
-                    ->badge()
-                    ->color(fn ($state) => ExpiryBadge::color($state))
-                    ->icon(fn ($state) => ExpiryBadge::icon($state))
-                    ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('occupational_safety_valid_from')
+        ->label('ZNR (od)')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('employers_authorization_valid_until')
-                    ->label('Ovlaštenik ZNR (do)')
-                    ->date('d.m.Y.')
-                    ->badge()
-                    ->color(fn ($state) => ExpiryBadge::color($state))
-                    ->icon(fn ($state) => ExpiryBadge::icon($state))
-                    ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('toxicology_valid_until')
+        ->label('Toksikologija (do)')
+        ->date('d.m.Y.')
+        ->badge()
+        ->color(fn ($state) => ExpiryBadge::color($state))
+        ->icon(fn ($state) => ExpiryBadge::icon($state))
+        ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                ViewColumn::make('certificates')
-    ->label('Ostale edukacije')
-    ->state(fn (Employee $record) => $record->certificates)
-    ->view('filament.components.certificates-filtered')
-    ->extraAttributes([
-        'style' => 'max-width:240px; width:240px; overflow:hidden;',
-    ]),
+    TextColumn::make('employers_authorization_valid_until')
+        ->label('Ovlaštenik ZNR (do)')
+        ->date('d.m.Y.')
+        ->badge()
+        ->color(fn ($state) => ExpiryBadge::color($state))
+        ->icon(fn ($state) => ExpiryBadge::icon($state))
+        ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-TextColumn::make('pdf')
-    ->label('Prilozi')
-    ->alignment(Alignment::Center)
-    ->html()
-    ->extraAttributes([
-        'style' => 'min-width:230px; width:230px;',
-    ])
-    ->state(function (Employee $record): string {
-        if (! is_array($record->pdf) || count($record->pdf) === 0) {
-            return '<span style="color:#6b7280;">0</span>';
-        }
+    ViewColumn::make('certificates')
+        ->label('Ostale edukacije')
+        ->state(fn (Employee $record) => $record->certificates)
+        ->view('filament.components.certificates-filtered')
+        ->extraAttributes([
+            'style' => 'max-width:240px; width:240px; overflow:hidden;',
+        ])
+        ->toggleable(),
 
-        $files = collect($record->pdf)->take(10)->values();
+    TextColumn::make('pdf')
+        ->label('Prilozi')
+        ->alignment(Alignment::Center)
+        ->html()
+        ->extraAttributes([
+            'style' => 'min-width:230px; width:230px;',
+        ])
+        ->state(function (Employee $record): string {
+            if (! is_array($record->pdf) || count($record->pdf) === 0) {
+                return '<span style="color:#6b7280;">0</span>';
+            }
 
-        $makeLink = function ($file, $index) {
-            $url = route('file.preview', [
-                'file' => ltrim($file, '/'),
-            ]);
+            $files = collect($record->pdf)->take(10)->values();
 
-            $name = e(basename($file));
-            $number = $index + 1;
+            $makeLink = function ($file, $index) {
+                $url = route('file.preview', [
+                    'file' => ltrim($file, '/'),
+                ]);
 
-            return '<a href="' . e($url) . '"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="' . $name . '"
-                onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
-                style="
-                    display:inline-flex;
-                    align-items:center;
-                    justify-content:center;
-                    width:36px;
-                    height:24px;
-                    border-radius:7px;
-                    background:rgba(59,130,246,.15);
-                    border:1px solid rgba(59,130,246,.35);
-                    color:#93c5fd;
-                    font-size:12px;
-                    font-weight:700;
-                    text-decoration:none;
-                    cursor:pointer;
-                    white-space:nowrap;
-                    flex:0 0 36px;
-                "
-            >📎 ' . $number . '</a>';
-        };
+                $name = e(basename($file));
+                $number = $index + 1;
 
-        $row1 = $files->slice(0, 5)
-    ->values()
-    ->map(fn ($file, $index) => $makeLink($file, $index))
-    ->implode('');
+                return '<a href="' . e($url) . '"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="' . $name . '"
+                    onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                    style="
+                        display:inline-flex;
+                        align-items:center;
+                        justify-content:center;
+                        width:36px;
+                        height:24px;
+                        border-radius:7px;
+                        background:rgba(59,130,246,.15);
+                        border:1px solid rgba(59,130,246,.35);
+                        color:#93c5fd;
+                        font-size:12px;
+                        font-weight:700;
+                        text-decoration:none;
+                        cursor:pointer;
+                        white-space:nowrap;
+                        flex:0 0 36px;
+                    "
+                >📎 ' . $number . '</a>';
+            };
 
-$row2 = $files->slice(5, 5)
-    ->values()
-    ->map(fn ($file, $index) => $makeLink($file, $index + 5))
-    ->implode('');
+            $row1 = $files->slice(0, 5)
+                ->values()
+                ->map(fn ($file, $index) => $makeLink($file, $index))
+                ->implode('');
 
-        return '<div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
-            <div style="display:flex; gap:4px; justify-content:center; flex-wrap:nowrap;">' . $row1 . '</div>
-            <div style="display:flex; gap:4px; justify-content:center; flex-wrap:nowrap;">' . $row2 . '</div>
-        </div>';
-    })
-    ->tooltip(function (Employee $record): string {
-        if (! is_array($record->pdf) || count($record->pdf) === 0) {
-            return 'Nema priloga';
-        }
+            $row2 = $files->slice(5, 5)
+                ->values()
+                ->map(fn ($file, $index) => $makeLink($file, $index + 5))
+                ->implode('');
 
-        return collect($record->pdf)
-            ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
-            ->implode("\n");
-    }),
-            ])
+            return '<div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                <div style="display:flex; gap:4px; justify-content:center; flex-wrap:nowrap;">' . $row1 . '</div>
+                <div style="display:flex; gap:4px; justify-content:center; flex-wrap:nowrap;">' . $row2 . '</div>
+            </div>';
+        })
+        ->tooltip(function (Employee $record): string {
+            if (! is_array($record->pdf) || count($record->pdf) === 0) {
+                return 'Nema priloga';
+            }
+
+            return collect($record->pdf)
+                ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+                ->implode("\n");
+        })
+        ->toggleable(),
+])
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status zapisa')

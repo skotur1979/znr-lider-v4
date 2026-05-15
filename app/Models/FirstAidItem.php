@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FirstAidItem extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'Prva pomoć';
+
     protected $fillable = [
         'first_aid_kit_id',
         'material_type',
@@ -22,5 +27,4 @@ class FirstAidItem extends Model
     {
         return $this->belongsTo(FirstAidKit::class, 'first_aid_kit_id');
     }
-    
 }

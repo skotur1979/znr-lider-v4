@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,6 +10,10 @@ use Illuminate\Support\Facades\Auth;
 
 class WorkTask extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'Radni zadaci';
+
     protected $fillable = [
         'user_id',
         'title',

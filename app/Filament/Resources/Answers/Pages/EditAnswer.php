@@ -8,4 +8,9 @@ use Filament\Resources\Pages\EditRecord;
 class EditAnswer extends EditRecord
 {
     protected static string $resource = AnswerResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
 }

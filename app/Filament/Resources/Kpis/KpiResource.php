@@ -187,78 +187,90 @@ class KpiResource extends BaseResource
         return $table
         ->paginated([10, 25, 50,'all'])
             ->columns([
-                TextColumn::make('name')
-                    ->label('Naziv KPI-a')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->wrap(),
-static::userTableColumn(),
-                TextColumn::make('category')
-                    ->label('Kategorija')
-                    ->badge()
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('name')
+        ->label('Naziv KPI-a')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('unit')
-                    ->label('Jedinica')
-                    ->badge()
-                    ->alignment(Alignment::Center),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('effective_target')
-                    ->label('Cilj')
-                    ->state(fn (Kpi $record) => $record->effectiveTargetValue(static::resolveOwnerId()))
-                    ->formatStateUsing(fn ($state, Kpi $record) => $record->formatNumberOnly($state)),
+    TextColumn::make('category')
+        ->label('Kategorija')
+        ->badge()
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('calculation_type')
-                    ->label('Tip')
-                    ->badge()
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'manual' => 'Ručno',
-                        'automatic' => 'Automatski',
-                        'formula' => 'Formula',
-                        default => $state,
-                    })
-                    ->color(fn (string $state): string => match ($state) {
-                        'manual' => 'gray',
-                        'automatic' => 'success',
-                        'formula' => 'warning',
-                        default => 'gray',
-                    })
-                    ->alignment(Alignment::Center),
+    TextColumn::make('unit')
+        ->label('Jedinica')
+        ->badge()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                IconColumn::make('is_active')
-                    ->label('Aktivan')
-                    ->boolean()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('effective_target')
+        ->label('Cilj')
+        ->state(fn (Kpi $record) => $record->effectiveTargetValue(static::resolveOwnerId()))
+        ->formatStateUsing(fn ($state, Kpi $record) => $record->formatNumberOnly($state))
+        ->toggleable(),
 
-                IconColumn::make('show_on_dashboard')
-                    ->label('Dashboard')
-                    ->boolean()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('calculation_type')
+        ->label('Tip')
+        ->badge()
+        ->formatStateUsing(fn (string $state): string => match ($state) {
+            'manual' => 'Ručno',
+            'automatic' => 'Automatski',
+            'formula' => 'Formula',
+            default => $state,
+        })
+        ->color(fn (string $state): string => match ($state) {
+            'manual' => 'gray',
+            'automatic' => 'success',
+            'formula' => 'warning',
+            default => 'gray',
+        })
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('latest_value')
-                    ->label('Zadnja vrijednost')
-                    ->state(fn (Kpi $record) => $record->latestValue()?->value)
-                    ->formatStateUsing(fn ($state, Kpi $record) => $record->formatNumberOnly($state)),
+    IconColumn::make('is_active')
+        ->label('Aktivan')
+        ->boolean()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('current_status')
-                    ->label('Status')
-                    ->badge()
-                    ->state(fn (Kpi $record) => $record->evaluateStatus($record->latestValue()?->value, static::resolveOwnerId()))
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'success' => 'U cilju',
-                        'warning' => 'Upozorenje',
-                        'danger' => 'Izvan cilja',
-                        default => 'Bez cilja',
-                    })
-                    ->color(fn (string $state): string => match ($state) {
-                        'success' => 'success',
-                        'warning' => 'warning',
-                        'danger' => 'danger',
-                        default => 'gray',
-                    }),
-            ])
+    IconColumn::make('show_on_dashboard')
+        ->label('Dashboard')
+        ->boolean()
+        ->alignment(Alignment::Center)
+        ->toggleable(isToggledHiddenByDefault: true),
+
+    TextColumn::make('latest_value')
+        ->label('Zadnja vrijednost')
+        ->state(fn (Kpi $record) => $record->latestValue()?->value)
+        ->formatStateUsing(fn ($state, Kpi $record) => $record->formatNumberOnly($state))
+        ->toggleable(),
+
+    TextColumn::make('current_status')
+        ->label('Status')
+        ->badge()
+        ->state(fn (Kpi $record) => $record->evaluateStatus($record->latestValue()?->value, static::resolveOwnerId()))
+        ->formatStateUsing(fn (string $state): string => match ($state) {
+            'success' => 'U cilju',
+            'warning' => 'Upozorenje',
+            'danger' => 'Izvan cilja',
+            default => 'Bez cilja',
+        })
+        ->color(fn (string $state): string => match ($state) {
+            'success' => 'success',
+            'warning' => 'warning',
+            'danger' => 'danger',
+            default => 'gray',
+        })
+        ->toggleable(),
+])
             ->defaultSort('sort_order')
             ->recordUrl(fn (Kpi $record): string => static::getUrl('view', ['record' => $record]))
             ->filters([

@@ -8,4 +8,9 @@ use Filament\Resources\Pages\EditRecord;
 class EditLearningMaterial extends EditRecord
 {
     protected static string $resource = LearningMaterialResource::class;
+    
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
 }

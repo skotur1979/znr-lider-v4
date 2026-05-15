@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use App\Services\FiveSScoreService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InspectionZoneAnswer extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = '5S odgovori';
+
     protected $table = 'inspection_answers';
 
     protected $fillable = [
@@ -37,21 +42,21 @@ class InspectionZoneAnswer extends Model
     ];
 
     protected static function booted(): void
-{
-    static::saved(function (InspectionZoneAnswer $answer) {
-        if ($answer->zone) {
-            app(FiveSScoreService::class)->recalculateZone($answer->zone);
-            $answer->zone->inspection?->refreshFiveSScore();
-        }
-    });
+    {
+        static::saved(function (InspectionZoneAnswer $answer) {
+            if ($answer->zone) {
+                app(FiveSScoreService::class)->recalculateZone($answer->zone);
+                $answer->zone->inspection?->refreshFiveSScore();
+            }
+        });
 
-    static::deleted(function (InspectionZoneAnswer $answer) {
-        if ($answer->zone) {
-            app(FiveSScoreService::class)->recalculateZone($answer->zone);
-            $answer->zone->inspection?->refreshFiveSScore();
-        }
-    });
-}
+        static::deleted(function (InspectionZoneAnswer $answer) {
+            if ($answer->zone) {
+                app(FiveSScoreService::class)->recalculateZone($answer->zone);
+                $answer->zone->inspection?->refreshFiveSScore();
+            }
+        });
+    }
 
     public function inspection(): BelongsTo
     {

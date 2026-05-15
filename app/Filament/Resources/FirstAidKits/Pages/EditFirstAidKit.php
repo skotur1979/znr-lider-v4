@@ -13,4 +13,9 @@ class EditFirstAidKit extends EditRecord
     {
         return 'Uredi Prva pomoć';
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
 }

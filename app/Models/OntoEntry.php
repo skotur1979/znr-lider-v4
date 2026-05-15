@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,6 +10,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OntoEntry extends Model
 {
     use SoftDeletes;
+    use LogsActivity;
+
+    protected static string $activityModule = 'ONTO evidencija';
 
     protected $fillable = [
         'onto_record_id',

@@ -165,52 +165,59 @@ class WasteTypeResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
+        ->recordUrl(fn ($record): string => static::getUrl('edit', ['record' => $record]))
         ->paginated([10, 25, 50,'all'])
             ->defaultSort('waste_code')
             ->columns([
-                TextColumn::make('waste_code')
-                    ->label('Ključni broj otpada')
-                    ->searchable()
-                    ->sortable()
-                    ->html()
-                    ->formatStateUsing(function (string $state): string {
-                        $hasStar = str_ends_with($state, '*');
-                        $code = rtrim($state, '*');
+    TextColumn::make('waste_code')
+        ->label('Ključni broj otpada')
+        ->searchable()
+        ->sortable()
+        ->html()
+        ->formatStateUsing(function (string $state): string {
+            $hasStar = str_ends_with($state, '*');
+            $code = rtrim($state, '*');
 
-                        if (strlen($code) === 6) {
-                            $code = substr($code, 0, 2) . ' ' .
-                                substr($code, 2, 2) . ' ' .
-                                substr($code, 4, 2);
-                        }
+            if (strlen($code) === 6) {
+                $code = substr($code, 0, 2) . ' ' .
+                    substr($code, 2, 2) . ' ' .
+                    substr($code, 4, 2);
+            }
 
-                        return $hasStar
-                            ? $code . '<sup style="font-size:0.75em">*</sup>'
-                            : $code;
-                    }),
+            return $hasStar
+                ? $code . '<sup style="font-size:0.75em">*</sup>'
+                : $code;
+        })
+        ->toggleable(),
 
-                TextColumn::make('name')
-                    ->label('Naziv')
-                    ->searchable()
-                    ->sortable()
-                    ->wrap(),
-static::userTableColumn(),
-                IconColumn::make('is_hazardous')
-                    ->label('Opasan')
-                    ->boolean()
-                    ->sortable(),
+    TextColumn::make('name')
+        ->label('Naziv')
+        ->searchable()
+        ->sortable()
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('created_at')
-                    ->label('Kreirano')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('deleted_at')
-                    ->label('Deaktivirano')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
+    IconColumn::make('is_hazardous')
+        ->label('Opasan')
+        ->boolean()
+        ->sortable()
+        ->toggleable(),
+
+    TextColumn::make('created_at')
+        ->label('Kreirano')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+
+    TextColumn::make('deleted_at')
+        ->label('Deaktivirano')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+])
             ->filters([
                 SelectFilter::make('is_hazardous')
                     ->label('Vrsta')
@@ -302,7 +309,6 @@ static::userTableColumn(),
         return [
             'index' => ListWasteTypes::route('/'),
             'create' => CreateWasteType::route('/create'),
-            'view' => ViewWasteType::route('/{record}'),
             'edit' => EditWasteType::route('/{record}/edit'),
         ];
     }

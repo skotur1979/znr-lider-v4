@@ -9,8 +9,13 @@ class EditChemical extends EditRecord
 {
     protected static string $resource = ChemicalResource::class;
 
+   protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
+
     public function getMaxContentWidth(): ?string
-{
-    return 'full';
-}
+    {
+        return 'full';
+    }
 }

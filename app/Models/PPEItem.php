@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PPEItem extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'OZO';
+
     protected $table = 'personal_protective_equipment_items';
 
     protected $fillable = [

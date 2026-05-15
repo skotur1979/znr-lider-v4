@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Fire;
+use App\Services\ActivityLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +27,15 @@ class FiresImport implements ToCollection
 
         if (! $headers) {
             $this->skipped++;
+
+            ActivityLogger::import(
+                module: 'Vatrogasni aparati',
+                created: $this->created,
+                updated: $this->updated,
+                unchanged: $this->unchanged,
+                skipped: $this->skipped,
+            );
+
             return;
         }
 
@@ -135,6 +145,14 @@ class FiresImport implements ToCollection
             $fire->update($changed);
             $this->updated++;
         }
+
+        ActivityLogger::import(
+            module: 'Vatrogasni aparati',
+            created: $this->created,
+            updated: $this->updated,
+            unchanged: $this->unchanged,
+            skipped: $this->skipped,
+        );
     }
 
     private function value($row, array $map, string $key)

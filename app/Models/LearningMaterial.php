@@ -2,21 +2,26 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LearningMaterial extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'Edukacijski centar';
+
     protected $fillable = [
         'user_id',
         'learning_category_id',
         'title',
         'description',
         'type',
-        'url',          // stari single link (ostavljamo zbog kompatibilnosti)
-        'file_path',    // stari single file (ostavljamo)
-        'links',        // novi multiple linkovi (json)
-        'files',        // novi multiple fileovi (json)
+        'url',
+        'file_path',
+        'links',
+        'files',
         'is_global',
         'is_active',
         'sort_order',
@@ -70,20 +75,20 @@ class LearningMaterial extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | HELPER METODE (KLJUČNO 🔥)
+    | HELPER METODE
     |--------------------------------------------------------------------------
     */
 
     public function hasLinks(): bool
     {
-        return !empty($this->url)
+        return ! empty($this->url)
             || collect($this->links ?? [])
-                ->contains(fn ($item) => !blank($item['url'] ?? null));
+                ->contains(fn ($item) => ! blank($item['url'] ?? null));
     }
 
     public function hasFiles(): bool
     {
-        return !empty($this->file_path)
+        return ! empty($this->file_path)
             || collect($this->files ?? [])
                 ->filter()
                 ->isNotEmpty();
@@ -93,7 +98,7 @@ class LearningMaterial extends Model
     {
         $links = [];
 
-        if (!empty($this->url)) {
+        if (! empty($this->url)) {
             $links[] = [
                 'label' => 'Glavni link',
                 'url' => $this->url,
@@ -101,7 +106,7 @@ class LearningMaterial extends Model
         }
 
         foreach ($this->links ?? [] as $link) {
-            if (!blank($link['url'] ?? null)) {
+            if (! blank($link['url'] ?? null)) {
                 $links[] = $link;
             }
         }
@@ -113,12 +118,12 @@ class LearningMaterial extends Model
     {
         $files = [];
 
-        if (!empty($this->file_path)) {
+        if (! empty($this->file_path)) {
             $files[] = $this->file_path;
         }
 
         foreach ($this->files ?? [] as $file) {
-            if (!blank($file)) {
+            if (! blank($file)) {
                 $files[] = $file;
             }
         }

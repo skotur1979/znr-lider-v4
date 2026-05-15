@@ -5,6 +5,7 @@ namespace App\Filament\Resources\OperationalLogs\Pages;
 use App\Filament\Resources\OperationalLogs\OperationalLogResource;
 use App\Models\OperationalLog;
 use App\Models\WorkTask;
+use App\Services\ActivityLogger;
 use Filament\Actions\DeleteAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
@@ -80,6 +81,13 @@ class EditOperationalLog extends EditRecord
         ]);
 
         if ($createdTasks > 0) {
+            ActivityLogger::status(
+                module: 'Operativni dnevnik',
+                title: 'Naknadno kreirani radni zadaci iz operativnog dnevnika',
+                description: 'Naknadno kreirano radnih zadataka: ' . $createdTasks . '. Datum dnevnika: ' . optional($record->log_date)->format('d.m.Y.'),
+                record: $record,
+            );
+
             Notification::make()
                 ->title('Kreirani su novi radni zadaci.')
                 ->body('Broj novih radnih zadataka: ' . $createdTasks)
@@ -94,5 +102,10 @@ class EditOperationalLog extends EditRecord
             DeleteAction::make()
                 ->label('Obriši'),
         ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
     }
 }

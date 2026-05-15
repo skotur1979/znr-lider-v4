@@ -178,91 +178,101 @@ class OntoRecordResource extends BaseResource
         ->paginated([10, 25, 50,'all'])
             ->defaultSort('year', 'desc')
             ->columns([
-                TextColumn::make('organization.company_name')
-                    ->label('Organizacija')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
-static::userTableColumn(),
-                TextColumn::make('organizationLocation.name')
-                    ->label('Lokacija')
-                    ->formatStateUsing(fn ($state, OntoRecord $record) => $record->organizationLocation?->display_name
-                        ?? $record->organizationLocation?->name
-                        ?? $record->organizationLocation?->location_name
-                        ?? '-')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold'),
+    TextColumn::make('organization.company_name')
+        ->label('Organizacija')
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('wasteType.waste_code')
-                    ->label('K.B.')
-                    ->html()
-                    ->formatStateUsing(function (?string $state): string {
-                        if (! $state) {
-                            return '-';
-                        }
+    static::userTableColumn()
+        ->toggleable(),
 
-                        $hasStar = str_ends_with($state, '*');
-                        $code = rtrim($state, '*');
+    TextColumn::make('organizationLocation.name')
+        ->label('Lokacija')
+        ->formatStateUsing(fn ($state, OntoRecord $record) => $record->organizationLocation?->display_name
+            ?? $record->organizationLocation?->name
+            ?? $record->organizationLocation?->location_name
+            ?? '-')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->toggleable(),
 
-                        if (strlen($code) === 6) {
-                            $code = substr($code, 0, 2) . ' '
-                                . substr($code, 2, 2) . ' '
-                                . substr($code, 4, 2);
-                        }
+    TextColumn::make('wasteType.waste_code')
+        ->label('K.B.')
+        ->html()
+        ->formatStateUsing(function (?string $state): string {
+            if (! $state) {
+                return '-';
+            }
 
-                        return $hasStar
-                            ? $code . '<sup style="font-size:0.75em">*</sup>'
-                            : $code;
-                    })
-                    ->sortable()
-                    ->searchable(),
+            $hasStar = str_ends_with($state, '*');
+            $code = rtrim($state, '*');
 
-                TextColumn::make('wasteType.name')
-                    ->label('Naziv otpada')
-                    ->searchable()
-                    ->sortable()
-                    ->wrap(),
+            if (strlen($code) === 6) {
+                $code = substr($code, 0, 2) . ' '
+                    . substr($code, 2, 2) . ' '
+                    . substr($code, 4, 2);
+            }
 
-                TextColumn::make('year')
-                    ->label('Godina')
-                    ->sortable(),
+            return $hasStar
+                ? $code . '<sup style="font-size:0.75em">*</sup>'
+                : $code;
+        })
+        ->sortable()
+        ->searchable()
+        ->toggleable(),
 
-                TextColumn::make('current_balance_kg')
-                    ->label('Stanje (kg)')
-                    ->sortable()
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.')),
+    TextColumn::make('wasteType.name')
+        ->label('Naziv otpada')
+        ->searchable()
+        ->sortable()
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('entries_count')
-                    ->label('Stavke')
-                    ->counts('entries')
-                    ->badge()
-                    ->sortable(),
+    TextColumn::make('year')
+        ->label('Godina')
+        ->sortable()
+        ->toggleable(),
 
-                IconColumn::make('is_closed')
-                    ->label('Zatvoren')
-                    ->boolean()
-                    ->sortable(),
+    TextColumn::make('current_balance_kg')
+        ->label('Stanje (kg)')
+        ->sortable()
+        ->badge()
+        ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.'))
+        ->toggleable(),
 
-                TextColumn::make('opening_date')
-                    ->label('Otvoren')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->toggleable(),
+    TextColumn::make('entries_count')
+        ->label('Stavke')
+        ->counts('entries')
+        ->badge()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('closing_date')
-                    ->label('Zatvoren datum')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+    IconColumn::make('is_closed')
+        ->label('Zatvoren')
+        ->boolean()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('deleted_at')
-                    ->label('Deaktivirano')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
+    TextColumn::make('opening_date')
+        ->label('Otvoren')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(),
+
+    TextColumn::make('closing_date')
+        ->label('Zatvoren datum')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+
+    TextColumn::make('deleted_at')
+        ->label('Deaktivirano')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(isToggledHiddenByDefault: true),
+])
             ->filters([
                 SelectFilter::make('waste_organization_id')
                     ->label('Organizacija')

@@ -17,3 +17,13 @@ Schedule::command('emails:send-daily-status')
 Schedule::command('emails:send-weekly-status')
     ->mondays()
     ->at('07:00');
+
+/*
+|--------------------------------------------------------------------------
+| Activity logs cleanup
+|--------------------------------------------------------------------------
+| Briše aktivnosti starije od 6 mjeseci
+*/
+
+Schedule::command('activitylogs:cleanup')
+    ->dailyAt('02:00');

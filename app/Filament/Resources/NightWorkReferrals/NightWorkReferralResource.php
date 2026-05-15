@@ -410,44 +410,52 @@ class NightWorkReferralResource extends BaseResource
         return $table
         ->paginated([10, 25, 50,'all'])
             ->columns([
-                TextColumn::make('display_name')
-                    ->label('Zaposlenik')
-                    ->state(fn (NightWorkReferral $record) => $record->employee->name ?? $record->full_name)
-                    ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->where(function (Builder $q) use ($search) {
-                            $q->where('full_name', 'like', "%{$search}%")
-                                ->orWhereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('name', 'like', "%{$search}%"));
-                        });
-                    })
-                    ->sortable()
-                    ->weight('bold')
-                    ->wrap(),
-static::userTableColumn(),
-                TextColumn::make('referral_number')
-                    ->label('Broj uputnice')
-                    ->sortable()
-                    ->searchable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('display_name')
+        ->label('Zaposlenik')
+        ->state(fn (NightWorkReferral $record) => $record->employee->name ?? $record->full_name)
+        ->searchable(query: function (Builder $query, string $search): Builder {
+            return $query->where(function (Builder $q) use ($search) {
+                $q->where('full_name', 'like', "%{$search}%")
+                    ->orWhereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('name', 'like', "%{$search}%"));
+            });
+        })
+        ->sortable()
+        ->weight('bold')
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('referral_date')
-                    ->label('Datum')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('job_title')
-                    ->label('Noćni rad za koji se utvrđuje zdr. sposobnost')
-                    ->wrap()
-                    ->limit(150)
-                    ->tooltip(fn (NightWorkReferral $record) => $record->job_title),
+    TextColumn::make('referral_number')
+        ->label('Broj uputnice')
+        ->sortable()
+        ->searchable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('manual_entry')
-                    ->label('Unos')
-                    ->badge()
-                    ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn ($state) => $state ? 'Ručno' : 'Zaposlenik')
-                    ->color(fn ($state) => $state ? 'warning' : 'success'),
-            ])
+    TextColumn::make('referral_date')
+        ->label('Datum')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
+
+    TextColumn::make('job_title')
+        ->label('Noćni rad za koji se utvrđuje zdr. sposobnost')
+        ->wrap()
+        ->limit(150)
+        ->tooltip(fn (NightWorkReferral $record) => $record->job_title)
+        ->toggleable(),
+
+    TextColumn::make('manual_entry')
+        ->label('Unos')
+        ->badge()
+        ->alignment(Alignment::Center)
+        ->formatStateUsing(fn ($state) => $state ? 'Ručno' : 'Zaposlenik')
+        ->color(fn ($state) => $state ? 'warning' : 'success')
+        ->toggleable(),
+])
             ->defaultSort('referral_date', 'desc')
             ->recordUrl(fn (NightWorkReferral $record): string => static::getUrl('view', ['record' => $record]))
             ->filters([

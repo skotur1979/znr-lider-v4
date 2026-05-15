@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,6 +10,10 @@ use Illuminate\Support\Facades\Auth;
 
 class RiskAssessment extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'Procjene rizika';
+
     protected $table = 'risk_assessments';
 
     protected $fillable = [
@@ -44,6 +49,7 @@ class RiskAssessment extends Model
     {
         return $this->hasMany(RiskAttachment::class, 'risk_assessment_id');
     }
+
     protected static function booted(): void
     {
         static::creating(function (self $record) {

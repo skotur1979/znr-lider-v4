@@ -2,23 +2,24 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Fire extends Model
 {
     use SoftDeletes;
+    use LogsActivity;
+
+    protected static string $activityModule = 'Vatrogasni aparati';
 
     protected $fillable = [
         'user_id',
         'place',
         'type',
-
-        // ✅ ALIAS koji Filament koristi:
         'factory_number_year_of_production',
-
         'serial_label_number',
         'examination_valid_from',
         'examination_valid_until',
@@ -37,10 +38,6 @@ class Fire extends Model
         'pdf' => 'array',
     ];
 
-    /**
-     * ✅ Mapira "factory_number_year_of_production" (u formi/filamentu)
-     * na stvarni DB stupac "factory_number/year_of_production"
-     */
     protected function factoryNumberYearOfProduction(): Attribute
     {
         return Attribute::make(
@@ -48,6 +45,7 @@ class Fire extends Model
             set: fn ($value) => ['factory_number/year_of_production' => $value],
         );
     }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

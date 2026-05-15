@@ -142,84 +142,92 @@ class DocumentationItemResource extends BaseResource
         return $table
             ->defaultSort('datum_izrade', 'desc')
             ->columns([
-                TextColumn::make('naziv')
-                    ->label('Naziv')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->wrap(),
-static::userTableColumn(),
-                TextColumn::make('tvrtka')
-                    ->label('Tvrtka')
-                    ->searchable()
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('naziv')
+        ->label('Naziv')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('datum_izrade')
-                    ->label('Datum izrade')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('status_napomena')
-                    ->label('Status / napomena')
-                    ->wrap()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('tvrtka')
+        ->label('Tvrtka')
+        ->searchable()
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('prilozi')
-    ->label('Prilozi')
-    ->alignment(Alignment::Center)
-    ->html()
-    ->state(function (DocumentationItem $record): string {
-        if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
-            return '<span style="color:#6b7280;">0</span>';
-        }
+    TextColumn::make('datum_izrade')
+        ->label('Datum izrade')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-        return collect($record->prilozi)
-            ->map(function ($file, $index) {
-                $url = route('file.preview', [
-                    'file' => ltrim($file, '/'),
-                ]);
+    TextColumn::make('status_napomena')
+        ->label('Status / napomena')
+        ->wrap()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                $name = e(basename($file));
-                $number = $index + 1;
+    TextColumn::make('prilozi')
+        ->label('Prilozi')
+        ->alignment(Alignment::Center)
+        ->html()
+        ->state(function (DocumentationItem $record): string {
+            if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
+                return '<span style="color:#6b7280;">0</span>';
+            }
 
-                return '<a href="' . $url . '"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="' . $name . '"
-                    onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
-                    style="
-                        display:inline-flex;
-                        align-items:center;
-                        justify-content:center;
-                        min-width:28px;
-                        height:24px;
-                        padding:0 8px;
-                        margin:1px 2px;
-                        border-radius:7px;
-                        background:rgba(59,130,246,.15);
-                        border:1px solid rgba(59,130,246,.35);
-                        color:#93c5fd;
-                        font-size:12px;
-                        font-weight:700;
-                        text-decoration:none;
-                        cursor:pointer;
-                    "
-                >📎 ' . $number . '</a>';
-            })
-            ->implode('');
-    })
-    ->tooltip(function (DocumentationItem $record): string {
-        if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
-            return 'Nema priloga';
-        }
+            return collect($record->prilozi)
+                ->map(function ($file, $index) {
+                    $url = route('file.preview', [
+                        'file' => ltrim($file, '/'),
+                    ]);
 
-        return collect($record->prilozi)
-            ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
-            ->implode("\n");
-    }),
-            ])
+                    $name = e(basename($file));
+                    $number = $index + 1;
+
+                    return '<a href="' . $url . '"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="' . $name . '"
+                        onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                        style="
+                            display:inline-flex;
+                            align-items:center;
+                            justify-content:center;
+                            min-width:28px;
+                            height:24px;
+                            padding:0 8px;
+                            margin:1px 2px;
+                            border-radius:7px;
+                            background:rgba(59,130,246,.15);
+                            border:1px solid rgba(59,130,246,.35);
+                            color:#93c5fd;
+                            font-size:12px;
+                            font-weight:700;
+                            text-decoration:none;
+                            cursor:pointer;
+                        "
+                    >📎 ' . $number . '</a>';
+                })
+                ->implode('');
+        })
+        ->tooltip(function (DocumentationItem $record): string {
+            if (! is_array($record->prilozi) || count($record->prilozi) === 0) {
+                return 'Nema priloga';
+            }
+
+            return collect($record->prilozi)
+                ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+                ->implode("\n");
+        })
+        ->toggleable(),
+])
             ->paginated([10, 25, 50, 'all'])
             ->actions([
                 ActionGroup::make([

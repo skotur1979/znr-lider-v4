@@ -235,46 +235,55 @@ class FireResource extends BaseResource
         return $table
             ->defaultSort('id', 'desc')
             ->columns([
-                TextColumn::make('place')
-                    ->label('Mjesto gdje se aparat nalazi')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold'),
-static::userTableColumn(),
-                TextColumn::make('type')
-                    ->label('Tip aparata')
-                    ->alignment(Alignment::Center)
-                    ->searchable()
-                    ->sortable(),
+    TextColumn::make('place')
+        ->label('Mjesto gdje se aparat nalazi')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->toggleable(),
 
-                TextColumn::make('factory_number_year_of_production')
-                    ->label('Tvor.broj/Godina proizv.')
-                    ->alignment(Alignment::Center)
-                    ->searchable()
-                    ->sortable(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('examination_valid_from')
-                    ->label('Datum ispitivanja')
-                    ->alignment(Alignment::Center)
-                    ->date('d.m.Y.')
-                    ->sortable(),
+    TextColumn::make('type')
+        ->label('Tip aparata')
+        ->alignment(Alignment::Center)
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('examination_valid_until')
-                    ->label('Ispitivanje vrijedi do')
-                    ->alignment(Alignment::Center)
-                    ->date('d.m.Y.')
-                    ->badge()
-                    ->color(fn ($state) => ExpiryBadge::color($state))
-                    ->icon(fn ($state) => ExpiryBadge::icon($state))
-                    ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
-                    ->sortable(),
+    TextColumn::make('factory_number_year_of_production')
+        ->label('Tvor.broj/Godina proizv.')
+        ->alignment(Alignment::Center)
+        ->searchable()
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('regular_examination_valid_from')
-                    ->label('Datum redovnog pregleda')
-                    ->alignment(Alignment::Center)
-                    ->date('d.m.Y.')
-                    ->sortable(),
-            ])
+    TextColumn::make('examination_valid_from')
+        ->label('Datum ispitivanja')
+        ->alignment(Alignment::Center)
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(),
+
+    TextColumn::make('examination_valid_until')
+        ->label('Ispitivanje vrijedi do')
+        ->alignment(Alignment::Center)
+        ->date('d.m.Y.')
+        ->badge()
+        ->color(fn ($state) => ExpiryBadge::color($state))
+        ->icon(fn ($state) => ExpiryBadge::icon($state))
+        ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
+        ->sortable()
+        ->toggleable(),
+
+    TextColumn::make('regular_examination_valid_from')
+        ->label('Datum redovnog pregleda')
+        ->alignment(Alignment::Center)
+        ->date('d.m.Y.')
+        ->sortable()
+        ->toggleable(),
+])
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status zapisa')

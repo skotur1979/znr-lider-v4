@@ -2,13 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Chemical extends Model
 {
     use SoftDeletes;
+    use LogsActivity;
+
+    protected static string $activityModule = 'Kemikalije';
 
     protected $fillable = [
         'user_id',
@@ -33,6 +37,7 @@ class Chemical extends Model
         'attachments'       => 'array',
         'stl_hzjz'          => 'date',
     ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

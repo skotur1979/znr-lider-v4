@@ -65,44 +65,54 @@ class ExpenseResource extends BaseResource
                 ");
             })
             ->columns([
-                TextColumn::make('budget.godina')
-                    ->label('Godina')
-                    ->sortable()
-                    ->searchable(),
-static::userTableColumn(),
-                TextColumn::make('category.name')
-                    ->label('Kategorija')
-                    ->sortable()
-                    ->searchable()
-                    ->wrap(),
+    TextColumn::make('budget.godina')
+        ->label('Godina')
+        ->sortable()
+        ->searchable()
+        ->toggleable(),
 
-                TextColumn::make('mjesec')
-                    ->label('Mjesec')
-                    ->sortable(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('naziv_troska')
-                    ->label('Naziv troška')
-                    ->searchable()
-                    ->wrap()
-                    ->weight('bold'),
+    TextColumn::make('category.name')
+        ->label('Kategorija')
+        ->sortable()
+        ->searchable()
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('iznos')
-                    ->label('Iznos (€)')
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.') . ' €')
-                    ->sortable()
-                    ->alignEnd(),
+    TextColumn::make('mjesec')
+        ->label('Mjesec')
+        ->sortable()
+        ->toggleable(),
 
-                TextColumn::make('dobavljac')
-                    ->label('Dobavljač')
-                    ->searchable()
-                    ->wrap(),
+    TextColumn::make('naziv_troska')
+        ->label('Naziv troška')
+        ->searchable()
+        ->wrap()
+        ->weight('bold')
+        ->toggleable(),
 
-                IconColumn::make('realizirano')
-                    ->label('Realizirano')
-                    ->boolean()
-                    ->trueIcon('heroicon-o-check-circle')
-                    ->falseIcon('heroicon-o-x-circle'),
-            ])
+    TextColumn::make('iznos')
+        ->label('Iznos (€)')
+        ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.') . ' €')
+        ->sortable()
+        ->alignEnd()
+        ->toggleable(),
+
+    TextColumn::make('dobavljac')
+        ->label('Dobavljač')
+        ->searchable()
+        ->wrap()
+        ->toggleable(),
+
+    IconColumn::make('realizirano')
+        ->label('Realizirano')
+        ->boolean()
+        ->trueIcon('heroicon-o-check-circle')
+        ->falseIcon('heroicon-o-x-circle')
+        ->toggleable(),
+])
             ->filters([
                 SelectFilter::make('mjesec')
                     ->label('Mjesec')

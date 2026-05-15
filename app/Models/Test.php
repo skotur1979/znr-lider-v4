@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Test extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'Testovi';
+
     protected $fillable = [
         'user_id',
         'naziv',
@@ -34,5 +39,4 @@ class Test extends Model
     {
         return $this->hasMany(TestAttempt::class);
     }
-    
 }

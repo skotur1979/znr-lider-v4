@@ -89,4 +89,8 @@ class EditObservation extends EditRecord
             'sent_at' => now(),
         ]);
     }
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
 }

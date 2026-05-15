@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use App\Services\InspectionZoneTemplateService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InspectionZone extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'Zone nadzora';
+
     protected $fillable = [
         'name',
         'note',
@@ -40,7 +45,7 @@ class InspectionZone extends Model
         return $this->hasMany(InspectionZoneAnswer::class, 'inspection_zone_id');
     }
 
-     public function getTotalPointsAttribute(): int
+    public function getTotalPointsAttribute(): int
     {
         return (int) $this->answers()->sum('score');
     }

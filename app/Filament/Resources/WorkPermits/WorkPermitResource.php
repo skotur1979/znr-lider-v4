@@ -308,48 +308,57 @@ class WorkPermitResource extends BaseResource
     {
         return $table
             ->columns([
-                TextColumn::make('permit_number')
-                    ->label('Broj')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->alignment(Alignment::Center),
-static::userTableColumn(),
-                TextColumn::make('issue_date')
-                    ->label('Datum')
-                    ->date('d.m.Y.')
-                    ->sortable()
-                    ->alignment(Alignment::Center),
+    TextColumn::make('permit_number')
+        ->label('Broj')
+        ->searchable()
+        ->sortable()
+        ->weight('bold')
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('work_types')
-                    ->label('Vrsta poslova')
-                    ->searchable()
-                    ->wrap(),
+    static::userTableColumn()
+        ->toggleable(),
 
-                TextColumn::make('valid_from')
-                    ->label('Vrijedi od')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable(),
+    TextColumn::make('issue_date')
+        ->label('Datum')
+        ->date('d.m.Y.')
+        ->sortable()
+        ->alignment(Alignment::Center)
+        ->toggleable(),
 
-                TextColumn::make('valid_until')
-                    ->label('Vrijedi do')
-                    ->dateTime('d.m.Y. H:i')
-                    ->sortable(),
+    TextColumn::make('work_types')
+        ->label('Vrsta poslova')
+        ->searchable()
+        ->wrap()
+        ->toggleable(),
 
-                TextColumn::make('works_finished')
-                    ->label('Završeno')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => match ($state) {
-                        true => 'DA',
-                        false => 'NE',
-                        default => '-',
-                    })
-                    ->color(fn ($state) => match ($state) {
-                        true => 'success',
-                        false => 'danger',
-                        default => 'gray',
-                    }),
-            ])
+    TextColumn::make('valid_from')
+        ->label('Vrijedi od')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(),
+
+    TextColumn::make('valid_until')
+        ->label('Vrijedi do')
+        ->dateTime('d.m.Y. H:i')
+        ->sortable()
+        ->toggleable(),
+
+    TextColumn::make('works_finished')
+        ->label('Završeno')
+        ->badge()
+        ->formatStateUsing(fn ($state) => match ($state) {
+            true => 'DA',
+            false => 'NE',
+            default => '-',
+        })
+        ->color(fn ($state) => match ($state) {
+            true => 'success',
+            false => 'danger',
+            default => 'gray',
+        })
+        ->toggleable(),
+])
             ->defaultSort('issue_date', 'desc')
             ->recordUrl(fn (WorkPermit $record): string => static::getUrl('view', ['record' => $record]))
             ->filters([

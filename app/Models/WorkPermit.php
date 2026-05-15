@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,6 +10,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class WorkPermit extends Model
 {
     use SoftDeletes;
+    use LogsActivity;
+
+    protected static string $activityModule = 'Dozvole za rad';
 
     protected $fillable = [
         'user_id',
@@ -170,6 +174,7 @@ class WorkPermit extends Model
             'fall_protection_belt' => 'Pojas za rad na visini',
         ];
     }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

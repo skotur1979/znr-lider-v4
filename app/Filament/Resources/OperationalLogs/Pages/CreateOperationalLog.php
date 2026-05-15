@@ -5,6 +5,7 @@ namespace App\Filament\Resources\OperationalLogs\Pages;
 use App\Filament\Resources\OperationalLogs\OperationalLogResource;
 use App\Models\OperationalLog;
 use App\Models\WorkTask;
+use App\Services\ActivityLogger;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Support\Enums\Width;
@@ -76,6 +77,15 @@ class CreateOperationalLog extends CreateRecord
             'converted_id' => null,
             'status' => $createdTasks > 0 ? 'converted' : 'recorded',
         ]);
+
+        if ($createdTasks > 0) {
+            ActivityLogger::status(
+                module: 'Operativni dnevnik',
+                title: 'Kreirani radni zadaci iz operativnog dnevnika',
+                description: 'Iz operativnog dnevnika kreirano radnih zadataka: ' . $createdTasks . '. Datum dnevnika: ' . now()->parse($logDate)->format('d.m.Y.'),
+                record: $log,
+            );
+        }
 
         Notification::make()
             ->title('Operativni dnevnik je spremljen.')

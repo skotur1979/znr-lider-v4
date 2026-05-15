@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Chemical;
+use App\Services\ActivityLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +27,15 @@ class ChemicalsImport implements ToCollection
 
         if (! $headers) {
             $this->skipped++;
+
+            ActivityLogger::import(
+                module: 'Kemikalije',
+                created: $this->created,
+                updated: $this->updated,
+                unchanged: $this->unchanged,
+                skipped: $this->skipped,
+            );
+
             return;
         }
 
@@ -128,6 +138,14 @@ class ChemicalsImport implements ToCollection
             $chemical->update($changed);
             $this->updated++;
         }
+
+        ActivityLogger::import(
+            module: 'Kemikalije',
+            created: $this->created,
+            updated: $this->updated,
+            unchanged: $this->unchanged,
+            skipped: $this->skipped,
+        );
     }
 
     private function value($row, array $map, string $key)

@@ -7,6 +7,7 @@ use App\Filament\Resources\WorkTasks\Pages\CreateWorkTask;
 use App\Filament\Resources\WorkTasks\Pages\EditWorkTask;
 use App\Filament\Resources\WorkTasks\Pages\ListWorkTasks;
 use App\Models\WorkTask;
+use App\Services\ActivityLogger;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -20,6 +21,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\MaxWidth;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -28,7 +30,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Auth;
-use Filament\Support\Enums\MaxWidth;
 
 class WorkTaskResource extends BaseResource
 {
@@ -45,92 +46,99 @@ class WorkTaskResource extends BaseResource
     {
         return 'work_tasks';
     }
+
     public static function getMaxContentWidth(): MaxWidth|string|null
-{
-    return MaxWidth::Full;
-}
+    {
+        return MaxWidth::Full;
+    }
 
     public static function form(Schema $schema): Schema
-{
-    return $schema
-        ->schema([
-            Hidden::make('user_id')
-                ->default(fn () => Auth::user()?->ownerId())
-                ->dehydrated(),
+    {
+        return $schema
+            ->schema([
+                Hidden::make('user_id')
+                    ->default(fn () => Auth::user()?->ownerId())
+                    ->dehydrated(),
 
-            Section::make('Radni zadatak')
-                ->columnSpanFull()
-                ->columns(2)
-                ->schema([
-                    TextInput::make('title')
-                        ->label('Naziv zadatka')
-                        ->required()
-                        ->maxLength(120),
+                Section::make('Radni zadatak')
+                    ->columnSpanFull()
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('title')
+                            ->label('Naziv zadatka')
+                            ->required()
+                            ->maxLength(120),
 
-                    DatePicker::make('due_date')
-                        ->label('Datum')
-                        ->required()
-                        ->native(false)
-                        ->displayFormat('d.m.Y.'),
+                        DatePicker::make('due_date')
+                            ->label('Datum')
+                            ->required()
+                            ->native(false)
+                            ->displayFormat('d.m.Y.'),
 
-                    Textarea::make('description')
-                        ->label('Opis')
-                        ->rows(5)
-                        ->maxLength(1000)
-                        ->columnSpanFull(),
-                ]),
-        ])
-        ->columns(1);
-}
+                        Textarea::make('description')
+                            ->label('Opis')
+                            ->rows(5)
+                            ->maxLength(1000)
+                            ->columnSpanFull(),
+                    ]),
+            ])
+            ->columns(1);
+    }
 
     public static function table(Table $table): Table
     {
         return $table
-        ->paginated([10, 25, 50,'all'])
+            ->paginated([10, 25, 50, 'all'])
             ->modifyQueryUsing(fn (Builder $query) => $query->latest('due_date')->latest('id'))
             ->columns([
-                TextColumn::make('title')
-                    ->label('Zadatak')
-                    ->searchable()
-                    ->wrap()
-                    ->weight('bold'),
-static::userTableColumn(),
-                TextColumn::make('description')
-                    ->label('Opis')
-                    ->limit(80)
-                    ->wrap()
-                    ->toggleable(),
+    TextColumn::make('title')
+        ->label('Zadatak')
+        ->searchable()
+        ->wrap()
+        ->weight('bold')
+        ->toggleable(),
 
-                TextColumn::make('due_date')
-                    ->label('Datum')
-                    ->date('d.m.Y.')
-                    ->badge()
-                    ->color(function (WorkTask $record): string {
-                        if ($record->is_done) {
-                            return 'success';
-                        }
+    static::userTableColumn()
+        ->toggleable(),
 
-                        if ($record->due_date?->isPast()) {
-                            return 'danger';
-                        }
+    TextColumn::make('description')
+        ->label('Opis')
+        ->limit(80)
+        ->wrap()
+        ->toggleable(),
 
-                        if ($record->due_date?->isToday()) {
-                            return 'warning';
-                        }
+    TextColumn::make('due_date')
+        ->label('Datum')
+        ->date('d.m.Y.')
+        ->badge()
+        ->color(function (WorkTask $record): string {
+            if ($record->is_done) {
+                return 'success';
+            }
 
-                        return 'info';
-                    }),
+            if ($record->due_date?->isPast()) {
+                return 'danger';
+            }
 
-                IconColumn::make('is_done')
-                    ->label('Riješeno')
-                    ->boolean(),
+            if ($record->due_date?->isToday()) {
+                return 'warning';
+            }
 
-                TextColumn::make('completed_at')
-                    ->label('Zatvoreno')
-                    ->dateTime('d.m.Y. H:i')
-                    ->placeholder('-')
-                    ->toggleable(),
-            ])
+            return 'info';
+        })
+        ->toggleable(),
+
+    IconColumn::make('is_done')
+        ->label('Riješeno')
+        ->boolean()
+        ->toggleable(),
+
+    TextColumn::make('completed_at')
+        ->label('Zatvoreno')
+        ->dateTime('d.m.Y. H:i')
+        ->placeholder('-')
+        ->toggleable(isToggledHiddenByDefault: true),
+])
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status')
@@ -161,6 +169,13 @@ static::userTableColumn(),
                             'completed_at' => now(),
                         ]);
 
+                        ActivityLogger::status(
+                            module: 'Radni zadaci',
+                            title: 'Radni zadatak zatvoren',
+                            description: 'Zatvoren je radni zadatak: ' . $record->title,
+                            record: $record,
+                        );
+
                         Notification::make()
                             ->title('Radni zadatak je zatvoren.')
                             ->success()
@@ -178,6 +193,13 @@ static::userTableColumn(),
                             'is_done' => false,
                             'completed_at' => null,
                         ]);
+
+                        ActivityLogger::status(
+                            module: 'Radni zadaci',
+                            title: 'Radni zadatak vraćen u otvorene',
+                            description: 'Radni zadatak je vraćen u otvorene: ' . $record->title,
+                            record: $record,
+                        );
 
                         Notification::make()
                             ->title('Radni zadatak je vraćen u otvorene.')
@@ -217,6 +239,14 @@ static::userTableColumn(),
                             }
                         });
 
+                        if ($count > 0) {
+                            ActivityLogger::status(
+                                module: 'Radni zadaci',
+                                title: 'Zatvoreni označeni radni zadaci',
+                                description: "Zatvoreno zadataka: {$count}.",
+                            );
+                        }
+
                         Notification::make()
                             ->title("Zatvoreno zadataka: {$count}")
                             ->success()
@@ -245,6 +275,14 @@ static::userTableColumn(),
                                 $count++;
                             }
                         });
+
+                        if ($count > 0) {
+                            ActivityLogger::status(
+                                module: 'Radni zadaci',
+                                title: 'Radni zadaci vraćeni u otvorene',
+                                description: "Vraćeno u otvorene: {$count}.",
+                            );
+                        }
 
                         Notification::make()
                             ->title("Vraćeno u otvorene: {$count}")

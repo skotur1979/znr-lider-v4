@@ -18,4 +18,8 @@ class EditWasteType extends EditRecord
 
         return $data;
     }
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? static::getResource()::getUrl('index');
+    }
 }

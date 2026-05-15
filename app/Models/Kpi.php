@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,6 +15,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Kpi extends Model
 {
     use SoftDeletes;
+    use LogsActivity;
+
+    protected static string $activityModule = 'KPI';
 
     protected $fillable = [
         'name',
@@ -221,6 +225,7 @@ class Kpi extends Model
     {
         return $this->evaluateStatus($this->latestValue()?->value);
     }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

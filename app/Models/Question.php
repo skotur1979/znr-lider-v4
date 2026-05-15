@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Question extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'Pitanja';
+
     protected $fillable = [
         'user_id',
         'test_id',
