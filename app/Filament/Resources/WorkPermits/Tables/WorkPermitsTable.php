@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\WorkPermits\WorkPermits\Tables;
+namespace App\Filament\Resources\WorkPermits\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;

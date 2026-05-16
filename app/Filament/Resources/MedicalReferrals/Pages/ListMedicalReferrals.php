@@ -14,7 +14,8 @@ class ListMedicalReferrals extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Novi RA-1 Uputnica'),
+                ->label('Novi RA-1 Uputnica')
+                ->icon('heroicon-o-plus'),
         ];
     }
 }

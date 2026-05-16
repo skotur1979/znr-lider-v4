@@ -14,7 +14,8 @@ class ListRiskAssessments extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make()->label('Nova Procjena Rizika'),
+            Actions\CreateAction::make()->label('Nova Procjena Rizika')
+            ->icon('heroicon-o-plus'),
 
             Actions\Action::make('export_pdf')
                 ->label('Izvoz u PDF')

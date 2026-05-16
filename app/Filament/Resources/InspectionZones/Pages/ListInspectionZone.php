@@ -5,7 +5,7 @@ namespace App\Filament\Resources\InspectionZones\Pages;
 use App\Filament\Resources\InspectionZones\InspectionZoneResource;
 use Filament\Resources\Pages\ListRecords;
 
-class ListInspectionZones extends ListRecords
+class ListInspectionZone extends ListRecords
 {
     protected static string $resource = InspectionZoneResource::class;
 

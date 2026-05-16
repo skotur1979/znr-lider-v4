@@ -13,7 +13,10 @@ class ViewPPELog extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
+            EditAction::make()
+                ->label('Uredi')
+                ->icon('heroicon-o-pencil-square')
+                ->color('warning'),
         ];
     }
 }

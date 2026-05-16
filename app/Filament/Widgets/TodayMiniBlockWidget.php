@@ -21,6 +21,10 @@ use Livewire\Attributes\Url;
 
 class TodayMiniBlockWidget extends Widget
 {
+    protected static bool $isLazy = true;
+
+    protected static ?string $pollingInterval = null;
+    
     protected string $view = 'filament.widgets.today-mini-block-widget';
 
     protected int|string|array $columnSpan = 'full';

@@ -16,7 +16,8 @@ class ListWasteTypes extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Nova vrsta otpada'),
+                ->label('Nova vrsta otpada')
+                ->icon('heroicon-o-plus'),
 
             Actions\Action::make('export_excel')
                 ->label('Izvoz u Excel')

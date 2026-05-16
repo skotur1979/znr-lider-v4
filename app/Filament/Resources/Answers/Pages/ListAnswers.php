@@ -13,7 +13,8 @@ class ListAnswers extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Novi odgovor'),
+            CreateAction::make()->label('Novi odgovor')
+            ->icon('heroicon-o-plus'),
         ];
     }
 }

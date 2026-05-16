@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\WorkPermits\WorkPermits\Schemas;
+namespace App\Filament\Resources\WorkPermits\Schemas;
 
 use Filament\Schemas\Schema;
 

@@ -17,7 +17,8 @@ class ListInspections extends ListRecords
     {
         return [
             CreateAction::make()
-                ->label('Novi nadzor'),
+                ->label('Novi nadzor')
+                ->icon('heroicon-o-plus'),
 
             Action::make('create_five_s')
                 ->label('Novi 5S nadzor')

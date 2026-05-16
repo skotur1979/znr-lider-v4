@@ -22,7 +22,8 @@ class ListObservations extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Novo zapažanje'),
+                ->label('Novo zapažanje')
+                ->icon('heroicon-o-plus'),
 
             Actions\Action::make('export_pdf')
     ->label('Izvoz u PDF')

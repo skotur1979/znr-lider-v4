@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Filament\Resources\PpeLogs;
+namespace App\Filament\Resources\PPELogs;
 
 use App\Filament\Resources\BaseResource;
-use App\Filament\Resources\PpeLogs\PPELogResource\Pages;
-use App\Filament\Resources\PpeLogs\PPELogResource\RelationManagers\ItemsRelationManager;
+use App\Filament\Resources\PPELogs\Pages;
+use App\Filament\Resources\PPELogs\RelationManagers\ItemsRelationManager;
 use App\Models\Employee;
 use App\Models\PPELog;
 use BackedEnum;

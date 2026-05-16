@@ -16,6 +16,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 class TopSystemStatusBarWidget extends Widget
@@ -26,11 +27,21 @@ class TopSystemStatusBarWidget extends Widget
 
     protected static ?int $sort = -100;
 
+    protected static bool $isLazy = true;
+
+    protected static ?string $pollingInterval = null;
+
     public const CRITICAL_EXPIRED_THRESHOLD = 10;
 
     protected function getViewData(): array
     {
-        return static::makeSystemStatusData(Auth::user());
+        $user = Auth::user();
+
+        $cacheKey = 'top_system_status_bar_' . ($user?->id ?? 'guest') . '_' . Carbon::today()->format('Y_m_d');
+
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($user): array {
+            return static::makeSystemStatusData($user);
+        });
     }
 
     public static function makeSystemStatusData(?User $user = null): array
@@ -164,11 +175,13 @@ class TopSystemStatusBarWidget extends Widget
 
         if (! $userIds) {
             $query->whereRaw('1 = 0');
+
             return true;
         }
 
         if (Schema::hasColumn($table, 'user_id')) {
             $query->whereIn($table . '.user_id', $userIds);
+
             return true;
         }
 
@@ -255,7 +268,6 @@ class TopSystemStatusBarWidget extends Widget
             return $this->unsupportedRow();
         }
 
-        /** @var Model $model */
         $model = new $modelClass();
         $table = $model->getTable();
 
@@ -290,7 +302,9 @@ class TopSystemStatusBarWidget extends Widget
             return $this->unsupportedRow();
         }
 
-        $query = PPEItem::query()->whereNotNull($table . '.end_date');
+        $query = PPEItem::query()
+            ->whereNull($table . '.return_date')
+            ->whereNotNull($table . '.end_date');
 
         if (! $this->applyOrganizationScope($query, $table, $user)) {
             $userIds = $this->organizationUserIds($user);
@@ -367,12 +381,12 @@ class TopSystemStatusBarWidget extends Widget
     protected function countDateQuery(Builder $query, string $dateColumn, Carbon $today, Carbon $soonDate): array
     {
         $expired = (clone $query)
-            ->whereDate($dateColumn, '<', $today)
+            ->where($dateColumn, '<', $today->copy()->startOfDay())
             ->count();
 
         $soon = (clone $query)
-            ->whereDate($dateColumn, '>=', $today)
-            ->whereDate($dateColumn, '<=', $soonDate)
+            ->where($dateColumn, '>=', $today->copy()->startOfDay())
+            ->where($dateColumn, '<=', $soonDate->copy()->endOfDay())
             ->count();
 
         return [
@@ -498,8 +512,8 @@ class TopSystemStatusBarWidget extends Widget
 
     protected function resolvePpeExpiredUrl(): string
     {
-        if (class_exists(\App\Filament\Resources\PpeLogs\PPELogResource::class)) {
-            return \App\Filament\Resources\PpeLogs\PPELogResource::getUrl('index', [
+        if (class_exists(\App\Filament\Resources\PPELogs\PPELogResource::class)) {
+            return \App\Filament\Resources\PPELogs\PPELogResource::getUrl('index', [
                 'pregled' => 'isteklo',
             ]);
         }

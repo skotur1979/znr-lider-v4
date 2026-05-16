@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\PpeLogs\PPELogResource\RelationManagers;
+namespace App\Filament\Resources\PPELogs\RelationManagers;
 
 use App\Models\PPEEquipment;
 use App\Support\ExpiryBadge;

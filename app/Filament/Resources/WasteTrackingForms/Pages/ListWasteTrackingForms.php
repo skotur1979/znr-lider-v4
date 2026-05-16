@@ -17,7 +17,8 @@ class ListWasteTrackingForms extends ListRecords
     {
         return [
             CreateAction::make()
-                ->label('Novi prateći list'),
+                ->label('Novi prateći list')
+                ->icon('heroicon-o-plus'),
 
             Action::make('exportExcel')
                 ->label('Izvoz u Excel')

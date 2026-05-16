@@ -14,7 +14,8 @@ class ListNightWorkReferrals extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Nova NR-1 Uputnica'),
+                ->label('Nova NR-1 Uputnica')
+                ->icon('heroicon-o-plus'),
         ];
     }
 }

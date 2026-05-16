@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Inspections\Inspections\Schemas;
+namespace App\Filament\Resources\Inspections\Schemas;
 
 use Filament\Schemas\Schema;
 

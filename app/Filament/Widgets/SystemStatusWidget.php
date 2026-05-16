@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\Schema;
 
 class SystemStatusWidget extends Widget
 {
+    protected static bool $isLazy = true;
+
+    protected static ?string $pollingInterval = null;
+    
     protected string $view = 'filament.widgets.system-status-widget';
 
     protected int|string|array $columnSpan = 'full';
@@ -210,8 +214,8 @@ class SystemStatusWidget extends Widget
 
     protected function resolvePpeUrl(): string
     {
-        if (class_exists(\App\Filament\Resources\PpeLogs\PPELogResource::class)) {
-            return \App\Filament\Resources\PpeLogs\PPELogResource::getUrl('index', [
+        if (class_exists(\App\Filament\Resources\PPELogs\PPELogResource::class)) {
+            return \App\Filament\Resources\PPELogs\PPELogResource::getUrl('index', [
                 'tableFilters' => [
                     'pregled' => [
                         'value' => 'isteklo',

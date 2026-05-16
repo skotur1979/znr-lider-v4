@@ -1,14 +1,13 @@
 <?php
 
-namespace App\Filament\Resources\PpeLogs\PPELogResource\Pages;
+namespace App\Filament\Resources\PPELogs\Pages;
 
-use App\Exports\PersonalProtectiveEquipmentExport;
-use App\Filament\Resources\PpeLogs\PPELogResource;
+use App\Exports\PpeLogItemsExport;
+use App\Filament\Resources\PPELogs\PPELogResource;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\EditRecord;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\PpeLogItemsExport;
 
 class EditPPELog extends EditRecord
 {
@@ -19,7 +18,7 @@ class EditPPELog extends EditRecord
         return [
             Action::make('export_pdf')
                 ->label('Izvoz u PDF')
-                ->icon('heroicon-o-document')
+                ->icon('heroicon-o-arrow-down-tray')
                 ->color('warning')
                 ->action(function () {
                     $record = $this->record->load('items');
@@ -36,20 +35,20 @@ class EditPPELog extends EditRecord
                     );
                 }),
 
-           Action::make('export_excel')
-    ->label('Izvoz u Excel')
-    ->icon('heroicon-o-document-text')
-    ->color('success')
-    ->action(function () {
-        $record = $this->record->load('items');
+            Action::make('export_excel')
+                ->label('Izvoz u Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->action(function () {
+                    $record = $this->record->load('items');
 
-        $filename = 'OZO-' . str_replace(' ', '-', $record->user_last_name) . '-' . now()->format('d-m-Y') . '.xlsx';
+                    $filename = 'OZO-' . str_replace(' ', '-', $record->user_last_name) . '-' . now()->format('d-m-Y') . '.xlsx';
 
-        return Excel::download(new PpeLogItemsExport($record), $filename);
-    
+                    return Excel::download(new PpeLogItemsExport($record), $filename);
                 }),
         ];
     }
+
     protected function getRedirectUrl(): string
     {
         return $this->previousUrl ?? static::getResource()::getUrl('index');

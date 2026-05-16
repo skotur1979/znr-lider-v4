@@ -36,7 +36,8 @@ class ListWorkTasks extends ListRecords
     {
         return [
             CreateAction::make()
-                ->label('Novi radni zadatak'),
+                ->label('Novi radni zadatak')
+                ->icon('heroicon-o-plus'),
 
             Action::make('exportExcel')
                 ->label('Izvoz u Excel')

@@ -25,7 +25,7 @@ class ZonesRelationManager extends RelationManager
     {
         $inspection = $this->getOwnerRecord();
 
-        return InspectionResource::getUrl('view', [
+        return InspectionResource::getUrl('edit', [
             'record' => $inspection,
         ]) . '?relation=1';
     }
@@ -47,8 +47,8 @@ class ZonesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-        ->emptyStateHeading('Nema 5S zona')
-        ->emptyStateDescription('Stvori 5S zonu kako bi započeo.')
+            ->emptyStateHeading('Nema 5S zona')
+            ->emptyStateDescription('Stvori 5S zonu kako bi započeo.')
             ->columns([
                 TextColumn::make('name')
                     ->label('Zona')
@@ -65,37 +65,38 @@ class ZonesRelationManager extends RelationManager
                     ->formatStateUsing(fn ($state) => filled($state) ? $state : '-'),
 
                 TextColumn::make('percentage')
-    ->label('Rezultat')
-    ->alignment(Alignment::Center)
-    ->html()
-    ->state(function ($record) {
-        $percentage = (float) ($record->percentage ?? 0);
+                    ->label('Rezultat')
+                    ->alignment(Alignment::Center)
+                    ->html()
+                    ->state(function ($record) {
+                        $percentage = (float) ($record->percentage ?? 0);
 
-        $styles = match (true) {
-            $percentage < 40 => 'background:#991b1b;color:#ffffff;',
-            $percentage < 60 => 'background:#f59e0b;color:#111827;',
-            $percentage < 80 => 'background:#fde047;color:#111827;',
-            default => 'background:#16a34a;color:#ffffff;',
-        };
+                        $styles = match (true) {
+                            $percentage < 40 => 'background:#991b1b;color:#ffffff;',
+                            $percentage < 60 => 'background:#f59e0b;color:#111827;',
+                            $percentage < 80 => 'background:#fde047;color:#111827;',
+                            default => 'background:#16a34a;color:#ffffff;',
+                        };
 
-        return '<div style="
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            min-width:76px;
-            height:36px;
-            padding:0 12px;
-            border-radius:10px;
-            font-weight:800;
-            font-size:16px;
-            line-height:1;
-            box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
-            ' . $styles . '
-        ">' . e(number_format($percentage, 0)) . '%</div>';
-    }),
+                        return '<div style="
+                            display:inline-flex;
+                            align-items:center;
+                            justify-content:center;
+                            min-width:76px;
+                            height:36px;
+                            padding:0 12px;
+                            border-radius:10px;
+                            font-weight:800;
+                            font-size:16px;
+                            line-height:1;
+                            box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
+                            ' . $styles . '
+                        ">' . e(number_format($percentage, 0)) . '%</div>';
+                    }),
             ])
             ->headerActions([
-                CreateAction::make()->label('Dodaj zonu'),
+                CreateAction::make()
+                    ->label('Dodaj zonu'),
             ])
             ->actions([
                 Action::make('ocijeni')
@@ -107,9 +108,11 @@ class ZonesRelationManager extends RelationManager
                         'return_url' => $this->getInspectionViewUrl(),
                     ])),
 
-                EditAction::make()->label('Uredi zonu'),
+                EditAction::make()
+                    ->label('Uredi zonu'),
 
-                DeleteAction::make()->label('Obriši zonu'),
+                DeleteAction::make()
+                    ->label('Obriši zonu'),
             ]);
     }
 }

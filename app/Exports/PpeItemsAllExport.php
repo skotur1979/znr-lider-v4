@@ -2,7 +2,7 @@
 
 namespace App\Exports;
 
-use App\Filament\Resources\PpeLogs\PPELogResource;
+use App\Filament\Resources\PPELogs\PPELogResource;
 use App\Models\PPEItem;
 use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;

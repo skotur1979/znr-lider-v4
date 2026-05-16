@@ -14,7 +14,8 @@ class ListLearningCategories extends ListRecords
     {
         return [
             CreateAction::make()
-                ->label('Nova kategorija'),
+                ->label('Nova kategorija')
+                ->icon('heroicon-o-plus'),
         ];
     }
 }

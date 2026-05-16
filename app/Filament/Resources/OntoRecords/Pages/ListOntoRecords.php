@@ -13,7 +13,8 @@ class ListOntoRecords extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Novi ONTO obrazac'),
+            CreateAction::make()->label('Novi ONTO obrazac')
+            ->icon('heroicon-o-plus'),
         ];
     }
 }

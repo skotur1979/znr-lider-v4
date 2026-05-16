@@ -22,7 +22,8 @@ class ListFirstAidKits extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Novi zapis'),
+                ->label('Nova prva pomoć')
+                ->icon('heroicon-o-plus'),
 
             Actions\Action::make('export_pdf')
                 ->label('Izvoz u PDF')

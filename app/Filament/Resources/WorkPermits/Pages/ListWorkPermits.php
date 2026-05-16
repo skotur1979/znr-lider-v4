@@ -16,7 +16,8 @@ class ListWorkPermits extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Nova dozvola za rad'),
+                ->label('Nova dozvola za rad')
+                ->icon('heroicon-o-plus'),
 
             Actions\Action::make('exportExcel')
                 ->label('Izvoz u Excel')

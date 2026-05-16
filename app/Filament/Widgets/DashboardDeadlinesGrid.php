@@ -16,6 +16,10 @@ use Livewire\Attributes\On;
 
 class DashboardDeadlinesGrid extends Widget
 {
+    protected static bool $isLazy = true;
+
+    protected static ?string $pollingInterval = null;
+    
     protected string $view = 'filament.widgets.dashboard-deadlines-grid';
 
     protected int|string|array $columnSpan = 'full';

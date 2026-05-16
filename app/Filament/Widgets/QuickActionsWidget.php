@@ -20,6 +20,10 @@ use Illuminate\Support\Facades\Auth;
 
 class QuickActionsWidget extends Widget
 {
+    protected static bool $isLazy = true;
+
+    protected static ?string $pollingInterval = null;
+    
     protected string $view = 'filament.widgets.quick-actions-widget';
 
     protected int|string|array $columnSpan = 'full';

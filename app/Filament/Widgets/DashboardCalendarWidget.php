@@ -18,6 +18,9 @@ use Livewire\Attributes\Url;
 
 class DashboardCalendarWidget extends Widget
 {
+    protected static bool $isLazy = true;
+
+    protected static ?string $pollingInterval = null;
     protected string $view = 'filament.widgets.dashboard-calendar-widget';
 
     protected int|string|array $columnSpan = 'full';

@@ -20,7 +20,7 @@ class ListKpis extends ListRecords
             Action::make('dashboard')
                 ->label('KPI Dashboard')
                 ->icon('heroicon-o-chart-bar-square')
-                ->color('gray')
+                ->color('info')
                 ->url(static::getResource()::getUrl('dashboard')),
 
             Action::make('reports')

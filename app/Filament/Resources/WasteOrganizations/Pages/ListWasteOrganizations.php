@@ -14,7 +14,8 @@ class ListWasteOrganizations extends ListRecords
     {
         return [
             CreateAction::make()
-                ->label('Nova organizacija'),
+                ->label('Nova organizacija')
+                ->icon('heroicon-o-plus'),
         ];
     }
 }

@@ -17,7 +17,7 @@ class ViewWorkPermit extends ViewRecord
             Actions\Action::make('export_pdf')
                 ->label('Izvoz PDF')
                 ->icon('heroicon-o-document-arrow-down')
-                ->color('danger')
+                ->color('warning')
                 ->action(function () {
                     $path = WorkPermitPdfGenerator::generate($this->record);
 

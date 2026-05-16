@@ -82,7 +82,7 @@ class ListExpenses extends ListRecords
         return [
             Action::make('export_excel')
                 ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-text')
+                ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->button()
                 ->action(function () {

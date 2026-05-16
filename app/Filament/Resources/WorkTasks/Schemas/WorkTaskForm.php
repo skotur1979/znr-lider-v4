@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\WorkTasks\WorkTasks\Schemas;
+namespace App\Filament\Resources\WorkTasks\Schemas;
 
 use Filament\Schemas\Schema;
 

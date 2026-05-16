@@ -29,7 +29,8 @@ class ListIncidents extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Novi incident'),
+                ->label('Novi incident')
+                ->icon('heroicon-o-plus'),
 
             Actions\Action::make('export_pdf')
     ->label('Izvoz u PDF')

@@ -13,7 +13,8 @@ class ListTests extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Novi test'),
+            CreateAction::make()->label('Novi test')
+            ->icon('heroicon-o-plus'),
         ];
     }
 }

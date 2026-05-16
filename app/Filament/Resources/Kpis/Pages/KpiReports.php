@@ -70,7 +70,7 @@ class KpiReports extends Page
         Action::make('dashboard')
             ->label('KPI Dashboard')
             ->icon('heroicon-o-chart-bar-square')
-            ->color('warning')
+            ->color('info')
             ->url(KpiResource::getUrl('dashboard')),
 
         Action::make('bulk_entry')

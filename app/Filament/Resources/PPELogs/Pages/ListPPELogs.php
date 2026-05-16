@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Filament\Resources\PpeLogs\PPELogResource\Pages;
+namespace App\Filament\Resources\PPELogs\Pages;
 
 use App\Exports\PpeItemsAllExport;
-use App\Filament\Resources\PpeLogs\PPELogResource;
+use App\Filament\Resources\PPELogs\PPELogResource;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -19,11 +19,13 @@ class ListPPELogs extends ListRecords
     {
         return [
             CreateAction::make()
-                ->label('Novi OZO'),
+                ->label('Novi OZO')
+                ->icon('heroicon-o-plus')
+                ->color('warning'),
 
             Action::make('export_excel')
                 ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-text')
+                ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->action(fn () => Excel::download(
                     new PpeItemsAllExport(),
@@ -43,14 +45,16 @@ class ListPPELogs extends ListRecords
 
         return match ($pregled) {
             'uskoro' => $query->whereHas('items', function (Builder $q): void {
-                $q->whereNotNull('end_date')
-                    ->whereDate('end_date', '>=', Carbon::today())
-                    ->whereDate('end_date', '<=', Carbon::today()->addDays(30));
+                $q->whereNull('return_date')
+                    ->whereNotNull('end_date')
+                    ->where('end_date', '>=', Carbon::today()->startOfDay())
+                    ->where('end_date', '<=', Carbon::today()->addDays(30)->endOfDay());
             }),
 
             'isteklo' => $query->whereHas('items', function (Builder $q): void {
-                $q->whereNotNull('end_date')
-                    ->whereDate('end_date', '<', Carbon::today());
+                $q->whereNull('return_date')
+                    ->whereNotNull('end_date')
+                    ->where('end_date', '<', Carbon::today()->startOfDay());
             }),
 
             default => $query,

@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Filament\Resources\PpeLogs\PPELogResource\Pages;
+namespace App\Filament\Resources\PPELogs\Pages;
 
-use App\Filament\Resources\PpeLogs\PPELogResource;
+use App\Filament\Resources\PPELogs\PPELogResource;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Auth;
 

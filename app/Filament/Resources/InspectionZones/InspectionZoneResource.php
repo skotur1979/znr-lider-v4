@@ -108,7 +108,7 @@ class InspectionZoneResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListInspectionZones::route('/'),
+            'index' => Pages\ListInspectionZone::route('/'),
             'view' => Pages\ViewInspectionZone::route('/{record}'),
             'edit' => Pages\EditInspectionZone::route('/{record}/edit'),
         ];

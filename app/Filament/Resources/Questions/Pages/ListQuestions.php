@@ -13,7 +13,8 @@ class ListQuestions extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Novo pitanje'),
+            CreateAction::make()->label('Novo pitanje')
+            ->icon('heroicon-o-plus'),
         ];
     }
 }

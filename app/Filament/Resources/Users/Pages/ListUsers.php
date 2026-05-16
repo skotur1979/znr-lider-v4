@@ -16,7 +16,8 @@ class ListUsers extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Novi korisnik'),
+                ->label('Novi korisnik')
+                ->icon('heroicon-o-plus'),
 
             Actions\Action::make('exportExcel')
                 ->label('Izvoz u Excel')
