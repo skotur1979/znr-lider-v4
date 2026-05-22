@@ -1,6 +1,7 @@
 @php
     $effectiveTarget = $record->effectiveTargetValue($ownerId);
-    $currentStatus = $record->evaluateStatus($record->latestValue()?->value, $ownerId);
+    $latestValue = $record->latestValue();
+    $currentStatus = $record->evaluateStatus($latestValue?->value, $ownerId);
 
     $statusText = match($currentStatus) {
         'success' => 'U cilju',
@@ -19,28 +20,61 @@
     $points = collect($trend)->values();
     $numericValues = $points->pluck('value')->filter(fn ($v) => $v !== null);
 
+    $min = 0;
     $max = $numericValues->max();
-    $min = $numericValues->min();
 
-    if ($max === null || $min === null) {
+    if ($max === null) {
         $max = 1;
-        $min = 0;
     }
 
-    if ((float) $max === (float) $min) {
-        $max += 1;
+    if ($effectiveTarget !== null) {
+        $max = max((float) $max, (float) $effectiveTarget);
+    }
+
+    $max = (float) $max * 1.15;
+
+    if ($max <= 0) {
+        $max = 1;
     }
 
     $width = 900;
-    $height = 260;
-    $paddingX = 50;
-    $paddingY = 30;
+    $height = 280;
+    $paddingX = 60;
+    $paddingYTop = 30;
+    $paddingYBottom = 40;
+    $chartLeft = $paddingX;
+    $chartRight = 850;
+    $chartTop = $paddingYTop;
+    $chartBottom = $height - $paddingYBottom;
+    $chartHeight = $chartBottom - $chartTop;
+
     $count = max($points->count(), 1);
-    $stepX = ($width - ($paddingX * 2)) / max($count - 1, 1);
+    $stepX = ($chartRight - $chartLeft) / max($count - 1, 1);
+
+    $gridLines = [];
+    for ($i = 0; $i <= 5; $i++) {
+        $value = ($max / 5) * $i;
+        $y = $chartBottom - (($value - $min) / (($max - $min) ?: 1) * $chartHeight);
+
+        $gridLines[] = [
+            'value' => $value,
+            'formatted' => number_format($value, 0, ',', '.'),
+            'y' => round($y, 2),
+        ];
+    }
+
+    $targetY = null;
+
+    if ($effectiveTarget !== null) {
+        $targetNormalized = ((float) $effectiveTarget - $min) / (($max - $min) ?: 1);
+        $targetY = $chartBottom - ($targetNormalized * $chartHeight);
+        $targetY = round($targetY, 2);
+    }
 
     $svgPoints = [];
+
     foreach ($points as $index => $item) {
-        $x = $paddingX + ($index * $stepX);
+        $x = $chartLeft + ($index * $stepX);
         $value = $item['value'];
 
         if ($value === null) {
@@ -48,8 +82,8 @@
             continue;
         }
 
-        $normalized = ($value - $min) / (($max - $min) ?: 1);
-        $y = $height - $paddingY - ($normalized * ($height - ($paddingY * 2)));
+        $normalized = ((float) $value - $min) / (($max - $min) ?: 1);
+        $y = $chartBottom - ($normalized * $chartHeight);
 
         $svgPoints[] = [
             'x' => round($x, 2),
@@ -233,14 +267,14 @@
 
         <div class="kpi-box">
             <span class="kpi-label">Zadnja vrijednost</span>
-            <div class="kpi-value">{{ $record->formatNumberOnly($record->latestValue()?->value) }}</div>
+            <div class="kpi-value">{{ $record->formatNumberOnly($latestValue?->value) }}</div>
         </div>
 
         <div class="kpi-box">
             <span class="kpi-label">Zadnji period</span>
             <div class="kpi-value">
-                @if($record->latestValue())
-                    {{ sprintf('%02d/%s', $record->latestValue()->month, $record->latestValue()->year) }}
+                @if($latestValue)
+                    {{ sprintf('%02d/%s', $latestValue->month, $latestValue->year) }}
                 @else
                     -
                 @endif
@@ -253,11 +287,69 @@
         <div style="font-size:13px;opacity:.75;margin-bottom:12px;">Pregled mjesečnih vrijednosti za odabrani KPI</div>
 
         <div style="overflow-x:auto;">
-            <svg viewBox="0 0 900 260" class="min-w-[900px] w-full">
-                @for ($i = 0; $i < 5; $i++)
-                    @php $y = 30 + ($i * 50); @endphp
-                    <line x1="50" y1="{{ $y }}" x2="850" y2="{{ $y }}" stroke="rgba(148,163,184,0.25)" stroke-width="1" />
-                @endfor
+            <svg viewBox="0 0 900 280" class="min-w-[900px] w-full">
+                @foreach($gridLines as $line)
+                    <line
+                        x1="{{ $chartLeft }}"
+                        y1="{{ $line['y'] }}"
+                        x2="{{ $chartRight }}"
+                        y2="{{ $line['y'] }}"
+                        stroke="rgba(148,163,184,0.25)"
+                        stroke-width="1"
+                    />
+
+                    <text
+                        x="{{ $chartLeft - 12 }}"
+                        y="{{ $line['y'] + 4 }}"
+                        text-anchor="end"
+                        font-size="11"
+                        fill="currentColor"
+                        class="text-gray-500"
+                    >
+                        {{ $line['formatted'] }}
+                    </text>
+                @endforeach
+
+                <line
+                    x1="{{ $chartLeft }}"
+                    y1="{{ $chartTop }}"
+                    x2="{{ $chartLeft }}"
+                    y2="{{ $chartBottom }}"
+                    stroke="rgba(148,163,184,0.35)"
+                    stroke-width="1"
+                />
+
+                <line
+                    x1="{{ $chartLeft }}"
+                    y1="{{ $chartBottom }}"
+                    x2="{{ $chartRight }}"
+                    y2="{{ $chartBottom }}"
+                    stroke="rgba(148,163,184,0.35)"
+                    stroke-width="1"
+                />
+
+                @if($effectiveTarget !== null && $targetY !== null)
+                    <line
+                        x1="{{ $chartLeft }}"
+                        y1="{{ $targetY }}"
+                        x2="{{ $chartRight }}"
+                        y2="{{ $targetY }}"
+                        stroke="#ef4444"
+                        stroke-width="2"
+                        stroke-dasharray="6 6"
+                    />
+
+                    <text
+                        x="{{ $chartRight - 6 }}"
+                        y="{{ $targetY - 6 }}"
+                        text-anchor="end"
+                        font-size="11"
+                        font-weight="800"
+                        fill="#ef4444"
+                    >
+                        CILJ: {{ $record->formatNumberOnly($effectiveTarget) }}
+                    </text>
+                @endif
 
                 @if($polyline !== '')
                     <polyline
@@ -272,12 +364,31 @@
                 @foreach($svgPoints as $point)
                     @if($point)
                         <circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="5" class="fill-primary-500" />
+
+                        <text
+                            x="{{ $point['x'] }}"
+                            y="{{ max(12, $point['y'] - 12) }}"
+                            text-anchor="middle"
+                            font-size="11"
+                            font-weight="800"
+                            fill="currentColor"
+                            class="text-primary-500"
+                        >
+                            {{ $point['value'] }}
+                        </text>
                     @endif
                 @endforeach
 
                 @foreach($points as $index => $item)
-                    @php $x = $paddingX + ($index * $stepX); @endphp
-                    <text x="{{ $x }}" y="248" text-anchor="middle" font-size="11" fill="currentColor" class="text-gray-500">
+                    @php $x = $chartLeft + ($index * $stepX); @endphp
+                    <text
+                        x="{{ $x }}"
+                        y="{{ $height - 12 }}"
+                        text-anchor="middle"
+                        font-size="11"
+                        fill="currentColor"
+                        class="text-gray-500"
+                    >
                         {{ $item['label'] }}
                     </text>
                 @endforeach

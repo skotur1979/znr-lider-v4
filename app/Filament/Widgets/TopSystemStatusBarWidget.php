@@ -216,42 +216,71 @@ class TopSystemStatusBarWidget extends Widget
         }
 
         $employeeModel = new Employee();
+        $employeeTable = $employeeModel->getTable();
 
-        if (! method_exists($employeeModel, 'certificates')) {
+        if (! Schema::hasTable($employeeTable)) {
             return $this->unsupportedRow();
         }
 
+        $expiredCount = 0;
+        $soonCount = 0;
+
         try {
-            $relatedModel = $employeeModel->certificates()->getRelated();
-            $certTable = $relatedModel->getTable();
+            if (method_exists($employeeModel, 'certificates')) {
+                $relatedModel = $employeeModel->certificates()->getRelated();
+                $certTable = $relatedModel->getTable();
 
-            if (! Schema::hasTable($certTable) || ! Schema::hasColumn($certTable, 'valid_until')) {
-                return $this->unsupportedRow();
-            }
+                if (Schema::hasTable($certTable) && Schema::hasColumn($certTable, 'valid_until')) {
+                    $query = $relatedModel::query()->whereNotNull($certTable . '.valid_until');
 
-            $query = $relatedModel::query()->whereNotNull($certTable . '.valid_until');
-
-            if (Schema::hasColumn($certTable, 'active')) {
-                $query->where($certTable . '.active', true);
-            }
-
-            if (Schema::hasColumn($certTable, 'deleted_at')) {
-                $query->whereNull($certTable . '.deleted_at');
-            }
-
-            $userIds = $this->organizationUserIds($user);
-
-            if ($userIds !== null && method_exists($relatedModel, 'employee')) {
-                $query->whereHas('employee', function (Builder $q) use ($userIds): void {
-                    $employeeTable = $q->getModel()->getTable();
-
-                    if (Schema::hasColumn($employeeTable, 'user_id')) {
-                        $q->whereIn($employeeTable . '.user_id', $userIds);
+                    if (Schema::hasColumn($certTable, 'active')) {
+                        $query->where($certTable . '.active', true);
                     }
-                });
+
+                    if (Schema::hasColumn($certTable, 'deleted_at')) {
+                        $query->whereNull($certTable . '.deleted_at');
+                    }
+
+                    $userIds = $this->organizationUserIds($user);
+
+                    if ($userIds !== null && method_exists($relatedModel, 'employee')) {
+                        $query->whereHas('employee', function (Builder $q) use ($userIds): void {
+                            $employeeTable = $q->getModel()->getTable();
+
+                            if (Schema::hasColumn($employeeTable, 'user_id')) {
+                                $q->whereIn($employeeTable . '.user_id', $userIds);
+                            }
+                        });
+                    }
+
+                    $certificateCounts = $this->countDateQuery($query, $certTable . '.valid_until', $today, $soonDate);
+
+                    $expiredCount += (int) $certificateCounts['expired_count'];
+                    $soonCount += (int) $certificateCounts['soon_count'];
+                }
             }
 
-            return $this->countDateQuery($query, $certTable . '.valid_until', $today, $soonDate);
+            $znrQuery = Employee::query()
+                ->whereNull($employeeTable . '.occupational_safety_valid_from')
+                ->whereNotNull($employeeTable . '.employeed_at');
+
+            $this->applyCommonScopes($znrQuery, $employeeModel);
+            $this->applyOrganizationScope($znrQuery, $employeeTable, $user);
+
+            $expiredCount += (clone $znrQuery)
+                ->whereDate($employeeTable . '.employeed_at', '<', $today->copy()->subDays(60))
+                ->count();
+
+            $soonCount += (clone $znrQuery)
+                ->whereDate($employeeTable . '.employeed_at', '>=', $today->copy()->subDays(60))
+                ->whereDate($employeeTable . '.employeed_at', '<=', $today->copy()->subDays(30))
+                ->count();
+
+            return [
+                'expired_count' => $expiredCount,
+                'soon_count' => $soonCount,
+                'supported' => true,
+            ];
         } catch (\Throwable $e) {
             return $this->unsupportedRow();
         }
@@ -378,20 +407,29 @@ class TopSystemStatusBarWidget extends Widget
         return $this->countDateQuery($query, $table . '.target_date', $today, $soonDate);
     }
 
-    protected function countDateQuery(Builder $query, string $dateColumn, Carbon $today, Carbon $soonDate): array
-    {
-        $expired = (clone $query)
-            ->where($dateColumn, '<', $today->copy()->startOfDay())
-            ->count();
+    protected function countDateQuery(
+        Builder $query,
+        string $dateColumn,
+        Carbon $today,
+        Carbon $soonDate
+    ): array {
+        $todayStart = $today->copy()->startOfDay();
+        $soonEnd = $soonDate->copy()->endOfDay();
 
-        $soon = (clone $query)
-            ->where($dateColumn, '>=', $today->copy()->startOfDay())
-            ->where($dateColumn, '<=', $soonDate->copy()->endOfDay())
-            ->count();
+        $result = (clone $query)
+            ->selectRaw("
+                SUM(CASE WHEN {$dateColumn} < ? THEN 1 ELSE 0 END) as expired_count,
+                SUM(CASE WHEN {$dateColumn} >= ? AND {$dateColumn} <= ? THEN 1 ELSE 0 END) as soon_count
+            ", [
+                $todayStart,
+                $todayStart,
+                $soonEnd,
+            ])
+            ->first();
 
         return [
-            'expired_count' => (int) $expired,
-            'soon_count' => (int) $soon,
+            'expired_count' => (int) ($result->expired_count ?? 0),
+            'soon_count' => (int) ($result->soon_count ?? 0),
             'supported' => true,
         ];
     }

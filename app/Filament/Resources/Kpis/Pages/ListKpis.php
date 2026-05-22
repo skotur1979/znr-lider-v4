@@ -36,17 +36,27 @@ class ListKpis extends ListRecords
                 ->url(static::getResource()::getUrl('bulk-entry')),
 
             Action::make('generate_current_month')
-                ->label('Generiraj tekući mjesec')
-                ->icon('heroicon-o-arrow-path')
-                ->color('success')
-                ->action(function () {
-                    app(KpiCalculationService::class)->generateForMonth(now()->month, now()->year);
+    ->label('Ažuriraj tekući mjesec')
+    ->icon('heroicon-o-arrow-path')
+    ->color('success')
+    ->requiresConfirmation()
+    ->modalHeading('Ažuriranje KPI vrijednosti')
+    ->modalDescription('Sustav će ponovno izračunati automatske KPI vrijednosti za tekući mjesec. Postojeće vrijednosti za isti mjesec bit će ažurirane, a ručni KPI unosi neće se mijenjati.')
+    ->modalSubmitActionLabel('Ažuriraj KPI')
+    ->action(function () {
+        $result = app(KpiCalculationService::class)
+            ->generateForMonth(now()->month, now()->year);
 
-                    Notification::make()
-                        ->title('KPI vrijednosti su generirane za tekući mjesec.')
-                        ->success()
-                        ->send();
-                }),
+        Notification::make()
+            ->title('KPI vrijednosti su ažurirane.')
+            ->body(
+                'Kreirano: ' . $result['generated'] .
+                ' | Ažurirano: ' . $result['updated'] .
+                ' | Preskočeno: ' . $result['skipped']
+            )
+            ->success()
+            ->send();
+    }),
 
             Action::make('exportExcel')
                 ->label('Izvoz u Excel')

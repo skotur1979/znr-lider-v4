@@ -19,6 +19,10 @@ class ActivityLogger
         try {
             $user = Auth::user();
 
+            if (! $user && $action !== 'failed_login') {
+                return;
+            }
+
             ActivityLog::create([
                 'user_id' => $user?->id,
                 'owner_id' => $user?->ownerId(),

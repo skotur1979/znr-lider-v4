@@ -14,6 +14,8 @@ use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Attributes\Url;
 
 class DashboardCalendarWidget extends Widget
@@ -21,6 +23,7 @@ class DashboardCalendarWidget extends Widget
     protected static bool $isLazy = true;
 
     protected static ?string $pollingInterval = null;
+
     protected string $view = 'filament.widgets.dashboard-calendar-widget';
 
     protected int|string|array $columnSpan = 'full';
@@ -41,6 +44,20 @@ class DashboardCalendarWidget extends Widget
     public ?string $taskDate = null;
     public string $taskTitle = '';
     public ?string $taskDescription = null;
+
+    protected function cacheKey(): string
+    {
+        return 'dashboard-calendar-' . (auth()->id() ?? 'guest')
+            . '-' . $this->calendar_month
+            . '-' . $this->calendar_year
+            . '-' . ($this->selected_date ?: 'none')
+            . '-' . now()->format('Y-m-d-H');
+    }
+
+    protected function clearCalendarCache(): void
+    {
+        Cache::forget($this->cacheKey());
+    }
 
     protected function ownerId(): ?int
     {
@@ -67,6 +84,19 @@ class DashboardCalendarWidget extends Widget
         return $query->where('user_id', $ownerId);
     }
 
+    protected function applyActiveScope(Builder $query, string $table): Builder
+    {
+        if (Schema::hasColumn($table, 'active')) {
+            $query->where($table . '.active', true);
+        }
+
+        if (Schema::hasColumn($table, 'deleted_at')) {
+            $query->whereNull($table . '.deleted_at');
+        }
+
+        return $query;
+    }
+
     public function mount(): void
     {
         $this->calendar_month = (int) request()->query('calendar_month', now()->month);
@@ -80,6 +110,7 @@ class DashboardCalendarWidget extends Widget
 
         $this->calendar_month = (int) $current->month;
         $this->calendar_year = (int) $current->year;
+        $this->selected_date = null;
     }
 
     public function nextMonth(): void
@@ -88,6 +119,7 @@ class DashboardCalendarWidget extends Widget
 
         $this->calendar_month = (int) $current->month;
         $this->calendar_year = (int) $current->year;
+        $this->selected_date = null;
     }
 
     public function openTaskCreateModal(?string $date = null): void
@@ -159,6 +191,8 @@ class DashboardCalendarWidget extends Widget
             ]);
         }
 
+        $this->clearCalendarCache();
+
         $this->dispatch('work-task-updated');
         $this->closeTaskModal();
     }
@@ -179,6 +213,8 @@ class DashboardCalendarWidget extends Widget
             'completed_at' => now(),
         ]);
 
+        $this->clearCalendarCache();
+
         $this->dispatch('work-task-updated');
     }
 
@@ -197,6 +233,8 @@ class DashboardCalendarWidget extends Widget
             'is_done' => false,
             'completed_at' => null,
         ]);
+
+        $this->clearCalendarCache();
 
         $this->dispatch('work-task-updated');
     }
@@ -217,6 +255,8 @@ class DashboardCalendarWidget extends Widget
         if ($this->editingTaskId === $taskId) {
             $this->closeTaskModal();
         }
+
+        $this->clearCalendarCache();
 
         $this->dispatch('work-task-updated');
     }
@@ -239,53 +279,50 @@ class DashboardCalendarWidget extends Widget
 
     public function getViewData(): array
     {
-        $current = Carbon::create($this->calendar_year, $this->calendar_month, 1)->startOfMonth();
+        return Cache::remember(
+            $this->cacheKey(),
+            now()->addMinutes(5),
+            function (): array {
+                $current = Carbon::create($this->calendar_year, $this->calendar_month, 1)->startOfMonth();
 
-        $start = $current->copy()->startOfWeek(Carbon::MONDAY);
-        $end = $current->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
+                $start = $current->copy()->startOfWeek(Carbon::MONDAY);
+                $end = $current->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
 
-        $selectedDate = $this->selected_date
-            ? Carbon::parse($this->selected_date)->toDateString()
-            : null;
+                $selectedDate = $this->selected_date
+                    ? Carbon::parse($this->selected_date)->toDateString()
+                    : null;
 
-        $days = collect(CarbonPeriod::create($start, $end))
-            ->map(function (Carbon $day) use ($current, $selectedDate) {
+                $itemsByDate = $this->buildItems($start, $end)
+                    ->groupBy(fn (array $item) => $item['date']->format('Y-m-d'));
+
+                $days = collect(CarbonPeriod::create($start, $end))
+                    ->map(function (Carbon $day) use ($current, $selectedDate, $itemsByDate) {
+                        $key = $day->format('Y-m-d');
+                        $collection = $itemsByDate->get($key, collect());
+
+                        return [
+                            'date' => $day->copy(),
+                            'in_month' => $day->month === $current->month,
+                            'is_selected' => $selectedDate === $day->toDateString(),
+                            'items' => $collection->take(5)->values()->all(),
+                            'all_items' => $collection->values()->all(),
+                            'extra_count' => max(0, $collection->count() - 5),
+                            'total_count' => $collection->count(),
+                            'day_url' => url('/admin?calendar_month=' . $this->calendar_month
+                                . '&calendar_year=' . $this->calendar_year
+                                . '&selected_date=' . $day->toDateString()),
+                        ];
+                    })
+                    ->values();
+
                 return [
-                    'date' => $day->copy(),
-                    'in_month' => $day->month === $current->month,
-                    'is_selected' => $selectedDate === $day->toDateString(),
-                    'items' => [],
-                    'all_items' => [],
-                    'extra_count' => 0,
-                    'total_count' => 0,
-                    'day_url' => url('/admin?calendar_month=' . $this->calendar_month
-                        . '&calendar_year=' . $this->calendar_year
-                        . '&selected_date=' . $day->toDateString()),
+                    'monthLabel' => $current->translatedFormat('F Y'),
+                    'days' => $days->chunk(7),
+                    'weekdays' => ['pon.', 'uto.', 'sri.', 'čet.', 'pet.', 'sub.', 'ned.'],
+                    'selectedDate' => $selectedDate,
                 ];
-            })
-            ->values();
-
-        $itemsByDate = $this->buildItems($start, $end)
-            ->groupBy(fn (array $item) => $item['date']->format('Y-m-d'));
-
-        $days = $days->map(function (array $day) use ($itemsByDate) {
-            $key = $day['date']->format('Y-m-d');
-            $collection = $itemsByDate->get($key, collect());
-
-            $day['all_items'] = $collection->values()->all();
-            $day['items'] = $collection->take(5)->values()->all();
-            $day['total_count'] = $collection->count();
-            $day['extra_count'] = max(0, $collection->count() - 5);
-
-            return $day;
-        });
-
-        return [
-            'monthLabel' => $current->translatedFormat('F Y'),
-            'days' => $days->chunk(7),
-            'weekdays' => ['pon.', 'uto.', 'sri.', 'čet.', 'pet.', 'sub.', 'ned.'],
-            'selectedDate' => $selectedDate,
-        ];
+            }
+        );
     }
 
     protected function buildItems(Carbon $start, Carbon $end): Collection
@@ -307,37 +344,48 @@ class DashboardCalendarWidget extends Widget
 
     protected function employeeBaseQuery(): Builder
     {
-        $query = Employee::query();
-        return $this->applyOwnerScope($query);
+        return $this->applyActiveScope(
+            $this->applyOwnerScope(Employee::query()),
+            (new Employee())->getTable()
+        );
     }
 
     protected function machineBaseQuery(): Builder
     {
-        $query = Machine::query();
-        return $this->applyOwnerScope($query);
+        return $this->applyActiveScope(
+            $this->applyOwnerScope(Machine::query()),
+            (new Machine())->getTable()
+        );
     }
 
     protected function fireBaseQuery(): Builder
     {
-        $query = Fire::query();
-        return $this->applyOwnerScope($query);
+        return $this->applyActiveScope(
+            $this->applyOwnerScope(Fire::query()),
+            (new Fire())->getTable()
+        );
     }
 
     protected function miscellaneousBaseQuery(): Builder
     {
-        $query = Miscellaneous::query();
-        return $this->applyOwnerScope($query);
+        return $this->applyActiveScope(
+            $this->applyOwnerScope(Miscellaneous::query()),
+            (new Miscellaneous())->getTable()
+        );
     }
 
     protected function workTaskBaseQuery(): Builder
     {
-        $query = WorkTask::query();
-        return $this->applyOwnerScope($query);
+        return $this->applyActiveScope(
+            $this->applyOwnerScope(WorkTask::query()),
+            (new WorkTask())->getTable()
+        );
     }
 
     protected function employeeMedicalItems(Carbon $start, Carbon $end): Collection
     {
         return $this->employeeBaseQuery()
+            ->select(['id', 'name', 'medical_examination_valid_until'])
             ->whereNotNull('medical_examination_valid_until')
             ->whereBetween('medical_examination_valid_until', [$start->toDateString(), $end->toDateString()])
             ->orderBy('medical_examination_valid_until')
@@ -359,15 +407,22 @@ class DashboardCalendarWidget extends Widget
     protected function employeeCertificateItems(Carbon $start, Carbon $end): Collection
     {
         $query = EmployeeCertificate::query()
-            ->with('employee')
+            ->select(['id', 'employee_id', 'valid_until'])
+            ->with(['employee:id,name,user_id'])
             ->whereNotNull('valid_until')
             ->whereBetween('valid_until', [$start->toDateString(), $end->toDateString()])
             ->orderBy('valid_until');
 
+        $this->applyActiveScope($query, (new EmployeeCertificate())->getTable());
+
         if (! $this->isSuperAdmin()) {
             $ownerId = $this->ownerId();
 
-            $query->whereHas('employee', function (Builder $q) use ($ownerId) {
+            if (! $ownerId) {
+                return collect();
+            }
+
+            $query->whereHas('employee', function (Builder $q) use ($ownerId): void {
                 $q->where('user_id', $ownerId);
             });
         }
@@ -391,6 +446,7 @@ class DashboardCalendarWidget extends Widget
     protected function machineItems(Carbon $start, Carbon $end): Collection
     {
         return $this->machineBaseQuery()
+            ->select(['id', 'name', 'examination_valid_until'])
             ->whereNotNull('examination_valid_until')
             ->whereBetween('examination_valid_until', [$start->toDateString(), $end->toDateString()])
             ->orderBy('examination_valid_until')
@@ -412,6 +468,7 @@ class DashboardCalendarWidget extends Widget
     protected function fireItems(Carbon $start, Carbon $end): Collection
     {
         return $this->fireBaseQuery()
+            ->select(['id', 'place', 'examination_valid_until'])
             ->whereNotNull('examination_valid_until')
             ->whereBetween('examination_valid_until', [$start->toDateString(), $end->toDateString()])
             ->orderBy('examination_valid_until')
@@ -433,6 +490,7 @@ class DashboardCalendarWidget extends Widget
     protected function miscellaneousItems(Carbon $start, Carbon $end): Collection
     {
         return $this->miscellaneousBaseQuery()
+            ->select(['id', 'name', 'examination_valid_until'])
             ->whereNotNull('examination_valid_until')
             ->whereBetween('examination_valid_until', [$start->toDateString(), $end->toDateString()])
             ->orderBy('examination_valid_until')
@@ -454,19 +512,22 @@ class DashboardCalendarWidget extends Widget
     protected function workTaskItems(Carbon $start, Carbon $end): Collection
     {
         return $this->workTaskBaseQuery()
+            ->select(['id', 'title', 'description', 'due_date', 'is_done'])
             ->whereBetween('due_date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('due_date')
             ->orderBy('is_done')
             ->orderBy('id')
             ->get()
             ->map(function (WorkTask $task) {
+                $dueDate = Carbon::parse($task->due_date);
+
                 $class = $task->is_done
                     ? 'znr-task-done'
-                    : ($task->due_date->isPast() ? 'znr-task-overdue' : 'znr-task');
+                    : ($dueDate->isPast() ? 'znr-task-overdue' : 'znr-task');
 
                 return [
                     'id' => $task->id,
-                    'date' => Carbon::parse($task->due_date),
+                    'date' => $dueDate,
                     'title' => $task->title,
                     'description' => $task->description,
                     'url' => null,

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 class Employee extends Model
 {
@@ -90,5 +91,91 @@ class Employee extends Model
     {
         return $this->attributes['OIB'] ?? null;
     }
-}
 
+    public function znrTrainingDueDate(): ?Carbon
+    {
+        if ($this->occupational_safety_valid_from) {
+            return null;
+        }
+
+        if (! $this->employeed_at) {
+            return null;
+        }
+
+        return Carbon::parse($this->employeed_at)
+            ->addDays(60)
+            ->startOfDay();
+    }
+
+    public function znrTrainingStatus(): string
+    {
+        $dueDate = $this->znrTrainingDueDate();
+
+        if (! $dueDate) {
+            return 'completed';
+        }
+
+        $today = Carbon::today();
+        $soon = $today->copy()->addDays(30);
+
+        if ($dueDate->lt($today)) {
+            return 'expired';
+        }
+
+        if ($dueDate->lte($soon)) {
+            return 'expiring';
+        }
+
+        return 'ok';
+    }
+
+    public function isZnrTrainingExpired(): bool
+    {
+        return $this->znrTrainingStatus() === 'expired';
+    }
+
+    public function isZnrTrainingExpiring(): bool
+    {
+        return $this->znrTrainingStatus() === 'expiring';
+    }
+
+    public function znrTrainingDueLabel(): ?string
+    {
+        return $this->znrTrainingDueDate()?->format('d.m.Y.');
+    }
+
+    public function znrTrainingTooltip(): string
+    {
+        if ($this->occupational_safety_valid_from) {
+            return 'ZNR osposobljavanje je upisano.';
+        }
+
+        if (! $this->employeed_at) {
+            return 'Nije upisan datum zaposlenja.';
+        }
+
+        $dueDate = $this->znrTrainingDueDate();
+
+        return 'ZNR treba položiti najkasnije do ' . $dueDate?->format('d.m.Y.') . ' (60 dana od zaposlenja).';
+    }
+
+    public function znrTrainingBadgeColor(): string
+    {
+        return match ($this->znrTrainingStatus()) {
+            'expired' => 'danger',
+            'expiring' => 'warning',
+            'ok' => 'gray',
+            default => 'success',
+        };
+    }
+
+    public function znrTrainingBadgeIcon(): string
+    {
+        return match ($this->znrTrainingStatus()) {
+            'expired' => 'heroicon-m-exclamation-triangle',
+            'expiring' => 'heroicon-m-clock',
+            'ok' => 'heroicon-m-information-circle',
+            default => 'heroicon-m-check-circle',
+        };
+    }
+}

@@ -124,7 +124,12 @@
         ['key' => 'workplace', 'label' => 'Radno mjesto', 'width' => '10%'],
         ['key' => 'medical_examination_valid_until', 'label' => 'Liječnički (do)', 'width' => '10%', 'class' => 'center'],
         ['key' => 'article', 'label' => 'Članak 3. točke', 'width' => '10%'],
-        ['key' => 'occupational_safety_valid_from', 'label' => 'Zaštita na radu (od)', 'width' => '10%', 'class' => 'center'],
+        [
+        'key' => 'occupational_safety_valid_from',
+        'label' => 'Zaštita na radu',
+        'width' => '10%',
+        'class' => 'center'
+        ],
         ['key' => 'first_aid_valid_from', 'label' => 'Prva pomoć (od)', 'width' => '10%', 'class' => 'center'],
         ['key' => 'toxicology_valid_until', 'label' => 'Toksikologija (do)', 'width' => '10%', 'class' => 'center'],
         ['key' => 'employers_authorization_valid_until', 'label' => 'Ovlaštenik ZNR (do)', 'width' => '10%', 'class' => 'center'],
@@ -143,7 +148,31 @@
 
             'article' => e($e->article),
 
-            'occupational_safety_valid_from' => $fmt($e->occupational_safety_valid_from),
+            'occupational_safety_valid_from' =>
+
+    $e->occupational_safety_valid_from
+
+        ? '<div>' .
+            $fmt($e->occupational_safety_valid_from) .
+          '</div>'
+
+        : '<div class="' .
+
+            (
+                $e->znrTrainingStatus() === 'expired'
+                    ? 'rok-expired'
+                    : (
+                        $e->znrTrainingStatus() === 'expiring'
+                            ? 'rok-soon'
+                            : ''
+                    )
+            )
+
+            . '">' .
+
+            'Rok: ' . ($e->znrTrainingDueLabel() ?? '—')
+
+            . '</div>',
             'first_aid_valid_from' => $fmt($e->first_aid_valid_from),
 
             'toxicology_valid_until' =>

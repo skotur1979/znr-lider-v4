@@ -296,7 +296,8 @@ class WorkTaskResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()
+        ->with('user');
 
         if (Auth::user()?->isSuperAdmin()) {
             return $query;
@@ -306,15 +307,29 @@ class WorkTaskResource extends BaseResource
     }
 
     public static function getNavigationBadge(): ?string
-    {
+{
+    $user = Auth::user();
+
+    if (! $user) {
+        return null;
+    }
+
+    $cacheKey = 'work_tasks_badge_'
+        . $user->id
+        . '_'
+        . now()->format('Y-m-d-H');
+
+    return cache()->remember($cacheKey, now()->addMinutes(5), function () use ($user) {
+
         $query = static::getModel()::query();
 
-        if (! Auth::user()?->isSuperAdmin()) {
-            $query->where('user_id', Auth::user()?->ownerId());
+        if (! $user->isSuperAdmin()) {
+            $query->where('user_id', $user->ownerId());
         }
 
         return (string) $query->count();
-    }
+    });
+}
 
     public static function mutateFormDataBeforeCreate(array $data): array
     {

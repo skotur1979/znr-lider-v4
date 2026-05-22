@@ -18,13 +18,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
+use Illuminate\Support\Facades\Cache;
 
 class TodayMiniBlockWidget extends Widget
 {
     protected static bool $isLazy = true;
 
     protected static ?string $pollingInterval = null;
-    
+
     protected string $view = 'filament.widgets.today-mini-block-widget';
 
     protected int|string|array $columnSpan = 'full';
@@ -40,39 +41,48 @@ class TodayMiniBlockWidget extends Widget
     }
 
     protected function getViewData(): array
-    {
-        $day = $this->selected_date
-            ? Carbon::parse($this->selected_date)->startOfDay()
-            : Carbon::today();
+{
+    $userId = Auth::id() ?? 'guest';
 
-        $tasksForDay = $this->getTasksForDay($day);
-        $deadlines = $this->getDeadlinesBreakdownForDay($day);
+    return Cache::remember(
+        'today_mini_block_' . $userId . '_' . ($this->selected_date ?? 'today'),
+        now()->addMinutes(3),
+        function (): array {
 
-        $taskCount = $tasksForDay->count();
-        $deadlineCount = collect($deadlines)->sum();
+            $day = $this->selected_date
+                ? Carbon::parse($this->selected_date)->startOfDay()
+                : Carbon::today();
 
-        $taskTitles = $tasksForDay
-            ->take(3)
-            ->pluck('title')
-            ->map(fn (?string $title) => Str::limit((string) $title, 24))
-            ->values()
-            ->all();
+            $tasksForDay = $this->getTasksForDay($day);
+            $deadlines = $this->getDeadlinesBreakdownForDay($day);
 
-        $extraTasksCount = max($taskCount - count($taskTitles), 0);
+            $taskCount = $tasksForDay->count();
+            $deadlineCount = collect($deadlines)->sum();
 
-        return [
-            'dayLabel' => $day->isToday() ? 'Danas' : 'Odabrani datum',
-            'dayDateLabel' => $day->format('d.m.Y.'),
-            'taskCount' => $taskCount,
-            'deadlineCount' => $deadlineCount,
-            'taskTitles' => $taskTitles,
-            'extraTasksCount' => $extraTasksCount,
-            'deadlines' => $deadlines,
-            'hasAnything' => $taskCount > 0 || $deadlineCount > 0,
-            'tasksUrl' => $this->resolveTasksDayUrl($day),
-            'calendarUrl' => $this->resolveCalendarUrl($day),
-        ];
-    }
+            $taskTitles = $tasksForDay
+                ->take(3)
+                ->pluck('title')
+                ->map(fn (?string $title) => Str::limit((string) $title, 24))
+                ->values()
+                ->all();
+
+            $extraTasksCount = max($taskCount - count($taskTitles), 0);
+
+            return [
+                'dayLabel' => $day->isToday() ? 'Danas' : 'Odabrani datum',
+                'dayDateLabel' => $day->format('d.m.Y.'),
+                'taskCount' => $taskCount,
+                'deadlineCount' => $deadlineCount,
+                'taskTitles' => $taskTitles,
+                'extraTasksCount' => $extraTasksCount,
+                'deadlines' => $deadlines,
+                'hasAnything' => $taskCount > 0 || $deadlineCount > 0,
+                'tasksUrl' => $this->resolveTasksDayUrl($day),
+                'calendarUrl' => $this->resolveCalendarUrl($day),
+            ];
+        }
+    );
+}
 
     protected function getTasksForDay(Carbon $day)
     {

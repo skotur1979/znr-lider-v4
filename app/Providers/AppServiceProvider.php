@@ -6,6 +6,7 @@ use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
 use App\Models\OperationalLog;
 use App\Services\ActivityLogger;
+use App\Models\ActivityLog;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -68,6 +69,12 @@ class AppServiceProvider extends ServiceProvider
             $model = $data[0] ?? null;
 
             if (! $model instanceof Model) {
+                return;
+            }
+            // VAŽNO:
+            // ActivityLog mora zadržati stvarnog korisnika koji je napravio akciju.
+            // Ne smije se pregaziti ownerId-em.
+            if ($model instanceof ActivityLog) {
                 return;
             }
 

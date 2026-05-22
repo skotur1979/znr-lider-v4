@@ -11,19 +11,23 @@ use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Cache;
 
 class SystemStatusWidget extends Widget
 {
     protected static bool $isLazy = true;
 
     protected static ?string $pollingInterval = null;
-    
+
     protected string $view = 'filament.widgets.system-status-widget';
 
     protected int|string|array $columnSpan = 'full';
 
     protected function getViewData(): array
-    {
+{
+    $userId = Auth::id() ?? 'guest';
+
+    return Cache::remember('system_status_widget_' . $userId, now()->addMinutes(5), function (): array {
         $today = Carbon::today();
 
         return [
@@ -63,7 +67,8 @@ class SystemStatusWidget extends Widget
                 ],
             ],
         ];
-    }
+    });
+}
 
     protected function countExpiredPpe(Carbon $today): int
     {
@@ -80,7 +85,7 @@ class SystemStatusWidget extends Widget
 
         $query = PPEItem::query()
             ->whereNotNull('end_date')
-            ->whereDate('end_date', '<', $today);
+            ->where('end_date', '<', $today->copy()->startOfDay());
 
         $this->applyCommonScopes($query, $model);
 
@@ -162,7 +167,7 @@ class SystemStatusWidget extends Widget
 
         $query = FirstAidItem::query()
             ->whereNotNull('valid_until')
-            ->whereDate('valid_until', '<', $today);
+            ->where('valid_until', '<', $today->copy()->startOfDay());
 
         $this->applyCommonScopes($query, $model);
 

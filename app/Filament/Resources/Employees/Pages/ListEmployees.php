@@ -14,7 +14,6 @@ use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
-// prilagodi ako su ti klase drugačije imenovane
 use App\Exports\EmployeesExport;
 use App\Imports\EmployeesImport;
 
@@ -25,34 +24,36 @@ class ListEmployees extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+
             Actions\CreateAction::make()
                 ->label('Novi Zaposlenik')
                 ->icon('heroicon-o-plus'),
 
             Actions\Action::make('export_pdf')
-    ->label('Izvoz u PDF')
-    ->icon('heroicon-o-arrow-down-tray')
-    ->color('warning')
-    ->action(function () {
-        $employees = $this->getFilteredSortedTableQuery()
-            ->with('certificates')
-            ->get();
+                ->label('Izvoz u PDF')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('warning')
+                ->action(function () {
 
-        $pdf = Pdf::loadView('pdf.employees', compact('employees'))
-            ->setPaper('a4', 'landscape')
-            ->setOptions([
-                'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled' => true,
-                'isPhpEnabled' => true,
-                'dpi' => 96,
-                'defaultFont' => 'DejaVu Sans',
-            ]);
+                    $employees = $this->getFilteredSortedTableQuery()
+                        ->with('certificates')
+                        ->get();
 
-        return response()->streamDownload(
-            fn () => print($pdf->output()),
-            'zaposlenici-' . now()->format('Y-m-d') . '.pdf'
-        );
-    }),
+                    $pdf = Pdf::loadView('pdf.employees', compact('employees'))
+                        ->setPaper('a4', 'landscape')
+                        ->setOptions([
+                            'isHtml5ParserEnabled' => true,
+                            'isRemoteEnabled' => true,
+                            'isPhpEnabled' => true,
+                            'dpi' => 96,
+                            'defaultFont' => 'DejaVu Sans',
+                        ]);
+
+                    return response()->streamDownload(
+                        fn () => print($pdf->output()),
+                        'zaposlenici-' . now()->format('Y-m-d') . '.pdf'
+                    );
+                }),
 
             Actions\Action::make('export_excel')
                 ->label('Izvoz u Excel')
@@ -64,74 +65,87 @@ class ListEmployees extends ListRecords
                 )),
 
             Actions\Action::make('import_excel')
-    ->label('Uvoz iz Excela')
-    ->icon('heroicon-o-document-arrow-up')
-    ->color('warning')
-    ->form([
-        FileUpload::make('excel_file')
-            ->label('Excel datoteka')
-            ->disk('local')
-            ->directory('imports')
-            ->preserveFilenames()
-            ->acceptedFileTypes([
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-excel',
-            ])
-            ->required(),
-    ])
-    ->action(function (array $data): void {
-        $path = $data['excel_file'];
+                ->label('Uvoz iz Excela')
+                ->icon('heroicon-o-document-arrow-up')
+                ->color('warning')
 
-        if (is_array($path)) {
-            $path = collect($path)->first();
-        }
+                ->form([
 
-        if ($path instanceof TemporaryUploadedFile) {
-            $path = $path->store('imports', 'local');
-        }
+                    FileUpload::make('excel_file')
+                        ->label('Excel datoteka')
+                        ->disk('local')
+                        ->directory('imports')
+                        ->preserveFilenames()
 
-        if (! Storage::disk('local')->exists($path)) {
-            Notification::make()
-                ->title('Excel datoteka nije pronađena')
-                ->danger()
-                ->send();
+                        ->acceptedFileTypes([
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'application/vnd.ms-excel',
+                        ])
 
-            return;
-        }
+                        ->required(),
+                ])
 
-        $fullPath = Storage::disk('local')->path($path);
+                ->action(function (array $data): void {
 
-        $import = new EmployeesImport();
+                    $path = $data['excel_file'];
 
-        Excel::import($import, $fullPath);
+                    if (is_array($path)) {
+                        $path = collect($path)->first();
+                    }
 
-        $total = $import->created + $import->updated + $import->unchanged + $import->skipped;
+                    if ($path instanceof TemporaryUploadedFile) {
+                        $path = $path->store('imports', 'local');
+                    }
 
-        Notification::make()
-            ->title('Uvoz zaposlenika je završen')
-            ->body(
-                "Ukupno obrađeno zaposlenika: {$total}\n" .
-                "Novi zaposlenici: {$import->created}\n" .
-                "Ažurirani zaposlenici: {$import->updated}\n" .
-                "Bez promjene: {$import->unchanged}\n" .
-                "Preskočeni redovi: {$import->skipped}\n\n" .
-                "Novi certifikati: {$import->certificatesCreated}\n" .
-                "Ažurirani certifikati: {$import->certificatesUpdated}\n" .
-                "Certifikati bez promjene: {$import->certificatesUnchanged}"
-            )
-            ->success()
-            ->send();
+                    if (! Storage::disk('local')->exists($path)) {
 
-        $this->resetTable();
-    }),
+                        Notification::make()
+                            ->title('Excel datoteka nije pronađena')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    $fullPath = Storage::disk('local')->path($path);
+
+                    $import = new EmployeesImport();
+
+                    Excel::import($import, $fullPath);
+
+                    $total = $import->created +
+                        $import->updated +
+                        $import->unchanged +
+                        $import->skipped;
+
+                    Notification::make()
+                        ->title('Uvoz zaposlenika je završen')
+                        ->body(
+                            "Ukupno obrađeno zaposlenika: {$total}\n" .
+                            "Novi zaposlenici: {$import->created}\n" .
+                            "Ažurirani zaposlenici: {$import->updated}\n" .
+                            "Bez promjene: {$import->unchanged}\n" .
+                            "Preskočeni redovi: {$import->skipped}\n\n" .
+                            "Novi certifikati: {$import->certificatesCreated}\n" .
+                            "Ažurirani certifikati: {$import->certificatesUpdated}\n" .
+                            "Certifikati bez promjene: {$import->certificatesUnchanged}"
+                        )
+                        ->success()
+                        ->send();
+
+                    $this->resetTable();
+                }),
         ];
     }
-     protected function getTableQuery(): Builder
+
+    protected function getTableQuery(): Builder
     {
         $query = parent::getTableQuery();
+
         $pregled = request()->query('pregled');
 
         return match ($pregled) {
+
             'medical_expiring' => $query
                 ->whereDate('medical_examination_valid_until', '>=', Carbon::today())
                 ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30)),
@@ -139,13 +153,52 @@ class ListEmployees extends ListRecords
             'medical_expired' => $query
                 ->whereDate('medical_examination_valid_until', '<', Carbon::today()),
 
-            'certificates_expiring' => $query->whereHas('certificates', function (Builder $q) {
-                $q->whereDate('valid_until', '>=', Carbon::today())
-                    ->whereDate('valid_until', '<=', Carbon::today()->addDays(30));
+            'certificates_expiring' => $query->where(function (Builder $query) {
+
+                $query->whereHas('certificates', function (Builder $q) {
+
+                    $q->whereDate('valid_until', '>=', Carbon::today())
+                        ->whereDate('valid_until', '<=', Carbon::today()->addDays(30));
+
+                })
+
+                ->orWhere(function (Builder $q) {
+
+                    $q->whereNull('occupational_safety_valid_from')
+                        ->whereNotNull('employeed_at')
+
+                        ->whereDate(
+                            'employeed_at',
+                            '>=',
+                            Carbon::today()->subDays(60)
+                        )
+
+                        ->whereDate(
+                            'employeed_at',
+                            '<=',
+                            Carbon::today()->subDays(30)
+                        );
+                });
             }),
 
-            'certificates_expired' => $query->whereHas('certificates', function (Builder $q) {
-                $q->whereDate('valid_until', '<', Carbon::today());
+            'certificates_expired' => $query->where(function (Builder $query) {
+
+                $query->whereHas('certificates', function (Builder $q) {
+
+                    $q->whereDate('valid_until', '<', Carbon::today());
+
+                })
+
+                ->orWhere(function (Builder $q) {
+
+                    $q->whereNull('occupational_safety_valid_from')
+                        ->whereNotNull('employeed_at')
+                        ->whereDate(
+                            'employeed_at',
+                            '<',
+                            Carbon::today()->subDays(60)
+                        );
+                });
             }),
 
             default => $query,

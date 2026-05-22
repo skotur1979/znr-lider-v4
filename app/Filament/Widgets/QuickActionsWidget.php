@@ -17,13 +17,14 @@ use App\Filament\Resources\WasteTrackingForms\WasteTrackingFormResource;
 use App\Filament\Resources\WorkTasks\WorkTaskResource;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 class QuickActionsWidget extends Widget
 {
     protected static bool $isLazy = true;
 
     protected static ?string $pollingInterval = null;
-    
+
     protected string $view = 'filament.widgets.quick-actions-widget';
 
     protected int|string|array $columnSpan = 'full';
@@ -47,7 +48,7 @@ class QuickActionsWidget extends Widget
             'miscellaneous',
         ];
 
-        $saved = is_array($user?->quick_actions) ? $user->quick_actions : [];
+        $saved = is_array($user?->dashboard_quick_actions) ? $user->dashboard_quick_actions : [];
 
         $availableKeys = array_keys($this->getAllActions());
 
@@ -66,104 +67,129 @@ class QuickActionsWidget extends Widget
     }
 
     protected function getAllActions(): array
-    {
-        $actions = [
-            'operational_log' => [
-                'label' => 'Operativni dnevnik',
-                'description' => 'Brzi zapis, bilješka ili dnevni unos',
-                'icon' => 'heroicon-o-clipboard-document-list',
-                'url' => $this->resourceCreateUrl(OperationalLogResource::class),
-                'color' => 'blue',
-            ],
+{
+    $userId = Auth::id() ?? 'guest';
 
-            'employee' => [
-                'label' => 'Novi zaposlenik',
-                'description' => 'Dodaj novog zaposlenika',
-                'icon' => 'heroicon-o-users',
-                'url' => $this->resourceCreateUrl(EmployeeResource::class),
-                'color' => 'sky',
-            ],
-            'ra1' => [
-                'label' => 'Nova uputnica RA1',
-                'description' => 'Dodaj novu liječničku uputnicu',
-                'icon' => 'heroicon-o-document-text',
-                'url' => $this->resourceCreateUrl(MedicalReferralResource::class),
-                'color' => 'indigo',
-            ],
-            'machine' => [
-                'label' => 'Nova radna oprema',
-                'description' => 'Dodaj novi stroj / opremu',
-                'icon' => 'heroicon-o-cog-6-tooth',
-                'url' => $this->resourceCreateUrl(MachineResource::class),
-                'color' => 'amber',
-            ],
-            'miscellaneous' => [
-                'label' => 'Nova ostala ispitivanja',
-                'description' => 'Dodaj novo ostalo ispitivanje',
-                'icon' => 'heroicon-o-wrench-screwdriver',
-                'url' => $this->resourceCreateUrl(MiscellaneousResource::class),
-                'color' => 'emerald',
-            ],
-            'work_task' => [
-                'label' => 'Novi radni zadatak',
-                'description' => 'Dodaj novi osobni zadatak / podsjetnik',
-                'icon' => 'heroicon-o-clipboard-document-check',
-                'url' => $this->resourceCreateUrl(WorkTaskResource::class),
-                'color' => 'violet',
-            ],
-            'expense' => [
-                'label' => 'Novi trošak',
-                'description' => 'Dodaj novi trošak',
-                'icon' => 'heroicon-o-banknotes',
-                'url' => $this->resourceCreateUrl(ExpenseResource::class),
-                'color' => 'rose',
-            ],
-            'waste_tracking' => [
-                'label' => 'Novi prateći list',
-                'description' => 'Dodaj novi prateći list otpada',
-                'icon' => 'heroicon-o-clipboard-document-list',
-                'url' => $this->resourceCreateUrl(WasteTrackingFormResource::class),
-                'color' => 'violet',
-            ],
-            'ozo' => [
-                'label' => 'Novi upisnik OZO',
-                'description' => 'Dodaj novi zapis upisnika OZO',
-                'icon' => 'heroicon-o-shield-check',
-                'url' => $this->resourceCreateUrl(PersonalProtectiveEquipmentLogResource::class),
-                'color' => 'teal',
-            ],
-            'incident' => [
-                'label' => 'Novi incident',
-                'description' => 'Dodaj novi incident',
-                'icon' => 'heroicon-o-exclamation-triangle',
-                'url' => $this->resourceCreateUrl(IncidentResource::class),
-                'color' => 'orange',
-            ],
-            'observation' => [
-                'label' => 'Novo zapažanje',
-                'description' => 'Dodaj novo zapažanje',
-                'icon' => 'heroicon-o-eye',
-                'url' => $this->resourceCreateUrl(ObservationResource::class),
-                'color' => 'lime',
-            ],
-            'global_search' => [
-                'label' => 'Globalna pretraga',
-                'description' => 'Pretraži sve module',
-                'icon' => 'heroicon-o-magnifying-glass',
-                'url' => class_exists(GlobalSearch::class) ? GlobalSearch::getUrl() : null,
-                'color' => 'blue',
-            ],
-            'chemical' => [
-                'label' => 'Nova kemikalija',
-                'description' => 'Dodaj novu kemikaliju',
-                'icon' => 'heroicon-o-beaker',
-                'url' => $this->resourceCreateUrl(ChemicalResource::class),
-                'color' => 'purple',
-            ],
-        ];
+    return Cache::remember(
+        'quick_actions_widget_' . $userId,
+        now()->addMinutes(30),
+        function (): array {
 
-        return array_filter($actions, fn ($action) => filled($action['url'] ?? null));
-    }
+            $actions = [
+                'operational_log' => [
+                    'label' => 'Operativni dnevnik',
+                    'description' => 'Brzi zapis, bilješka ili dnevni unos',
+                    'icon' => 'heroicon-o-clipboard-document-list',
+                    'url' => $this->resourceCreateUrl(OperationalLogResource::class),
+                    'color' => 'blue',
+                ],
+
+                'employee' => [
+                    'label' => 'Novi zaposlenik',
+                    'description' => 'Dodaj novog zaposlenika',
+                    'icon' => 'heroicon-o-users',
+                    'url' => $this->resourceCreateUrl(EmployeeResource::class),
+                    'color' => 'sky',
+                ],
+
+                'ra1' => [
+                    'label' => 'Nova uputnica RA1',
+                    'description' => 'Dodaj novu liječničku uputnicu',
+                    'icon' => 'heroicon-o-document-text',
+                    'url' => $this->resourceCreateUrl(MedicalReferralResource::class),
+                    'color' => 'indigo',
+                ],
+
+                'machine' => [
+                    'label' => 'Nova radna oprema',
+                    'description' => 'Dodaj novi stroj / opremu',
+                    'icon' => 'heroicon-o-cog-6-tooth',
+                    'url' => $this->resourceCreateUrl(MachineResource::class),
+                    'color' => 'amber',
+                ],
+
+                'miscellaneous' => [
+                    'label' => 'Nova ostala ispitivanja',
+                    'description' => 'Dodaj novo ostalo ispitivanje',
+                    'icon' => 'heroicon-o-wrench-screwdriver',
+                    'url' => $this->resourceCreateUrl(MiscellaneousResource::class),
+                    'color' => 'emerald',
+                ],
+
+                'work_task' => [
+                    'label' => 'Novi radni zadatak',
+                    'description' => 'Dodaj novi osobni zadatak / podsjetnik',
+                    'icon' => 'heroicon-o-clipboard-document-check',
+                    'url' => $this->resourceCreateUrl(WorkTaskResource::class),
+                    'color' => 'violet',
+                ],
+
+                'expense' => [
+                    'label' => 'Novi trošak',
+                    'description' => 'Dodaj novi trošak',
+                    'icon' => 'heroicon-o-banknotes',
+                    'url' => $this->resourceCreateUrl(ExpenseResource::class),
+                    'color' => 'rose',
+                ],
+
+                'waste_tracking' => [
+                    'label' => 'Novi prateći list',
+                    'description' => 'Dodaj novi prateći list otpada',
+                    'icon' => 'heroicon-o-clipboard-document-list',
+                    'url' => $this->resourceCreateUrl(WasteTrackingFormResource::class),
+                    'color' => 'violet',
+                ],
+
+                'ozo' => [
+                    'label' => 'Novi upisnik OZO',
+                    'description' => 'Dodaj novi zapis upisnika OZO',
+                    'icon' => 'heroicon-o-shield-check',
+                    'url' => $this->resourceCreateUrl(PersonalProtectiveEquipmentLogResource::class),
+                    'color' => 'teal',
+                ],
+
+                'incident' => [
+                    'label' => 'Novi incident',
+                    'description' => 'Dodaj novi incident',
+                    'icon' => 'heroicon-o-exclamation-triangle',
+                    'url' => $this->resourceCreateUrl(IncidentResource::class),
+                    'color' => 'orange',
+                ],
+
+                'observation' => [
+                    'label' => 'Novo zapažanje',
+                    'description' => 'Dodaj novo zapažanje',
+                    'icon' => 'heroicon-o-eye',
+                    'url' => $this->resourceCreateUrl(ObservationResource::class),
+                    'color' => 'lime',
+                ],
+
+                'global_search' => [
+                    'label' => 'Globalna pretraga',
+                    'description' => 'Pretraži sve module',
+                    'icon' => 'heroicon-o-magnifying-glass',
+                    'url' => class_exists(GlobalSearch::class)
+                        ? GlobalSearch::getUrl()
+                        : null,
+                    'color' => 'blue',
+                ],
+
+                'chemical' => [
+                    'label' => 'Nova kemikalija',
+                    'description' => 'Dodaj novu kemikaliju',
+                    'icon' => 'heroicon-o-beaker',
+                    'url' => $this->resourceCreateUrl(ChemicalResource::class),
+                    'color' => 'purple',
+                ],
+            ];
+
+            return array_filter(
+                $actions,
+                fn ($action) => filled($action['url'] ?? null)
+            );
+        }
+    );
+}
 
     protected function resourceCreateUrl(string $resourceClass): ?string
     {
@@ -242,7 +268,7 @@ class QuickActionsWidget extends Widget
         $selection = array_slice($selection, 0, $this->maxQuickActions);
 
         $user = Auth::user();
-        $user->quick_actions = $selection;
+        $user->dashboard_quick_actions = $selection;
         $user->save();
 
         $this->selectedActionKeys = $selection;

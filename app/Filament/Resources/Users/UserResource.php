@@ -10,6 +10,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -50,29 +51,28 @@ class UserResource extends Resource
     {
         return [
             'upravljanje' => [
-    'inspections',
-    'operational_logs',
-    'risk_assessments',
-    'documentation',
-    'chemicals',
-    'observations',
-    'incidents',
-    'expenses',
-    'budgets',
-    'work_permits',
-    'kpis',
-],
+                'inspections',
+                'operational_logs',
+                'risk_assessments',
+                'documentation',
+                'chemicals',
+                'observations',
+                'incidents',
+                'expenses',
+                'budgets',
+                'work_permits',
+                'kpis',
+            ],
             'zaposlenici' => [
-    'employees',
-    'medical_referrals_ra1',
-    'medical_referrals_nr1',
-    'ppe_logs',
-],
-
-'edukacija' => [
-    'education_categories',
-    'education_center',
-],
+                'employees',
+                'medical_referrals_ra1',
+                'medical_referrals_nr1',
+                'ppe_logs',
+            ],
+            'edukacija' => [
+                'education_categories',
+                'education_center',
+            ],
             'ispitivanja' => [
                 'machines',
                 'fires',
@@ -123,14 +123,14 @@ class UserResource extends Resource
     public static function mergeQuickActions(array $data): array
     {
         $merged = array_merge(
-    $data['quick_actions_upravljanje'] ?? [],
-    $data['quick_actions_zaposlenici'] ?? [],
-    $data['quick_actions_edukacija'] ?? [],
-    $data['quick_actions_ispitivanja'] ?? [],
-    $data['quick_actions_okolis'] ?? [],
-    $data['quick_actions_testiranje'] ?? [],
-    $data['quick_actions_zadaci'] ?? [],
-);
+            $data['quick_actions_upravljanje'] ?? [],
+            $data['quick_actions_zaposlenici'] ?? [],
+            $data['quick_actions_edukacija'] ?? [],
+            $data['quick_actions_ispitivanja'] ?? [],
+            $data['quick_actions_okolis'] ?? [],
+            $data['quick_actions_testiranje'] ?? [],
+            $data['quick_actions_zadaci'] ?? [],
+        );
 
         $data['quick_actions'] = array_values(array_unique($merged));
 
@@ -143,6 +143,17 @@ class UserResource extends Resource
             $data['quick_actions_testiranje'],
             $data['quick_actions_zadaci'],
         );
+
+        return $data;
+    }
+
+    protected static function resetLegalAcceptance(array $data): array
+    {
+        $data['accepted_terms_at'] = null;
+        $data['accepted_privacy_at'] = null;
+        $data['terms_version'] = null;
+        $data['privacy_version'] = null;
+        $data['newsletter_opt_in'] = false;
 
         return $data;
     }
@@ -258,121 +269,116 @@ class UserResource extends Resource
                 ->label('Prima tjedni izvještaj na e-mail')
                 ->default(false),
 
+            Section::make('GDPR / prihvaćanje uvjeta')
+                ->visible(fn () => Auth::user()?->isSuperAdmin())
+                ->columns(2)
+                ->schema([
+                    Placeholder::make('gdpr_status')
+                        ->label('Status')
+                        ->content(fn (?User $record): string => $record?->hasAcceptedCurrentLegalTerms()
+                            ? 'Prihvaćeno'
+                            : 'Nije prihvaćeno'),
+
+                    Placeholder::make('newsletter_status')
+                        ->label('Newsletter')
+                        ->content(fn (?User $record): string => $record?->newsletter_opt_in ? 'Da' : 'Ne'),
+
+                    Placeholder::make('accepted_terms_at_info')
+                        ->label('Uvjeti korištenja')
+                        ->content(fn (?User $record): string => $record?->accepted_terms_at
+                            ? $record->accepted_terms_at->format('d.m.Y. H:i') . ' / verzija ' . ($record->terms_version ?? '-')
+                            : '-'),
+
+                    Placeholder::make('accepted_privacy_at_info')
+                        ->label('Pravila privatnosti')
+                        ->content(fn (?User $record): string => $record?->accepted_privacy_at
+                            ? $record->accepted_privacy_at->format('d.m.Y. H:i') . ' / verzija ' . ($record->privacy_version ?? '-')
+                            : '-'),
+                ])
+                ->columnSpanFull(),
+
             Section::make('Uključeni moduli')
                 ->visible(fn () => Auth::user()?->isSuperAdmin())
                 ->schema([
                     Section::make('Upravljanje')
                         ->compact()
                         ->schema([
-                            static::moduleCheckboxList(
-                                'quick_actions_upravljanje',
-                                [
-    'inspections' => 'Nadzori',
-    'operational_logs' => 'Operativni dnevnik',
-    'risk_assessments' => 'Procjene rizika',
-    'documentation' => 'Dokumentacija',
-    'chemicals' => 'Kemikalije',
-    'observations' => 'Zapažanja',
-    'incidents' => 'Incidenti',
-    'expenses' => 'Troškovi',
-    'budgets' => 'Budžet',
-    'work_permits' => 'Dozvole za rad',
-    'kpis' => 'KPI',
-],
-                                'upravljanje',
-                                5
-                            ),
+                            static::moduleCheckboxList('quick_actions_upravljanje', [
+                                'inspections' => 'Nadzori',
+                                'operational_logs' => 'Operativni dnevnik',
+                                'risk_assessments' => 'Procjene rizika',
+                                'documentation' => 'Dokumentacija',
+                                'chemicals' => 'Kemikalije',
+                                'observations' => 'Zapažanja',
+                                'incidents' => 'Incidenti',
+                                'expenses' => 'Troškovi',
+                                'budgets' => 'Budžet',
+                                'work_permits' => 'Dozvole za rad',
+                                'kpis' => 'KPI',
+                            ], 'upravljanje', 5),
                         ]),
 
                     Section::make('Zaposlenici')
                         ->compact()
                         ->schema([
-                            static::moduleCheckboxList(
-                                'quick_actions_zaposlenici',
-                                [
-                                    'employees' => 'Zaposlenici',
-                                    'medical_referrals_ra1' => 'RA-1 uputnice',
-                                    'medical_referrals_nr1' => 'NR-1 uputnice',
-                                    'ppe_logs' => 'Upisnik OZO',
-                                ],
-                                'zaposlenici',
-                                4
-                            ),
+                            static::moduleCheckboxList('quick_actions_zaposlenici', [
+                                'employees' => 'Zaposlenici',
+                                'medical_referrals_ra1' => 'RA-1 uputnice',
+                                'medical_referrals_nr1' => 'NR-1 uputnice',
+                                'ppe_logs' => 'Upisnik OZO',
+                            ], 'zaposlenici', 4),
                         ]),
-                        Section::make('Edukacija')
-    ->compact()
-    ->schema([
-        static::moduleCheckboxList(
-            'quick_actions_edukacija',
-            [
-                'education_categories' => 'Kategorije edukacije',
-                'education_center' => 'Edukacijski centar',
-            ],
-            'edukacija',
-            2
-        ),
-    ]),
+
+                    Section::make('Edukacija')
+                        ->compact()
+                        ->schema([
+                            static::moduleCheckboxList('quick_actions_edukacija', [
+                                'education_categories' => 'Kategorije edukacije',
+                                'education_center' => 'Edukacijski centar',
+                            ], 'edukacija', 2),
+                        ]),
+
                     Section::make('Ispitivanja')
                         ->compact()
                         ->schema([
-                            static::moduleCheckboxList(
-                                'quick_actions_ispitivanja',
-                                [
-                                    'machines' => 'Radna oprema',
-                                    'fires' => 'Vatrogasni aparati',
-                                    'first_aid' => 'Prva pomoć - ormarići',
-                                    'miscellaneous' => 'Ostala ispitivanja',
-                                    'categories' => 'Kategorije ispitivanja',
-                                ],
-                                'ispitivanja',
-                                5
-                            ),
+                            static::moduleCheckboxList('quick_actions_ispitivanja', [
+                                'machines' => 'Radna oprema',
+                                'fires' => 'Vatrogasni aparati',
+                                'first_aid' => 'Prva pomoć - ormarići',
+                                'miscellaneous' => 'Ostala ispitivanja',
+                                'categories' => 'Kategorije ispitivanja',
+                            ], 'ispitivanja', 5),
                         ]),
 
                     Section::make('Zaštita okoliša')
                         ->compact()
                         ->schema([
-                            static::moduleCheckboxList(
-                                'quick_actions_okolis',
-                                [
-                                    'waste_organizations' => 'Organizacije otpada',
-                                    'waste_types' => 'Vrste otpada',
-                                    'onto_records' => 'ONTO obrasci',
-                                    'waste_tracking_forms' => 'Prateći listovi',
-                                    'monthly_reports' => 'Mjesečni izvještaj',
-                                ],
-                                'okolis',
-                                5
-                            ),
+                            static::moduleCheckboxList('quick_actions_okolis', [
+                                'waste_organizations' => 'Organizacije otpada',
+                                'waste_types' => 'Vrste otpada',
+                                'onto_records' => 'ONTO obrasci',
+                                'waste_tracking_forms' => 'Prateći listovi',
+                                'monthly_reports' => 'Mjesečni izvještaj',
+                            ], 'okolis', 5),
                         ]),
 
                     Section::make('Testiranje')
                         ->compact()
                         ->schema([
-                            static::moduleCheckboxList(
-                                'quick_actions_testiranje',
-                                [
-                                    'tests' => 'Testovi',
-                                    'questions' => 'Pitanja',
-                                    'answers' => 'Odgovori',
-                                    'test_attempts' => 'Riješeni testovi',
-                                ],
-                                'testiranje',
-                                4
-                            ),
+                            static::moduleCheckboxList('quick_actions_testiranje', [
+                                'tests' => 'Testovi',
+                                'questions' => 'Pitanja',
+                                'answers' => 'Odgovori',
+                                'test_attempts' => 'Riješeni testovi',
+                            ], 'testiranje', 4),
                         ]),
 
                     Section::make('Radni zadaci')
                         ->compact()
                         ->schema([
-                            static::moduleCheckboxList(
-                                'quick_actions_zadaci',
-                                [
-                                    'work_tasks' => 'Radni zadaci',
-                                ],
-                                'zadaci',
-                                1
-                            ),
+                            static::moduleCheckboxList('quick_actions_zadaci', [
+                                'work_tasks' => 'Radni zadaci',
+                            ], 'zadaci', 1),
                         ]),
                 ])
                 ->columns(1)
@@ -430,6 +436,44 @@ class UserResource extends Resource
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('Aktivan')
                     ->boolean(),
+
+                Tables\Columns\IconColumn::make('legal_accepted')
+                    ->label('GDPR')
+                    ->state(fn (User $record): bool => $record->hasAcceptedCurrentLegalTerms())
+                    ->boolean()
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\TextColumn::make('accepted_terms_at')
+                    ->label('Uvjeti prihvaćeni')
+                    ->dateTime('d.m.Y. H:i')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\TextColumn::make('accepted_privacy_at')
+                    ->label('Privatnost prihvaćena')
+                    ->dateTime('d.m.Y. H:i')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\TextColumn::make('terms_version')
+                    ->label('Verzija uvjeta')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\TextColumn::make('privacy_version')
+                    ->label('Verzija privatnosti')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\IconColumn::make('newsletter_opt_in')
+                    ->label('Newsletter')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
             ])
             ->actions([
                 ViewAction::make()->label('Prikaži'),
@@ -465,6 +509,7 @@ class UserResource extends Resource
     public static function mutateFormDataBeforeCreate(array $data): array
     {
         $data = static::mergeQuickActions($data);
+        $data = static::resetLegalAcceptance($data);
 
         $authUser = Auth::user();
 
@@ -504,6 +549,11 @@ class UserResource extends Resource
             unset($data['organization_name']);
             unset($data['role']);
             unset($data['parent_user_id']);
+            unset($data['accepted_terms_at']);
+            unset($data['accepted_privacy_at']);
+            unset($data['terms_version']);
+            unset($data['privacy_version']);
+            unset($data['newsletter_opt_in']);
         }
 
         return $data;

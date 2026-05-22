@@ -226,7 +226,16 @@ public static function getGlobalSearchEloquentQuery(): Builder
 
 public static function getNavigationBadge(): ?string
 {
-    return (string) static::getEloquentQuery()->count();
+    $userId = auth()->id() ?? 'guest';
+
+    $cacheKey = 'operational_logs_badge_'
+        . $userId
+        . '_'
+        . now()->format('Y-m-d-H');
+
+    return cache()->remember($cacheKey, now()->addMinutes(5), function () {
+        return (string) static::getEloquentQuery()->count();
+    });
 }
 
     public static function getPages(): array

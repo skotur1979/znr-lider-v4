@@ -333,7 +333,7 @@ class EmployeesImport implements ToCollection
             'lijecnicki_pregled_do' => 'lijecnicki_pregled_do',
             'clanak_3_tocke' => 'clanak_3_tocke',
             'napomena' => 'napomena',
-            'znr_od' => 'znr_od',
+            'znr_od', 'znr_polozen_od', 'znr_osposobljen_od', 'znr_osposobljavanje_od' => 'znr_od',
             'zop_od' => 'zop_od',
             'zop_izjava_od' => 'zop_izjava_od',
             'evakuacija_od' => 'evakuacija_od',

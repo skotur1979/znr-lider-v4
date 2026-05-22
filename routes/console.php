@@ -22,8 +22,11 @@ Schedule::command('emails:send-weekly-status')
 |--------------------------------------------------------------------------
 | Activity logs cleanup
 |--------------------------------------------------------------------------
-| Briše aktivnosti starije od 6 mjeseci
+| Briše aktivnosti starije od 30 dana
 */
 
 Schedule::command('activitylogs:cleanup')
     ->dailyAt('02:00');
+
+    Schedule::command('temp:cleanup')
+    ->dailyAt('02:15');

@@ -14,6 +14,7 @@ class KpiValue extends Model
 
     protected $fillable = [
         'kpi_id',
+        'user_id',
         'month',
         'year',
         'value',
@@ -36,4 +37,8 @@ class KpiValue extends Model
     {
         return sprintf('%02d/%s', $this->month, $this->year);
     }
+    public function user(): BelongsTo
+{
+    return $this->belongsTo(User::class);
+}
 }

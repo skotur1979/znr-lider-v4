@@ -75,6 +75,14 @@ class UserStatusSummaryService
             ->get()
             ->flatMap(fn ($employee) => $employee->certificates ?? collect());
 
+        $znrExpired = $this->countZnrExpired($user, $today);
+
+        $znrExpiring30 = $this->countZnrExpiring(
+            $user,
+            $today,
+            $future30
+        );
+
         $closedWorkTasksTotal = $workTasks->clone()
             ->where('is_done', true)
             ->count();
@@ -83,6 +91,7 @@ class UserStatusSummaryService
 
         return [
             'deadlines' => [
+
                 'employees_expired' => $employees->clone()
                     ->whereNotNull('medical_examination_valid_until')
                     ->whereDate('medical_examination_valid_until', '<', $today)
@@ -94,12 +103,22 @@ class UserStatusSummaryService
                     ->count(),
 
                 'employee_certificates_expired' => $employeeCertificates
-                    ->filter(fn ($certificate) => $certificate->valid_until && Carbon::parse($certificate->valid_until)->lt($today))
-                    ->count(),
+                    ->filter(fn ($certificate) =>
+                        $certificate->valid_until &&
+                        Carbon::parse($certificate->valid_until)->lt($today)
+                    )
+                    ->count() + $znrExpired,
 
                 'employee_certificates_expiring_30' => $employeeCertificates
-                    ->filter(fn ($certificate) => $certificate->valid_until && Carbon::parse($certificate->valid_until)->between($today, $future30))
-                    ->count(),
+                    ->filter(fn ($certificate) =>
+                        $certificate->valid_until &&
+                        Carbon::parse($certificate->valid_until)->between($today, $future30)
+                    )
+                    ->count() + $znrExpiring30,
+
+                'znr_training_expired' => $znrExpired,
+
+                'znr_training_expiring_30' => $znrExpiring30,
 
                 'machines_expired' => $machines->clone()
                     ->whereNotNull('examination_valid_until')
@@ -142,11 +161,17 @@ class UserStatusSummaryService
                     ->count(),
 
                 'first_aid_expired' => $firstAidItems
-                    ->filter(fn ($item) => $item->valid_until && Carbon::parse($item->valid_until)->lt($today))
+                    ->filter(fn ($item) =>
+                        $item->valid_until &&
+                        Carbon::parse($item->valid_until)->lt($today)
+                    )
                     ->count(),
 
                 'first_aid_expiring_30' => $firstAidItems
-                    ->filter(fn ($item) => $item->valid_until && Carbon::parse($item->valid_until)->between($today, $future30))
+                    ->filter(fn ($item) =>
+                        $item->valid_until &&
+                        Carbon::parse($item->valid_until)->between($today, $future30)
+                    )
                     ->count(),
 
                 'observations_expired' => $observations->clone()
@@ -222,6 +247,43 @@ class UserStatusSummaryService
         ];
     }
 
+    protected function countZnrExpired(User $user, Carbon $today): int
+    {
+        return $this->employeeQuery($user)
+            ->whereNull('occupational_safety_valid_from')
+            ->whereNotNull('employeed_at')
+            ->whereDate(
+                'employeed_at',
+                '<',
+                $today->copy()->subDays(60)
+            )
+            ->count();
+    }
+
+    protected function countZnrExpiring(
+        User $user,
+        Carbon $today,
+        Carbon $future30
+    ): int {
+        return $this->employeeQuery($user)
+            ->whereNull('occupational_safety_valid_from')
+            ->whereNotNull('employeed_at')
+
+            ->whereDate(
+                'employeed_at',
+                '>=',
+                $today->copy()->subDays(60)
+            )
+
+            ->whereDate(
+                'employeed_at',
+                '<=',
+                $today->copy()->subDays(30)
+            )
+
+            ->count();
+    }
+
     protected function safetyMetrics(User $user): array
     {
         $today = Carbon::today();
@@ -238,9 +300,13 @@ class UserStatusSummaryService
             ->min('date_occurred');
 
         if ($lastLtaDate) {
-            $daysWithoutLta = Carbon::parse($lastLtaDate)->startOfDay()->diffInDays($today);
+            $daysWithoutLta = Carbon::parse($lastLtaDate)
+                ->startOfDay()
+                ->diffInDays($today);
         } elseif ($firstIncidentDate) {
-            $daysWithoutLta = Carbon::parse($firstIncidentDate)->startOfDay()->diffInDays($today);
+            $daysWithoutLta = Carbon::parse($firstIncidentDate)
+                ->startOfDay()
+                ->diffInDays($today);
         } else {
             $daysWithoutLta = 0;
         }
@@ -256,12 +322,15 @@ class UserStatusSummaryService
         $recordLtaDays = $daysWithoutLta;
 
         if ($ltaDates->count() >= 2) {
+
             foreach ($ltaDates as $index => $date) {
+
                 if ($index === 0) {
                     continue;
                 }
 
-                $diff = $ltaDates[$index - 1]->diffInDays($date);
+                $diff = $ltaDates[$index - 1]
+                    ->diffInDays($date);
 
                 if ($diff > $recordLtaDays) {
                     $recordLtaDays = $diff;
@@ -271,6 +340,7 @@ class UserStatusSummaryService
 
         return [
             'days_without_lta' => (int) $daysWithoutLta,
+
             'record_lta_days' => (int) $recordLtaDays,
 
             'lta_count' => $incidents->clone()
@@ -326,7 +396,11 @@ class UserStatusSummaryService
                     ->count(),
 
                 'inspection_findings_closed' => $findings->clone()
-                    ->whereIn('workflow_status', ['closed', 'resolved_no_action', 'converted_to_observation'])
+                    ->whereIn('workflow_status', [
+                        'closed',
+                        'resolved_no_action',
+                        'converted_to_observation',
+                    ])
                     ->whereBetween('updated_at', [$start, $end])
                     ->count(),
 
@@ -341,7 +415,11 @@ class UserStatusSummaryService
                     ->count(),
             ],
 
-            'current_state' => $this->buildSummary($user, now()->startOfDay(), now()->addDays(30)->endOfDay()),
+            'current_state' => $this->buildSummary(
+                $user,
+                now()->startOfDay(),
+                now()->addDays(30)->endOfDay()
+            ),
         ];
     }
 

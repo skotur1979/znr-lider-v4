@@ -73,39 +73,63 @@ class KpiCalculationService
         return (int) $user->id;
     }
 
-    public function generateForMonth(int $month, int $year): void
+    public function generateForMonth(int $month, int $year): array
     {
-        $this->baseKpiQuery()
-            ->where('is_active', true)
-            ->where(function (Builder $q) {
-                $q->whereIn('calculation_type', ['automatic', 'formula'])
-                    ->orWhereIn('source_key', self::automaticSourceKeys());
-            })
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->each(function (Kpi $kpi) use ($month, $year) {
-                $value = $this->calculateSingle($kpi, $month, $year);
+    $generated = 0;
+    $updated = 0;
+    $skipped = 0;
 
-                if ($value === null) {
-                    return;
-                }
+    $this->baseKpiQuery()
+        ->where('is_active', true)
+        ->where(function (Builder $q) {
+            $q->whereIn('calculation_type', ['automatic', 'formula'])
+                ->orWhereIn('source_key', self::automaticSourceKeys());
+        })
+        ->orderBy('sort_order')
+        ->orderBy('name')
+        ->get()
+        ->each(function (Kpi $kpi) use ($month, $year, &$generated, &$updated, &$skipped) {
 
-                KpiValue::updateOrCreate(
-                    [
-                        'kpi_id' => $kpi->id,
-                        'month' => $month,
-                        'year' => $year,
-                    ],
-                    [
-                        'value' => $value,
-                        'auto_generated' => true,
-                        'source_label' => $this->sourceLabel($kpi),
-                        'note' => null,
-                    ]
-                );
-            });
-    }
+            $ownerId = $this->resolveOwnerId();
+            $value = $this->calculateSingle($kpi, $month, $year);
+
+            if ($value === null) {
+                $skipped++;
+                return;
+            }
+
+            $existing = KpiValue::query()
+            ->where('kpi_id', $kpi->id)
+            ->where('user_id', $ownerId)
+            ->where('month', $month)
+            ->where('year', $year)
+            ->first();
+
+            KpiValue::updateOrCreate(
+                [
+                    'kpi_id' => $kpi->id,
+                    'user_id' => $ownerId,
+                    'month' => $month,
+                    'year' => $year,
+            ],
+                [
+                    'value' => $value,
+                    'auto_generated' => true,
+                    'source_label' => $this->sourceLabel($kpi),
+                    'note' => 'Automatski ažurirano: ' . now()->format('d.m.Y. H:i'),
+                ]
+            );
+
+            $existing ? $updated++ : $generated++;
+        });
+
+    return [
+        'generated' => $generated,
+        'updated' => $updated,
+        'skipped' => $skipped,
+        'total' => $generated + $updated,
+    ];
+}
 
     public function calculateSingle(Kpi $kpi, int $month, int $year): ?float
     {

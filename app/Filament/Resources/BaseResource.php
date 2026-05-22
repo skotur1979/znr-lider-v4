@@ -7,26 +7,17 @@ use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 abstract class BaseResource extends Resource
 {
     use HasUserTableColumn;
 
-    /**
-     * Uključi na true ako resource koristi SoftDeletes.
-     */
     protected static bool $usesSoftDeletes = false;
 
-    /**
-     * Uključi na false ako tablica nema user_id i nije owner scoped.
-     */
     protected static bool $hasOwnership = true;
 
-    /**
-     * Ako resource ima module access ključ, ovdje ga vrati.
-     * Primjer: 'incidents', 'employees', 'machines'
-     */
     protected static function getModuleKey(): ?string
     {
         return null;
@@ -58,12 +49,6 @@ abstract class BaseResource extends Resource
         return Schema::hasColumn((new $model)->getTable(), $column);
     }
 
-    /**
-     * Scope za organizacijske podatke.
-     *
-     * Super admin vidi sve.
-     * Glavni korisnik i podkorisnik vide sve zapise svoje organizacije.
-     */
     protected static function scopeToOwner(Builder $query, string $column = 'user_id'): Builder
     {
         if (! static::$hasOwnership) {
@@ -141,21 +126,31 @@ abstract class BaseResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $query = static::getModel()::query();
+        $userId = Auth::id() ?? 'guest';
 
-        if (static::$usesSoftDeletes) {
-            $query->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ]);
-        }
+        $cacheKey = 'navigation_badge_' . str_replace('\\', '_', static::class)
+            . '_' . $userId
+            . '_' . now()->format('Y-m-d-H');
 
-        return (string) static::scopeToOwner($query)->count();
+        return Cache::remember($cacheKey, now()->addMinutes(5), function (): string {
+            $model = static::getModel();
+
+            if (! $model) {
+                return '0';
+            }
+
+            $query = $model::query();
+
+            if (static::$usesSoftDeletes) {
+                $query->withoutGlobalScopes([
+                    SoftDeletingScope::class,
+                ]);
+            }
+
+            return (string) static::scopeToOwner($query)->count();
+        });
     }
 
-    /**
-     * Pomoćna metoda ako ju negdje želiš ručno pozvati.
-     * Glavno automatsko spremanje user_id sada radi preko AppServiceProvider-a.
-     */
     public static function defaultUserId(): ?int
     {
         if (! static::$hasOwnership) {

@@ -25,6 +25,11 @@ class User extends Authenticatable
         'is_active',
         'daily_status_email_enabled',
         'weekly_status_email_enabled',
+        'accepted_terms_at',
+        'accepted_privacy_at',
+        'terms_version',
+        'privacy_version',
+        'newsletter_opt_in',
     ];
 
     protected $hidden = [
@@ -43,8 +48,18 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'daily_status_email_enabled' => 'boolean',
             'weekly_status_email_enabled' => 'boolean',
+            'accepted_terms_at' => 'datetime',
+            'accepted_privacy_at' => 'datetime',
+            'newsletter_opt_in' => 'boolean',
         ];
     }
+    public function hasAcceptedCurrentLegalTerms(): bool
+{
+    return $this->accepted_terms_at
+        && $this->accepted_privacy_at
+        && $this->terms_version === config('legal.terms_version')
+        && $this->privacy_version === config('legal.privacy_version');
+}
 
     public function parentUser(): BelongsTo
     {
@@ -122,6 +137,10 @@ class User extends Authenticatable
     public function operationalLogs()
 {
     return $this->hasMany(\App\Models\OperationalLog::class);
+}
+    public function legalAcceptances(): HasMany
+{
+    return $this->hasMany(\App\Models\LegalAcceptance::class);
 }
 }
 

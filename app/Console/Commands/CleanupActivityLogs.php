@@ -9,14 +9,16 @@ class CleanupActivityLogs extends Command
 {
     protected $signature = 'activitylogs:cleanup';
 
-    protected $description = 'Delete old activity logs';
+    protected $description = 'Delete activity logs older than 30 days';
 
-    public function handle(): void
+    public function handle(): int
     {
-        ActivityLog::query()
+        $deleted = ActivityLog::query()
             ->where('created_at', '<', now()->subDays(30))
             ->delete();
 
-        $this->info('Old activity logs deleted.');
+        $this->info("Old activity logs deleted: {$deleted}");
+
+        return self::SUCCESS;
     }
 }

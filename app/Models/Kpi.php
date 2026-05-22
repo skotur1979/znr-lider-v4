@@ -78,12 +78,26 @@ class Kpi extends Model
     }
 
     public function valueFor(int $month, int $year): ?KpiValue
-    {
-        return $this->values()
-            ->where('month', $month)
-            ->where('year', $year)
-            ->first();
+{
+    $user = Auth::user();
+
+    $ownerId = null;
+
+    if ($user) {
+
+        if (method_exists($user, 'ownerId')) {
+            $ownerId = $user->ownerId() ?: $user->id;
+        } else {
+            $ownerId = $user->id;
+        }
     }
+
+    return $this->values()
+        ->where('month', $month)
+        ->where('year', $year)
+        ->where('user_id', $ownerId)
+        ->first();
+}
 
     public function previousMonthValue(int $month, int $year): ?KpiValue
     {

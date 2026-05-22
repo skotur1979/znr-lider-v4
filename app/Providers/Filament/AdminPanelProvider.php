@@ -21,6 +21,7 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Widgets\TopSystemStatusBarWidget;
 use App\Filament\Widgets\TodayMiniBlockWidget;
+use App\Http\Middleware\EnsureLegalAccepted;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -57,6 +58,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+                EnsureLegalAccepted::class,
             ]);
     }
 }

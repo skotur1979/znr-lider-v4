@@ -58,98 +58,141 @@ class ActivityLogResource extends BaseResource
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()->latest();
+{
+    $query = ActivityLog::query()
+        ->with(['user', 'owner'])
+        ->latest();
 
-        $user = auth()->user();
+    $user = auth()->user();
 
-        if (! $user) {
-            return $query->whereRaw('1 = 0');
-        }
+    if (! $user) {
+        return $query->whereRaw('1 = 0');
+    }
+
+    // Super admin vidi sve aktivnosti
+    if ($user->isSuperAdmin()) {
+        return $query;
+    }
+
+    // Glavni korisnik organizacije vidi sve aktivnosti svoje organizacije
+    if ($user->canCreateSubusers()) {
+        return $query->where('owner_id', $user->ownerId());
+    }
+
+    // Podkorisnik vidi samo svoje aktivnosti
+    return $query->where('user_id', $user->id);
+}
+
+public static function getNavigationBadge(): ?string
+{
+    $user = auth()->user();
+
+    if (! $user) {
+        return null;
+    }
+
+    $cacheKey = 'activity_log_badge_'
+        . $user->id
+        . '_'
+        . now()->format('Y-m-d-H');
+
+    return cache()->remember($cacheKey, now()->addMinutes(5), function () use ($user) {
+
+        $query = ActivityLog::query();
 
         if ($user->isSuperAdmin()) {
-            return $query;
+            return (string) $query->count();
         }
 
         if ($user->canCreateSubusers()) {
-            return $query->where('owner_id', $user->ownerId());
+            return (string) $query
+                ->where('owner_id', $user->ownerId())
+                ->count();
         }
 
-        return $query->where('user_id', $user->id);
+        return (string) $query
+            ->where('user_id', $user->id)
+            ->count();
+    });
+}
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->defaultSort('created_at', 'desc')
-            ->paginated([10, 25, 50, 100, 200])
+            ->paginated([10, 25, 50, 100])
             ->columns([
-    TextColumn::make('created_at')
-        ->label('Vrijeme')
-        ->dateTime('d.m.Y. H:i')
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make('created_at')
+                    ->label('Vrijeme')
+                    ->dateTime('d.m.Y. H:i')
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('user.name')
-        ->label('Korisnik')
-        ->badge()
-        ->color('info')
-        ->searchable()
-        ->placeholder('-')
-        ->toggleable(),
+                TextColumn::make('user.name')
+                    ->label('Korisnik')
+                    ->badge()
+                    ->color('info')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(),
 
-    TextColumn::make('module')
-        ->label('Modul')
-        ->badge()
-        ->color('gray')
-        ->searchable()
-        ->toggleable(),
+                TextColumn::make('module')
+                    ->label('Modul')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable()
+                    ->toggleable(),
 
-    TextColumn::make('action')
-        ->label('Radnja')
-        ->badge()
-        ->formatStateUsing(fn (?string $state) => match ($state) {
-            'created' => 'Kreirano',
-            'updated' => 'Uređeno',
-            'deleted' => 'Obrisano',
-            'import' => 'Import',
-            'export' => 'Export',
-            'status' => 'Status',
-            'login' => 'Prijava',
-            'logout' => 'Odjava',
-            'failed_login' => 'Neuspješna prijava',
-            default => $state ?? '-',
-        })
-        ->color(fn (?string $state) => match ($state) {
-            'created' => 'success',
-            'updated' => 'warning',
-            'deleted' => 'danger',
-            'import' => 'info',
-            'export' => 'gray',
-            'status' => 'primary',
-            'login' => 'success',
-            'logout' => 'gray',
-            'failed_login' => 'danger',
-            default => 'gray',
-        })
-        ->toggleable(),
+                TextColumn::make('action')
+                    ->label('Radnja')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'created' => 'Kreirano',
+                        'updated' => 'Uređeno',
+                        'deleted' => 'Obrisano',
+                        'import' => 'Import',
+                        'export' => 'Export',
+                        'status' => 'Status',
+                        'login' => 'Prijava',
+                        'logout' => 'Odjava',
+                        'failed_login' => 'Neuspješna prijava',
+                        default => $state ?? '-',
+                    })
+                    ->color(fn (?string $state) => match ($state) {
+                        'created' => 'success',
+                        'updated' => 'warning',
+                        'deleted' => 'danger',
+                        'import' => 'info',
+                        'export' => 'gray',
+                        'status' => 'primary',
+                        'login' => 'success',
+                        'logout' => 'gray',
+                        'failed_login' => 'danger',
+                        default => 'gray',
+                    })
+                    ->toggleable(),
 
-    TextColumn::make('title')
-        ->label('Opis aktivnosti')
-        ->searchable()
-        ->wrap()
-        ->weight('semibold')
-        ->toggleable(),
+                TextColumn::make('title')
+                    ->label('Opis aktivnosti')
+                    ->searchable()
+                    ->wrap()
+                    ->weight('semibold')
+                    ->toggleable(),
 
-    TextColumn::make('description')
-        ->label('Detalji')
-        ->wrap()
-        ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('description')
+                    ->label('Detalji')
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-    TextColumn::make('ip_address')
-        ->label('IP')
-        ->toggleable(isToggledHiddenByDefault: true),
-])
+                TextColumn::make('ip_address')
+                    ->label('IP')
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
             ->filters([
                 SelectFilter::make('module')
                     ->label('Modul')
@@ -157,6 +200,7 @@ class ActivityLogResource extends BaseResource
                         ->whereNotNull('module')
                         ->distinct()
                         ->orderBy('module')
+                        ->limit(100)
                         ->pluck('module', 'module')
                         ->toArray()),
 
