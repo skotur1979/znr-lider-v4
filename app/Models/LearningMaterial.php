@@ -18,6 +18,7 @@ class LearningMaterial extends Model
         'title',
         'description',
         'type',
+        'source_type',
         'url',
         'file_path',
         'links',
@@ -39,12 +40,6 @@ class LearningMaterial extends Model
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | RELATIONS
-    |--------------------------------------------------------------------------
-    */
-
     public function category(): BelongsTo
     {
         return $this->belongsTo(LearningCategory::class, 'learning_category_id');
@@ -55,43 +50,33 @@ class LearningMaterial extends Model
         return $this->belongsTo(User::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | ACCESSORS
-    |--------------------------------------------------------------------------
-    */
-
     public function getTypeLabelAttribute(): string
     {
         return match ($this->type) {
+            'manual' => 'Upute za korištenje',
+            'excel_template' => 'Excel predložak',
+            'pdf_form' => 'PDF obrazac',
+            'faq' => 'FAQ / pomoć',
+            'example' => 'Primjer',
+            'video' => 'Video link',
+            'website' => 'Korisni link',
             'document' => 'Dokument',
-            'video' => 'Video',
-            'website' => 'Stručna stranica',
             'instruction' => 'Uputa',
             'other' => 'Ostalo',
             default => 'Materijal',
         };
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | HELPER METODE
-    |--------------------------------------------------------------------------
-    */
-
     public function hasLinks(): bool
     {
         return ! empty($this->url)
-            || collect($this->links ?? [])
-                ->contains(fn ($item) => ! blank($item['url'] ?? null));
+            || collect($this->links ?? [])->contains(fn ($item) => ! blank($item['url'] ?? null));
     }
 
     public function hasFiles(): bool
     {
         return ! empty($this->file_path)
-            || collect($this->files ?? [])
-                ->filter()
-                ->isNotEmpty();
+            || collect($this->files ?? [])->filter()->isNotEmpty();
     }
 
     public function getAllLinks(): array
@@ -107,7 +92,10 @@ class LearningMaterial extends Model
 
         foreach ($this->links ?? [] as $link) {
             if (! blank($link['url'] ?? null)) {
-                $links[] = $link;
+                $links[] = [
+                    'label' => $link['label'] ?? 'Link',
+                    'url' => $link['url'],
+                ];
             }
         }
 

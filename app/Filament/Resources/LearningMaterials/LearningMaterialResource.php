@@ -41,7 +41,6 @@ class LearningMaterialResource extends BaseResource
     protected static bool $hasOwnership = false;
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedAcademicCap;
-
     protected static \UnitEnum|string|null $navigationGroup = 'Edukacija';
 
     protected static ?string $navigationLabel = 'Edukacijski centar';
@@ -58,6 +57,38 @@ class LearningMaterialResource extends BaseResource
     public static function getMaxContentWidth(): MaxWidth|string|null
     {
         return MaxWidth::Full;
+    }
+
+    public static function contentTypeOptions(): array
+    {
+        return [
+            'manual' => '📘 Upute za korištenje aplikacije',
+            'excel_template' => '📊 Excel predložak za uvoz',
+            'pdf_form' => '📄 PDF obrazac',
+            'faq' => '❓ FAQ / pomoć',
+            'example' => '✅ Primjer popunjenog dokumenta',
+            'video' => '🎥 Video link',
+            'website' => '🌐 Korisni link / stručna stranica',
+            'document' => '📁 Dokument',
+            'other' => '📚 Ostalo',
+        ];
+    }
+
+    public static function contentTypeLabel(?string $type): string
+    {
+        return match ($type) {
+            'manual' => 'Upute',
+            'excel_template' => 'Excel predložak',
+            'pdf_form' => 'PDF obrazac',
+            'faq' => 'FAQ / pomoć',
+            'example' => 'Primjer',
+            'video' => 'Video link',
+            'website' => 'Korisni link',
+            'document' => 'Dokument',
+            'instruction' => 'Uputa',
+            'other' => 'Ostalo',
+            default => 'Materijal',
+        };
     }
 
     public static function form(Schema $schema): Schema
@@ -99,17 +130,11 @@ class LearningMaterialResource extends BaseResource
 
                                 CheckboxList::make('content_types')
                                     ->label('Sadržaj uključuje')
-                                    ->options([
-                                        'document' => '📄 Dokument',
-                                        'video' => '🎥 Video',
-                                        'website' => '🌐 Stručni link / web stranica',
-                                        'instruction' => '📘 Uputa',
-                                        'other' => '📚 Ostalo',
-                                    ])
-                                    ->columns(3)
+                                    ->options(static::contentTypeOptions())
+                                    ->columns(2)
                                     ->bulkToggleable()
                                     ->required()
-                                    ->helperText('Možeš označiti više opcija. Npr. ako materijal ima Napo video i PDF dokument, označi Video i Dokument.')
+                                    ->helperText('Možeš označiti više opcija. Video se ne uploada u aplikaciju, već se dodaje samo kao link.')
                                     ->columnSpanFull(),
 
                                 Textarea::make('description')
@@ -142,14 +167,14 @@ class LearningMaterialResource extends BaseResource
                             ->schema([
                                 Placeholder::make('info')
                                     ->label('Napomena')
-                                    ->content('Možeš dodati više linkova i više dokumenata. Video se ne uploada već ide kao link, npr. YouTube, Napo i sl.'),
+                                    ->content('Možeš dodati više linkova i više dokumenata. Video sadržaj se ne uploada u aplikaciju, nego se dodaje samo kao link, npr. Napo, YouTube, EU-OSHA ili stručna stranica.'),
 
                                 Repeater::make('links')
                                     ->label('Linkovi')
                                     ->schema([
                                         TextInput::make('label')
                                             ->label('Naziv linka')
-                                            ->placeholder('npr. Napo film, EU-OSHA, interna stranica...')
+                                            ->placeholder('npr. Napo film, EU-OSHA, HZJZ, korisna stručna stranica...')
                                             ->maxLength(255),
 
                                         TextInput::make('url')
@@ -228,14 +253,7 @@ class LearningMaterialResource extends BaseResource
                             : [$record->type ?: 'document'];
 
                         return collect($types)
-                            ->map(fn ($type) => match ($type) {
-                                'document' => 'Dokument',
-                                'video' => 'Video',
-                                'website' => 'Stručna stranica',
-                                'instruction' => 'Uputa',
-                                'other' => 'Ostalo',
-                                default => 'Materijal',
-                            })
+                            ->map(fn ($type) => static::contentTypeLabel($type))
                             ->implode(', ');
                     })
                     ->color('info'),
@@ -253,9 +271,7 @@ class LearningMaterialResource extends BaseResource
                             $linksCount++;
                         }
 
-                        $filesCount = collect($record->files ?? [])
-                            ->filter()
-                            ->count();
+                        $filesCount = collect($record->files ?? [])->filter()->count();
 
                         if (! blank($record->file_path)) {
                             $filesCount++;
@@ -264,39 +280,11 @@ class LearningMaterialResource extends BaseResource
                         $html = '';
 
                         if ($linksCount > 0) {
-                            $html .= '<span style="
-                                display:inline-flex;
-                                align-items:center;
-                                justify-content:center;
-                                min-width:28px;
-                                height:24px;
-                                padding:0 8px;
-                                margin:1px 2px;
-                                border-radius:7px;
-                                background:rgba(245,158,11,.18);
-                                border:1px solid rgba(245,158,11,.38);
-                                color:#fbbf24;
-                                font-size:12px;
-                                font-weight:700;
-                            ">🔗 ' . $linksCount . '</span>';
+                            $html .= '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 8px;margin:1px 2px;border-radius:7px;background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.38);color:#fbbf24;font-size:12px;font-weight:700;">🔗 ' . $linksCount . '</span>';
                         }
 
                         if ($filesCount > 0) {
-                            $html .= '<span style="
-                                display:inline-flex;
-                                align-items:center;
-                                justify-content:center;
-                                min-width:28px;
-                                height:24px;
-                                padding:0 8px;
-                                margin:1px 2px;
-                                border-radius:7px;
-                                background:rgba(16,185,129,.18);
-                                border:1px solid rgba(16,185,129,.38);
-                                color:#6ee7b7;
-                                font-size:12px;
-                                font-weight:700;
-                            ">📄 ' . $filesCount . '</span>';
+                            $html .= '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 8px;margin:1px 2px;border-radius:7px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.38);color:#6ee7b7;font-size:12px;font-weight:700;">📄 ' . $filesCount . '</span>';
                         }
 
                         return $html ?: '<span style="color:#6b7280;">0</span>';
@@ -326,10 +314,14 @@ class LearningMaterialResource extends BaseResource
                 SelectFilter::make('content_type')
                     ->label('Vrsta')
                     ->options([
+                        'manual' => 'Upute',
+                        'excel_template' => 'Excel predložak',
+                        'pdf_form' => 'PDF obrazac',
+                        'faq' => 'FAQ / pomoć',
+                        'example' => 'Primjer',
+                        'video' => 'Video link',
+                        'website' => 'Korisni link',
                         'document' => 'Dokument',
-                        'video' => 'Video',
-                        'website' => 'Stručna stranica',
-                        'instruction' => 'Uputa',
                         'other' => 'Ostalo',
                     ])
                     ->query(function (Builder $query, array $data) {
@@ -363,11 +355,8 @@ class LearningMaterialResource extends BaseResource
                         ->openUrlInNewTab()
                         ->visible(fn (LearningMaterial $record) => filled(static::firstFileUrl($record))),
 
-                    ViewAction::make()
-                        ->label('Prikaži'),
-
-                    EditAction::make()
-                        ->label('Uredi'),
+                    ViewAction::make()->label('Prikaži'),
+                    EditAction::make()->label('Uredi'),
 
                     DeleteAction::make()
                         ->label('Obriši')
@@ -385,8 +374,7 @@ class LearningMaterialResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = static::getModel()::query()
-            ->with(['category', 'user']);
+        $query = static::getModel()::query()->with(['category', 'user']);
 
         if (static::isSuperAdmin()) {
             return $query;
@@ -426,8 +414,7 @@ class LearningMaterialResource extends BaseResource
             return $record->url;
         }
 
-        $first = collect($record->links ?? [])
-            ->first(fn ($item) => ! blank($item['url'] ?? null));
+        $first = collect($record->links ?? [])->first(fn ($item) => ! blank($item['url'] ?? null));
 
         return $first['url'] ?? null;
     }
@@ -438,9 +425,7 @@ class LearningMaterialResource extends BaseResource
             return Storage::disk('public')->url($record->file_path);
         }
 
-        $first = collect($record->files ?? [])
-            ->filter()
-            ->first();
+        $first = collect($record->files ?? [])->filter()->first();
 
         return $first ? Storage::disk('public')->url($first) : null;
     }
@@ -452,6 +437,9 @@ class LearningMaterialResource extends BaseResource
 
     public static function mutateFormDataBeforeCreate(array $data): array
     {
+        $data['type'] = $data['content_types'][0] ?? 'document';
+        $data['source_type'] = 'mixed';
+
         if (! static::isSuperAdmin()) {
             $data['user_id'] = static::ownerId();
             $data['is_global'] = false;
@@ -462,6 +450,9 @@ class LearningMaterialResource extends BaseResource
 
     public static function mutateFormDataBeforeSave(array $data): array
     {
+        $data['type'] = $data['content_types'][0] ?? ($data['type'] ?? 'document');
+        $data['source_type'] = 'mixed';
+
         if (! static::isSuperAdmin()) {
             $data['user_id'] = static::ownerId();
             $data['is_global'] = false;
@@ -469,7 +460,31 @@ class LearningMaterialResource extends BaseResource
 
         return $data;
     }
+public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+{
+    if (static::isSuperAdmin()) {
+        return true;
+    }
 
+    if ((bool) $record->is_global) {
+        return false;
+    }
+
+    return (int) $record->user_id === (int) static::ownerId();
+}
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+{
+    if (static::isSuperAdmin()) {
+        return true;
+    }
+
+    if ((bool) $record->is_global) {
+        return false;
+    }
+
+    return (int) $record->user_id === (int) static::ownerId();
+}
     public static function getPages(): array
     {
         return [

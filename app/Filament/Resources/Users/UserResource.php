@@ -4,8 +4,7 @@ namespace App\Filament\Resources\Users;
 
 use App\Filament\Resources\Users\Pages;
 use App\Models\User;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\CheckboxList;
@@ -14,14 +13,19 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class UserResource extends Resource
 {
@@ -294,6 +298,25 @@ class UserResource extends Resource
                         ->content(fn (?User $record): string => $record?->accepted_privacy_at
                             ? $record->accepted_privacy_at->format('d.m.Y. H:i') . ' / verzija ' . ($record->privacy_version ?? '-')
                             : '-'),
+
+                    Placeholder::make('account_status_info')
+                        ->label('Status računa')
+                        ->content(fn (?User $record): string => match ($record?->account_status) {
+                            'active' => 'Aktivan',
+                            'deactivated' => 'Deaktiviran',
+                            'anonymized' => 'Anonimiziran',
+                            'archived' => 'Arhiviran',
+                            default => '-',
+                        }),
+
+                    Placeholder::make('gdpr_request_status_info')
+                        ->label('GDPR zahtjev')
+                        ->content(fn (?User $record): string => match ($record?->gdpr_request_status) {
+                            'requested' => 'Zaprimljen',
+                            'processing' => 'U obradi',
+                            'completed' => 'Riješen',
+                            default => '-',
+                        }),
                 ])
                 ->columnSpanFull(),
 
@@ -437,6 +460,42 @@ class UserResource extends Resource
                     ->label('Aktivan')
                     ->boolean(),
 
+                Tables\Columns\TextColumn::make('account_status')
+                    ->label('Status')
+                    ->badge()
+                    ->sortable()
+                    ->color(fn (?string $state): string => match ($state) {
+                        'active' => 'success',
+                        'deactivated' => 'warning',
+                        'anonymized' => 'danger',
+                        'archived' => 'gray',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'active' => 'Aktivan',
+                        'deactivated' => 'Deaktiviran',
+                        'anonymized' => 'Anonimiziran',
+                        'archived' => 'Arhiviran',
+                        default => '-',
+                    }),
+
+                Tables\Columns\TextColumn::make('gdpr_request_status')
+                    ->label('GDPR zahtjev')
+                    ->badge()
+                    ->toggleable()
+                    ->color(fn (?string $state): string => match ($state) {
+                        'requested' => 'danger',
+                        'processing' => 'warning',
+                        'completed' => 'success',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'requested' => 'Zaprimljen',
+                        'processing' => 'U obradi',
+                        'completed' => 'Riješen',
+                        default => '-',
+                    }),
+
                 Tables\Columns\IconColumn::make('legal_accepted')
                     ->label('GDPR')
                     ->state(fn (User $record): bool => $record->hasAcceptedCurrentLegalTerms())
@@ -474,23 +533,230 @@ class UserResource extends Resource
                     ->boolean()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\IconColumn::make('legal_consent_withdrawn_status')
+                    ->label('Privola povučena')
+                    ->state(fn (User $record): bool => (bool) $record->legal_consent_withdrawn_at)
+                    ->boolean()
+                    ->trueIcon('heroicon-o-x-circle')
+                    ->falseIcon('heroicon-o-check-circle')
+                    ->trueColor('danger')
+                    ->falseColor('success')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\TextColumn::make('legal_consent_withdrawn_at')
+                    ->label('Privola povučena datum')
+                    ->dateTime('d.m.Y. H:i')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\TextColumn::make('legal_consent_withdrawn_reason')
+                    ->label('Razlog povlačenja')
+                    ->limit(40)
+                    ->tooltip(fn (User $record) => $record->legal_consent_withdrawn_reason)
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\IconColumn::make('account_deletion_requested_status')
+                    ->label('Brisanje računa')
+                    ->state(fn (User $record): bool => (bool) $record->account_deletion_requested_at)
+                    ->boolean()
+                    ->trueIcon('heroicon-o-exclamation-triangle')
+                    ->falseIcon('heroicon-o-check-circle')
+                    ->trueColor('danger')
+                    ->falseColor('success')
+                    ->toggleable()
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\TextColumn::make('account_deletion_requested_at')
+                    ->label('Zahtjev za brisanje')
+                    ->dateTime('d.m.Y. H:i')
+                    ->placeholder('-')
+                    ->toggleable()
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+
+                Tables\Columns\TextColumn::make('account_deletion_reason')
+                    ->label('Razlog brisanja')
+                    ->limit(40)
+                    ->tooltip(fn (User $record) => $record->account_deletion_reason)
+                    ->placeholder('-')
+                    ->toggleable()
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
+            ])
+            ->filters([
+                TernaryFilter::make('deleted_at')
+                    ->label('Arhivirani korisnici')
+                    ->placeholder('Svi korisnici')
+                    ->trueLabel('Samo arhivirani')
+                    ->falseLabel('Bez arhiviranih')
+                    ->queries(
+                        true: fn (Builder $query) => $query->onlyTrashed(),
+                        false: fn (Builder $query) => $query->withoutTrashed(),
+                        blank: fn (Builder $query) => $query->withTrashed(),
+                    ),
             ])
             ->actions([
-                ViewAction::make()->label('Prikaži'),
-                EditAction::make()->label('Uredi'),
-                DeleteAction::make()
-                    ->label('Obriši')
-                    ->visible(fn (User $record) => ! $record->isSuperAdmin()),
+                ViewAction::make()
+                    ->label('Prikaži'),
+
+                EditAction::make()
+                    ->label('Uredi'),
+
+                Action::make('deactivate_user')
+                    ->label('Deaktiviraj')
+                    ->icon('heroicon-o-user-minus')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Deaktivirati korisnika?')
+                    ->modalDescription('Korisnik se neće moći prijaviti, ali njegovi zapisi i audit tragovi ostaju sačuvani.')
+                    ->visible(fn (User $record): bool =>
+                        ! $record->isSuperAdmin()
+                        && (bool) $record->is_active
+                        && ! $record->trashed()
+                        && (
+                            Auth::user()?->isSuperAdmin()
+                            || (
+                                Auth::user()?->canCreateSubusers()
+                                && (int) $record->parent_user_id === (int) Auth::user()?->ownerId()
+                            )
+                        )
+                    )
+                    ->action(function (User $record): void {
+                        $record->forceFill([
+                            'is_active' => false,
+                            'account_status' => 'deactivated',
+                        ])->save();
+
+                        Notification::make()
+                            ->title('Korisnik je deaktiviran.')
+                            ->success()
+                            ->send();
+                    }),
+
+                Action::make('activate_user')
+                    ->label('Aktiviraj')
+                    ->icon('heroicon-o-user-plus')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (User $record): bool =>
+                        Auth::user()?->isSuperAdmin()
+                        && ! $record->isSuperAdmin()
+                        && ! (bool) $record->is_active
+                        && ! $record->trashed()
+                    )
+                    ->action(function (User $record): void {
+                        $record->forceFill([
+                            'is_active' => true,
+                            'account_status' => 'active',
+                        ])->save();
+
+                        Notification::make()
+                            ->title('Korisnik je ponovno aktiviran.')
+                            ->success()
+                            ->send();
+                    }),
+
+                Action::make('mark_gdpr_processing')
+                    ->label('GDPR u obradi')
+                    ->icon('heroicon-o-clock')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->visible(fn (User $record): bool =>
+                        Auth::user()?->isSuperAdmin()
+                        && ! $record->isSuperAdmin()
+                        && ! $record->trashed()
+                        && $record->gdpr_request_status === 'requested'
+                    )
+                    ->action(function (User $record): void {
+                        $record->forceFill([
+                            'gdpr_request_status' => 'processing',
+                        ])->save();
+
+                        Notification::make()
+                            ->title('GDPR zahtjev je označen kao u obradi.')
+                            ->success()
+                            ->send();
+                    }),
+
+                Action::make('anonymize_user')
+                    ->label('Anonimiziraj')
+                    ->icon('heroicon-o-shield-exclamation')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading('Anonimizirati korisnika?')
+                    ->modalDescription('Osobni podaci korisnika bit će zamijenjeni anonimnim vrijednostima. Audit zapisi i zakonske evidencije ostaju sačuvani.')
+                    ->visible(fn (User $record): bool =>
+                        Auth::user()?->isSuperAdmin()
+                        && ! $record->isSuperAdmin()
+                        && (int) $record->id !== (int) Auth::id()
+                        && ! $record->trashed()
+                        && $record->account_status !== 'anonymized'
+                    )
+                    ->action(function (User $record): void {
+                        $record->forceFill([
+                            'name' => 'Anonimizirani korisnik #' . $record->id,
+                            'email' => 'deleted-user-' . $record->id . '@example.invalid',
+                            'organization_name' => null,
+                            'password' => Hash::make(Str::random(64)),
+                            'is_active' => false,
+                            'account_status' => 'anonymized',
+                            'gdpr_request_status' => 'completed',
+                            'gdpr_request_processed_at' => now(),
+                            'daily_status_email_enabled' => false,
+                            'weekly_status_email_enabled' => false,
+                            'newsletter_opt_in' => false,
+                            'legal_consent_withdrawn_at' => $record->legal_consent_withdrawn_at ?? now(),
+                            'legal_consent_withdrawn_reason' => $record->legal_consent_withdrawn_reason ?: 'Korisnik anonimiziran nakon GDPR zahtjeva.',
+                        ])->save();
+
+                        Notification::make()
+                            ->title('Korisnik je anonimiziran.')
+                            ->success()
+                            ->send();
+                    }),
+
+                Action::make('archive_user')
+                    ->label('Arhiviraj')
+                    ->icon('heroicon-o-archive-box')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading('Arhivirati korisnika?')
+                    ->modalDescription('Korisnik će biti soft-delete arhiviran. Podaci se neće fizički brisati iz baze.')
+                    ->visible(fn (User $record): bool =>
+                        Auth::user()?->isSuperAdmin()
+                        && ! $record->isSuperAdmin()
+                        && (int) $record->id !== (int) Auth::id()
+                        && ! $record->trashed()
+                    )
+                    ->action(function (User $record): void {
+                        $record->forceFill([
+                            'account_status' => 'archived',
+                            'is_active' => false,
+                        ])->save();
+
+                        $record->delete();
+
+                        Notification::make()
+                            ->title('Korisnik je arhiviran.')
+                            ->success()
+                            ->send();
+                    }),
             ])
-            ->bulkActions([
-                DeleteBulkAction::make()->label('Obriši označeno'),
-            ]);
+            ->bulkActions([]);
     }
 
     public static function getEloquentQuery(): Builder
     {
         $authUser = Auth::user();
-        $query = parent::getEloquentQuery();
+
+        $query = parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ])
+            ->withTrashed();
 
         if ($authUser?->isSuperAdmin()) {
             return $query;
@@ -517,6 +783,8 @@ class UserResource extends Resource
             $data['is_admin'] = false;
             $data['role'] = $data['role'] ?? 'org_admin';
             $data['is_active'] = $data['is_active'] ?? true;
+            $data['account_status'] = 'active';
+            $data['gdpr_request_status'] = null;
 
             if (($data['role'] ?? null) === 'org_admin') {
                 $data['parent_user_id'] = null;
@@ -531,6 +799,8 @@ class UserResource extends Resource
         $data['is_admin'] = false;
         $data['can_manage_subusers'] = false;
         $data['is_active'] = true;
+        $data['account_status'] = 'active';
+        $data['gdpr_request_status'] = null;
         $data['quick_actions'] = null;
 
         return $data;
@@ -546,6 +816,9 @@ class UserResource extends Resource
             unset($data['quick_actions']);
             unset($data['can_manage_subusers']);
             unset($data['is_active']);
+            unset($data['account_status']);
+            unset($data['gdpr_request_status']);
+            unset($data['gdpr_request_processed_at']);
             unset($data['organization_name']);
             unset($data['role']);
             unset($data['parent_user_id']);

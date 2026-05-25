@@ -30,3 +30,9 @@ Schedule::command('activitylogs:cleanup')
 
     Schedule::command('temp:cleanup')
     ->dailyAt('02:15');
+
+    Schedule::command('backup:run --only-db')
+    ->dailyAt('02:00');
+
+    Schedule::command('backup:clean')
+    ->dailyAt('03:00');

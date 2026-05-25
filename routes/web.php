@@ -8,6 +8,9 @@ use App\Http\Controllers\TestAttemptController;
 use App\Http\Controllers\ZnrGeneralReportController;
 use App\Http\Controllers\LegalAcceptanceController;
 use App\Http\Controllers\LegalDocumentPdfController;
+use App\Http\Controllers\UserPrivacyController;
+use App\Http\Controllers\AccountDeletionController;
+use App\Http\Controllers\EmailTwoFactorController;
 
 Route::middleware(['auth'])->group(function () {
 
@@ -34,6 +37,21 @@ Route::middleware(['auth'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | EMAIL 2FA za Super Admina
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/email-2fa/verify', [EmailTwoFactorController::class, 'verify'])
+        ->name('email-2fa.verify');
+
+    Route::post('/email-2fa/confirm', [EmailTwoFactorController::class, 'confirm'])
+        ->name('email-2fa.confirm');
+
+    Route::post('/email-2fa/resend', [EmailTwoFactorController::class, 'resend'])
+        ->name('email-2fa.resend');
+
+    /*
+    |--------------------------------------------------------------------------
     | GDPR / Pravni dokumenti
     |--------------------------------------------------------------------------
     */
@@ -47,12 +65,6 @@ Route::middleware(['auth'])->group(function () {
     Route::view('/politika-kolacica', 'legal.cookies')
         ->name('legal.cookies');
 
-    /*
-    |--------------------------------------------------------------------------
-    | PDF verzije pravnih dokumenata
-    |--------------------------------------------------------------------------
-    */
-
     Route::get('/pravila-privatnosti/pdf', [LegalDocumentPdfController::class, 'privacy'])
         ->name('legal.privacy.pdf');
 
@@ -61,7 +73,7 @@ Route::middleware(['auth'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Prihvaćanje uvjeta
+    | Prihvaćanje / ponovno prihvaćanje uvjeta
     |--------------------------------------------------------------------------
     */
 
@@ -70,6 +82,21 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('/prihvacanje-uvjeta', [LegalAcceptanceController::class, 'store'])
         ->name('legal.accept.store');
+
+    /*
+    |--------------------------------------------------------------------------
+    | GDPR korisničke radnje
+    |--------------------------------------------------------------------------
+    */
+
+    Route::post('/gdpr/povlacenje-privole', [LegalAcceptanceController::class, 'withdraw'])
+        ->name('legal.withdraw');
+
+    Route::get('/moji-podaci/export', [UserPrivacyController::class, 'export'])
+        ->name('user.privacy.export');
+
+    Route::post('/moj-racun/zahtjev-brisanje', [AccountDeletionController::class, 'requestDeletion'])
+        ->name('account.deletion.request');
 
     /*
     |--------------------------------------------------------------------------
@@ -119,5 +146,4 @@ Route::middleware(['auth'])->group(function () {
         ]);
 
     })->name('file.preview');
-
 });

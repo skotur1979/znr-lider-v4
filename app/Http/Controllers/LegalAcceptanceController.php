@@ -43,6 +43,8 @@ class LegalAcceptanceController extends Controller
             'terms_version' => $termsVersion,
             'privacy_version' => $privacyVersion,
             'newsletter_opt_in' => $newsletter,
+            'legal_consent_withdrawn_at' => null,
+            'legal_consent_withdrawn_reason' => null,
         ])->save();
 
         LegalAcceptance::create([
@@ -67,5 +69,36 @@ class LegalAcceptanceController extends Controller
         );
 
         return redirect()->intended('/admin');
+    }
+
+    public function withdraw(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $user = $request->user();
+
+        $user->forceFill([
+            'accepted_terms_at' => null,
+            'accepted_privacy_at' => null,
+            'terms_version' => null,
+            'privacy_version' => null,
+            'newsletter_opt_in' => false,
+            'legal_consent_withdrawn_at' => now(),
+            'legal_consent_withdrawn_reason' => $data['reason'] ?? null,
+        ])->save();
+
+        ActivityLogger::log(
+            module: 'GDPR',
+            action: 'legal_consent_withdrawn',
+            title: 'Povučena privola / prihvaćanje pravnih uvjeta',
+            description: 'Korisnik je povukao prihvaćanje pravnih uvjeta. Za nastavak korištenja sustava bit će potrebno ponovno prihvaćanje važeće verzije dokumenata.',
+            record: $user,
+        );
+
+        return redirect()
+            ->route('legal.accept')
+            ->with('status', 'Privola je povučena. Za nastavak korištenja sustava potrebno je ponovno prihvatiti važeće dokumente.');
     }
 }

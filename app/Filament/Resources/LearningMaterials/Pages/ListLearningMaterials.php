@@ -21,15 +21,15 @@ class ListLearningMaterials extends Page
 
     protected string $view = 'filament.resources.learning-materials.pages.list-learning-materials';
 
-    public ?string $search = null;
-    public ?string $category = null;
-    public ?string $type = null;
+    public string $search = '';
+    public string $category = '';
+    public string $type = '';
 
     protected $queryString = [
-        'search' => ['except' => ''],
-        'category' => ['except' => ''],
-        'type' => ['except' => ''],
-    ];
+    'search' => ['except' => ''],
+    'category' => ['except' => ''],
+    'type' => ['except' => ''],
+];
 
     protected function getHeaderActions(): array
     {
@@ -168,23 +168,21 @@ class ListLearningMaterials extends Page
 
     public function typeLabel(?string $type): string
     {
-        return match ($type) {
-            'document' => 'Dokument',
-            'video' => 'Video',
-            'website' => 'Stručna stranica',
-            'instruction' => 'Uputa',
-            'other' => 'Ostalo',
-            default => 'Materijal',
-        };
+        return LearningMaterialResource::contentTypeLabel($type);
     }
 
     public function iconFor(?string $type): string
     {
         return match ($type) {
+            'manual' => '📘',
+            'excel_template' => '📊',
+            'pdf_form' => '📄',
+            'faq' => '❓',
+            'example' => '✅',
             'video' => '🎥',
             'website' => '🌐',
+            'document' => '📁',
             'instruction' => '📘',
-            'document' => '📄',
             default => '📚',
         };
     }

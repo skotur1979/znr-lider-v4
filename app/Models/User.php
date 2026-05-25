@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -25,16 +26,32 @@ class User extends Authenticatable
         'is_active',
         'daily_status_email_enabled',
         'weekly_status_email_enabled',
+
         'accepted_terms_at',
         'accepted_privacy_at',
         'terms_version',
         'privacy_version',
         'newsletter_opt_in',
+
+        'legal_consent_withdrawn_at',
+        'legal_consent_withdrawn_reason',
+        'account_deletion_requested_at',
+        'account_deletion_reason',
+        'account_status',
+        'gdpr_request_status',
+        'gdpr_request_processed_at',
+
+        'last_activity_at',
+
+        'email_2fa_code_hash',
+        'email_2fa_expires_at',
+        'email_2fa_verified_at',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+        'email_2fa_code_hash',
     ];
 
     protected function casts(): array
@@ -51,15 +68,29 @@ class User extends Authenticatable
             'accepted_terms_at' => 'datetime',
             'accepted_privacy_at' => 'datetime',
             'newsletter_opt_in' => 'boolean',
+            'legal_consent_withdrawn_at' => 'datetime',
+            'account_deletion_requested_at' => 'datetime',
+            'deleted_at' => 'datetime',
+            'gdpr_request_processed_at' => 'datetime',
+            'last_activity_at' => 'datetime',
+            'email_2fa_expires_at' => 'datetime',
+            'email_2fa_verified_at' => 'datetime',
         ];
     }
+
     public function hasAcceptedCurrentLegalTerms(): bool
-{
-    return $this->accepted_terms_at
-        && $this->accepted_privacy_at
-        && $this->terms_version === config('legal.terms_version')
-        && $this->privacy_version === config('legal.privacy_version');
-}
+    {
+        return $this->accepted_terms_at
+            && $this->accepted_privacy_at
+            && $this->terms_version === config('legal.terms_version')
+            && $this->privacy_version === config('legal.privacy_version')
+            && ! $this->legal_consent_withdrawn_at;
+    }
+
+    public function hasRequestedAccountDeletion(): bool
+    {
+        return (bool) $this->account_deletion_requested_at;
+    }
 
     public function parentUser(): BelongsTo
     {
@@ -134,15 +165,14 @@ class User extends Authenticatable
 
         return $this->isOrgAdmin() && $this->can_manage_subusers;
     }
-    public function operationalLogs()
-{
-    return $this->hasMany(\App\Models\OperationalLog::class);
-}
+
+    public function operationalLogs(): HasMany
+    {
+        return $this->hasMany(\App\Models\OperationalLog::class);
+    }
+
     public function legalAcceptances(): HasMany
-{
-    return $this->hasMany(\App\Models\LegalAcceptance::class);
+    {
+        return $this->hasMany(\App\Models\LegalAcceptance::class);
+    }
 }
-}
-
-
-
