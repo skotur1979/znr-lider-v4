@@ -2,7 +2,11 @@
 
 namespace App\Filament\Resources\InspectionZones\RelationManagers;
 
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Support\Enums\Alignment;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -58,12 +62,12 @@ class QuestionsRelationManager extends RelationManager
                     ->wrap()
                     ->grow(true)
                     ->extraAttributes([
-                        'style' => 'white-space: normal; line-height: 1.5; font-size: 15px; min-width: 560px; font-weight: 600;',
+                        'style' => 'white-space: normal; line-height: 1.5; font-size: 15px; min-width: 620px; font-weight: 600;',
                     ]),
 
                 Tables\Columns\TextColumn::make('answer.score')
                     ->label('Ocjena')
-                    ->alignment(\Filament\Support\Enums\Alignment::Center)
+                    ->alignment(Alignment::Center)
                     ->html()
                     ->state(function ($record) {
                         $score = $record->answer?->score;
@@ -83,19 +87,18 @@ class QuestionsRelationManager extends RelationManager
                             display:inline-flex;
                             align-items:center;
                             justify-content:center;
-                            min-width:48px;
-                            height:40px;
-                            padding:0 12px;
-                            border-radius:10px;
-                            font-weight:800;
+                            min-width:52px;
+                            height:42px;
+                            padding:0 14px;
+                            border-radius:12px;
+                            font-weight:900;
                             font-size:20px;
                             line-height:1;
-                            box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
                             ' . $classes . '
                         ">' . e(filled($score) ? (string) $score : '-') . '</div>';
                     })
                     ->grow(false)
-                    ->width('140px'),
+                    ->width('110px'),
             ])
             ->groups([
                 Tables\Grouping\Group::make('section')
@@ -111,6 +114,31 @@ class QuestionsRelationManager extends RelationManager
             ])
             ->defaultGroup('section')
             ->striped()
+            ->actions([
+                EditAction::make()
+                    ->label('Uredi pitanje')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('warning')
+                    ->form([
+                        Select::make('section')
+                            ->label('Sekcija')
+                            ->options([
+                                'Sortiranje' => '1 - SORTIRANJE',
+                                'Slaganje' => '2 - SLAGANJE',
+                                'Sjaj' => '3 - SJAJ',
+                                'Standardiziranje' => '4 - STANDARDIZIRANJE',
+                                'Samoodržavanje' => '5 - SAMOODRŽAVANJE',
+                            ])
+                            ->required(),
+
+                        Textarea::make('question')
+                            ->label('Pitanje')
+                            ->required()
+                            ->rows(5)
+                            ->columnSpanFull(),
+                    ]),
+            ])
+            ->headerActions([])
             ->paginated(false);
     }
 }

@@ -37,45 +37,46 @@ class ListExpenses extends ListRecords
     }
 
     public function getHeader(): ?View
-    {
-        $selectedYear = data_get($this->getTableFilterState('godina'), 'value')
-            ?: (string) Carbon::now('Europe/Zagreb')->year;
+{
+    $selectedYear = data_get($this->getTableFilterState('godina'), 'value')
+        ?: (string) Carbon::now('Europe/Zagreb')->year;
 
-        $isAdmin = auth()->user()?->isAdmin();
-        $userId  = auth()->id();
+    $user = auth()->user();
+    $isSuperAdmin = $user?->isSuperAdmin();
+    $ownerId = $user?->ownerId();
 
-        $base = Expense::query()
-            ->where('realizirano', true)
-            ->when(! $isAdmin, fn (Builder $q) => $q->where('user_id', $userId))
-            ->whereHas('budget', fn (Builder $b) => $b->where('godina', $selectedYear));
+    $base = Expense::query()
+        ->where('realizirano', true)
+        ->when(! $isSuperAdmin, fn (Builder $q) => $q->where('user_id', $ownerId))
+        ->whereHas('budget', fn (Builder $b) => $b->where('godina', $selectedYear));
 
-        $ukupnoTroskova = (float) (clone $base)->sum('iznos');
+    $ukupnoTroskova = (float) (clone $base)->sum('iznos');
 
-        $ukupniBudget = (float) Budget::query()
-            ->when(! $isAdmin, fn (Builder $q) => $q->where('user_id', $userId))
-            ->where('godina', $selectedYear)
-            ->sum('ukupni_budget');
+    $ukupniBudget = (float) Budget::query()
+        ->when(! $isSuperAdmin, fn (Builder $q) => $q->where('user_id', $ownerId))
+        ->where('godina', $selectedYear)
+        ->sum('ukupni_budget');
 
-        $razlika = $ukupniBudget - $ukupnoTroskova;
+    $razlika = $ukupniBudget - $ukupnoTroskova;
 
-        $grupiraniTroskovi = (clone $base)
-            ->whereNotNull('mjesec')
-            ->selectRaw('mjesec, SUM(iznos) as ukupno')
-            ->groupBy('mjesec')
-            ->orderByRaw("FIELD(mjesec,
-                'Siječanj','Veljača','Ožujak','Travanj','Svibanj','Lipanj',
-                'Srpanj','Kolovoz','Rujan','Listopad','Studeni','Prosinac'
-            )")
-            ->get();
+    $grupiraniTroskovi = (clone $base)
+        ->whereNotNull('mjesec')
+        ->selectRaw('mjesec, SUM(iznos) as ukupno')
+        ->groupBy('mjesec')
+        ->orderByRaw("FIELD(mjesec,
+            'Siječanj','Veljača','Ožujak','Travanj','Svibanj','Lipanj',
+            'Srpanj','Kolovoz','Rujan','Listopad','Studeni','Prosinac'
+        )")
+        ->get();
 
-        return view('filament.resources.expenses.partials.zbroj', [
-            'godina'            => $selectedYear,
-            'ukupnoTroskova'    => $ukupnoTroskova,
-            'ukupniBudget'      => $ukupniBudget,
-            'razlika'           => $razlika,
-            'grupiraniTroskovi' => $grupiraniTroskovi,
-        ]);
-    }
+    return view('filament.resources.expenses.partials.zbroj', [
+        'godina'            => $selectedYear,
+        'ukupnoTroskova'    => $ukupnoTroskova,
+        'ukupniBudget'      => $ukupniBudget,
+        'razlika'           => $razlika,
+        'grupiraniTroskovi' => $grupiraniTroskovi,
+    ]);
+}
 
     protected function getHeaderActions(): array
     {

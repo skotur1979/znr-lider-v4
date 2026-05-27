@@ -41,13 +41,20 @@ class GlobalSearchService
     }
 
     protected function scopeUser(Builder $query): Builder
-    {
-        if (! Auth::user()?->isAdmin()) {
-            $query->where('user_id', Auth::id());
+{
+    if (! Auth::user()?->isAdmin()) {
+
+        $ownerId = Auth::user()?->ownerId();
+
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
         }
 
-        return $query;
+        $query->where('user_id', $ownerId);
     }
+
+    return $query;
+}
 
     protected function resourceRecordUrl(string $resourceClass, $record): string
     {

@@ -211,31 +211,7 @@ class ExpenseResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
 {
-    $query = parent::getEloquentQuery();
-
-    $user = Auth::user();
-
-    if ($user?->isSuperAdmin()) {
-        return $query;
-    }
-
-    if ($user?->can_manage_subusers) {
-        $organizationUserIds = \App\Models\User::query()
-            ->where('id', $user->id)
-            ->orWhere('parent_user_id', $user->id)
-            ->pluck('id');
-
-        return $query->whereIn('user_id', $organizationUserIds);
-    }
-
-    $ownerId = $user?->parent_user_id ?: $user?->id;
-
-    $organizationUserIds = \App\Models\User::query()
-        ->where('id', $ownerId)
-        ->orWhere('parent_user_id', $ownerId)
-        ->pluck('id');
-
-    return $query->whereIn('user_id', $organizationUserIds);
+    return parent::getEloquentQuery();
 }
 
     public static function getNavigationBadge(): ?string

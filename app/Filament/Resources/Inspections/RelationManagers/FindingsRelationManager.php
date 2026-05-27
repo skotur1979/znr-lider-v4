@@ -53,34 +53,50 @@ class FindingsRelationManager extends RelationManager
     }
 
     protected function mutateFindingData(array $data): array
-    {
-        $data['title'] = mb_substr(trim((string) ($data['description'] ?? '')), 0, 255);
+{
+    $data['title'] = mb_substr(trim((string) ($data['description'] ?? '')), 0, 255);
 
-        if (($data['category_select'] ?? null) === '__custom__') {
-            $data['category'] = filled($data['category_custom'] ?? null)
-                ? trim($data['category_custom'])
-                : 'Ostalo';
-        } else {
-            $data['category'] = $data['category_select'] ?? 'Ostalo';
-        }
+    $categorySelect = $data['category_select'] ?? null;
+    $categoryCustom = $data['category_custom'] ?? null;
+    $currentCategory = $data['category'] ?? null;
 
-        if (($data['finding_status_select'] ?? null) === '__custom__') {
-            $data['finding_status'] = filled($data['finding_status_custom'] ?? null)
-                ? trim($data['finding_status_custom'])
-                : 'recommendation';
-        } else {
-            $data['finding_status'] = $data['finding_status_select'] ?? 'recommendation';
-        }
-
-        unset(
-            $data['category_select'],
-            $data['category_custom'],
-            $data['finding_status_select'],
-            $data['finding_status_custom']
-        );
-
-        return $data;
+    if ($categorySelect === '__custom__') {
+        $data['category'] = filled($categoryCustom)
+            ? trim((string) $categoryCustom)
+            : (filled($currentCategory) ? trim((string) $currentCategory) : 'Ostalo');
+    } elseif (filled($categorySelect)) {
+        $data['category'] = $categorySelect;
+    } elseif (filled($currentCategory)) {
+        $data['category'] = trim((string) $currentCategory);
+    } else {
+        $data['category'] = 'Ostalo';
     }
+
+    $statusSelect = $data['finding_status_select'] ?? null;
+    $statusCustom = $data['finding_status_custom'] ?? null;
+    $currentStatus = $data['finding_status'] ?? null;
+
+    if ($statusSelect === '__custom__') {
+        $data['finding_status'] = filled($statusCustom)
+            ? trim((string) $statusCustom)
+            : (filled($currentStatus) ? trim((string) $currentStatus) : 'recommendation');
+    } elseif (filled($statusSelect)) {
+        $data['finding_status'] = $statusSelect;
+    } elseif (filled($currentStatus)) {
+        $data['finding_status'] = trim((string) $currentStatus);
+    } else {
+        $data['finding_status'] = 'recommendation';
+    }
+
+    unset(
+        $data['category_select'],
+        $data['category_custom'],
+        $data['finding_status_select'],
+        $data['finding_status_custom']
+    );
+
+    return $data;
+}
 
     protected function getObservationCreateUrl(InspectionFinding $record): string
     {
@@ -126,7 +142,7 @@ class FindingsRelationManager extends RelationManager
                 ])
                 ->searchable()
                 ->live()
-                ->dehydrated(false)
+                ->dehydrated(true)
                 ->afterStateHydrated(function (Select $component, ?InspectionFinding $record) {
                     $known = [
                         'OZO',
@@ -163,7 +179,7 @@ class FindingsRelationManager extends RelationManager
                 ->label('Ručno upiši područje')
                 ->visible(fn (callable $get) => $get('category_select') === '__custom__')
                 ->live(onBlur: true)
-                ->dehydrated(false)
+                ->dehydrated(true)
                 ->afterStateHydrated(function (TextInput $component, ?InspectionFinding $record) {
                     $known = [
                         'OZO',
@@ -201,7 +217,7 @@ class FindingsRelationManager extends RelationManager
                 ->default('recommendation')
                 ->searchable()
                 ->live()
-                ->dehydrated(false)
+                ->dehydrated(true)
                 ->afterStateHydrated(function (Select $component, ?InspectionFinding $record) {
                     $known = ['ok', 'recommendation', 'noncompliance', 'critical'];
                     $value = $record?->finding_status;
@@ -227,7 +243,7 @@ class FindingsRelationManager extends RelationManager
                 ->label('Ručno upiši vrstu nalaza')
                 ->visible(fn (callable $get) => $get('finding_status_select') === '__custom__')
                 ->live(onBlur: true)
-                ->dehydrated(false)
+                ->dehydrated(true)
                 ->afterStateHydrated(function (TextInput $component, ?InspectionFinding $record) {
                     $known = ['ok', 'recommendation', 'noncompliance', 'critical'];
                     $value = $record?->finding_status;

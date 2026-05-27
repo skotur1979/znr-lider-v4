@@ -62,12 +62,12 @@ class ViewOntoRecord extends ViewRecord
                 ->action(function (array $data): void {
                     try {
                         app(OntoService::class)->addInput(
-                            $this->record,
-                            $data['entry_date'],
-                            (float) $data['quantity_kg'],
-                            $data['method'] ?? 'UVL',
-                            $data['note'] ?? null,
-                        );
+                        $this->record,
+                        $data['entry_date'] ?? $data['date'] ?? now()->format('Y-m-d'),
+                        (float) $data['quantity_kg'],
+                        $data['method'] ?? 'UVL',
+                        $data['note'] ?? null,
+                    );
 
                         Notification::make()
                             ->title('Ulaz otpada je uspješno evidentiran.')
@@ -89,11 +89,13 @@ class ViewOntoRecord extends ViewRecord
                 ->color('warning')
                 ->visible(fn () => ! $this->record->is_closed)
                 ->form([
-                    DatePicker::make('entry_date')
-                        ->label('Datum')
-                        ->native(false)
-                        ->required()
-                        ->default(now()),
+            DatePicker::make('entry_date')
+                ->label('Datum')
+                ->required()
+                ->displayFormat('d.m.Y.')
+                ->format('Y-m-d')
+                ->native(false)
+                ->default(now()),
 
                     TextInput::make('quantity_kg')
                         ->label('Količina (kg)')
