@@ -41,6 +41,7 @@ class BulkKpiEntry extends Page
     public function loadRows(): void
     {
         $user = auth()->user();
+        $ownerId = $user?->ownerId();
 
         $query = Kpi::query()
             ->where('is_active', true)
@@ -49,9 +50,15 @@ class BulkKpiEntry extends Page
             ->orderBy('sort_order')
             ->orderBy('name');
 
-        if ($user && (! method_exists($user, 'isAdmin') || ! $user->isAdmin()) && (int) $user->id !== 1) {
-            $query->where(function (Builder $q) use ($user) {
-                $q->where('user_id', $user->id)
+        if (! $user?->isSuperAdmin()) {
+            if (! $ownerId) {
+                $this->rows = [];
+
+                return;
+            }
+
+            $query->where(function (Builder $q) use ($ownerId) {
+                $q->where('user_id', $ownerId)
                     ->orWhereNull('user_id');
             });
         }
@@ -73,11 +80,22 @@ class BulkKpiEntry extends Page
 
     public function save(): void
     {
+        $user = auth()->user();
+        $ownerId = $user?->ownerId();
+
         foreach ($this->rows as $row) {
             $kpi = Kpi::find($row['kpi_id']);
 
             if (! $kpi) {
                 continue;
+            }
+
+            if (! $user?->isSuperAdmin()) {
+                $canUseKpi = blank($kpi->user_id) || (int) $kpi->user_id === (int) $ownerId;
+
+                if (! $canUseKpi) {
+                    continue;
+                }
             }
 
             if ($row['value'] === null || $row['value'] === '') {
@@ -88,6 +106,7 @@ class BulkKpiEntry extends Page
                 [
                     'month' => $this->month,
                     'year' => $this->year,
+                    'user_id' => $ownerId,
                 ],
                 [
                     'value' => (float) $row['value'],

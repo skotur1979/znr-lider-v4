@@ -400,24 +400,30 @@ class KpiResource extends BaseResource
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery();
+{
+    $model = static::getModel();
 
-        if (static::isSuperAdmin()) {
-            return $query;
-        }
+    $query = $model::query();
 
-        $ownerId = static::ownerId();
+    $query->withoutGlobalScopes([
+        \Illuminate\Database\Eloquent\SoftDeletingScope::class,
+    ]);
 
-        if (! $ownerId) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        return $query->where(function (Builder $q) use ($ownerId) {
-            $q->where('user_id', $ownerId)
-                ->orWhereNull('user_id');
-        });
+    if (static::isSuperAdmin()) {
+        return $query;
     }
+
+    $ownerId = static::ownerId();
+
+    if (! $ownerId) {
+        return $query->whereRaw('1 = 0');
+    }
+
+    return $query->where(function (Builder $q) use ($ownerId) {
+        $q->where('user_id', $ownerId)
+            ->orWhereNull('user_id');
+    });
+}
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
@@ -425,22 +431,28 @@ class KpiResource extends BaseResource
     }
 
     public static function getNavigationBadge(): ?string
-    {
-        $query = static::getModel()::query();
+{
+    $model = static::getModel();
 
-        if (! static::isSuperAdmin()) {
-            $ownerId = static::ownerId();
+    $query = $model::query();
 
-            if (! $ownerId) {
-                return '0';
-            }
+    $query->withoutGlobalScopes([
+        \Illuminate\Database\Eloquent\SoftDeletingScope::class,
+    ]);
 
-            $query->where(function (Builder $q) use ($ownerId) {
-                $q->where('user_id', $ownerId)
-                    ->orWhereNull('user_id');
-            });
+    if (! static::isSuperAdmin()) {
+        $ownerId = static::ownerId();
+
+        if (! $ownerId) {
+            return '0';
         }
 
-        return (string) $query->count();
+        $query->where(function (Builder $q) use ($ownerId) {
+            $q->where('user_id', $ownerId)
+                ->orWhereNull('user_id');
+        });
+    }
+
+    return (string) $query->count();
     }
 }

@@ -129,10 +129,10 @@ abstract class BaseResource extends Resource
         $userId = Auth::id() ?? 'guest';
 
         $cacheKey = 'navigation_badge_' . str_replace('\\', '_', static::class)
-            . '_' . $userId
-            . '_' . now()->format('Y-m-d-H');
+    . '_' . $userId
+    . '_' . now()->format('Y-m-d-H-i');
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function (): string {
+        return Cache::remember($cacheKey, now()->addMinutes(2), function (): string {
             $model = static::getModel();
 
             if (! $model) {

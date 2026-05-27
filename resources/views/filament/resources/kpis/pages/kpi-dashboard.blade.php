@@ -591,18 +591,18 @@
                                     <span class="kpi-badge {{ $statusClass }}">{{ $statusText }}</span>
                                 </td>
                                 <td class="kpi-center">
-                                    @if(($row['is_global'] ?? false) && !auth()->user()?->isSuperAdmin())
-                                        <button
-                                            type="button"
-                                            wire:click="openTargetModal({{ $row['id'] }})"
-                                            class="kpi-target-btn"
-                                        >
-                                            Cilj
-                                        </button>
-                                    @else
-                                        -
-                                    @endif
-                                </td>
+                                @if(!auth()->user()?->isSuperAdmin())
+                                    <button
+                                        type="button"
+                                        wire:click="openTargetModal({{ $row['id'] }})"
+                                        class="kpi-target-btn"
+                                    >
+                                        Cilj
+                                    </button>
+                                @else
+                                    -
+                                @endif
+                            </td>
                             </tr>
                         @endforeach
                     </tbody>

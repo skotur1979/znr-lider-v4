@@ -39,32 +39,44 @@ class WasteMonthlyReport extends Page
     }
 
     protected function getHeaderActions(): array
-{
-    return [
-        Action::make('exportExcel')
-            ->label('Izvoz u Excel')
-            ->icon('heroicon-o-document-arrow-down')
-            ->color('success')
-            ->action(function () {
-                $locationName = 'sve-lokacije';
+    {
+        return [
+            Action::make('exportExcel')
+                ->label('Izvoz u Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->action(function () {
+                    $locationName = 'sve-lokacije';
 
-                if ($this->selectedLocationId) {
-                    $location = WasteOrganizationLocation::find($this->selectedLocationId);
-                    $locationName = str($location?->display_name ?? $location?->name ?? 'lokacija')
-                        ->slug()
-                        ->toString();
-                }
+                    if ($this->selectedLocationId) {
+                        $location = WasteOrganizationLocation::find($this->selectedLocationId);
 
-                return Excel::download(
-                    new WasteMonthlyReportExport(
-                        (int) $this->selectedYear,
-                        $this->selectedLocationId ? (int) $this->selectedLocationId : null,
-                    ),
-                    'mjesecni-izvjestaj-otpada-' . $this->selectedYear . '-' . $locationName . '.xlsx'
-                );
-            }),
-    ];
-}
+                        $locationName = str(
+                            $location?->display_name
+                            ?? $location?->name
+                            ?? 'lokacija'
+                        )
+                            ->slug()
+                            ->toString();
+                    }
+
+                    return Excel::download(
+                        new WasteMonthlyReportExport(
+                            (int) $this->selectedYear,
+                            $this->selectedLocationId
+                                ? (int) $this->selectedLocationId
+                                : null,
+                        ),
+                        'mjesecni-izvjestaj-otpada-'
+                        . $this->selectedYear
+                        . '-'
+                        . $locationName
+                        . '.xlsx'
+                    );
+                }),
+        ];
+    }
+
     public function getMonthLabels(): array
     {
         return [
@@ -85,10 +97,12 @@ class WasteMonthlyReport extends Page
 
     public function getYearOptions(): array
     {
+        $ownerId = Auth::user()?->ownerId();
+
         $years = OntoRecord::query()
             ->when(
                 ! Auth::user()?->isAdmin(),
-                fn ($query) => $query->where('user_id', Auth::id())
+                fn ($query) => $query->where('user_id', $ownerId)
             )
             ->distinct()
             ->orderByDesc('year')
@@ -106,10 +120,15 @@ class WasteMonthlyReport extends Page
 
     public function getLocationOptions(): array
     {
+        $ownerId = Auth::user()?->ownerId();
+
         return WasteOrganizationLocation::query()
             ->when(
                 ! Auth::user()?->isAdmin(),
-                fn ($query) => $query->whereHas('organization', fn ($q) => $q->where('user_id', Auth::id()))
+                fn ($query) => $query->whereHas(
+                    'organization',
+                    fn ($q) => $q->where('user_id', $ownerId)
+                )
             )
             ->orderBy('name')
             ->get()
@@ -121,10 +140,12 @@ class WasteMonthlyReport extends Page
 
     public function getRowsProperty(): array
     {
+        $ownerId = Auth::user()?->ownerId();
+
         $baseWasteTypeIds = OntoRecord::query()
             ->when(
                 ! Auth::user()?->isAdmin(),
-                fn ($query) => $query->where('user_id', Auth::id())
+                fn ($query) => $query->where('user_id', $ownerId)
             )
             ->when(
                 filled($this->selectedYear),
@@ -132,7 +153,10 @@ class WasteMonthlyReport extends Page
             )
             ->when(
                 filled($this->selectedLocationId),
-                fn ($query) => $query->where('waste_organization_location_id', $this->selectedLocationId)
+                fn ($query) => $query->where(
+                    'waste_organization_location_id',
+                    $this->selectedLocationId
+                )
             )
             ->distinct()
             ->pluck('waste_type_id')
@@ -150,19 +174,37 @@ class WasteMonthlyReport extends Page
             ->keyBy('id');
 
         $outputSums = OntoEntry::query()
-            ->selectRaw('onto_records.waste_type_id as waste_type_id, MONTH(onto_entries.entry_date) as month_no, SUM(onto_entries.output_kg) as total_kg')
-            ->join('onto_records', 'onto_records.id', '=', 'onto_entries.onto_record_id')
+            ->selectRaw('
+                onto_records.waste_type_id as waste_type_id,
+                MONTH(onto_entries.entry_date) as month_no,
+                SUM(onto_entries.output_kg) as total_kg
+            ')
+            ->join(
+                'onto_records',
+                'onto_records.id',
+                '=',
+                'onto_entries.onto_record_id'
+            )
             ->where('onto_entries.entry_type', 'output')
             ->whereYear('onto_entries.entry_date', $this->selectedYear)
             ->when(
                 ! Auth::user()?->isAdmin(),
-                fn ($query) => $query->where('onto_records.user_id', Auth::id())
+                fn ($query) => $query->where(
+                    'onto_records.user_id',
+                    $ownerId
+                )
             )
             ->when(
                 filled($this->selectedLocationId),
-                fn ($query) => $query->where('onto_records.waste_organization_location_id', $this->selectedLocationId)
+                fn ($query) => $query->where(
+                    'onto_records.waste_organization_location_id',
+                    $this->selectedLocationId
+                )
             )
-            ->groupByRaw('onto_records.waste_type_id, MONTH(onto_entries.entry_date)')
+            ->groupByRaw('
+                onto_records.waste_type_id,
+                MONTH(onto_entries.entry_date)
+            ')
             ->get();
 
         $matrix = [];
@@ -174,6 +216,7 @@ class WasteMonthlyReport extends Page
         foreach ($outputSums as $sum) {
             $wasteTypeId = (int) $sum->waste_type_id;
             $monthNo = (int) $sum->month_no;
+
             $matrix[$wasteTypeId][$monthNo] = (float) $sum->total_kg;
         }
 
@@ -186,12 +229,15 @@ class WasteMonthlyReport extends Page
                 continue;
             }
 
-            $months = $matrix[$wasteTypeId] ?? array_fill(1, 12, 0.0);
+            $months = $matrix[$wasteTypeId]
+                ?? array_fill(1, 12, 0.0);
 
             $rows[] = [
                 'waste_type_id' => $wasteTypeId,
                 'waste_code' => $wasteType->waste_code,
-                'formatted_waste_code' => WasteCodeFormatter::plain($wasteType->waste_code),
+                'formatted_waste_code' => WasteCodeFormatter::plain(
+                    $wasteType->waste_code
+                ),
                 'name' => $wasteType->name,
                 'is_hazardous' => (bool) $wasteType->is_hazardous,
                 'months' => $months,
@@ -200,8 +246,17 @@ class WasteMonthlyReport extends Page
         }
 
         usort($rows, function (array $a, array $b): int {
-            $codeA = preg_replace('/\D+/', '', (string) ($a['waste_code'] ?? ''));
-            $codeB = preg_replace('/\D+/', '', (string) ($b['waste_code'] ?? ''));
+            $codeA = preg_replace(
+                '/\D+/',
+                '',
+                (string) ($a['waste_code'] ?? '')
+            );
+
+            $codeB = preg_replace(
+                '/\D+/',
+                '',
+                (string) ($b['waste_code'] ?? '')
+            );
 
             return strcmp(
                 str_pad($codeA, 10, '0', STR_PAD_RIGHT),
