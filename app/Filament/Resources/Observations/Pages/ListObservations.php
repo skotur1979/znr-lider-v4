@@ -18,6 +18,11 @@ class ListObservations extends ListRecords
 
     protected static string $resource = ObservationResource::class;
 
+    public function getMaxContentWidth(): ?string
+{
+    return 'screen-2xl';
+}
+
     protected function getHeaderActions(): array
     {
         return [

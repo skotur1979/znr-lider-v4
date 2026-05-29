@@ -10,6 +10,11 @@ class ListQuestions extends ListRecords
 {
     protected static string $resource = QuestionResource::class;
 
+    public function getMaxContentWidth(): ?string
+    {
+        return 'screen-2xl';
+    }
+
     protected function getHeaderActions(): array
     {
         return [

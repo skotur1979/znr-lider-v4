@@ -17,6 +17,11 @@ class ListChemicals extends ListRecords
 {
     protected static string $resource = ChemicalResource::class;
 
+    public function getMaxContentWidth(): ?string
+    {
+        return 'full';
+    }
+
     protected function getHeaderActions(): array
     {
         return [

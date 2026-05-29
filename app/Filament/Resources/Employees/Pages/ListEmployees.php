@@ -21,6 +21,11 @@ class ListEmployees extends ListRecords
 {
     protected static string $resource = EmployeeResource::class;
 
+    public function getMaxContentWidth(): ?string
+    {
+        return 'full';
+    }
+
     protected function getHeaderActions(): array
     {
         return [

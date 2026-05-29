@@ -10,7 +10,7 @@ class ListBudgets extends ListRecords
     protected static string $resource = BudgetResource::class;
 
     public function getMaxContentWidth(): ?string
-    {
-        return 'full';
-    }
+{
+    return '7xl';
+}
 }

@@ -116,10 +116,11 @@ class QuestionsRelationManager extends RelationManager
             ->striped()
             ->actions([
                 EditAction::make()
-                    ->label('Uredi pitanje')
-                    ->icon('heroicon-o-pencil-square')
-                    ->color('warning')
-                    ->form([
+                ->label('Uredi pitanje')
+                ->modalHeading('Uredi pitanje zone')
+                ->icon('heroicon-o-pencil-square')
+                ->color('warning')
+                ->form([
                         Select::make('section')
                             ->label('Sekcija')
                             ->options([

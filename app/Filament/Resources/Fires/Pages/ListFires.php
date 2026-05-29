@@ -20,6 +20,11 @@ class ListFires extends ListRecords
 {
     protected static string $resource = FireResource::class;
 
+    public function getMaxContentWidth(): ?string
+    {
+        return 'screen-2xl';
+    }
+
     protected function getHeaderActions(): array
     {
         return [

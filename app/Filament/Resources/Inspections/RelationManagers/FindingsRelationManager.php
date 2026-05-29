@@ -29,6 +29,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Filament\Tables\Filters\SelectFilter;
+use App\Exports\InspectionFindingsExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class FindingsRelationManager extends RelationManager
 {
@@ -335,124 +338,172 @@ class FindingsRelationManager extends RelationManager
             ->emptyStateHeading('Nema nalaza nadzora')
             ->emptyStateDescription('Stvori nalaz nadzora kako bi započeo.')
             ->columns([
-                TextColumn::make('category')
-                    ->label('Područje')
-                    ->badge()
-                    ->alignment(Alignment::Center)
-                    ->searchable()
-                    ->wrap(),
+    TextColumn::make('category')
+        ->label('Područje')
+        ->badge()
+        ->alignment(Alignment::Center)
+        ->searchable()
+        ->wrap(),
 
-                TextColumn::make('description')
-                    ->label('Što je uočeno / pronađeno')
-                    ->wrap()
-                    ->searchable()
-                    ->limit(90),
+    TextColumn::make('description')
+    ->label('Što je uočeno / pronađeno')
+    ->searchable()
+    ->html()
+    ->formatStateUsing(function (?string $state) {
+        $text = trim((string) $state);
+        $text = mb_strlen($text) > 90
+            ? mb_substr($text, 0, 90) . '...'
+            : $text;
 
-                TextColumn::make('finding_status')
-                    ->label('Vrsta')
-                    ->badge()
-                    ->color(fn (?string $state) => match ($state) {
-                        'ok' => 'success',
-                        'recommendation' => 'warning',
-                        'noncompliance' => 'danger',
-                        'critical' => 'danger',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'ok' => 'Uredno',
-                        'recommendation' => 'Preporuka',
-                        'noncompliance' => 'Nepravilnost',
-                        'critical' => 'Kritična nepravilnost',
-                        default => $state ?: '-',
-                    })
-                    ->alignment(Alignment::Center),
+        return nl2br(e(wordwrap($text, 30, "\n", true)));
+    })
+    ->tooltip(fn ($record) => $record->description),
 
-                TextColumn::make('workflow_status')
-                    ->label('Status postupanja')
-                    ->badge()
-                    ->color(fn (?string $state) => match ($state) {
-                        'open' => 'gray',
-                        'in_progress' => 'warning',
-                        'closed' => 'success',
-                        'resolved_no_action' => 'success',
-                        'converted_to_observation' => 'info',
-                        'rejected' => 'danger',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'open' => 'Nije započeto',
-                        'in_progress' => 'U tijeku',
-                        'closed' => 'Zatvoreno',
-                        'resolved_no_action' => 'Riješeno bez akcija',
-                        'converted_to_observation' => 'Pretvoreno u zapažanje',
-                        'rejected' => 'Odbačeno',
-                        default => $state ?: '-',
-                    })
-                    ->alignment(Alignment::Center),
+    TextColumn::make('finding_status')
+        ->label('Vrsta')
+        ->badge()
+        ->color(fn (?string $state) => match ($state) {
+            'ok' => 'success',
+            'recommendation' => 'warning',
+            'noncompliance' => 'danger',
+            'critical' => 'danger',
+            default => 'gray',
+        })
+        ->formatStateUsing(fn (?string $state) => match ($state) {
+            'ok' => 'Uredno',
+            'recommendation' => 'Preporuka',
+            'noncompliance' => 'Nepravilnost',
+            'critical' => 'Kritična nepravilnost',
+            default => $state ?: '-',
+        })
+        ->alignment(Alignment::Center),
 
-                TextColumn::make('due_date')
-                    ->label('Rok')
-                    ->date('d.m.Y.')
-                    ->badge()
-                    ->color(function ($state, InspectionFinding $record) {
-                        if (in_array($record->workflow_status, ['closed', 'rejected', 'resolved_no_action'], true)) {
-                            return 'success';
-                        }
+    TextColumn::make('workflow_status')
+        ->label('Status postupanja')
+        ->badge()
+        ->color(fn (?string $state) => match ($state) {
+            'open' => 'gray',
+            'in_progress' => 'warning',
+            'closed' => 'success',
+            'resolved_no_action' => 'success',
+            'converted_to_observation' => 'info',
+            'rejected' => 'danger',
+            default => 'gray',
+        })
+        ->formatStateUsing(fn (?string $state) => match ($state) {
+            'open' => 'Nije započeto',
+            'in_progress' => 'U tijeku',
+            'closed' => 'Zatvoreno',
+            'resolved_no_action' => 'Riješeno bez akcija',
+            'converted_to_observation' => 'Pretvoreno u zapažanje',
+            'rejected' => 'Odbačeno',
+            default => $state ?: '-',
+        })
+        ->alignment(Alignment::Center),
 
-                        if (blank($state)) {
-                            return null;
-                        }
+    TextColumn::make('responsible_person')
+        ->label('Odgovorna osoba')
+        ->searchable()
+        ->wrap()
+        ->placeholder('-'),
 
-                        $date = Carbon::parse($state)->startOfDay();
-                        $today = Carbon::today();
+    TextColumn::make('due_date')
+        ->label('Rok')
+        ->date('d.m.Y.')
+        ->badge()
+        ->color(function ($state, InspectionFinding $record) {
+            if (in_array($record->workflow_status, ['closed', 'rejected', 'resolved_no_action'], true)) {
+                return 'success';
+            }
 
-                        if ($date->lt($today)) {
-                            return 'danger';
-                        }
+            if (blank($state)) {
+                return null;
+            }
 
-                        if ($date->lte($today->copy()->addDays(14))) {
-                            return 'warning';
-                        }
+            $date = Carbon::parse($state)->startOfDay();
+            $today = Carbon::today();
 
-                        return null;
-                    })
-                    ->alignment(Alignment::Center),
+            if ($date->lt($today)) {
+                return 'danger';
+            }
+
+            if ($date->lte($today->copy()->addDays(14))) {
+                return 'warning';
+            }
+
+            return null;
+        })
+        ->alignment(Alignment::Center),
+        ])
+        ->filters([
+            SelectFilter::make('category')
+            ->label('Područje')
+            ->options(fn (): array => InspectionFinding::query()
+                ->whereNotNull('category')
+                ->where('category', '<>', '')
+                ->orderBy('category')
+                ->pluck('category', 'category')
+                ->toArray()
+            )
+            ->searchable(),
+
+    SelectFilter::make('finding_status')
+        ->label('Vrsta')
+        ->options([
+            'ok' => 'Uredno',
+            'recommendation' => 'Preporuka',
+            'noncompliance' => 'Nepravilnost',
+            'critical' => 'Kritična nepravilnost',
+        ]),
             ])
             ->headerActions([
-                Action::make('export_findings_pdf')
-                    ->label('Izvoz u PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('warning')
-                    ->action(function () {
-                        $inspection = $this->getOwnerRecord();
+    Action::make('export_findings_pdf')
+        ->label('Izvoz u PDF')
+        ->icon('heroicon-o-arrow-down-tray')
+        ->color('warning')
+        ->action(function () {
+            $inspection = $this->getOwnerRecord();
 
-                        $findings = $inspection->findings()
-                            ->orderByDesc('id')
-                            ->get();
+            $findings = $this->getFilteredSortedTableQuery()
+                ->get();
 
-                        $pdf = Pdf::loadView('pdf.inspection-findings', [
-                            'inspection' => $inspection,
-                            'findings' => $findings,
-                        ])
-                            ->setPaper('a4', 'landscape')
-                            ->setOptions([
-                                'isHtml5ParserEnabled' => true,
-                                'isRemoteEnabled' => true,
-                                'isPhpEnabled' => true,
-                                'dpi' => 96,
-                                'defaultFont' => 'DejaVu Sans',
-                            ]);
-
-                        return response()->streamDownload(
-                            fn () => print($pdf->output()),
-                            'nalazi-nadzora-' . now()->format('Y-m-d') . '.pdf'
-                        );
-                    }),
-
-                CreateAction::make()
-                    ->label('Dodaj nalaz')
-                    ->mutateDataUsing(fn (array $data): array => $this->mutateFindingData($data)),
+            $pdf = Pdf::loadView('pdf.inspection-findings', [
+                'inspection' => $inspection,
+                'findings' => $findings,
             ])
+                ->setPaper('a4', 'landscape')
+                ->setOptions([
+                    'isHtml5ParserEnabled' => true,
+                    'isRemoteEnabled' => true,
+                    'isPhpEnabled' => true,
+                    'dpi' => 96,
+                    'defaultFont' => 'DejaVu Sans',
+                ]);
+
+            return response()->streamDownload(
+                fn () => print($pdf->output()),
+                'nalazi-nadzora-' . now()->format('Y-m-d') . '.pdf'
+            );
+        }),
+
+            Action::make('export_findings_excel')
+                ->label('Izvoz u Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->action(function () {
+                    $findings = $this->getFilteredSortedTableQuery()
+                        ->get();
+
+                    return Excel::download(
+                        new InspectionFindingsExport($findings),
+                        'nalazi-nadzora-' . now()->format('Y-m-d') . '.xlsx'
+                    );
+                }),
+
+            CreateAction::make()
+                ->label('Dodaj nalaz')
+                ->mutateDataUsing(fn (array $data): array => $this->mutateFindingData($data)),
+        ])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaz'),
