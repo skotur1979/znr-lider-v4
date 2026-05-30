@@ -103,28 +103,30 @@ class SystemStatusWidget extends Widget
     }
 
     protected function countOpenObservations(): int
-    {
-        if (! class_exists(Observation::class)) {
-            return 0;
-        }
-
-        $model = new Observation();
-        $table = $model->getTable();
-
-        if (! Schema::hasColumn($table, 'status')) {
-            return 0;
-        }
-
-        $query = Observation::query()->whereIn('status', [
-            'Not started',
-            'In progress',
-        ]);
-
-        $this->applyCommonScopes($query, $model);
-        $this->applyDirectUserScope($query, $table);
-
-        return (int) $query->count();
+{
+    if (! class_exists(Observation::class)) {
+        return 0;
     }
+
+    $model = new Observation();
+    $table = $model->getTable();
+
+    if (! Schema::hasColumn($table, 'status')) {
+        return 0;
+    }
+
+    $query = Observation::query()->whereIn('status', [
+        'Not started',
+        'In progress',
+        'Nije započeto',
+        'U tijeku',
+    ]);
+
+    $this->applyCommonScopes($query, $model);
+    $this->applyDirectUserScope($query, $table);
+
+    return (int) $query->count();
+}
 
     protected function countDraftWasteTrackingForms(): int
     {
@@ -198,24 +200,32 @@ class SystemStatusWidget extends Widget
     }
 
     protected function applyDirectUserScope(Builder $query, string $table): bool
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
 
-        if (! $user) {
-            return true;
-        }
-
-        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
-            return true;
-        }
-
-        if (Schema::hasColumn($table, 'user_id')) {
-            $query->where($table . '.user_id', $user->id);
-            return true;
-        }
-
-        return false;
+    if (! $user) {
+        return true;
     }
+
+    if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+        return true;
+    }
+
+    if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+        return true;
+    }
+
+    $ownerId = method_exists($user, 'ownerId')
+        ? $user->ownerId()
+        : $user->id;
+
+    if (Schema::hasColumn($table, 'user_id')) {
+        $query->where($table . '.user_id', $ownerId);
+        return true;
+    }
+
+    return false;
+}
 
     protected function resolvePpeUrl(): string
     {

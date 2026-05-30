@@ -76,16 +76,16 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
         }
 
         return array_merge($row, [
-            $chemical->cas_number,
-            $chemical->ufi_number,
-            '',
-            implode(', ', $this->toList($chemical->h_statements)),
-            implode(', ', $this->toList($chemical->p_statements)),
-            $chemical->usage_location,
-            $chemical->annual_quantity,
-            $chemical->gvi_kgvi,
-            $chemical->voc,
-            $chemical->stl_hzjz ? $chemical->stl_hzjz->format('d.m.Y.') : '',
+        $chemical->cas_number,
+        $chemical->ufi_number,
+        implode('; ', $this->normalizePictos($chemical->hazard_pictograms)),
+        implode(', ', $this->toList($chemical->h_statements)),
+        implode(', ', $this->toList($chemical->p_statements)),
+        $chemical->usage_location,
+        $chemical->annual_quantity,
+        $chemical->gvi_kgvi,
+        $chemical->voc,
+        $chemical->stl_hzjz ? $chemical->stl_hzjz->format('d.m.Y.') : '',
         ]);
     }
 
@@ -223,43 +223,45 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
     }
 
     private function normalizePictos($value): array
-    {
-        return collect($this->toList($value))
-            ->map(fn ($v) => strtoupper(trim((string) $v)))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-    }
+{
+    return collect($this->toList($value))
+        ->map(function ($v) {
+            $v = strtoupper(trim((string) $v));
+            $v = pathinfo($v, PATHINFO_FILENAME);
+            $v = str_replace([' ', '_', '-'], '', $v);
+
+            if (preg_match('/GHS0?([1-9])/', $v, $m)) {
+                return 'GHS0' . $m[1];
+            }
+
+            return $v;
+        })
+        ->filter()
+        ->unique()
+        ->values()
+        ->all();
+}
 
     private function toList($value): array
-    {
-        if ($value === null || $value === '') {
-            return [];
-        }
+{
+    if ($value === null || $value === '') {
+        return [];
+    }
 
-        if (is_array($value)) {
-            return collect($value)
-                ->map(fn ($v) => trim((string) $v))
-                ->filter()
-                ->values()
-                ->all();
-        }
-
-        $value = (string) $value;
-
-        $parts = explode(',', $value);
-
-        if (count($parts) === 1 && preg_match('/\s+/', $value)) {
-            $parts = preg_split('/\s+/', $value) ?: [];
-        }
-
-        return collect($parts)
-            ->map(fn ($v) => trim($v))
+    if (is_array($value)) {
+        return collect($value)
+            ->map(fn ($v) => trim((string) $v))
             ->filter()
             ->values()
             ->all();
     }
+
+    return collect(preg_split('/[,\n\r;:]+/', (string) $value) ?: [])
+        ->map(fn ($v) => trim((string) $v))
+        ->filter()
+        ->values()
+        ->all();
+}
 
     private function findPictogramPath(string $code): ?string
     {

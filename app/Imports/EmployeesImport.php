@@ -4,13 +4,13 @@ namespace App\Imports;
 
 use App\Models\Employee;
 use App\Models\EmployeeCertificate;
+use App\Services\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
-use App\Services\ActivityLogger;
 
 class EmployeesImport implements ToCollection
 {
@@ -69,22 +69,25 @@ class EmployeesImport implements ToCollection
 
             $employee = null;
 
+            /*
+             * VAŽNO:
+             * Ako postoji OIB u Excelu, tražimo SAMO po OIB-u.
+             * Ne smijemo pasti na e-mail jer u predlošku više radnika može imati isti testni e-mail,
+             * pa bi se svi certifikati zalijepili na jednog radnika.
+             */
             if ($oib) {
                 $employee = (clone $query)->where('OIB', $oib)->first();
-            }
-
-            if (! $employee && $email) {
-                $employee = (clone $query)->where('email', $email)->first();
-            }
-
-            if (! $employee && $phone) {
+            } elseif ($email) {
+                $employee = (clone $query)
+                    ->where('email', $email)
+                    ->where('name', $name)
+                    ->first();
+            } elseif ($phone) {
                 $employee = (clone $query)
                     ->where('name', $name)
                     ->where('phone', $phone)
                     ->first();
-            }
-
-            if (! $employee) {
+            } else {
                 $employee = (clone $query)
                     ->where('name', $name)
                     ->first();
@@ -110,7 +113,6 @@ class EmployeesImport implements ToCollection
                 'medical_examination_valid_from' => $this->parseDate($this->value($row, $map, 'lijecnicki_pregled_od')),
                 'medical_examination_valid_until' => $this->parseDate($this->value($row, $map, 'lijecnicki_pregled_do')),
                 'article' => $this->clean($this->value($row, $map, 'clanak_3_tocke')),
-                'remark' => $this->clean($this->value($row, $map, 'napomena')),
                 'occupational_safety_valid_from' => $this->parseDate($this->value($row, $map, 'znr_od')),
                 'fire_protection_valid_from' => $this->parseDate($this->value($row, $map, 'zop_od')),
                 'fire_protection_statement_at' => $this->parseDate($this->value($row, $map, 'zop_izjava_od')),
@@ -123,6 +125,7 @@ class EmployeesImport implements ToCollection
                 'handling_flammable_materials_valid_until' => $this->parseDate($this->value($row, $map, 'rukovanje_zapaljivim_tvarima_do')),
                 'employers_authorization_valid_from' => $this->parseDate($this->value($row, $map, 'ovlastenik_poslodavca_od')),
                 'employers_authorization_valid_until' => $this->parseDate($this->value($row, $map, 'ovlastenik_poslodavca_do')),
+                'remark' => $this->clean($this->value($row, $map, 'napomena')),
             ];
 
             if (! $employee) {
@@ -132,7 +135,7 @@ class EmployeesImport implements ToCollection
                 $changed = [];
 
                 foreach ($data as $field => $value) {
-                    if (in_array($field, ['user_id'], true)) {
+                    if ($field === 'user_id') {
                         continue;
                     }
 
@@ -160,14 +163,15 @@ class EmployeesImport implements ToCollection
             }
 
             $this->importCertificates($employee, $row, $map);
-            ActivityLogger::import(
+        }
+
+        ActivityLogger::import(
             module: 'Zaposlenici',
             created: $this->created,
             updated: $this->updated,
             unchanged: $this->unchanged,
             skipped: $this->skipped,
         );
-        }
     }
 
     private function importCertificates(Employee $employee, $row, array $map): void
@@ -207,17 +211,13 @@ class EmployeesImport implements ToCollection
                     continue;
                 }
 
-                if ($value === null) {
-                    continue;
-                }
-
                 $current = $certificate->{$field};
 
                 if ($current instanceof \Carbon\CarbonInterface) {
                     $current = $current->format('Y-m-d');
                 }
 
-                if ((string) ($current ?? '') !== (string) $value) {
+                if ((string) ($current ?? '') !== (string) ($value ?? '')) {
                     $changed[$field] = $value;
                 }
             }
@@ -323,7 +323,7 @@ class EmployeesImport implements ToCollection
             'spol' => 'spol',
             'oib' => 'oib',
             'telefon' => 'telefon',
-            'email' => 'email',
+            'email', 'e_mail' => 'email',
             'radno_mjesto' => 'radno_mjesto',
             'organizacijska_jedinica' => 'organizacijska_jedinica',
             'vrsta_ugovora' => 'vrsta_ugovora',
@@ -332,7 +332,6 @@ class EmployeesImport implements ToCollection
             'lijecnicki_pregled_od' => 'lijecnicki_pregled_od',
             'lijecnicki_pregled_do' => 'lijecnicki_pregled_do',
             'clanak_3_tocke' => 'clanak_3_tocke',
-            'napomena' => 'napomena',
             'znr_od', 'znr_polozen_od', 'znr_osposobljen_od', 'znr_osposobljavanje_od' => 'znr_od',
             'zop_od' => 'zop_od',
             'zop_izjava_od' => 'zop_izjava_od',
@@ -345,6 +344,7 @@ class EmployeesImport implements ToCollection
             'rukovanje_zapaljivim_tvarima_do' => 'rukovanje_zapaljivim_tvarima_do',
             'ovlastenik_poslodavca_od' => 'ovlastenik_poslodavca_od',
             'ovlastenik_poslodavca_do' => 'ovlastenik_poslodavca_do',
+            'napomena' => 'napomena',
             default => $key,
         };
     }

@@ -56,48 +56,56 @@ class TopSystemStatusBarWidget extends Widget
                 'label' => 'Liječnički',
                 'icon' => '🩺',
                 'expired_url' => $self->resolveEmployeesMedicalExpiredUrl(),
+                'soon_url' => $self->resolveEmployeesMedicalSoonUrl(),
                 ...$self->countEmployeeMedicalDeadlines($today, $soonDate, $user),
             ],
             [
                 'label' => 'Edukacije',
                 'icon' => '🎓',
                 'expired_url' => $self->resolveEmployeesCertificatesExpiredUrl(),
+                'soon_url' => $self->resolveEmployeesCertificatesSoonUrl(),
                 ...$self->countEmployeeCertificateDeadlines($today, $soonDate, $user),
             ],
             [
                 'label' => 'Radna oprema',
                 'icon' => '⚙️',
                 'expired_url' => $self->resolveMachinesExpiredUrl(),
+                'soon_url' => $self->resolveMachinesSoonUrl(),
                 ...$self->countSimpleDateDeadline(Machine::class, ['examination_valid_until'], $today, $soonDate, $user),
             ],
             [
                 'label' => 'Aparati',
                 'icon' => '🧯',
                 'expired_url' => $self->resolveFiresExpiredUrl(),
+                'soon_url' => $self->resolveFiresSoonUrl(),
                 ...$self->countSimpleDateDeadline(Fire::class, ['examination_valid_until'], $today, $soonDate, $user),
             ],
             [
                 'label' => 'Ostala ispit.',
                 'icon' => '🛠️',
                 'expired_url' => $self->resolveMiscellaneousExpiredUrl(),
+                'soon_url' => $self->resolveMiscellaneousSoonUrl(),
                 ...$self->countSimpleDateDeadline(Miscellaneous::class, ['examination_valid_until'], $today, $soonDate, $user),
             ],
             [
                 'label' => 'OZO',
                 'icon' => '🦺',
                 'expired_url' => $self->resolvePpeExpiredUrl(),
+                'soon_url' => $self->resolvePpeSoonUrl(),
                 ...$self->countPpeDeadline($today, $soonDate, $user),
             ],
             [
                 'label' => 'Prva pomoć',
                 'icon' => '🩹',
                 'expired_url' => $self->resolveFirstAidExpiredUrl(),
+                'soon_url' => $self->resolveFirstAidSoonUrl(),
                 ...$self->countFirstAidDeadline($today, $soonDate, $user),
             ],
             [
                 'label' => 'Zapažanja',
                 'icon' => '👁️',
                 'expired_url' => $self->resolveObservationsExpiredUrl(),
+                'soon_url' => $self->resolveObservationsSoonUrl(),
                 ...$self->countObservationDeadline($today, $soonDate, $user),
             ],
         ];
@@ -568,4 +576,49 @@ class TopSystemStatusBarWidget extends Widget
     {
         return url('/admin/observations?pregled=isteklo');
     }
+    protected function resolveEmployeesMedicalSoonUrl(): string
+{
+    return url('/admin/employees?pregled=medical_expiring');
+}
+
+    protected function resolveEmployeesCertificatesSoonUrl(): string
+{
+    return url('/admin/employees?pregled=certificates_expiring');
+}
+
+    protected function resolveMachinesSoonUrl(): string
+{
+    return url('/admin/machines?pregled=uskoro');
+}
+
+    protected function resolveFiresSoonUrl(): string
+{
+    return url('/admin/fires?pregled=uskoro');
+}
+
+    protected function resolveMiscellaneousSoonUrl(): string
+{
+    return url('/admin/miscellaneouses?pregled=uskoro');
+}
+
+    protected function resolvePpeSoonUrl(): string
+{
+    if (class_exists(\App\Filament\Resources\PPELogs\PPELogResource::class)) {
+        return \App\Filament\Resources\PPELogs\PPELogResource::getUrl('index', [
+            'pregled' => 'uskoro',
+        ]);
+    }
+
+    return url('/admin/ppe-logs?pregled=uskoro');
+}
+
+    protected function resolveFirstAidSoonUrl(): string
+{
+    return url('/admin/first-aid-kits?pregled=uskoro');
+}
+
+    protected function resolveObservationsSoonUrl(): string
+{
+    return url('/admin/observations?pregled=uskoro');
+}
 }

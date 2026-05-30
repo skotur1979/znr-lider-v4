@@ -43,9 +43,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
 
     public function headings(): array
     {
-        $headings = [
-            'Mjesto',
-        ];
+        $headings = ['Mjesto'];
 
         if ($this->showUserColumn) {
             $headings[] = 'Korisnik';
@@ -54,13 +52,13 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
         return array_merge($headings, [
             'Tip',
             'Tvor. broj / god. proizv.',
-            'Serijski broj',
+            'Serijski broj eviden. naljepnice',
             'Datum periodičkog servisa',
             'Vrijedi do',
-            'Serviser',
             'Datum redovnog pregleda',
+            'Serviser',
             'Uočljivost',
-            'Uočeni nedostatci',
+            'Uočeni nedostaci',
             'Postupci otklanjanja',
             'Broj priloga',
         ]);
@@ -74,9 +72,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
         $validUntil = $fire->examination_valid_until ? Carbon::parse($fire->examination_valid_until) : null;
         $regularFrom = $fire->regular_examination_valid_from ? Carbon::parse($fire->regular_examination_valid_from) : null;
 
-        $row = [
-            $fire->place,
-        ];
+        $row = [$fire->place];
 
         if ($this->showUserColumn) {
             $row[] = $fire->user?->name ?? '';
@@ -88,8 +84,8 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             $fire->serial_label_number,
             $serviceFrom ? ExcelDate::dateTimeToExcel($serviceFrom) : null,
             $validUntil ? ExcelDate::dateTimeToExcel($validUntil) : null,
-            $fire->service,
             $regularFrom ? ExcelDate::dateTimeToExcel($regularFrom) : null,
+            $fire->service,
             $fire->visible,
             $fire->remark,
             $fire->action,
@@ -103,14 +99,14 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             return [
                 'F' => 'dd.mm.yyyy',
                 'G' => 'dd.mm.yyyy',
-                'I' => 'dd.mm.yyyy',
+                'H' => 'dd.mm.yyyy',
             ];
         }
 
         return [
             'E' => 'dd.mm.yyyy',
             'F' => 'dd.mm.yyyy',
-            'H' => 'dd.mm.yyyy',
+            'G' => 'dd.mm.yyyy',
         ];
     }
 
@@ -156,11 +152,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
                 if ($this->showUserColumn) {
-                    $sheet->getStyle("D2:G{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-                    $sheet->getStyle("I2:I{$lastRow}")
+                    $sheet->getStyle("D2:H{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
@@ -173,12 +165,12 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                         'B' => 22,
                         'C' => 18,
                         'D' => 24,
-                        'E' => 24,
+                        'E' => 26,
                         'F' => 18,
                         'G' => 16,
-                        'H' => 28,
-                        'I' => 20,
-                        'J' => 28,
+                        'H' => 22,
+                        'I' => 28,
+                        'J' => 22,
                         'K' => 32,
                         'L' => 32,
                         'M' => 14,
@@ -186,11 +178,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
 
                     $expiryColumn = 'G';
                 } else {
-                    $sheet->getStyle("C2:F{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-                    $sheet->getStyle("H2:H{$lastRow}")
+                    $sheet->getStyle("C2:G{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
@@ -202,12 +190,12 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                         'A' => 30,
                         'B' => 18,
                         'C' => 24,
-                        'D' => 24,
+                        'D' => 26,
                         'E' => 18,
                         'F' => 16,
-                        'G' => 28,
-                        'H' => 20,
-                        'I' => 28,
+                        'G' => 22,
+                        'H' => 28,
+                        'I' => 22,
                         'J' => 32,
                         'K' => 32,
                         'L' => 14,
@@ -220,7 +208,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
 
-                $sheet->getRowDimension(1)->setRowHeight(30);
+                $sheet->getRowDimension(1)->setRowHeight(34);
 
                 for ($row = 2; $row <= $lastRow; $row++) {
                     $sheet->getRowDimension($row)->setRowHeight(34);

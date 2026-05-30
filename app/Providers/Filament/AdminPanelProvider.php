@@ -42,7 +42,7 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 TopSystemStatusBarWidget::class,
                 QuickActionsWidget::class,
-                SystemStatusWidget::class,
+                // SystemStatusWidget::class,
                 DashboardDeadlinesGrid::class,
                 TodayMiniBlockWidget::class,
                 DashboardCalendarWidget::class,

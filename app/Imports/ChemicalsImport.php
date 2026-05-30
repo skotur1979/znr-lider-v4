@@ -176,19 +176,31 @@ class ChemicalsImport implements ToCollection
     }
 
     private function parseList($value): array
-    {
-        $value = $this->clean($value);
+{
+    $value = $this->clean($value);
 
-        if (! $value) {
-            return [];
-        }
-
-        return collect(preg_split('/[,\n\r;]+/', $value) ?: [])
-            ->map(fn ($item) => trim((string) $item))
-            ->filter()
-            ->values()
-            ->all();
+    if (! $value) {
+        return [];
     }
+
+    return collect(preg_split('/[,\n\r;:]+/', $value) ?: [])
+        ->map(fn ($item) => trim((string) $item))
+        ->filter()
+        ->map(function ($item) {
+            $item = strtoupper(trim((string) $item));
+            $item = pathinfo($item, PATHINFO_FILENAME);
+            $item = str_replace([' ', '_', '-'], '', $item);
+
+            if (preg_match('/GHS0?([1-9])/', $item, $m)) {
+                return 'GHS0' . $m[1];
+            }
+
+            return $item;
+        })
+        ->unique()
+        ->values()
+        ->all();
+}
 
     private function parseDate($value): ?string
     {

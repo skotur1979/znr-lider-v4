@@ -199,9 +199,15 @@
 
                                     <span class="tsb-sep">/</span>
 
-                                    <span class="tsb-soon-text">
-                                        Uskoro {{ $row['soon_count'] }}
-                                    </span>
+                                    @if (($row['soon_count'] ?? 0) > 0 && ! empty($row['soon_url']))
+                                <a href="{{ $row['soon_url'] }}" class="tsb-soon-link">
+                                    Uskoro {{ $row['soon_count'] }}
+                                </a>
+                            @else
+                                <span class="tsb-soon-text">
+                                    Uskoro {{ $row['soon_count'] }}
+                                </span>
+                            @endif
                                 </div>
                             </div>
 
@@ -406,6 +412,17 @@
         .tsb-expired-link:hover{opacity:.82;text-decoration:none;}
         .tsb-expired-blink{animation:tsbTextPulse 2.2s ease-in-out infinite;}
         .tsb-soon-text{color:#f59e0b;font-weight:1000;}
+        .tsb-soon-link{
+        color:#f59e0b;
+        font-weight:1000;
+        text-decoration:none;
+        cursor:pointer;
+    }
+
+    .tsb-soon-link:hover{
+        text-decoration:underline;
+        opacity:.9;
+    }
         .tsb-sep{color:#94a3b8;font-weight:900;}
         .tsb-chevron{margin-left:auto;flex-shrink:0;color:#93c5fd;font-size:1.45rem;line-height:1;opacity:.9;}
 

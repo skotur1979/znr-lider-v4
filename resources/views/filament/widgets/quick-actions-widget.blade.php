@@ -1,13 +1,14 @@
 <x-filament-widgets::widget>
     <style>
         .znr-quick-wrap{
-            border-radius: 18px;
-            padding: 14px 16px;
-            border: 1px solid #dbe3f0;
-            background: #ffffff;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-            margin-bottom: 16px;
-        }
+    border-radius: 18px;
+    padding: 12px 16px;
+    border: 1px solid #dbe3f0;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    margin-top: -25px;
+    margin-bottom: -10px;
+}
 
         .dark .znr-quick-wrap{
             border: 1px solid rgba(148, 163, 184, .14);

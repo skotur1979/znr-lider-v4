@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\FirstAidKits\Pages;
 
+use App\Exports\FirstAidKitsExport;
 use App\Filament\Resources\FirstAidKits\FirstAidKitResource;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\FirstAidKitsExport;
 
 class ListFirstAidKits extends ListRecords
 {
@@ -36,8 +38,8 @@ class ListFirstAidKits extends ListRecords
                         ->get();
 
                     $pdf = Pdf::loadView('pdf.first-aid-kits', [
-                            'kits' => $kits,
-                        ])
+                        'kits' => $kits,
+                    ])
                         ->setPaper('a4', 'landscape')
                         ->setOptions([
                             'isHtml5ParserEnabled' => true,
@@ -62,5 +64,30 @@ class ListFirstAidKits extends ListRecords
                     'prva-pomoc-ormarici-' . now()->format('Y-m-d') . '.xlsx'
                 )),
         ];
+    }
+
+    protected function getTableQuery(): Builder
+    {
+        $query = parent::getTableQuery();
+
+        $pregled =
+            request()->query('pregled')
+            ?? data_get(request()->query(), 'tableFilters.pregled.value')
+            ?? data_get(request()->query(), 'filters.pregled.value');
+
+        return match ($pregled) {
+            'uskoro' => $query->whereHas('items', function (Builder $q): void {
+                $q->whereNotNull('valid_until')
+                    ->whereDate('valid_until', '>=', Carbon::today())
+                    ->whereDate('valid_until', '<=', Carbon::today()->addDays(30));
+            }),
+
+            'isteklo' => $query->whereHas('items', function (Builder $q): void {
+                $q->whereNotNull('valid_until')
+                    ->whereDate('valid_until', '<', Carbon::today());
+            }),
+
+            default => $query,
+        };
     }
 }

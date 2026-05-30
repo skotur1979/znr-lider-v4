@@ -73,7 +73,14 @@ class FiresImport implements ToCollection
 
             $service = $this->clean($this->value($row, $map, 'serviser'));
             $visible = $this->clean($this->value($row, $map, 'uocljivost'));
-            $remarkAction = $this->clean($this->value($row, $map, 'uoceni_nedostaci_postupci_otklanjanja'));
+
+            $combined = $this->clean($this->value($row, $map, 'uoceni_nedostaci_postupci_otklanjanja'));
+            $remark = $this->clean($this->value($row, $map, 'uoceni_nedostaci'));
+            $action = $this->clean($this->value($row, $map, 'postupci_otklanjanja'));
+
+            if (! $remark && $combined) {
+                $remark = $combined;
+            }
 
             if (! $serviceFrom || ! $validUntil || ! $regularFrom) {
                 $this->skipped++;
@@ -105,8 +112,8 @@ class FiresImport implements ToCollection
                 'regular_examination_valid_from' => $regularFrom,
                 'service' => $service,
                 'visible' => $visible,
-                'remark' => $remarkAction,
-                'action' => $remarkAction,
+                'remark' => $remark,
+                'action' => $action,
             ];
 
             if (! $fire) {
@@ -118,7 +125,7 @@ class FiresImport implements ToCollection
             $changed = [];
 
             foreach ($data as $field => $value) {
-                if (in_array($field, ['user_id', 'place', 'serial_label_number'], true)) {
+                if (in_array($field, ['user_id', 'place'], true)) {
                     continue;
                 }
 
@@ -188,6 +195,10 @@ class FiresImport implements ToCollection
             return null;
         }
 
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)->format('Y-m-d');
+        }
+
         if (is_numeric($value)) {
             try {
                 return Carbon::instance(Date::excelToDateTimeObject((float) $value))->format('Y-m-d');
@@ -235,16 +246,36 @@ class FiresImport implements ToCollection
         return match ($key) {
             'mjesto' => 'mjesto',
             'tip' => 'tip',
-            'tvor_broj', 'tvorn_broj', 'tvornicki_broj', 'tvornicki_broj_godina_proizvodnje' => 'tvor_broj',
-            'serijski_broj', 'ser_broj', 'serijski_broj_evidencijske_naljepnice' => 'serijski_broj',
+
+            'tvor_broj',
+            'tvorn_broj',
+            'tvornicki_broj',
+            'tvornicki_broj_godina_proizvodnje',
+            'tvor_broj_god_proizv',
+            'tvor_broj_godina_proizvodnje' => 'tvor_broj',
+
+            'serijski_broj',
+            'ser_broj',
+            'serijski_broj_eviden_naljepnice',
+            'serijski_broj_evidencijske_naljepnice',
+            'serijski_broj_evidenc_naljepnice',
+            'serijski_broj_evid_naljepnice' => 'serijski_broj',
+
             'datum_periodickog_servisa' => 'datum_periodickog_servisa',
             'vrijedi_do' => 'vrijedi_do',
             'datum_redovnog_pregleda' => 'datum_redovnog_pregleda',
             'serviser' => 'serviser',
             'uocljivost' => 'uocljivost',
+
             'uoceni_nedostaci_postupci_otklanjanja',
+            'uoceni_nedostatci_postupci_otklanjanja' => 'uoceni_nedostaci_postupci_otklanjanja',
+
             'uoceni_nedostaci',
-            'postupci_otklanjanja' => 'uoceni_nedostaci_postupci_otklanjanja',
+            'uoceni_nedostatci' => 'uoceni_nedostaci',
+
+            'postupci_otklanjanja',
+            'postupak_otklanjanja' => 'postupci_otklanjanja',
+
             default => $key,
         };
     }
