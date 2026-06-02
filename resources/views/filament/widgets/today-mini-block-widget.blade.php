@@ -48,7 +48,7 @@
             background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
             box-shadow:0 8px 18px rgba(15, 23, 42, 0.06);
             margin-top: -10px;
-            margin-bottom:-10px;
+            margin-bottom:-15px;
             scroll-margin-top:90px;
         }
 

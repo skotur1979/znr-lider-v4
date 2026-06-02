@@ -22,6 +22,7 @@ use UnitEnum;
 class QuestionResource extends BaseResource
 {
     protected static ?string $model = Question::class;
+    protected static bool $hasOwnership = false;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-question-mark-circle';
     protected static string|UnitEnum|null $navigationGroup = 'Testiranje';
@@ -103,45 +104,89 @@ class QuestionResource extends BaseResource
             ])
             ->defaultSort('test_id')
             ->actions([
-                EditAction::make()->label('Uredi'),
-                DeleteAction::make()->label('Obriši'),
+                EditAction::make()
+            ->label('Uredi')
+            ->visible(fn (Question $record): bool =>
+                Auth::user()?->isSuperAdmin()
+                || ($record->test?->user_id !== null)
+            ),
+
+            DeleteAction::make()
+            ->label('Obriši')
+            ->visible(fn (Question $record): bool =>
+                Auth::user()?->isSuperAdmin()
+                || ($record->test?->user_id !== null)
+            ),
             ])
             ->bulkActions([
                 DeleteBulkAction::make()->label('Obriši označeno'),
             ]);
     }
 
-    public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->with('test')
-            ->withCount('answers')
-            ->orderBy('test_id')
-            ->orderBy('id');
+    protected static function organizationUserIds(): array
+{
+    $user = Auth::user();
 
-        if (Auth::user()?->isSuperAdmin()) {
-            return $query;
-        }
+    if (! $user) {
+        return [];
+    }
 
-        return $query->where(function (Builder $q) {
+    $ownerId = method_exists($user, 'ownerId')
+        ? $user->ownerId()
+        : ($user->parent_user_id ?: $user->id);
+
+    return \App\Models\User::query()
+        ->where('id', $ownerId)
+        ->orWhere('parent_user_id', $ownerId)
+        ->pluck('id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+}
+
+public static function getEloquentQuery(): Builder
+{
+    $query = parent::getEloquentQuery()
+        ->with('test')
+        ->withCount('answers')
+        ->orderBy('test_id')
+        ->orderBy('id');
+
+    if (Auth::user()?->isSuperAdmin()) {
+        return $query;
+    }
+
+    $userIds = static::organizationUserIds();
+
+    return $query->where(function (Builder $q) use ($userIds): void {
+        $q->whereNull('user_id')
+            ->orWhereIn('user_id', $userIds)
+            ->orWhereHas('test', function (Builder $testQuery) use ($userIds): void {
+                $testQuery->whereNull('user_id')
+                    ->orWhereIn('user_id', $userIds);
+            });
+    });
+}
+
+public static function getNavigationBadge(): ?string
+{
+    $query = static::getModel()::query();
+
+    if (! Auth::user()?->isSuperAdmin()) {
+        $userIds = static::organizationUserIds();
+
+        $query->where(function (Builder $q) use ($userIds): void {
             $q->whereNull('user_id')
-                ->orWhere('user_id', Auth::id());
+                ->orWhereIn('user_id', $userIds)
+                ->orWhereHas('test', function (Builder $testQuery) use ($userIds): void {
+                    $testQuery->whereNull('user_id')
+                        ->orWhereIn('user_id', $userIds);
+                });
         });
     }
 
-    public static function getNavigationBadge(): ?string
-    {
-        $query = static::getModel()::query();
-
-        if (! Auth::user()?->isSuperAdmin()) {
-            $query->where(function (Builder $q) {
-                $q->whereNull('user_id')
-                    ->orWhere('user_id', Auth::id());
-            });
-        }
-
-        return (string) $query->count();
-    }
+    return (string) $query->count();
+}
 
     public static function getPages(): array
     {

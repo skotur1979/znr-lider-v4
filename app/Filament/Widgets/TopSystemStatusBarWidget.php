@@ -39,7 +39,7 @@ class TopSystemStatusBarWidget extends Widget
 
         $cacheKey = 'top_system_status_bar_' . ($user?->id ?? 'guest') . '_' . Carbon::today()->format('Y_m_d');
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($user): array {
+        return Cache::remember($cacheKey, now()->addMinutes(2), function () use ($user): array {
             return static::makeSystemStatusData($user);
         });
     }
@@ -96,7 +96,7 @@ class TopSystemStatusBarWidget extends Widget
             ],
             [
                 'label' => 'Prva pomoć',
-                'icon' => '🩹',
+                'icon' => '➕',
                 'expired_url' => $self->resolveFirstAidExpiredUrl(),
                 'soon_url' => $self->resolveFirstAidSoonUrl(),
                 ...$self->countFirstAidDeadline($today, $soonDate, $user),
@@ -253,12 +253,20 @@ class TopSystemStatusBarWidget extends Widget
 
                     if ($userIds !== null && method_exists($relatedModel, 'employee')) {
                         $query->whereHas('employee', function (Builder $q) use ($userIds): void {
-                            $employeeTable = $q->getModel()->getTable();
+                        $employeeTable = $q->getModel()->getTable();
 
-                            if (Schema::hasColumn($employeeTable, 'user_id')) {
-                                $q->whereIn($employeeTable . '.user_id', $userIds);
-                            }
-                        });
+                        if (Schema::hasColumn($employeeTable, 'user_id')) {
+                            $q->whereIn($employeeTable . '.user_id', $userIds);
+                        }
+
+                        if (Schema::hasColumn($employeeTable, 'active')) {
+                            $q->where($employeeTable . '.active', true);
+                        }
+
+                        if (Schema::hasColumn($employeeTable, 'deleted_at')) {
+                            $q->whereNull($employeeTable . '.deleted_at');
+                        }
+                    });
                     }
 
                     $certificateCounts = $this->countDateQuery($query, $certTable . '.valid_until', $today, $soonDate);
@@ -342,6 +350,7 @@ class TopSystemStatusBarWidget extends Widget
         $query = PPEItem::query()
             ->whereNull($table . '.return_date')
             ->whereNotNull($table . '.end_date');
+            $this->applyCommonScopes($query, $model);
 
         if (! $this->applyOrganizationScope($query, $table, $user)) {
             $userIds = $this->organizationUserIds($user);
@@ -374,6 +383,7 @@ class TopSystemStatusBarWidget extends Widget
         }
 
         $query = FirstAidItem::query()->whereNotNull($table . '.valid_until');
+        $this->applyCommonScopes($query, $model);
 
         if (! $this->applyOrganizationScope($query, $table, $user)) {
             $userIds = $this->organizationUserIds($user);

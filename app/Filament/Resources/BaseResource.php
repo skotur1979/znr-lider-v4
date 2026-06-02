@@ -125,31 +125,42 @@ abstract class BaseResource extends Resource
     }
 
     public static function getNavigationBadge(): ?string
-    {
-        $userId = Auth::id() ?? 'guest';
+{
+    $userId = Auth::id() ?? 'guest';
 
-        $cacheKey = 'navigation_badge_' . str_replace('\\', '_', static::class)
-    . '_' . $userId
-    . '_' . now()->format('Y-m-d-H-i');
+    $cacheKey = 'navigation_badge_' . str_replace('\\', '_', static::class)
+        . '_' . $userId
+        . '_' . now()->format('Y-m-d-H-i');
 
-        return Cache::remember($cacheKey, now()->addMinutes(2), function (): string {
-            $model = static::getModel();
+    return Cache::remember($cacheKey, now()->addSeconds(30), function (): string {
+        $model = static::getModel();
 
-            if (! $model) {
-                return '0';
+        if (! $model) {
+            return '0';
+        }
+
+        $instance = new $model();
+        $table = $instance->getTable();
+
+        $query = $model::query();
+
+        if (static::$usesSoftDeletes) {
+            $query->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
+
+            if (Schema::hasColumn($table, 'deleted_at')) {
+                $query->whereNull($table . '.deleted_at');
             }
+        }
 
-            $query = $model::query();
+        if (Schema::hasColumn($table, 'active')) {
+            $query->where($table . '.active', true);
+        }
 
-            if (static::$usesSoftDeletes) {
-                $query->withoutGlobalScopes([
-                    SoftDeletingScope::class,
-                ]);
-            }
-
-            return (string) static::scopeToOwner($query)->count();
-        });
-    }
+        return (string) static::scopeToOwner($query)->count();
+    });
+}
 
     public static function defaultUserId(): ?int
     {

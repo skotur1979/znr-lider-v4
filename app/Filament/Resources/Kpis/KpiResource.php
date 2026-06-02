@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Kpis\Pages;
 use App\Filament\Resources\Kpis\RelationManagers\KpiValuesRelationManager;
 use App\Models\Kpi;
+use App\Models\KpiValue;
 use BackedEnum;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -247,16 +248,20 @@ class KpiResource extends BaseResource
         ->alignment(Alignment::Center)
         ->toggleable(isToggledHiddenByDefault: true),
 
-    TextColumn::make('latest_value')
+        TextColumn::make('latest_value')
         ->label('Zadnja vrijednost')
-        ->state(fn (Kpi $record) => $record->latestValue()?->value)
+        ->state(fn (Kpi $record) => static::latestVisibleKpiValue($record)?->value)
         ->formatStateUsing(fn ($state, Kpi $record) => $record->formatNumberOnly($state))
         ->toggleable(),
 
-    TextColumn::make('current_status')
+        TextColumn::make('current_status')
         ->label('Status')
         ->badge()
-        ->state(fn (Kpi $record) => $record->evaluateStatus($record->latestValue()?->value, static::resolveOwnerId()))
+        ->state(function (Kpi $record): string {
+            $value = static::latestVisibleKpiValue($record)?->value;
+
+            return $record->evaluateStatus($value, static::resolveOwnerId());
+        })
         ->formatStateUsing(fn (string $state): string => match ($state) {
             'success' => 'U cilju',
             'warning' => 'Upozorenje',
@@ -270,7 +275,7 @@ class KpiResource extends BaseResource
             default => 'gray',
         })
         ->toggleable(),
-])
+    ])
             ->defaultSort('sort_order')
             ->recordUrl(fn (Kpi $record): string => static::getUrl('view', ['record' => $record]))
             ->filters([
@@ -424,7 +429,25 @@ class KpiResource extends BaseResource
             ->orWhereNull('user_id');
     });
 }
+protected static function latestVisibleKpiValue(Kpi $record): ?KpiValue
+{
+    $query = KpiValue::query()
+        ->where('kpi_id', $record->id)
+        ->orderByDesc('year')
+        ->orderByDesc('month');
 
+    if (! static::isSuperAdmin()) {
+        $ownerId = static::resolveOwnerId();
+
+        if (! $ownerId) {
+            return null;
+        }
+
+        $query->where('user_id', $ownerId);
+    }
+
+    return $query->first();
+}
     public static function getGlobalSearchEloquentQuery(): Builder
     {
         return static::getEloquentQuery();

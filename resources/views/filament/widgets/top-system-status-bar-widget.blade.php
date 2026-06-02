@@ -165,58 +165,6 @@
                 </div>
             </div>
         </div>
-
-        @if (count($rows))
-            <div class="tsb-modules">
-                @foreach ($rows as $row)
-                    @php
-                        $expiredCount = (int) ($row['expired_count'] ?? 0);
-
-                        $moduleStatusClass = match (true) {
-                            $expiredCount > 5 => 'tsb-module-expired-high',
-                            $expiredCount > 0 => 'tsb-module-expired-low',
-                            default => 'tsb-module-ok',
-                        };
-                    @endphp
-
-                    <div class="tsb-module {{ $moduleStatusClass }}">
-                        <div class="tsb-module-inner">
-                            <span class="tsb-module-icon">{{ $row['icon'] }}</span>
-
-                            <div class="tsb-module-text">
-                                <span class="tsb-module-label">{{ $row['label'] }}</span>
-
-                                <div class="tsb-module-stats">
-                                    @if (($row['expired_count'] ?? 0) > 0 && ! empty($row['expired_url']))
-                                        <a href="{{ $row['expired_url'] }}" class="tsb-expired-link tsb-expired-blink">
-                                            Isteklo {{ $row['expired_count'] }}
-                                        </a>
-                                    @else
-                                        <span class="tsb-expired-text">
-                                            Isteklo {{ $row['expired_count'] }}
-                                        </span>
-                                    @endif
-
-                                    <span class="tsb-sep">/</span>
-
-                                    @if (($row['soon_count'] ?? 0) > 0 && ! empty($row['soon_url']))
-                                <a href="{{ $row['soon_url'] }}" class="tsb-soon-link">
-                                    Uskoro {{ $row['soon_count'] }}
-                                </a>
-                            @else
-                                <span class="tsb-soon-text">
-                                    Uskoro {{ $row['soon_count'] }}
-                                </span>
-                            @endif
-                                </div>
-                            </div>
-
-                            <span class="tsb-chevron">›</span>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @endif
     </div>
 
     <style>
@@ -225,7 +173,7 @@
             overflow:hidden;
             border-radius:20px;
             padding:22px;
-            margin-bottom:16px;
+            margin-bottom:5px;
             border:1px solid rgba(148,163,184,.16);
             background:#ffffff;
             box-shadow:0 10px 26px rgba(15,23,42,.06);

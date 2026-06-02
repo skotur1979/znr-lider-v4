@@ -8,6 +8,7 @@ use App\Filament\Widgets\QuickActionsWidget;
 use App\Filament\Widgets\SystemStatusWidget;
 use App\Filament\Widgets\TopSystemStatusBarWidget;
 use App\Filament\Widgets\TodayMiniBlockWidget;
+use App\Filament\Widgets\DashboardModulesStatusWidget;
 use App\Http\Middleware\EnsureLegalAccepted;
 use App\Http\Middleware\SessionTimeout;
 use Filament\Http\Middleware\Authenticate;
@@ -41,9 +42,10 @@ class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->widgets([
                 TopSystemStatusBarWidget::class,
+                DashboardModulesStatusWidget::class,
                 QuickActionsWidget::class,
                 // SystemStatusWidget::class,
-                DashboardDeadlinesGrid::class,
+                // DashboardDeadlinesGrid::class,
                 TodayMiniBlockWidget::class,
                 DashboardCalendarWidget::class,
             ])

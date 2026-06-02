@@ -7,7 +7,7 @@
     background: #ffffff;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     margin-top: -25px;
-    margin-bottom: -10px;
+    margin-bottom: -5px;
 }
 
         .dark .znr-quick-wrap{

@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\Kpis\RelationManagers;
 
+use App\Filament\Resources\Kpis\KpiResource;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class KpiValuesRelationManager extends RelationManager
 {
@@ -21,6 +23,19 @@ class KpiValuesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(function (Builder $query): Builder {
+                if (auth()->user()?->isSuperAdmin()) {
+                    return $query;
+                }
+
+                $ownerId = KpiResource::resolveOwnerId();
+
+                if (! $ownerId) {
+                    return $query->whereRaw('1 = 0');
+                }
+
+                return $query->where('user_id', $ownerId);
+            })
             ->defaultSort('year', 'desc')
             ->defaultSort('month', 'desc')
             ->columns([
