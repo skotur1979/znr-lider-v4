@@ -55,10 +55,16 @@ class InspectionResource extends BaseResource
             Section::make('Osnovni podaci nadzora')
                 ->schema([
                     TextInput::make('number')
-                        ->label('Broj nadzora')
-                        ->required()
-                        ->maxLength(50)
-                        ->unique(ignoreRecord: true),
+                    ->label('Broj nadzora')
+                    ->required()
+                    ->maxLength(50)
+                    ->unique(
+                        table: 'inspections',
+                        column: 'number',
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn ($rule) => $rule
+                            ->where('user_id', static::defaultUserId())
+    ),
 
                     TextInput::make('title')
                         ->label('Naziv nadzora')
