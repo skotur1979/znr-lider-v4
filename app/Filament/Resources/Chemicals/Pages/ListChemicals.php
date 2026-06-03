@@ -55,13 +55,20 @@ class ListChemicals extends ListRecords
     }),
 
             Actions\Action::make('export_excel')
-                ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(fn () => \Maatwebsite\Excel\Facades\Excel::download(
-    new \App\Exports\ChemicalsExport(),
-    'kemikalije-' . now()->format('Y-m-d') . '.xlsx'
-)),
+    ->label('Izvoz u Excel')
+    ->icon('heroicon-o-document-arrow-down')
+    ->color('success')
+    ->action(function () {
+
+        $chemicalIds = $this->getFilteredSortedTableQuery()
+            ->pluck('chemicals.id')
+            ->toArray();
+
+        return Excel::download(
+            new \App\Exports\ChemicalsExport($chemicalIds),
+            'kemikalije-' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }),
 
             Actions\Action::make('import_excel')
     ->label('Uvoz iz Excela')

@@ -344,7 +344,7 @@ class EmployeesImport implements ToCollection
             'rukovanje_zapaljivim_tvarima_do' => 'rukovanje_zapaljivim_tvarima_do',
             'ovlastenik_poslodavca_od' => 'ovlastenik_poslodavca_od',
             'ovlastenik_poslodavca_do' => 'ovlastenik_poslodavca_do',
-            'napomena' => 'napomena',
+            'napomena', 'napomena_lijecnika', 'napomena_lijecnickog_pregleda' => 'napomena',
             default => $key,
         };
     }

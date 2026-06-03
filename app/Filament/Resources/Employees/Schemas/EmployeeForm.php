@@ -103,6 +103,10 @@ Hidden::make('user_id')
                                         ->label('Članak 3. točke')
                                         ->rows(2)
                                         ->columnSpanFull(),
+                                        Textarea::make('remark')
+                                        ->label('Napomena liječnika')
+                                        ->rows(3)
+                                        ->columnSpanFull(),
                                 ]),
                         ])
                         ->columns(2),

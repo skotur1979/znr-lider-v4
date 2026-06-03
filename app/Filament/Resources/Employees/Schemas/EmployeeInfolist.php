@@ -66,6 +66,10 @@ class EmployeeInfolist
                                         TextEntry::make('article')
                                             ->label('Članak 3. točke')
                                             ->columnSpanFull(),
+                                            
+                                            TextEntry::make('remark')
+                                            ->label('Napomena liječnika')
+                                            ->columnSpanFull(),
                                     ]),
                             ]),
                     ]),

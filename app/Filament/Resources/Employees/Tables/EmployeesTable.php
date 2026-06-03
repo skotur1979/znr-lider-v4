@@ -256,47 +256,57 @@ class EmployeesTable
                     }),
 
                 Filter::make('medical_examination_expired')
-                    ->label('Liječnički (istekao)')
-                    ->query(fn (Builder $q) =>
-                        $q->whereDate('medical_examination_valid_until', '<', Carbon::today())
-                    ),
+    ->label('Liječnički (istekao)')
+    ->query(function (Builder $query): Builder {
+        return $query
+            ->whereNotNull('medical_examination_valid_until')
+            ->whereDate('medical_examination_valid_until', '<', Carbon::today());
+    }),
 
-                Filter::make('medical_examination_expiring')
-                    ->label('Liječnički (uskoro ističe)')
-                    ->query(fn (Builder $q) =>
-                        $q->whereDate('medical_examination_valid_until', '>=', Carbon::today())
-                            ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30))
-                    ),
+Filter::make('medical_examination_expiring')
+    ->label('Liječnički (uskoro ističe)')
+    ->query(function (Builder $query): Builder {
+        return $query
+            ->whereNotNull('medical_examination_valid_until')
+            ->whereDate('medical_examination_valid_until', '>=', Carbon::today())
+            ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30));
+    }),
 
-                Filter::make('znr_expired')
-                    ->label('ZNR nije položen (istekao rok)')
-                    ->query(fn (Builder $q) =>
-                        $q->whereNull('occupational_safety_valid_from')
-                            ->whereNotNull('employeed_at')
-                            ->whereDate('employeed_at', '<', Carbon::today()->subDays(60))
-                    ),
+Filter::make('znr_expired')
+    ->label('ZNR nije položen (istekao rok)')
+    ->query(function (Builder $query): Builder {
+        return $query
+            ->whereNull('occupational_safety_valid_from')
+            ->whereNotNull('employeed_at')
+            ->whereDate('employeed_at', '<', Carbon::today()->subDays(60));
+    }),
 
-                Filter::make('znr_expiring')
-                    ->label('ZNR nije položen (uskoro ističe)')
-                    ->query(fn (Builder $q) =>
-                        $q->whereNull('occupational_safety_valid_from')
-                            ->whereNotNull('employeed_at')
-                            ->whereDate('employeed_at', '>=', Carbon::today()->subDays(60))
-                            ->whereDate('employeed_at', '<=', Carbon::today()->subDays(30))
-                    ),
+Filter::make('znr_expiring')
+    ->label('ZNR nije položen (uskoro ističe)')
+    ->query(function (Builder $query): Builder {
+        return $query
+            ->whereNull('occupational_safety_valid_from')
+            ->whereNotNull('employeed_at')
+            ->whereDate('employeed_at', '>=', Carbon::today()->subDays(60))
+            ->whereDate('employeed_at', '<=', Carbon::today()->subDays(30));
+    }),
 
-                Filter::make('toxicology_expired')
-                    ->label('Toksikologija (istekla)')
-                    ->query(fn (Builder $q) =>
-                        $q->whereDate('toxicology_valid_until', '<', Carbon::today())
-                    ),
+Filter::make('toxicology_expired')
+    ->label('Toksikologija (istekla)')
+    ->query(function (Builder $query): Builder {
+        return $query
+            ->whereNotNull('toxicology_valid_until')
+            ->whereDate('toxicology_valid_until', '<', Carbon::today());
+    }),
 
-                Filter::make('toxicology_expiring')
-                    ->label('Toksikologija (uskoro ističe)')
-                    ->query(fn (Builder $q) =>
-                        $q->whereDate('toxicology_valid_until', '>=', Carbon::today())
-                            ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30))
-                    ),
+Filter::make('toxicology_expiring')
+    ->label('Toksikologija (uskoro ističe)')
+    ->query(function (Builder $query): Builder {
+        return $query
+            ->whereNotNull('toxicology_valid_until')
+            ->whereDate('toxicology_valid_until', '>=', Carbon::today())
+            ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30));
+    }),
             ])
 
             ->actions([

@@ -52,13 +52,20 @@ class ListMachines extends ListRecords
     }),
 
             Actions\Action::make('export_excel')
-                ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(fn () => Excel::download(
-                    new MachinesExport(),
-                    'radna-oprema-' . now()->format('Y-m-d') . '.xlsx'
-                )),
+    ->label('Izvoz u Excel')
+    ->icon('heroicon-o-document-arrow-down')
+    ->color('success')
+    ->action(function () {
+
+        $machineIds = $this->getFilteredSortedTableQuery()
+            ->pluck('machines.id')
+            ->toArray();
+
+        return Excel::download(
+            new MachinesExport($machineIds),
+            'radna-oprema-' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }),
 
             Actions\Action::make('import_excel')
     ->label('Uvoz iz Excela')

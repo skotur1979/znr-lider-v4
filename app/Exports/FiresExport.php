@@ -22,19 +22,26 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
 
     protected bool $showUserColumn = false;
 
-    public function __construct()
-    {
-        $user = auth()->user();
+    public function __construct(?array $fireIds = null)
+{
+    $user = auth()->user();
 
-        $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+    $this->showUserColumn =
+        (bool) $user?->isSuperAdmin()
+        || (bool) $user?->canCreateSubusers();
 
-        $this->fires = FireResource::getEloquentQuery()
-            ->with('user')
-            ->orderBy('place')
-            ->get();
+    $query = FireResource::getEloquentQuery()
+        ->with('user')
+        ->orderBy('place');
+
+    if ($fireIds !== null && count($fireIds) > 0) {
+        $query->whereIn('fires.id', $fireIds);
+    } else {
+        $query->withoutTrashed();
     }
+
+    $this->fires = $query->get();
+}
 
     public function collection()
     {

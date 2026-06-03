@@ -6,7 +6,6 @@ use App\Filament\Resources\Machines\MachineResource;
 use App\Models\Machine;
 use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -16,25 +15,32 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents
+class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, WithEvents
 {
     protected $machines;
 
     protected bool $showUserColumn = false;
 
-    public function __construct()
-    {
-        $user = auth()->user();
+    public function __construct(?array $machineIds = null)
+{
+    $user = auth()->user();
 
-        $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+    $this->showUserColumn =
+        (bool) $user?->isSuperAdmin()
+        || (bool) $user?->canCreateSubusers();
 
-        $this->machines = MachineResource::getEloquentQuery()
-            ->with('user')
-            ->orderBy('name')
-            ->get();
+    $query = MachineResource::getEloquentQuery()
+        ->with('user')
+        ->orderBy('name');
+
+    if ($machineIds !== null && count($machineIds) > 0) {
+        $query->whereIn('machines.id', $machineIds);
+    } else {
+        $query->withoutTrashed();
     }
+
+    $this->machines = $query->get();
+}
 
     public function collection()
     {
@@ -163,14 +169,14 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
                         'A' => 30,
                         'B' => 22,
                         'C' => 24,
-                        'D' => 22,
+                        'D' => 26,
                         'E' => 20,
                         'F' => 16,
                         'G' => 16,
-                        'H' => 24,
-                        'I' => 22,
+                        'H' => 26,
+                        'I' => 30,
                         'J' => 24,
-                        'K' => 45,
+                        'K' => 14,
                         'L' => 14,
                     ];
 
@@ -188,13 +194,13 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
                         'A' => 30,
                         'B' => 24,
                         'C' => 22,
-                        'D' => 20,
+                        'D' => 26,
                         'E' => 16,
                         'F' => 16,
-                        'G' => 24,
-                        'H' => 22,
-                        'I' => 24,
-                        'J' => 45,
+                        'G' => 16,
+                        'H' => 26,
+                        'I' => 30,
+                        'J' => 14,
                         'K' => 14,
                     ];
 

@@ -5,7 +5,6 @@ namespace App\Exports;
 use App\Filament\Resources\Chemicals\ChemicalResource;
 use App\Models\Chemical;
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithDrawings;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -14,25 +13,32 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
-class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithEvents, WithDrawings
+class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, WithEvents, WithDrawings
 {
     protected $chemicals;
 
     protected bool $showUserColumn = false;
 
-    public function __construct()
-    {
-        $user = auth()->user();
+    public function __construct(?array $chemicalIds = null)
+{
+    $user = auth()->user();
 
-        $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+    $this->showUserColumn =
+        (bool) $user?->isSuperAdmin()
+        || (bool) $user?->canCreateSubusers();
 
-        $this->chemicals = ChemicalResource::getEloquentQuery()
-            ->with('user')
-            ->orderBy('product_name')
-            ->get();
+    $query = ChemicalResource::getEloquentQuery()
+        ->with('user')
+        ->orderBy('product_name');
+
+    if ($chemicalIds !== null && count($chemicalIds) > 0) {
+        $query->whereIn('chemicals.id', $chemicalIds);
+    } else {
+        $query->withoutTrashed();
     }
+
+    $this->chemicals = $query->get();
+}
 
     public function collection()
     {
@@ -41,9 +47,7 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
 
     public function headings(): array
     {
-        $headings = [
-            'Ime proizvoda',
-        ];
+        $headings = ['Ime proizvoda'];
 
         if ($this->showUserColumn) {
             $headings[] = 'Korisnik';
@@ -68,24 +72,24 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
         /** @var Chemical $chemical */
 
         $row = [
-            $chemical->product_name,
+            $this->oneLine($chemical->product_name),
         ];
 
         if ($this->showUserColumn) {
-            $row[] = $chemical->user?->name ?? '';
+            $row[] = $this->oneLine($chemical->user?->name ?? '');
         }
 
         return array_merge($row, [
-        $chemical->cas_number,
-        $chemical->ufi_number,
-        implode('; ', $this->normalizePictos($chemical->hazard_pictograms)),
-        implode(', ', $this->toList($chemical->h_statements)),
-        implode(', ', $this->toList($chemical->p_statements)),
-        $chemical->usage_location,
-        $chemical->annual_quantity,
-        $chemical->gvi_kgvi,
-        $chemical->voc,
-        $chemical->stl_hzjz ? $chemical->stl_hzjz->format('d.m.Y.') : '',
+            $this->oneLine($chemical->cas_number),
+            $this->oneLine($chemical->ufi_number),
+            implode('; ', $this->normalizePictos($chemical->hazard_pictograms)),
+            implode(', ', $this->toList($chemical->h_statements)),
+            implode(', ', $this->toList($chemical->p_statements)),
+            $this->oneLine($chemical->usage_location),
+            $this->oneLine($chemical->annual_quantity),
+            $this->oneLine($chemical->gvi_kgvi),
+            $this->oneLine($chemical->voc),
+            $chemical->stl_hzjz ? $chemical->stl_hzjz->format('d.m.Y.') : '',
         ]);
     }
 
@@ -123,63 +127,60 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
 
                 $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setVertical(Alignment::VERTICAL_TOP)
+                    ->setHorizontal(Alignment::HORIZONTAL_LEFT)
                     ->setWrapText(true);
 
-                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
-
                 if ($this->showUserColumn) {
-                    $sheet->getStyle("I2:K{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
                     $widths = [
-                        'A' => 28,
+                        'A' => 30,
                         'B' => 18,
-                        'C' => 20,
-                        'D' => 20,
-                        'E' => 20,
+                        'C' => 32,
+                        'D' => 16,
+                        'E' => 16,
                         'F' => 28,
-                        'G' => 42,
+                        'G' => 48,
                         'H' => 24,
-                        'I' => 12,
-                        'J' => 12,
-                        'K' => 10,
+                        'I' => 14,
+                        'J' => 14,
+                        'K' => 12,
                         'L' => 16,
                     ];
-                } else {
-                    $sheet->getStyle("H2:J{$lastRow}")
+
+                    $sheet->getStyle("I2:L{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
+                } else {
                     $widths = [
-                        'A' => 28,
-                        'B' => 20,
-                        'C' => 20,
-                        'D' => 20,
+                        'A' => 32,
+                        'B' => 34,
+                        'C' => 16,
+                        'D' => 16,
                         'E' => 28,
-                        'F' => 42,
+                        'F' => 50,
                         'G' => 24,
-                        'H' => 12,
-                        'I' => 12,
-                        'J' => 10,
+                        'H' => 14,
+                        'I' => 14,
+                        'J' => 12,
                         'K' => 16,
                     ];
+
+                    $sheet->getStyle("H2:K{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 }
 
                 foreach ($widths as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
 
-                $sheet->getRowDimension(1)->setRowHeight(26);
+                $sheet->getRowDimension(1)->setRowHeight(28);
 
                 foreach ($this->chemicals as $i => $chemical) {
                     $row = $i + 2;
                     $count = count($this->normalizePictos($chemical->hazard_pictograms));
 
-                    $sheet->getRowDimension($row)->setRowHeight($count > 3 ? 48 : 32);
+                    $sheet->getRowDimension($row)->setRowHeight($count > 3 ? 38 : 24);
                 }
 
                 $sheet->freezePane('A2');
@@ -209,11 +210,10 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
                 $drawing->setName("picto_{$row}_{$idx}");
                 $drawing->setDescription($code);
                 $drawing->setPath($path);
-                $drawing->setHeight(18);
+                $drawing->setHeight(17);
                 $drawing->setCoordinates($pictogramColumn . $row);
-
-                $drawing->setOffsetX(4 + (($idx % 3) * 24));
-                $drawing->setOffsetY(4 + (intdiv($idx, 3) * 21));
+                $drawing->setOffsetX(4 + (($idx % 3) * 23));
+                $drawing->setOffsetY(3 + (intdiv($idx, 3) * 19));
 
                 $drawings[] = $drawing;
             }
@@ -222,46 +222,51 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, Shou
         return $drawings;
     }
 
-    private function normalizePictos($value): array
-{
-    return collect($this->toList($value))
-        ->map(function ($v) {
-            $v = strtoupper(trim((string) $v));
-            $v = pathinfo($v, PATHINFO_FILENAME);
-            $v = str_replace([' ', '_', '-'], '', $v);
-
-            if (preg_match('/GHS0?([1-9])/', $v, $m)) {
-                return 'GHS0' . $m[1];
-            }
-
-            return $v;
-        })
-        ->filter()
-        ->unique()
-        ->values()
-        ->all();
-}
-
-    private function toList($value): array
-{
-    if ($value === null || $value === '') {
-        return [];
+    private function oneLine($value): string
+    {
+        return trim(preg_replace('/\s+/', ' ', str_replace(["\r", "\n"], ' ', (string) ($value ?? ''))));
     }
 
-    if (is_array($value)) {
-        return collect($value)
-            ->map(fn ($v) => trim((string) $v))
+    private function normalizePictos($value): array
+    {
+        return collect($this->toList($value))
+            ->map(function ($v) {
+                $v = strtoupper(trim((string) $v));
+                $v = pathinfo($v, PATHINFO_FILENAME);
+                $v = str_replace([' ', '_', '-'], '', $v);
+
+                if (preg_match('/GHS0?([1-9])/', $v, $m)) {
+                    return 'GHS0' . $m[1];
+                }
+
+                return $v;
+            })
             ->filter()
+            ->unique()
             ->values()
             ->all();
     }
 
-    return collect(preg_split('/[,\n\r;:]+/', (string) $value) ?: [])
-        ->map(fn ($v) => trim((string) $v))
-        ->filter()
-        ->values()
-        ->all();
-}
+    private function toList($value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_array($value)) {
+            return collect($value)
+                ->map(fn ($v) => $this->oneLine($v))
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        return collect(preg_split('/[,\n\r;:]+/', (string) $value) ?: [])
+            ->map(fn ($v) => $this->oneLine($v))
+            ->filter()
+            ->values()
+            ->all();
+    }
 
     private function findPictogramPath(string $code): ?string
     {

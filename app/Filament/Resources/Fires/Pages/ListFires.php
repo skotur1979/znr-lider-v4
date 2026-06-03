@@ -57,10 +57,20 @@ class ListFires extends ListRecords
     }),
 
             Actions\Action::make('export_excel')
-                ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(fn () => Excel::download(new FiresExport(), 'vatrogasni-aparati-' . now()->format('Y-m-d') . '.xlsx')),
+    ->label('Izvoz u Excel')
+    ->icon('heroicon-o-document-arrow-down')
+    ->color('success')
+    ->action(function () {
+
+        $fireIds = $this->getFilteredSortedTableQuery()
+            ->pluck('fires.id')
+            ->toArray();
+
+        return Excel::download(
+            new FiresExport($fireIds),
+            'vatrogasni-aparati-' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }),
 
             Actions\Action::make('import_excel')
     ->label('Uvoz iz Excela')

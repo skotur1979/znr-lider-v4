@@ -61,13 +61,20 @@ class ListEmployees extends ListRecords
                 }),
 
             Actions\Action::make('export_excel')
-                ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(fn () => Excel::download(
-                    new EmployeesExport(),
-                    'zaposlenici-' . now()->format('Y-m-d') . '.xlsx'
-                )),
+    ->label('Izvoz u Excel')
+    ->icon('heroicon-o-document-arrow-down')
+    ->color('success')
+    ->action(function () {
+
+        $employeeIds = $this->getFilteredSortedTableQuery()
+            ->pluck('employees.id')
+            ->toArray();
+
+        return Excel::download(
+            new EmployeesExport($employeeIds),
+            'zaposlenici-' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }),
 
             Actions\Action::make('import_excel')
                 ->label('Uvoz iz Excela')

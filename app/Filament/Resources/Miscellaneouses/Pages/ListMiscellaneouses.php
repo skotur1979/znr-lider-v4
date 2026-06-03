@@ -55,13 +55,20 @@ class ListMiscellaneouses extends ListRecords
     }),
 
             Action::make('export_excel')
-                ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(fn () => Excel::download(
-                    new MiscellaneousesExport(),
-                    'ostala-ispitivanja-' . now()->format('Y-m-d') . '.xlsx'
-                )),
+    ->label('Izvoz u Excel')
+    ->icon('heroicon-o-document-arrow-down')
+    ->color('success')
+    ->action(function () {
+
+        $recordIds = $this->getFilteredSortedTableQuery()
+            ->pluck('miscellaneouses.id')
+            ->toArray();
+
+        return Excel::download(
+            new MiscellaneousesExport($recordIds),
+            'ostala-ispitivanja-' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }),
 
             Action::make('import_excel')
                 ->label('Uvoz iz Excela')

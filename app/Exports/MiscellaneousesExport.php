@@ -6,7 +6,6 @@ use App\Filament\Resources\Miscellaneouses\MiscellaneousResource;
 use App\Models\Miscellaneous;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -16,13 +15,13 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents
+class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, WithEvents
 {
     protected $records;
 
     protected bool $showUserColumn = false;
 
-    public function __construct()
+    public function __construct(?array $recordIds = null)
     {
         $user = auth()->user();
 
@@ -30,10 +29,17 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
             (bool) $user?->isSuperAdmin()
             || (bool) $user?->canCreateSubusers();
 
-        $this->records = MiscellaneousResource::getEloquentQuery()
+        $query = MiscellaneousResource::getEloquentQuery()
             ->with(['user', 'category'])
-            ->orderByDesc('examination_valid_until')
-            ->get();
+            ->orderByDesc('examination_valid_until');
+
+        if ($recordIds !== null && count($recordIds) > 0) {
+            $query->whereIn('miscellaneouses.id', $recordIds);
+        } else {
+            $query->withoutTrashed();
+        }
+
+        $this->records = $query->get();
     }
 
     public function collection()
@@ -43,9 +49,7 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
 
     public function headings(): array
     {
-        $headings = [
-            'Naziv',
-        ];
+        $headings = ['Naziv'];
 
         if ($this->showUserColumn) {
             $headings[] = 'Korisnik';
@@ -69,9 +73,7 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
         $from = $record->examination_valid_from ? Carbon::parse($record->examination_valid_from) : null;
         $until = $record->examination_valid_until ? Carbon::parse($record->examination_valid_until) : null;
 
-        $row = [
-            $record->name,
-        ];
+        $row = [$record->name];
 
         if ($this->showUserColumn) {
             $row[] = $record->user?->name ?? '';
@@ -138,11 +140,8 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
                 $sheet->getStyle("A2:{$lastCol}{$lastRow}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
-                    ->setWrapText(true);
-
-                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    ->setHorizontal(Alignment::HORIZONTAL_LEFT)
+                    ->setWrapText(false);
 
                 if ($this->showUserColumn) {
                     $sheet->getStyle("F2:G{$lastRow}")
@@ -153,17 +152,20 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
+                    $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setWrapText(true);
+                    $sheet->getStyle("H2:H{$lastRow}")->getAlignment()->setWrapText(true);
+
                     $widths = [
-                        'A' => 32,
-                        'B' => 22,
-                        'C' => 26,
-                        'D' => 24,
-                        'E' => 22,
-                        'F' => 16,
-                        'G' => 16,
-                        'H' => 45,
-                        'I' => 14,
-                    ];
+                    'A' => 50,
+                    'B' => 18,
+                    'C' => 34,
+                    'D' => 36,
+                    'E' => 28,
+                    'F' => 15,
+                    'G' => 15,
+                    'H' => 28,
+                    'I' => 10,
+                ];
 
                     $expiryColumn = 'G';
                 } else {
@@ -175,16 +177,19 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
+                    $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setWrapText(true);
+                    $sheet->getStyle("G2:G{$lastRow}")->getAlignment()->setWrapText(true);
+
                     $widths = [
-                        'A' => 32,
-                        'B' => 26,
-                        'C' => 24,
-                        'D' => 22,
-                        'E' => 16,
-                        'F' => 16,
-                        'G' => 45,
-                        'H' => 14,
-                    ];
+                    'A' => 50,
+                    'B' => 30,
+                    'C' => 34,
+                    'D' => 24,
+                    'E' => 14,
+                    'F' => 14,
+                    'G' => 28,
+                    'H' => 10,
+                ];
 
                     $expiryColumn = 'F';
                 }
@@ -196,7 +201,7 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
                 $sheet->getRowDimension(1)->setRowHeight(30);
 
                 for ($row = 2; $row <= $lastRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(34);
+                    $sheet->getRowDimension($row)->setRowHeight(40);
                 }
 
                 $today = Carbon::today();

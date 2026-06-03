@@ -83,7 +83,11 @@ class ChemicalsImport implements ToCollection
                 'user_id' => $userId,
                 'product_name' => $productName,
                 'cas_number' => $cas,
-                'ufi_number' => $this->clean($this->value($row, $map, 'ufi_broj')),
+                'ufi_number' => in_array(
+                trim((string) $this->value($row, $map, 'ufi_broj')),
+                ['/', '-', ''],
+                true
+                ) ? null : $this->clean($this->value($row, $map, 'ufi_broj')),
                 'hazard_pictograms' => $this->parseList($this->value($row, $map, 'piktogrami')),
                 'h_statements' => $this->parseList($this->value($row, $map, 'h_oznake')),
                 'p_statements' => $this->parseList($this->value($row, $map, 'p_oznake')),
@@ -195,7 +199,7 @@ class ChemicalsImport implements ToCollection
                 return 'GHS0' . $m[1];
             }
 
-            return $item;
+            return $this->normalizeStatementCode($item);
         })
         ->unique()
         ->values()
@@ -239,6 +243,17 @@ class ChemicalsImport implements ToCollection
             return null;
         }
     }
+    private function normalizeStatementCode(string $item): string
+{
+    $item = strtoupper(trim($item));
+    $item = str_replace([' ', '_', '-'], '', $item);
+
+    if (preg_match('/^([HP])(\d{3})(\+\d{3})+$/', $item, $m)) {
+        return preg_replace('/\+(\d{3})/', '+'.$m[1].'$1', $item);
+    }
+
+    return $item;
+}
 
     private function normalizeKey($key): ?string
     {

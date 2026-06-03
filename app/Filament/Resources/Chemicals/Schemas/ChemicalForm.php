@@ -46,16 +46,10 @@ class ChemicalForm
             ->maxLength(50),
 
         TextInput::make('ufi_number')
-            ->label('UFI broj')
-            ->maxLength(255)
-            ->rule(function ($record) {
-                return Rule::unique('chemicals', 'ufi_number')
-                    ->where(function ($query) {
-                        $query->where('user_id', auth()->user()?->ownerId() ?? auth()->id())
-                            ->whereNull('deleted_at');
-                    })
-                    ->ignore($record?->id);
-            }),
+        ->label('UFI broj')
+        ->maxLength(255)
+        ->nullable()
+        ->dehydrateStateUsing(fn ($state) => trim((string) $state) === '/' ? null : $state),
 
         TextInput::make('usage_location')
             ->label('Mjesto upotrebe')
