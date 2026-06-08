@@ -139,12 +139,20 @@ Hidden::make('user_id')
                                 ]),
 
                             Section::make('Toksikologija – Rad s opasnim kemikalijama')
-                                ->columns(2)
-                                ->columnSpan(1)
-                                ->schema([
-                                    $date('toxicology_valid_from', 'Vrijedi od'),
-                                    $date('toxicology_valid_until', 'Vrijedi do'),
-                                ]),
+                            ->columns(2)
+                            ->columnSpan(1)
+                            ->schema([
+                                $date('toxicology_valid_from', 'Vrijedi od'),
+                                $date('toxicology_valid_until', 'Vrijedi do'),
+                            ]),
+
+                        Section::make('Rukovanje zapaljivim tvarima')
+                            ->columns(2)
+                            ->columnSpan(1)
+                            ->schema([
+                                $date('handling_flammable_materials_valid_from', 'Vrijedi od'),
+                                $date('handling_flammable_materials_valid_until', 'Vrijedi do'),
+                            ]),
 
                             Section::make('Ovlaštenik poslodavca za ZNR')
                                 ->columns(2)

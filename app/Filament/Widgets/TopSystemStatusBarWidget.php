@@ -218,41 +218,42 @@ class TopSystemStatusBarWidget extends Widget
     }
 
     protected function countEmployeeCertificateDeadlines(Carbon $today, Carbon $soonDate, ?User $user): array
-    {
-        if (! class_exists(Employee::class)) {
-            return $this->unsupportedRow();
-        }
+{
+    if (! class_exists(Employee::class)) {
+        return $this->unsupportedRow();
+    }
 
-        $employeeModel = new Employee();
-        $employeeTable = $employeeModel->getTable();
+    $employeeModel = new Employee();
+    $employeeTable = $employeeModel->getTable();
 
-        if (! Schema::hasTable($employeeTable)) {
-            return $this->unsupportedRow();
-        }
+    if (! Schema::hasTable($employeeTable)) {
+        return $this->unsupportedRow();
+    }
 
-        $expiredCount = 0;
-        $soonCount = 0;
+    $expiredCount = 0;
+    $soonCount = 0;
 
-        try {
-            if (method_exists($employeeModel, 'certificates')) {
-                $relatedModel = $employeeModel->certificates()->getRelated();
-                $certTable = $relatedModel->getTable();
+    try {
+        // Ostale edukacije iz employee_certificates
+        if (method_exists($employeeModel, 'certificates')) {
+            $relatedModel = $employeeModel->certificates()->getRelated();
+            $certTable = $relatedModel->getTable();
 
-                if (Schema::hasTable($certTable) && Schema::hasColumn($certTable, 'valid_until')) {
-                    $query = $relatedModel::query()->whereNotNull($certTable . '.valid_until');
+            if (Schema::hasTable($certTable) && Schema::hasColumn($certTable, 'valid_until')) {
+                $query = $relatedModel::query()->whereNotNull($certTable . '.valid_until');
 
-                    if (Schema::hasColumn($certTable, 'active')) {
-                        $query->where($certTable . '.active', true);
-                    }
+                if (Schema::hasColumn($certTable, 'active')) {
+                    $query->where($certTable . '.active', true);
+                }
 
-                    if (Schema::hasColumn($certTable, 'deleted_at')) {
-                        $query->whereNull($certTable . '.deleted_at');
-                    }
+                if (Schema::hasColumn($certTable, 'deleted_at')) {
+                    $query->whereNull($certTable . '.deleted_at');
+                }
 
-                    $userIds = $this->organizationUserIds($user);
+                $userIds = $this->organizationUserIds($user);
 
-                    if ($userIds !== null && method_exists($relatedModel, 'employee')) {
-                        $query->whereHas('employee', function (Builder $q) use ($userIds): void {
+                if ($userIds !== null && method_exists($relatedModel, 'employee')) {
+                    $query->whereHas('employee', function (Builder $q) use ($userIds): void {
                         $employeeTable = $q->getModel()->getTable();
 
                         if (Schema::hasColumn($employeeTable, 'user_id')) {
@@ -267,41 +268,66 @@ class TopSystemStatusBarWidget extends Widget
                             $q->whereNull($employeeTable . '.deleted_at');
                         }
                     });
-                    }
-
-                    $certificateCounts = $this->countDateQuery($query, $certTable . '.valid_until', $today, $soonDate);
-
-                    $expiredCount += (int) $certificateCounts['expired_count'];
-                    $soonCount += (int) $certificateCounts['soon_count'];
                 }
+
+                $certificateCounts = $this->countDateQuery($query, $certTable . '.valid_until', $today, $soonDate);
+
+                $expiredCount += (int) $certificateCounts['expired_count'];
+                $soonCount += (int) $certificateCounts['soon_count'];
+            }
+        }
+
+        // ZNR nije položen - rok 60 dana od zaposlenja
+        $znrQuery = Employee::query()
+            ->whereNull($employeeTable . '.occupational_safety_valid_from')
+            ->whereNotNull($employeeTable . '.employeed_at');
+
+        $this->applyCommonScopes($znrQuery, $employeeModel);
+        $this->applyOrganizationScope($znrQuery, $employeeTable, $user);
+
+        $expiredCount += (clone $znrQuery)
+            ->whereDate($employeeTable . '.employeed_at', '<', $today->copy()->subDays(60))
+            ->count();
+
+        $soonCount += (clone $znrQuery)
+            ->whereDate($employeeTable . '.employeed_at', '>=', $today->copy()->subDays(60))
+            ->whereDate($employeeTable . '.employeed_at', '<=', $today->copy()->subDays(30))
+            ->count();
+
+        // Svi rokovi osposobljavanja iz employees tablice
+        $deadlineColumns = [
+            'first_aid_valid_until',
+            'toxicology_valid_until',
+            'handling_flammable_materials_valid_until',
+            'employers_authorization_valid_until',
+        ];
+
+        foreach ($deadlineColumns as $column) {
+            if (! Schema::hasColumn($employeeTable, $column)) {
+                continue;
             }
 
-            $znrQuery = Employee::query()
-                ->whereNull($employeeTable . '.occupational_safety_valid_from')
-                ->whereNotNull($employeeTable . '.employeed_at');
+            $query = Employee::query()
+                ->whereNotNull($employeeTable . '.' . $column);
 
-            $this->applyCommonScopes($znrQuery, $employeeModel);
-            $this->applyOrganizationScope($znrQuery, $employeeTable, $user);
+            $this->applyCommonScopes($query, $employeeModel);
+            $this->applyOrganizationScope($query, $employeeTable, $user);
 
-            $expiredCount += (clone $znrQuery)
-                ->whereDate($employeeTable . '.employeed_at', '<', $today->copy()->subDays(60))
-                ->count();
+            $counts = $this->countDateQuery($query, $employeeTable . '.' . $column, $today, $soonDate);
 
-            $soonCount += (clone $znrQuery)
-                ->whereDate($employeeTable . '.employeed_at', '>=', $today->copy()->subDays(60))
-                ->whereDate($employeeTable . '.employeed_at', '<=', $today->copy()->subDays(30))
-                ->count();
-
-            return [
-                'expired_count' => $expiredCount,
-                'soon_count' => $soonCount,
-                'supported' => true,
-            ];
-        } catch (\Throwable $e) {
-            return $this->unsupportedRow();
+            $expiredCount += (int) $counts['expired_count'];
+            $soonCount += (int) $counts['soon_count'];
         }
-    }
 
+        return [
+            'expired_count' => $expiredCount,
+            'soon_count' => $soonCount,
+            'supported' => true,
+        ];
+    } catch (\Throwable $e) {
+        return $this->unsupportedRow();
+    }
+}
     protected function countSimpleDateDeadline(
         string $modelClass,
         array $dateColumns,

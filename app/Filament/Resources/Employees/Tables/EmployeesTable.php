@@ -137,6 +137,17 @@ class EmployeesTable
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
+                    TextColumn::make('handling_flammable_materials_valid_until')
+                    ->label('Zapaljive tvari (do)')
+                    ->date('d.m.Y.')
+                    ->badge()
+                    ->color(fn ($state) => ExpiryBadge::color($state))
+                    ->icon(fn ($state) => ExpiryBadge::icon($state))
+                    ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
+                    ->sortable()
+                    ->alignment(Alignment::Center)
+                    ->toggleable(),
+
                 TextColumn::make('employers_authorization_valid_until')
                     ->label('Ovlaštenik ZNR (do)')
                     ->date('d.m.Y.')

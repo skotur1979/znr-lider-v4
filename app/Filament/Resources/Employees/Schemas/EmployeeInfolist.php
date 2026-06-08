@@ -118,18 +118,33 @@ class EmployeeInfolist
                                     ]),
 
                                 Section::make('Toksikologija')
-                                    ->columns(2)
-                                    ->schema([
-                                        TextEntry::make('toxicology_valid_from')
-                                            ->label('Vrijedi od')
-                                            ->date('d.m.Y.'),
+                                ->columns(2)
+                                ->schema([
+                                    TextEntry::make('toxicology_valid_from')
+                                        ->label('Vrijedi od')
+                                        ->date('d.m.Y.'),
 
-                                        TextEntry::make('toxicology_valid_until')
-                                            ->label('Vrijedi do')
-                                            ->date('d.m.Y.')
-                                            ->badge()
-                                            ->color(fn ($state) => self::rokColor($state)),
-                                    ]),
+                                    TextEntry::make('toxicology_valid_until')
+                                        ->label('Vrijedi do')
+                                        ->date('d.m.Y.')
+                                        ->badge()
+                                        ->color(fn ($state) => self::rokColor($state)),
+                                ]),
+
+                            Section::make('Rukovanje zapaljivim tvarima')
+                                ->columns(2)
+                                ->schema([
+                                    TextEntry::make('handling_flammable_materials_valid_from')
+                                        ->label('Vrijedi od')
+                                        ->date('d.m.Y.'),
+
+                                    TextEntry::make('handling_flammable_materials_valid_until')
+                                        ->label('Vrijedi do')
+                                        ->date('d.m.Y.')
+                                        ->badge()
+                                        ->color(fn ($state) => self::rokColor($state)),
+                                ]),
+
 
                                 Section::make('Ovlaštenik poslodavca za ZNR')
                                     ->columns(2)

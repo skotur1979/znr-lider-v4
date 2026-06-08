@@ -44,7 +44,7 @@ class IncidentResource extends BaseResource
 
     protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedEye;
 
-    protected static ?string $navigationLabel = 'Incidenti';
+    protected static ?string $navigationLabel = 'Incidenti - Ozljede';
     protected static ?string $modelLabel = 'Incident';
     protected static ?string $pluralModelLabel = 'Incidenti';
 
