@@ -20,6 +20,7 @@ class TestAttempt extends Model
         'radno_mjesto',
         'datum_rodjenja',
         'bodovi_osvojeni',
+        'oib',
         'rezultat',
         'prolaz',
     ];

@@ -90,6 +90,12 @@ class TestAttemptResource extends BaseResource
                     ->wrap()
                     ->extraAttributes(['style' => 'max-width:145px;']),
 
+                    TextColumn::make('oib')
+                    ->label('OIB')
+                    ->searchable()
+                    ->alignCenter()
+                    ->toggleable(),
+
                 TextColumn::make('radno_mjesto')
                     ->label('Radno mjesto')
                     ->searchable()

@@ -292,13 +292,19 @@
                 <div class="value">{{ $attempt->ime_prezime ?? '-' }}</div>
             </div>
             <div class="item">
-                <div class="label">Radno mjesto</div>
-                <div class="value">{{ $attempt->radno_mjesto ?? '-' }}</div>
-            </div>
-            <div class="item">
-                <div class="label">Datum rođenja</div>
-                <div class="value">{{ $datum }}</div>
-            </div>
+            <div class="label">Radno mjesto</div>
+            <div class="value">{{ $attempt->radno_mjesto ?? '-' }}</div>
+        </div>
+
+        <div class="item">
+            <div class="label">OIB</div>
+            <div class="value">{{ $attempt->oib ?? '-' }}</div>
+        </div>
+
+        <div class="item">
+            <div class="label">Datum rođenja</div>
+            <div class="value">{{ $datum }}</div>
+        </div>
             <div class="item">
                 <div class="label">Bodovi</div>
                 <div class="value">{{ $attempt->bodovi_osvojeni ?? '-' }}</div>
@@ -310,7 +316,7 @@
             <div class="item">
                 <div class="label">Datum slanja</div>
                 <div class="value">
-                    {{ optional($attempt->created_at)->format('d.m.Y. H:i') ?? '-' }}
+                    {{ optional($attempt->created_at)->format('d.m.Y.') ?? '-' }}
                 </div>
             </div>
         </div>

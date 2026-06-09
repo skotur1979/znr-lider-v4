@@ -23,6 +23,7 @@ class TestFormPage extends Page
     public Test $test;
 
     public string $ime_prezime = '';
+    public string $oib = '';
     public string $radno_mjesto = '';
     public ?string $datum_rodjenja = null;
 
@@ -48,6 +49,7 @@ class TestFormPage extends Page
 
         // Ručni unos podataka kandidata - bez povlačenja iz korisnika
         $this->ime_prezime = '';
+        $this->oib = '';
         $this->radno_mjesto = '';
         $this->datum_rodjenja = null;
 
@@ -68,6 +70,7 @@ class TestFormPage extends Page
     {
         $this->validate([
             'ime_prezime' => ['required', 'string', 'max:255'],
+            'oib' => ['required', 'digits:11'],
             'radno_mjesto' => ['nullable', 'string', 'max:255'],
             'datum_rodjenja' => ['nullable', 'date'],
         ], [
@@ -147,6 +150,7 @@ class TestFormPage extends Page
                     'radno_mjesto' => $this->radno_mjesto,
                     'datum_rodjenja' => $this->datum_rodjenja,
                     'bodovi_osvojeni' => $bodovi,
+                    'oib' => $this->oib,
                     'rezultat' => $postotak,
                     'prolaz' => $prolaz,
                 ]);

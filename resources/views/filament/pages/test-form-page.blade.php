@@ -77,10 +77,10 @@
         }
 
         .candidate-grid{
-            display:grid;
-            grid-template-columns:repeat(3, minmax(0,1fr));
-            gap:18px;
-        }
+        display:grid;
+        grid-template-columns:repeat(4, minmax(0,1fr));
+        gap:18px;
+    }
 
         @media (max-width: 900px){
             .candidate-grid{
@@ -405,45 +405,61 @@
                     <div class="intro-title">Podaci kandidata</div>
 
                     <div class="candidate-grid">
-                        <div class="field-wrap">
-                            <label for="ime_prezime">Ime i prezime</label>
-                            <input
-                                id="ime_prezime"
-                                type="text"
-                                wire:model.live="ime_prezime"
-                                class="field-input"
-                            >
-                            @error('ime_prezime')
-                                <div class="error-text">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <div class="field-wrap">
-                            <label for="radno_mjesto">Radno mjesto</label>
-                            <input
-                                id="radno_mjesto"
-                                type="text"
-                                wire:model.live="radno_mjesto"
-                                class="field-input"
-                            >
-                            @error('radno_mjesto')
-                                <div class="error-text">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <div class="field-wrap">
-                            <label for="datum_rodjenja">Datum rođenja</label>
-                            <input
-                                id="datum_rodjenja"
-                                type="date"
-                                wire:model.live="datum_rodjenja"
-                                class="field-input"
-                            >
-                            @error('datum_rodjenja')
-                                <div class="error-text">{{ $message }}</div>
-                            @enderror
-                        </div>
+                    <div class="field-wrap">
+                        <label for="ime_prezime">Ime i prezime</label>
+                        <input
+                            id="ime_prezime"
+                            type="text"
+                            wire:model.live="ime_prezime"
+                            class="field-input"
+                        >
+                        @error('ime_prezime')
+                            <div class="error-text">{{ $message }}</div>
+                        @enderror
                     </div>
+
+                    <div class="field-wrap">
+                        <label for="oib">OIB</label>
+                        <input
+                            id="oib"
+                            type="text"
+                            wire:model.live="oib"
+                            maxlength="11"
+                            inputmode="numeric"
+                            placeholder="Upišite OIB"
+                            class="field-input"
+                        >
+                        @error('oib')
+                            <div class="error-text">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="field-wrap">
+                        <label for="radno_mjesto">Radno mjesto</label>
+                        <input
+                            id="radno_mjesto"
+                            type="text"
+                            wire:model.live="radno_mjesto"
+                            class="field-input"
+                        >
+                        @error('radno_mjesto')
+                            <div class="error-text">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="field-wrap">
+                        <label for="datum_rodjenja">Datum rođenja</label>
+                        <input
+                            id="datum_rodjenja"
+                            type="date"
+                            wire:model.live="datum_rodjenja"
+                            class="field-input"
+                        >
+                        @error('datum_rodjenja')
+                            <div class="error-text">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
                 </div>
 
                 @foreach ($this->test->questions as $question)

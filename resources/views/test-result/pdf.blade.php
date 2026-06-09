@@ -175,7 +175,7 @@
     $datumRodj = $attempt->datum_rodjenja ? Carbon::parse($attempt->datum_rodjenja)->format('d.m.Y.') : '-';
     $rezultat  = is_numeric($attempt->rezultat) ? number_format((float) $attempt->rezultat, 2) : '-';
     $bodovi    = $attempt->bodovi_osvojeni ?? '-';
-    $poslano   = optional($attempt->created_at)->format('d.m.Y. H:i') ?? '-';
+    $poslano   = optional($attempt->created_at)->format('d.m.Y.') ?? '-';
     $statusTxt = $attempt->prolaz ? 'PROLAZ' : 'PAD';
 @endphp
 
@@ -210,6 +210,12 @@
             <td class="meta-k">Radno mjesto:</td>
             <td class="meta-v">{{ $attempt->radno_mjesto ?? '-' }}</td>
         </tr>
+
+        <tr>
+            <td class="meta-k">OIB:</td>
+            <td class="meta-v">{{ $attempt->oib ?? '-' }}</td>
+        </tr>
+
         <tr>
             <td class="meta-k">Datum rođenja:</td>
             <td class="meta-v">{{ $datumRodj }}</td>
