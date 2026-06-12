@@ -1,210 +1,250 @@
 <x-filament-panels::page>
     <style>
-    .privacy-wrap{
-        display:grid;
-        gap:18px;
-        max-width:1100px;
-    }
-
-    .privacy-card{
-        background:#ffffff;
-        border:1px solid #e5e7eb;
-        border-radius:18px;
-        padding:22px;
-        box-shadow:
-            0 1px 2px rgba(15,23,42,.04),
-            0 10px 24px rgba(15,23,42,.06);
-        transition:all .2s ease;
-    }
-
-    .privacy-card:hover{
-        transform:translateY(-1px);
-        box-shadow:
-            0 4px 12px rgba(15,23,42,.08),
-            0 18px 32px rgba(15,23,42,.08);
-    }
-
-    .dark .privacy-card{
-        background:#0f172a;
-        border-color:#1e293b;
-        box-shadow:
-            0 1px 2px rgba(0,0,0,.25),
-            0 14px 30px rgba(0,0,0,.28);
-    }
-
-    .privacy-title{
-        font-size:20px;
-        font-weight:800;
-        margin-bottom:16px;
-        color:#0f172a;
-        letter-spacing:-0.02em;
-    }
-
-    .dark .privacy-title{
-        color:#f8fafc;
-    }
-
-    .privacy-grid{
-        display:grid;
-        grid-template-columns:repeat(2,minmax(0,1fr));
-        gap:14px;
-    }
-
-    .privacy-item{
-        background:#f8fafc;
-        border:1px solid #e2e8f0;
-        border-radius:14px;
-        padding:14px;
-    }
-
-    .dark .privacy-item{
-        background:rgba(255,255,255,.03);
-        border-color:rgba(255,255,255,.06);
-    }
-
-    .privacy-label{
-        font-size:12px;
-        font-weight:600;
-        color:#64748b;
-        margin-bottom:6px;
-        text-transform:uppercase;
-        letter-spacing:.04em;
-    }
-
-    .dark .privacy-label{
-        color:#94a3b8;
-    }
-
-    .privacy-value{
-        font-weight:700;
-        color:#0f172a;
-    }
-
-    .dark .privacy-value{
-        color:#f8fafc;
-    }
-
-    .privacy-actions{
-        display:flex;
-        flex-wrap:wrap;
-        gap:10px;
-        margin-top:16px;
-    }
-
-    .btn{
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        border-radius:12px;
-        padding:10px 15px;
-        font-weight:700;
-        font-size:14px;
-        text-decoration:none;
-        border:1px solid transparent;
-        cursor:pointer;
-        transition:all .18s ease;
-    }
-
-    .btn:hover{
-        transform:translateY(-1px);
-    }
-
-    .btn-amber{
-        background:#f59e0b;
-        color:#111827;
-    }
-
-    .btn-amber:hover{
-        background:#fbbf24;
-    }
-
-    .btn-red{
-        background:#dc2626;
-        color:white;
-    }
-
-    .btn-red:hover{
-        background:#ef4444;
-    }
-
-    .btn-dark{
-        background:#334155;
-        color:white;
-    }
-
-    .btn-dark:hover{
-        background:#475569;
-    }
-
-    .btn-outline{
-        border:1px solid #d1d5db;
-        color:#0f172a;
-        background:#ffffff;
-    }
-
-    .btn-outline:hover{
-        background:#f8fafc;
-    }
-
-    .dark .btn-outline{
-        border-color:#475569;
-        color:#f8fafc;
-        background:transparent;
-    }
-
-    .dark .btn-outline:hover{
-        background:rgba(255,255,255,.05);
-    }
-
-    .privacy-text{
-        color:#475569;
-        line-height:1.7;
-    }
-
-    .dark .privacy-text{
-        color:#cbd5e1;
-    }
-
-    .privacy-danger{
-        background:#fff7f7;
-        border-color:#fecaca;
-    }
-
-    .dark .privacy-danger{
-        background:rgba(127,29,29,.20);
-        border-color:rgba(239,68,68,.25);
-    }
-
-    .privacy-textarea{
-        width:100%;
-        min-height:86px;
-        border-radius:12px;
-        border:1px solid #d1d5db;
-        background:#ffffff;
-        color:#0f172a;
-        padding:12px;
-        margin:10px 0;
-        transition:border-color .15s ease, box-shadow .15s ease;
-    }
-
-    .privacy-textarea:focus{
-        outline:none;
-        border-color:#f59e0b;
-        box-shadow:0 0 0 3px rgba(245,158,11,.15);
-    }
-
-    .dark .privacy-textarea{
-        border-color:#475569;
-        background:#020617;
-        color:#f8fafc;
-    }
-
-    @media (max-width:768px){
-        .privacy-grid{
-            grid-template-columns:1fr;
+        .privacy-wrap{
+            display:grid;
+            gap:18px;
+            max-width:1100px;
         }
+
+        .privacy-card{
+            background:#ffffff;
+            border:1px solid #e5e7eb;
+            border-radius:18px;
+            padding:22px;
+            box-shadow:
+                0 1px 2px rgba(15,23,42,.04),
+                0 10px 24px rgba(15,23,42,.06);
+            transition:all .2s ease;
+        }
+
+        .privacy-card:hover{
+            transform:translateY(-1px);
+            box-shadow:
+                0 4px 12px rgba(15,23,42,.08),
+                0 18px 32px rgba(15,23,42,.08);
+        }
+
+        .dark .privacy-card{
+            background:#0f172a;
+            border-color:#1e293b;
+            box-shadow:
+                0 1px 2px rgba(0,0,0,.25),
+                0 14px 30px rgba(0,0,0,.28);
+        }
+
+        .privacy-title{
+            font-size:20px;
+            font-weight:800;
+            margin-bottom:16px;
+            color:#0f172a;
+            letter-spacing:-0.02em;
+        }
+
+        .dark .privacy-title{
+            color:#f8fafc;
+        }
+
+        .privacy-subtitle{
+            font-size:14px;
+            font-weight:800;
+            color:#334155;
+            margin-top:18px;
+            margin-bottom:10px;
+        }
+
+        .dark .privacy-subtitle{
+            color:#e2e8f0;
+        }
+
+        .privacy-grid{
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:14px;
+        }
+
+        .privacy-item{
+            background:#f8fafc;
+            border:1px solid #e2e8f0;
+            border-radius:14px;
+            padding:14px;
+        }
+
+        .dark .privacy-item{
+            background:rgba(255,255,255,.03);
+            border-color:rgba(255,255,255,.06);
+        }
+
+        .privacy-label{
+            font-size:12px;
+            font-weight:600;
+            color:#64748b;
+            margin-bottom:6px;
+            text-transform:uppercase;
+            letter-spacing:.04em;
+        }
+
+        .dark .privacy-label{
+            color:#94a3b8;
+        }
+
+        .privacy-value{
+            font-weight:700;
+            color:#0f172a;
+        }
+
+        .dark .privacy-value{
+            color:#f8fafc;
+        }
+
+        .privacy-actions{
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+            margin-top:16px;
+        }
+
+        .btn{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:12px;
+            padding:10px 15px;
+            font-weight:700;
+            font-size:14px;
+            text-decoration:none;
+            border:1px solid transparent;
+            cursor:pointer;
+            transition:all .18s ease;
+        }
+
+        .btn:hover{
+            transform:translateY(-1px);
+        }
+
+        .btn-amber{
+            background:#f59e0b;
+            color:#111827;
+        }
+
+        .btn-amber:hover{
+            background:#fbbf24;
+        }
+
+        .btn-red{
+            background:#dc2626;
+            color:white;
+        }
+
+        .btn-red:hover{
+            background:#ef4444;
+        }
+
+        .btn-dark{
+            background:#334155;
+            color:white;
+        }
+
+        .btn-dark:hover{
+            background:#475569;
+        }
+
+        .btn-outline{
+            border:1px solid #d1d5db;
+            color:#0f172a;
+            background:#ffffff;
+        }
+
+        .btn-outline:hover{
+            background:#f8fafc;
+        }
+
+        .dark .btn-outline{
+            border-color:#475569;
+            color:#f8fafc;
+            background:transparent;
+        }
+
+        .dark .btn-outline:hover{
+            background:rgba(255,255,255,.05);
+        }
+
+        .legal-terms {
+        border-left: 4px solid #3b82f6;
     }
-</style>
+
+    .legal-privacy {
+        border-left: 4px solid #10b981;
+    }
+
+    .legal-cookies {
+        border-left: 4px solid #f59e0b;
+    }
+
+    .legal-dpa {
+        border-left: 4px solid #8b5cf6;
+    }
+
+    .legal-security {
+        border-left: 4px solid #ef4444;
+    }
+
+    .legal-retention {
+        border-left: 4px solid #06b6d4;
+    }
+
+    .legal-faq {
+        border-left: 4px solid #84cc16;
+    }
+
+        .privacy-text{
+            color:#475569;
+            line-height:1.7;
+        }
+
+        .dark .privacy-text{
+            color:#cbd5e1;
+        }
+
+        .privacy-danger{
+            background:#fff7f7;
+            border-color:#fecaca;
+        }
+
+        .dark .privacy-danger{
+            background:rgba(127,29,29,.20);
+            border-color:rgba(239,68,68,.25);
+        }
+
+        .privacy-textarea{
+            width:100%;
+            min-height:86px;
+            border-radius:12px;
+            border:1px solid #d1d5db;
+            background:#ffffff;
+            color:#0f172a;
+            padding:12px;
+            margin:10px 0;
+            transition:border-color .15s ease, box-shadow .15s ease;
+        }
+
+        .privacy-textarea:focus{
+            outline:none;
+            border-color:#f59e0b;
+            box-shadow:0 0 0 3px rgba(245,158,11,.15);
+        }
+
+        .dark .privacy-textarea{
+            border-color:#475569;
+            background:#020617;
+            color:#f8fafc;
+        }
+
+        @media (max-width:768px){
+            .privacy-grid{
+                grid-template-columns:1fr;
+            }
+        }
+    </style>
 
     <div class="privacy-wrap">
 
@@ -282,14 +322,74 @@
         </div>
 
         <div class="privacy-card">
-            <div class="privacy-title">Pravni dokumenti</div>
+    <div class="privacy-title">⚖️ Pravni dokumenti i usklađenost</div>
 
-            <div class="privacy-actions">
-                <a href="{{ route('legal.terms') }}" target="_blank" class="btn btn-outline">Uvjeti korištenja</a>
-                <a href="{{ route('legal.privacy') }}" target="_blank" class="btn btn-outline">Pravila privatnosti</a>
-                <a href="{{ route('legal.cookies') }}" target="_blank" class="btn btn-outline">Politika kolačića</a>
-            </div>
-        </div>
+    <div class="privacy-actions">
+        <a href="{{ route('legal.terms') }}" target="_blank" class="btn btn-outline legal-terms">
+            📜 Uvjeti korištenja
+        </a>
+
+        <a href="{{ route('legal.privacy') }}" target="_blank" class="btn btn-outline legal-privacy">
+            🔒 Pravila privatnosti
+        </a>
+
+        <a href="{{ route('legal.cookies') }}" target="_blank" class="btn btn-outline legal-cookies">
+            🍪 Politika kolačića
+        </a>
+
+        <a href="{{ route('legal.dpa') }}" target="_blank" class="btn btn-outline legal-dpa">
+            🤝 Ugovor o obradi podataka (DPA)
+        </a>
+
+        <a href="{{ route('legal.security') }}" target="_blank" class="btn btn-outline legal-security">
+            🛡️ Politika sigurnosti
+        </a>
+
+        <a href="{{ route('legal.retention') }}" target="_blank" class="btn btn-outline legal-retention">
+            🗄️ Zadržavanje i brisanje podataka
+        </a>
+
+        <a href="{{ route('legal.faq') }}" target="_blank" class="btn btn-outline legal-faq">
+            ❓ Često postavljana pitanja
+        </a>
+    </div>
+
+    <div class="privacy-subtitle">📁 PDF dokumenti</div>
+
+    <div class="privacy-actions">
+        <a href="{{ route('legal.terms.pdf') }}" target="_blank" class="btn btn-outline legal-terms">
+            📄 Uvjeti korištenja PDF
+        </a>
+
+        <a href="{{ route('legal.privacy.pdf') }}" target="_blank" class="btn btn-outline legal-privacy">
+            🔒 Pravila privatnosti PDF
+        </a>
+
+        @if (Route::has('legal.cookies.pdf'))
+            <a href="{{ route('legal.cookies.pdf') }}" target="_blank" class="btn btn-outline legal-cookies">
+                🍪 Politika kolačića PDF
+            </a>
+        @endif
+
+        @if (Route::has('legal.dpa.pdf'))
+            <a href="{{ route('legal.dpa.pdf') }}" target="_blank" class="btn btn-outline legal-dpa">
+                🤝 DPA PDF
+            </a>
+        @endif
+
+        @if (Route::has('legal.security.pdf'))
+            <a href="{{ route('legal.security.pdf') }}" target="_blank" class="btn btn-outline legal-security">
+                🛡️ Politika sigurnosti PDF
+            </a>
+        @endif
+
+        @if (Route::has('legal.retention.pdf'))
+            <a href="{{ route('legal.retention.pdf') }}" target="_blank" class="btn btn-outline legal-retention">
+                🗄️ Zadržavanje podataka PDF
+            </a>
+        @endif
+    </div>
+</div>
 
         <div class="privacy-card privacy-danger">
             <div class="privacy-title">GDPR zahtjevi</div>

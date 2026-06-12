@@ -133,19 +133,44 @@ class ListFires extends ListRecords
         ];
     }
     protected function getTableQuery(): Builder
-    {
-        $query = parent::getTableQuery();
-        $pregled = request()->query('pregled');
+{
+    $query = parent::getTableQuery();
+    $pregled = request()->query('pregled');
 
-        return match ($pregled) {
-            'uskoro' => $query
-                ->whereDate('examination_valid_until', '>=', Carbon::today())
-                ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30)),
+    return match ($pregled) {
+        'uskoro' => $query->where(function (Builder $q) {
+            $q->where(function (Builder $qq) {
+                $qq->whereDate('examination_valid_until', '>=', Carbon::today())
+                    ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30));
+            })
+            ->orWhere(function (Builder $qq) {
+                $qq->whereNotNull('regular_examination_valid_from')
+                    ->whereDate(
+                        \DB::raw('DATE_ADD(regular_examination_valid_from, INTERVAL 3 MONTH)'),
+                        '>=',
+                        Carbon::today()
+                    )
+                    ->whereDate(
+                        \DB::raw('DATE_ADD(regular_examination_valid_from, INTERVAL 3 MONTH)'),
+                        '<=',
+                        Carbon::today()->addDays(30)
+                    );
+            });
+        }),
 
-            'isteklo' => $query
-                ->whereDate('examination_valid_until', '<', Carbon::today()),
+        'isteklo' => $query->where(function (Builder $q) {
+            $q->whereDate('examination_valid_until', '<', Carbon::today())
+                ->orWhere(function (Builder $qq) {
+                    $qq->whereNotNull('regular_examination_valid_from')
+                        ->whereDate(
+                            \DB::raw('DATE_ADD(regular_examination_valid_from, INTERVAL 3 MONTH)'),
+                            '<',
+                            Carbon::today()
+                        );
+                });
+        }),
 
-            default => $query,
-        };
-    }
+        default => $query,
+    };
+}
 }

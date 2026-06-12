@@ -14,7 +14,6 @@ use App\Models\User;
 use Carbon\Carbon;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -53,7 +52,7 @@ class TopSystemStatusBarWidget extends Widget
 
         $rows = [
             [
-                'label' => 'Liječnički',
+                'label' => 'Liječnički pregledi',
                 'icon' => '🩺',
                 'expired_url' => $self->resolveEmployeesMedicalExpiredUrl(),
                 'soon_url' => $self->resolveEmployeesMedicalSoonUrl(),
@@ -74,28 +73,28 @@ class TopSystemStatusBarWidget extends Widget
                 ...$self->countSimpleDateDeadline(Machine::class, ['examination_valid_until'], $today, $soonDate, $user),
             ],
             [
-                'label' => 'Aparati',
+                'label' => 'Vatrogasni aparati',
                 'icon' => '🧯',
                 'expired_url' => $self->resolveFiresExpiredUrl(),
                 'soon_url' => $self->resolveFiresSoonUrl(),
-                ...$self->countSimpleDateDeadline(Fire::class, ['examination_valid_until'], $today, $soonDate, $user),
+                ...$self->countFireDeadlines($today, $soonDate, $user),
             ],
             [
-                'label' => 'Ostala ispit.',
+                'label' => 'Ostala ispitavanja',
                 'icon' => '🛠️',
                 'expired_url' => $self->resolveMiscellaneousExpiredUrl(),
                 'soon_url' => $self->resolveMiscellaneousSoonUrl(),
                 ...$self->countSimpleDateDeadline(Miscellaneous::class, ['examination_valid_until'], $today, $soonDate, $user),
             ],
             [
-                'label' => 'OZO',
+                'label' => 'OZO - Osobna zaštitna oprema',
                 'icon' => '🦺',
                 'expired_url' => $self->resolvePpeExpiredUrl(),
                 'soon_url' => $self->resolvePpeSoonUrl(),
                 ...$self->countPpeDeadline($today, $soonDate, $user),
             ],
             [
-                'label' => 'Prva pomoć',
+                'label' => 'Prva pomoć - materijali',
                 'icon' => '➕',
                 'expired_url' => $self->resolveFirstAidExpiredUrl(),
                 'soon_url' => $self->resolveFirstAidSoonUrl(),
@@ -196,6 +195,19 @@ class TopSystemStatusBarWidget extends Widget
         return false;
     }
 
+    protected function applyCommonScopes(Builder $query, object $model): void
+    {
+        $table = $model->getTable();
+
+        if (Schema::hasColumn($table, 'active')) {
+            $query->where($table . '.active', true);
+        }
+
+        if (Schema::hasColumn($table, 'deleted_at')) {
+            $query->whereNull($table . '.deleted_at');
+        }
+    }
+
     protected function countEmployeeMedicalDeadlines(Carbon $today, Carbon $soonDate, ?User $user): array
     {
         if (! class_exists(Employee::class)) {
@@ -218,116 +230,113 @@ class TopSystemStatusBarWidget extends Widget
     }
 
     protected function countEmployeeCertificateDeadlines(Carbon $today, Carbon $soonDate, ?User $user): array
-{
-    if (! class_exists(Employee::class)) {
-        return $this->unsupportedRow();
-    }
-
-    $employeeModel = new Employee();
-    $employeeTable = $employeeModel->getTable();
-
-    if (! Schema::hasTable($employeeTable)) {
-        return $this->unsupportedRow();
-    }
-
-    $expiredCount = 0;
-    $soonCount = 0;
-
-    try {
-        // Ostale edukacije iz employee_certificates
-        if (method_exists($employeeModel, 'certificates')) {
-            $relatedModel = $employeeModel->certificates()->getRelated();
-            $certTable = $relatedModel->getTable();
-
-            if (Schema::hasTable($certTable) && Schema::hasColumn($certTable, 'valid_until')) {
-                $query = $relatedModel::query()->whereNotNull($certTable . '.valid_until');
-
-                if (Schema::hasColumn($certTable, 'active')) {
-                    $query->where($certTable . '.active', true);
-                }
-
-                if (Schema::hasColumn($certTable, 'deleted_at')) {
-                    $query->whereNull($certTable . '.deleted_at');
-                }
-
-                $userIds = $this->organizationUserIds($user);
-
-                if ($userIds !== null && method_exists($relatedModel, 'employee')) {
-                    $query->whereHas('employee', function (Builder $q) use ($userIds): void {
-                        $employeeTable = $q->getModel()->getTable();
-
-                        if (Schema::hasColumn($employeeTable, 'user_id')) {
-                            $q->whereIn($employeeTable . '.user_id', $userIds);
-                        }
-
-                        if (Schema::hasColumn($employeeTable, 'active')) {
-                            $q->where($employeeTable . '.active', true);
-                        }
-
-                        if (Schema::hasColumn($employeeTable, 'deleted_at')) {
-                            $q->whereNull($employeeTable . '.deleted_at');
-                        }
-                    });
-                }
-
-                $certificateCounts = $this->countDateQuery($query, $certTable . '.valid_until', $today, $soonDate);
-
-                $expiredCount += (int) $certificateCounts['expired_count'];
-                $soonCount += (int) $certificateCounts['soon_count'];
-            }
+    {
+        if (! class_exists(Employee::class)) {
+            return $this->unsupportedRow();
         }
 
-        // ZNR nije položen - rok 60 dana od zaposlenja
-        $znrQuery = Employee::query()
-            ->whereNull($employeeTable . '.occupational_safety_valid_from')
-            ->whereNotNull($employeeTable . '.employeed_at');
+        $employeeModel = new Employee();
+        $employeeTable = $employeeModel->getTable();
 
-        $this->applyCommonScopes($znrQuery, $employeeModel);
-        $this->applyOrganizationScope($znrQuery, $employeeTable, $user);
-
-        $expiredCount += (clone $znrQuery)
-            ->whereDate($employeeTable . '.employeed_at', '<', $today->copy()->subDays(60))
-            ->count();
-
-        $soonCount += (clone $znrQuery)
-            ->whereDate($employeeTable . '.employeed_at', '>=', $today->copy()->subDays(60))
-            ->whereDate($employeeTable . '.employeed_at', '<=', $today->copy()->subDays(30))
-            ->count();
-
-        // Svi rokovi osposobljavanja iz employees tablice
-        $deadlineColumns = [
-            'first_aid_valid_until',
-            'toxicology_valid_until',
-            'handling_flammable_materials_valid_until',
-            'employers_authorization_valid_until',
-        ];
-
-        foreach ($deadlineColumns as $column) {
-            if (! Schema::hasColumn($employeeTable, $column)) {
-                continue;
-            }
-
-            $query = Employee::query()
-                ->whereNotNull($employeeTable . '.' . $column);
-
-            $this->applyCommonScopes($query, $employeeModel);
-            $this->applyOrganizationScope($query, $employeeTable, $user);
-
-            $counts = $this->countDateQuery($query, $employeeTable . '.' . $column, $today, $soonDate);
-
-            $expiredCount += (int) $counts['expired_count'];
-            $soonCount += (int) $counts['soon_count'];
+        if (! Schema::hasTable($employeeTable)) {
+            return $this->unsupportedRow();
         }
 
-        return [
-            'expired_count' => $expiredCount,
-            'soon_count' => $soonCount,
-            'supported' => true,
-        ];
-    } catch (\Throwable $e) {
-        return $this->unsupportedRow();
+        $expiredCount = 0;
+        $soonCount = 0;
+
+        try {
+            if (method_exists($employeeModel, 'certificates')) {
+                $relatedModel = $employeeModel->certificates()->getRelated();
+                $certTable = $relatedModel->getTable();
+
+                if (Schema::hasTable($certTable) && Schema::hasColumn($certTable, 'valid_until')) {
+                    $query = $relatedModel::query()->whereNotNull($certTable . '.valid_until');
+
+                    if (Schema::hasColumn($certTable, 'active')) {
+                        $query->where($certTable . '.active', true);
+                    }
+
+                    if (Schema::hasColumn($certTable, 'deleted_at')) {
+                        $query->whereNull($certTable . '.deleted_at');
+                    }
+
+                    $userIds = $this->organizationUserIds($user);
+
+                    if ($userIds !== null && method_exists($relatedModel, 'employee')) {
+                        $query->whereHas('employee', function (Builder $q) use ($userIds): void {
+                            $employeeTable = $q->getModel()->getTable();
+
+                            if (Schema::hasColumn($employeeTable, 'user_id')) {
+                                $q->whereIn($employeeTable . '.user_id', $userIds);
+                            }
+
+                            if (Schema::hasColumn($employeeTable, 'active')) {
+                                $q->where($employeeTable . '.active', true);
+                            }
+
+                            if (Schema::hasColumn($employeeTable, 'deleted_at')) {
+                                $q->whereNull($employeeTable . '.deleted_at');
+                            }
+                        });
+                    }
+
+                    $certificateCounts = $this->countDateQuery($query, $certTable . '.valid_until', $today, $soonDate);
+
+                    $expiredCount += (int) $certificateCounts['expired_count'];
+                    $soonCount += (int) $certificateCounts['soon_count'];
+                }
+            }
+
+            $znrQuery = Employee::query()
+                ->whereNull($employeeTable . '.occupational_safety_valid_from')
+                ->whereNotNull($employeeTable . '.employeed_at');
+
+            $this->applyCommonScopes($znrQuery, $employeeModel);
+            $this->applyOrganizationScope($znrQuery, $employeeTable, $user);
+
+            $expiredCount += (clone $znrQuery)
+                ->whereDate($employeeTable . '.employeed_at', '<', $today->copy()->subDays(60))
+                ->count();
+
+            $soonCount += (clone $znrQuery)
+                ->whereDate($employeeTable . '.employeed_at', '>=', $today->copy()->subDays(60))
+                ->whereDate($employeeTable . '.employeed_at', '<=', $today->copy()->subDays(30))
+                ->count();
+
+            $deadlineColumns = [
+                'first_aid_valid_until',
+                'toxicology_valid_until',
+                'handling_flammable_materials_valid_until',
+                'employers_authorization_valid_until',
+            ];
+
+            foreach ($deadlineColumns as $column) {
+                if (! Schema::hasColumn($employeeTable, $column)) {
+                    continue;
+                }
+
+                $query = Employee::query()->whereNotNull($employeeTable . '.' . $column);
+
+                $this->applyCommonScopes($query, $employeeModel);
+                $this->applyOrganizationScope($query, $employeeTable, $user);
+
+                $counts = $this->countDateQuery($query, $employeeTable . '.' . $column, $today, $soonDate);
+
+                $expiredCount += (int) $counts['expired_count'];
+                $soonCount += (int) $counts['soon_count'];
+            }
+
+            return [
+                'expired_count' => $expiredCount,
+                'soon_count' => $soonCount,
+                'supported' => true,
+            ];
+        } catch (\Throwable $e) {
+            return $this->unsupportedRow();
+        }
     }
-}
+
     protected function countSimpleDateDeadline(
         string $modelClass,
         array $dateColumns,
@@ -360,6 +369,48 @@ class TopSystemStatusBarWidget extends Widget
         return $this->countDateQuery($query, $table . '.' . $dateColumn, $today, $soonDate);
     }
 
+    protected function countFireDeadlines(Carbon $today, Carbon $soonDate, ?User $user): array
+{
+    $model = new Fire();
+    $table = $model->getTable();
+
+    if (! Schema::hasTable($table)) {
+        return $this->unsupportedRow();
+    }
+
+    $query = Fire::query();
+
+    $this->applyCommonScopes($query, $model);
+    $this->applyOrganizationScope($query, $table, $user);
+
+    $expiredPeriodic = (clone $query)
+        ->whereNotNull('examination_valid_until')
+        ->whereDate('examination_valid_until', '<', $today)
+        ->count();
+
+    $soonPeriodic = (clone $query)
+        ->whereNotNull('examination_valid_until')
+        ->whereDate('examination_valid_until', '>=', $today)
+        ->whereDate('examination_valid_until', '<=', $soonDate)
+        ->count();
+
+    $expiredRegular = (clone $query)
+        ->whereNotNull('regular_examination_valid_from')
+        ->whereDate(\DB::raw('DATE_ADD(regular_examination_valid_from, INTERVAL 3 MONTH)'), '<', $today)
+        ->count();
+
+    $soonRegular = (clone $query)
+        ->whereNotNull('regular_examination_valid_from')
+        ->whereDate(\DB::raw('DATE_ADD(regular_examination_valid_from, INTERVAL 3 MONTH)'), '>=', $today)
+        ->whereDate(\DB::raw('DATE_ADD(regular_examination_valid_from, INTERVAL 3 MONTH)'), '<=', $soonDate)
+        ->count();
+
+    return [
+        'expired_count' => $expiredPeriodic + $expiredRegular,
+        'soon_count' => $soonPeriodic + $soonRegular,
+        'supported' => true,
+    ];
+}
     protected function countPpeDeadline(Carbon $today, Carbon $soonDate, ?User $user): array
     {
         if (! class_exists(PPEItem::class)) {
@@ -376,7 +427,8 @@ class TopSystemStatusBarWidget extends Widget
         $query = PPEItem::query()
             ->whereNull($table . '.return_date')
             ->whereNotNull($table . '.end_date');
-            $this->applyCommonScopes($query, $model);
+
+        $this->applyCommonScopes($query, $model);
 
         if (! $this->applyOrganizationScope($query, $table, $user)) {
             $userIds = $this->organizationUserIds($user);
@@ -409,6 +461,7 @@ class TopSystemStatusBarWidget extends Widget
         }
 
         $query = FirstAidItem::query()->whereNotNull($table . '.valid_until');
+
         $this->applyCommonScopes($query, $model);
 
         if (! $this->applyOrganizationScope($query, $table, $user)) {
@@ -545,19 +598,6 @@ class TopSystemStatusBarWidget extends Widget
         return null;
     }
 
-    protected function applyCommonScopes(Builder $query, object $model): void
-    {
-        $table = $model->getTable();
-
-        if (Schema::hasColumn($table, 'active')) {
-            $query->where($table . '.active', true);
-        }
-
-        if (Schema::hasColumn($table, 'deleted_at')) {
-            $query->whereNull($table . '.deleted_at');
-        }
-    }
-
     protected function unsupportedRow(): array
     {
         return [
@@ -572,9 +612,19 @@ class TopSystemStatusBarWidget extends Widget
         return url('/admin/employees?pregled=medical_expired');
     }
 
+    protected function resolveEmployeesMedicalSoonUrl(): string
+    {
+        return url('/admin/employees?pregled=medical_expiring');
+    }
+
     protected function resolveEmployeesCertificatesExpiredUrl(): string
     {
         return url('/admin/employees?pregled=certificates_expired');
+    }
+
+    protected function resolveEmployeesCertificatesSoonUrl(): string
+    {
+        return url('/admin/employees?pregled=certificates_expiring');
     }
 
     protected function resolveMachinesExpiredUrl(): string
@@ -582,14 +632,29 @@ class TopSystemStatusBarWidget extends Widget
         return url('/admin/machines?pregled=isteklo');
     }
 
+    protected function resolveMachinesSoonUrl(): string
+    {
+        return url('/admin/machines?pregled=uskoro');
+    }
+
     protected function resolveFiresExpiredUrl(): string
     {
         return url('/admin/fires?pregled=isteklo');
     }
 
+    protected function resolveFiresSoonUrl(): string
+    {
+        return url('/admin/fires?pregled=uskoro');
+    }
+
     protected function resolveMiscellaneousExpiredUrl(): string
     {
         return url('/admin/miscellaneouses?pregled=isteklo');
+    }
+
+    protected function resolveMiscellaneousSoonUrl(): string
+    {
+        return url('/admin/miscellaneouses?pregled=uskoro');
     }
 
     protected function resolvePpeExpiredUrl(): string
@@ -603,58 +668,34 @@ class TopSystemStatusBarWidget extends Widget
         return url('/admin/ppe-logs?pregled=isteklo');
     }
 
+    protected function resolvePpeSoonUrl(): string
+    {
+        if (class_exists(\App\Filament\Resources\PPELogs\PPELogResource::class)) {
+            return \App\Filament\Resources\PPELogs\PPELogResource::getUrl('index', [
+                'pregled' => 'uskoro',
+            ]);
+        }
+
+        return url('/admin/ppe-logs?pregled=uskoro');
+    }
+
     protected function resolveFirstAidExpiredUrl(): string
     {
         return url('/admin/first-aid-kits?pregled=isteklo');
+    }
+
+    protected function resolveFirstAidSoonUrl(): string
+    {
+        return url('/admin/first-aid-kits?pregled=uskoro');
     }
 
     protected function resolveObservationsExpiredUrl(): string
     {
         return url('/admin/observations?pregled=isteklo');
     }
-    protected function resolveEmployeesMedicalSoonUrl(): string
-{
-    return url('/admin/employees?pregled=medical_expiring');
-}
-
-    protected function resolveEmployeesCertificatesSoonUrl(): string
-{
-    return url('/admin/employees?pregled=certificates_expiring');
-}
-
-    protected function resolveMachinesSoonUrl(): string
-{
-    return url('/admin/machines?pregled=uskoro');
-}
-
-    protected function resolveFiresSoonUrl(): string
-{
-    return url('/admin/fires?pregled=uskoro');
-}
-
-    protected function resolveMiscellaneousSoonUrl(): string
-{
-    return url('/admin/miscellaneouses?pregled=uskoro');
-}
-
-    protected function resolvePpeSoonUrl(): string
-{
-    if (class_exists(\App\Filament\Resources\PPELogs\PPELogResource::class)) {
-        return \App\Filament\Resources\PPELogs\PPELogResource::getUrl('index', [
-            'pregled' => 'uskoro',
-        ]);
-    }
-
-    return url('/admin/ppe-logs?pregled=uskoro');
-}
-
-    protected function resolveFirstAidSoonUrl(): string
-{
-    return url('/admin/first-aid-kits?pregled=uskoro');
-}
 
     protected function resolveObservationsSoonUrl(): string
-{
-    return url('/admin/observations?pregled=uskoro');
-}
+    {
+        return url('/admin/observations?pregled=uskoro');
+    }
 }

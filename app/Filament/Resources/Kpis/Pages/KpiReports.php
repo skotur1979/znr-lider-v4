@@ -7,6 +7,8 @@ use App\Services\KpiCalculationService;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\Page;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Exports\KpiReportsExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class KpiReports extends Page
 {
@@ -64,6 +66,17 @@ class KpiReports extends Page
                 return response()->streamDownload(
                     fn () => print($pdf->output()),
                     'kpi-izvjestaji-' . $this->year . '-' . now()->format('Y-m-d') . '.pdf'
+                );
+            }),
+
+            Action::make('export_excel')
+            ->label('Izvoz u Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(function () {
+                return Excel::download(
+                    new KpiReportsExport($this->year),
+                    'kpi-izvjestaji-' . $this->year . '-' . now()->format('Y-m-d') . '.xlsx'
                 );
             }),
 

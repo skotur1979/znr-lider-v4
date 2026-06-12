@@ -144,10 +144,11 @@ class FireResource extends BaseResource
                                 ->maxLength(255),
 
                             DatePicker::make('regular_examination_valid_from')
-                                ->label('Datum redovnog pregleda (obavezno)')
-                                ->required()
-                                ->displayFormat('d.m.Y.')
-                                ->native(false),
+                            ->label('Datum redovnog pregleda (obavezno)')
+                            ->helperText('Obavezni redovni pregled najmanje jednom svaka 3 mjeseca.')
+                            ->required()
+                            ->displayFormat('d.m.Y.')
+                            ->native(false),
                         ]),
 
                     Section::make('Ostalo')
@@ -283,6 +284,16 @@ class FireResource extends BaseResource
         ->date('d.m.Y.')
         ->sortable()
         ->toggleable(),
+
+    TextColumn::make('regular_examination_valid_until')
+        ->label('Redovni pregled vrijedi do')
+        ->alignment(Alignment::Center)
+        ->date('d.m.Y.')
+        ->badge()
+        ->color(fn ($state) => ExpiryBadge::color($state))
+        ->icon(fn ($state) => ExpiryBadge::icon($state))
+        ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
+        ->toggleable(),
 ])
             ->filters([
                 SelectFilter::make('status')
@@ -341,6 +352,80 @@ class FireResource extends BaseResource
                     ->label(''),
             ])
             ->bulkActions([
+    BulkAction::make('extendRegularInspection')
+        ->label('Produži pregled za 3 mj.')
+        ->icon(Heroicon::CalendarDays)
+        ->color('warning')
+        ->form([
+            DatePicker::make('regular_examination_valid_from')
+                ->label('Datum redovnog pregleda od kojeg se računa novi rok')
+                ->helperText('Novi rok će se računati: odabrani datum + 3 mjeseca.')
+                ->required()
+                ->displayFormat('d.m.Y.')
+                ->native(false),
+        ])
+        ->requiresConfirmation()
+        ->modalHeading('Produži redovni pregled')
+        ->modalDescription('Odabranim vatrogasnim aparatima upisat će se novi datum redovnog pregleda.')
+        ->modalSubmitActionLabel('Produži')
+        ->modalCancelActionLabel('Odustani')
+        ->action(function (EloquentCollection $records, array $data): void {
+            foreach ($records as $record) {
+                if ($record->trashed()) {
+                    continue;
+                }
+
+                $record->update([
+                    'regular_examination_valid_from' => $data['regular_examination_valid_from'],
+                ]);
+            }
+
+            Notification::make()
+                ->title('Redovni pregled je produžen')
+                ->body('Odabranim vatrogasnim aparatima ažuriran je datum redovnog pregleda.')
+                ->success()
+                ->send();
+        }),
+
+    BulkAction::make('extendPeriodicInspection')
+        ->label('Produži ispitivanje za 1 god.')
+        ->icon(Heroicon::ArrowPath)
+        ->color('success')
+        ->form([
+            DatePicker::make('examination_valid_from')
+                ->label('Datum periodičkog servisa / ispitivanja')
+                ->helperText('Polje "Vrijedi do" automatski će se postaviti na odabrani datum + 1 godina.')
+                ->required()
+                ->displayFormat('d.m.Y.')
+                ->native(false),
+        ])
+        ->requiresConfirmation()
+        ->modalHeading('Produži periodički servis / ispitivanje')
+        ->modalDescription('Odabranim vatrogasnim aparatima upisat će se novi datum ispitivanja i rok vrijedi do.')
+        ->modalSubmitActionLabel('Produži')
+        ->modalCancelActionLabel('Odustani')
+        ->action(function (EloquentCollection $records, array $data): void {
+            $from = Carbon::parse($data['examination_valid_from']);
+            $until = $from->copy()->addYearNoOverflow();
+
+            foreach ($records as $record) {
+                if ($record->trashed()) {
+                    continue;
+                }
+
+                $record->update([
+                    'examination_valid_from' => $from->toDateString(),
+                    'examination_valid_until' => $until->toDateString(),
+                ]);
+            }
+
+            Notification::make()
+                ->title('Ispitivanje je produženo')
+                ->body('Odabranim vatrogasnim aparatima ažuriran je datum ispitivanja i rok vrijedi do.')
+                ->success()
+                ->send();
+        }),
+
     DeleteBulkAction::make()
         ->label('Deaktiviraj označeno')
         ->requiresConfirmation()
@@ -387,7 +472,6 @@ class FireResource extends BaseResource
                 'deleted_at',
             ]);
 
-            // NE kopiraj priloge
             $newRecord->pdf = [];
 
             $newRecord->user_id = static::isSuperAdmin()

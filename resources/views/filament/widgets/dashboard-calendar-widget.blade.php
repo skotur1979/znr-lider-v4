@@ -504,33 +504,18 @@
         }
 
         .znr-hover-pop{
-            position:absolute;
-            top:calc(100% + 8px);
-            left:0;
-            width:220px;
-            max-width:220px;
-            max-height:240px;
-            overflow:hidden;
-            border-radius:14px;
-            border:1px solid rgba(59,130,246,.22);
-            background:rgba(7,16,36,.985);
-            box-shadow:0 18px 35px rgba(0,0,0,.30);
-            padding:10px;
-            z-index:999;
-            opacity:0;
-            visibility:hidden;
-            pointer-events:none;
-            transform:translateY(6px);
-            transition:opacity .16s ease, transform .16s ease, visibility .16s ease;
-        }
-
-        .znr-more-wrap:hover .znr-hover-pop,
-        .znr-hover-pop:hover{
-            opacity:1;
-            visibility:visible;
-            pointer-events:auto;
-            transform:translateY(0);
-        }
+        position:absolute;
+        top:calc(100% + 8px);
+        left:0;
+        width:260px;
+        max-width:260px;
+        border-radius:14px;
+        border:1px solid rgba(59,130,246,.22);
+        background:rgba(7,16,36,.985);
+        box-shadow:0 18px 35px rgba(0,0,0,.30);
+        padding:10px;
+        z-index:999;
+    }
 
         .znr-hover-pop-left{
             left:0;
@@ -594,22 +579,32 @@
         }
 
         .znr-hover-pop-list{
-            display:flex;
-            flex-direction:column;
-            gap:6px;
-            max-height:190px;
-            overflow-y:auto;
-            padding-right:2px;
-        }
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+        max-height:320px;
+        overflow-y:auto;
+        overflow-x:hidden;
+        overscroll-behavior:contain;
+        padding-right:4px;
+    }
 
-        .znr-hover-pop-list::-webkit-scrollbar{
-            width:6px;
-        }
+    .znr-hover-pop-list::-webkit-scrollbar{
+        width:8px;
+    }
 
-        .znr-hover-pop-list::-webkit-scrollbar-thumb{
-            background:rgba(148,163,184,.35);
-            border-radius:999px;
-        }
+    .znr-hover-pop-list::-webkit-scrollbar-track{
+        background:transparent;
+    }
+
+    .znr-hover-pop-list::-webkit-scrollbar-thumb{
+        background:rgba(148,163,184,.45);
+        border-radius:999px;
+    }
+
+    .znr-hover-pop-list::-webkit-scrollbar-thumb:hover{
+        background:rgba(148,163,184,.65);
+    }
 
         .znr-hover-item{
             width:100%;
@@ -1041,10 +1036,22 @@
                                 }
                             @endphp
 
-                            <div class="znr-more-wrap">
-                                <span class="znr-more">+{{ $day['extra_count'] }} više</span>
+                            <div
+                            class="znr-more-wrap"
+                            x-data="{ open: false }"
+                            @click.outside="open = false"
+                            >
+                            <span
+                                class="znr-more"
+                                @click.stop="open = !open">
+                                +{{ $day['extra_count'] }} više
+                            </span>
 
-                                <div class="znr-hover-pop {{ $popupClass }}">
+                            <div
+                                class="znr-hover-pop {{ $popupClass }}"
+                                x-show="open"
+                                x-transition
+                                style="display:none;">
                                     <div class="znr-hover-pop-head">
                                         <div class="znr-hover-pop-title">
                                             <div class="znr-hover-pop-title-main">Dodatne stavke</div>

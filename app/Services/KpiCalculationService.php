@@ -75,61 +75,61 @@ class KpiCalculationService
 
     public function generateForMonth(int $month, int $year): array
     {
-    $generated = 0;
-    $updated = 0;
-    $skipped = 0;
+        $generated = 0;
+        $updated = 0;
+        $skipped = 0;
 
-    $this->baseKpiQuery()
-        ->where('is_active', true)
-        ->where(function (Builder $q) {
-            $q->whereIn('calculation_type', ['automatic', 'formula'])
-                ->orWhereIn('source_key', self::automaticSourceKeys());
-        })
-        ->orderBy('sort_order')
-        ->orderBy('name')
-        ->get()
-        ->each(function (Kpi $kpi) use ($month, $year, &$generated, &$updated, &$skipped) {
+        $this->baseKpiQuery()
+            ->where('is_active', true)
+            ->where(function (Builder $q) {
+                $q->whereIn('calculation_type', ['automatic', 'formula'])
+                    ->orWhereIn('source_key', self::automaticSourceKeys());
+            })
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->each(function (Kpi $kpi) use ($month, $year, &$generated, &$updated, &$skipped) {
+                $ownerId = $this->resolveOwnerId();
+                $value = $this->calculateSingle($kpi, $month, $year);
 
-            $ownerId = $this->resolveOwnerId();
-            $value = $this->calculateSingle($kpi, $month, $year);
+                if ($value === null) {
+                    $skipped++;
 
-            if ($value === null) {
-                $skipped++;
-                return;
-            }
+                    return;
+                }
 
-            $existing = KpiValue::query()
-            ->where('kpi_id', $kpi->id)
-            ->where('user_id', $ownerId)
-            ->where('month', $month)
-            ->where('year', $year)
-            ->first();
+                $existing = KpiValue::query()
+                    ->where('kpi_id', $kpi->id)
+                    ->where('user_id', $ownerId)
+                    ->where('month', $month)
+                    ->where('year', $year)
+                    ->first();
 
-            KpiValue::updateOrCreate(
-                [
-                    'kpi_id' => $kpi->id,
-                    'user_id' => $ownerId,
-                    'month' => $month,
-                    'year' => $year,
-            ],
-                [
-                    'value' => $value,
-                    'auto_generated' => true,
-                    'source_label' => $this->sourceLabel($kpi),
-                    'note' => 'Automatski ažurirano: ' . now()->format('d.m.Y. H:i'),
-                ]
-            );
+                KpiValue::updateOrCreate(
+                    [
+                        'kpi_id' => $kpi->id,
+                        'user_id' => $ownerId,
+                        'month' => $month,
+                        'year' => $year,
+                    ],
+                    [
+                        'value' => $value,
+                        'auto_generated' => true,
+                        'source_label' => $this->sourceLabel($kpi),
+                        'note' => 'Automatski ažurirano: ' . now()->format('d.m.Y. H:i'),
+                    ]
+                );
 
-            $existing ? $updated++ : $generated++;
-        });
+                $existing ? $updated++ : $generated++;
+            });
 
-    return [
-        'generated' => $generated,
-        'updated' => $updated,
-        'skipped' => $skipped,
-        'total' => $generated + $updated,
-    ];
-}
+        return [
+            'generated' => $generated,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'total' => $generated + $updated,
+        ];
+    }
 
     public function calculateSingle(Kpi $kpi, int $month, int $year): ?float
     {
@@ -190,6 +190,8 @@ class KpiCalculationService
                     $compare = $kpi->valueFor($compareMonth, $compareYear);
                 }
 
+                $target = $kpi->effectiveTargetValueForPeriod($month, $year, $ownerId);
+
                 return [
                     'id' => $kpi->id,
                     'name' => $kpi->name,
@@ -200,8 +202,8 @@ class KpiCalculationService
                     'compare_value' => $compare?->value,
                     'formatted_current' => $kpi->formatNumberOnly($current?->value),
                     'formatted_compare' => $kpi->formatNumberOnly($compare?->value),
-                    'formatted_target' => $kpi->formatNumberOnly($kpi->effectiveTargetValue($ownerId)),
-                    'status' => $kpi->evaluateStatus($current?->value, $ownerId),
+                    'formatted_target' => $kpi->formatNumberOnly($target),
+                    'status' => $kpi->evaluateStatusForPeriod($current?->value, $month, $year, $ownerId),
                     'delta' => $this->delta($current?->value, $compare?->value),
                 ];
             })
@@ -242,6 +244,8 @@ class KpiCalculationService
                         : null;
                 }
 
+                $target = $kpi->effectiveTargetValueForPeriod(12, $year, $ownerId);
+
                 return [
                     'id' => $kpi->id,
                     'name' => $kpi->name,
@@ -252,8 +256,8 @@ class KpiCalculationService
                     'compare_value' => $compare,
                     'formatted_current' => $kpi->formatNumberOnly($current),
                     'formatted_compare' => $kpi->formatNumberOnly($compare),
-                    'formatted_target' => $kpi->formatNumberOnly($kpi->effectiveTargetValue($ownerId)),
-                    'status' => $kpi->evaluateStatus($current, $ownerId),
+                    'formatted_target' => $kpi->formatNumberOnly($target),
+                    'status' => $kpi->evaluateStatusForPeriod($current, 12, $year, $ownerId),
                     'delta' => $this->delta($current, $compare),
                 ];
             })
@@ -276,7 +280,17 @@ class KpiCalculationService
 
                 $statuses = collect(range(1, 12))
                     ->mapWithKeys(fn (int $month) => [
-                        $month => $kpi->evaluateStatus($kpi->valueFor($month, $year)?->value, $ownerId),
+                        $month => $kpi->evaluateStatusForPeriod(
+                            $kpi->valueFor($month, $year)?->value,
+                            $month,
+                            $year,
+                            $ownerId
+                        ),
+                    ]);
+
+                $targets = collect(range(1, 12))
+                    ->mapWithKeys(fn (int $month) => [
+                        $month => $kpi->effectiveTargetValueForPeriod($month, $year, $ownerId),
                     ]);
 
                 $total = $values->filter(fn ($value) => $value !== null)->sum();
@@ -287,9 +301,10 @@ class KpiCalculationService
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
-                    'formatted_target' => $kpi->formatNumberOnly($kpi->effectiveTargetValue($ownerId)),
+                    'formatted_target' => $kpi->formatNumberOnly($kpi->effectiveTargetValueForPeriod(12, $year, $ownerId)),
                     'values' => $values,
                     'statuses' => $statuses,
+                    'targets' => $targets,
                     'total' => $total,
                     'average' => $average,
                 ];
@@ -326,7 +341,25 @@ class KpiCalculationService
 
         return $query->where(function (Builder $q) use ($ownerId) {
             $q->where('user_id', $ownerId)
-                ->orWhereNull('user_id');
+                ->orWhere(function (Builder $global) use ($ownerId) {
+                    $global->whereNull('user_id')
+                        ->whereNotExists(function ($sub) use ($ownerId) {
+                            $sub->selectRaw('1')
+                                ->from('kpis as org_kpis')
+                                ->where('org_kpis.user_id', $ownerId)
+                                ->whereNull('org_kpis.deleted_at')
+                                ->where(function ($match) {
+                                    $match->where(function ($bySource) {
+                                        $bySource->whereNotNull('kpis.source_key')
+                                            ->whereColumn('org_kpis.source_key', 'kpis.source_key');
+                                    })
+                                    ->orWhere(function ($byName) {
+                                        $byName->whereNull('kpis.source_key')
+                                            ->whereColumn('org_kpis.name', 'kpis.name');
+                                    });
+                                });
+                        });
+                });
         });
     }
 
@@ -548,7 +581,16 @@ class KpiCalculationService
 
     protected function manualLinkedValue(string $kpiName, int $month, int $year): ?float
     {
-        $kpi = $this->baseKpiQuery()->where('name', $kpiName)->first();
+        $ownerId = $this->resolveOwnerId();
+
+        $kpi = Kpi::query()
+            ->where('name', $kpiName)
+            ->where(function (Builder $q) use ($ownerId) {
+                $q->where('user_id', $ownerId)
+                    ->orWhereNull('user_id');
+            })
+            ->orderByRaw('CASE WHEN user_id IS NULL THEN 1 ELSE 0 END')
+            ->first();
 
         if (! $kpi) {
             return null;

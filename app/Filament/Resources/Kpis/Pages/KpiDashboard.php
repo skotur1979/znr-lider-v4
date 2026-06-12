@@ -36,6 +36,9 @@ class KpiDashboard extends Page
     public $targetValue = null;
     public $warningOffset = null;
 
+    public ?int $targetMonth = null;
+    public ?int $targetYear = null;
+
     public bool $targetUsesOverride = false;
     public $globalTargetValue = null;
     public $globalWarningOffset = null;
@@ -126,18 +129,35 @@ class KpiDashboard extends Page
             return;
         }
 
-        $kpi = Kpi::query()->findOrFail($kpiId);
+        $ownerId = KpiResource::resolveOwnerId();
 
-        if (filled($kpi->user_id)) {
+        if (! $ownerId) {
             return;
         }
 
-        $override = $kpi->targetOverrideFor(KpiResource::resolveOwnerId());
+        $kpi = Kpi::query()->findOrFail($kpiId);
+
+        if (filled($kpi->user_id) && (int) $kpi->user_id !== (int) $ownerId) {
+            abort(403);
+        }
+
+        $this->targetMonth = $this->viewMode === 'month'
+            ? (int) $this->month
+            : now()->month;
+
+        $this->targetYear = (int) $this->year;
+
+        $override = KpiTargetOverride::query()
+            ->where('kpi_id', $kpi->id)
+            ->where('user_id', $ownerId)
+            ->where('month', $this->targetMonth)
+            ->where('year', $this->targetYear)
+            ->first();
 
         $this->targetKpiId = $kpi->id;
         $this->targetKpiName = $kpi->name;
-        $this->targetValue = $override?->target_value ?? $kpi->target_value;
-        $this->warningOffset = $override?->warning_offset ?? $kpi->warning_offset;
+        $this->targetValue = $override?->target_value ?? $kpi->effectiveTargetValueForPeriod($this->targetMonth, $this->targetYear, $ownerId);
+        $this->warningOffset = $override?->warning_offset ?? $kpi->effectiveWarningOffsetForPeriod($this->targetMonth, $this->targetYear, $ownerId);
 
         $this->targetUsesOverride = (bool) $override;
         $this->globalTargetValue = $kpi->target_value;
@@ -153,6 +173,8 @@ class KpiDashboard extends Page
         $this->targetKpiName = '';
         $this->targetValue = null;
         $this->warningOffset = null;
+        $this->targetMonth = null;
+        $this->targetYear = null;
         $this->targetUsesOverride = false;
         $this->globalTargetValue = null;
         $this->globalWarningOffset = null;
@@ -164,22 +186,32 @@ class KpiDashboard extends Page
             'targetKpiId' => ['required', 'integer', 'exists:kpis,id'],
             'targetValue' => ['nullable', 'numeric'],
             'warningOffset' => ['nullable', 'numeric'],
+            'targetMonth' => ['required', 'integer', 'min:1', 'max:12'],
+            'targetYear' => ['required', 'integer', 'min:2000', 'max:2100'],
         ]);
-
-        $kpi = Kpi::query()->findOrFail($this->targetKpiId);
 
         if (auth()->user()?->isSuperAdmin()) {
             abort(403);
         }
 
-        if (filled($kpi->user_id)) {
+        $ownerId = KpiResource::resolveOwnerId();
+
+        if (! $ownerId) {
+            abort(403);
+        }
+
+        $kpi = Kpi::query()->findOrFail($this->targetKpiId);
+
+        if (filled($kpi->user_id) && (int) $kpi->user_id !== (int) $ownerId) {
             abort(403);
         }
 
         KpiTargetOverride::updateOrCreate(
             [
                 'kpi_id' => $kpi->id,
-                'user_id' => KpiResource::resolveOwnerId(),
+                'user_id' => $ownerId,
+                'month' => (int) $this->targetMonth,
+                'year' => (int) $this->targetYear,
             ],
             [
                 'target_value' => $this->targetValue,
@@ -188,7 +220,8 @@ class KpiDashboard extends Page
         );
 
         Notification::make()
-            ->title('Cilj i tolerancija su spremljeni.')
+            ->title('Cilj je spremljen.')
+            ->body('Promjena cilja vrijedi od ' . str_pad((string) $this->targetMonth, 2, '0', STR_PAD_LEFT) . '/' . $this->targetYear . '.')
             ->success()
             ->send();
 
@@ -200,6 +233,8 @@ class KpiDashboard extends Page
     {
         $this->validate([
             'targetKpiId' => ['required', 'integer', 'exists:kpis,id'],
+            'targetMonth' => ['required', 'integer', 'min:1', 'max:12'],
+            'targetYear' => ['required', 'integer', 'min:2000', 'max:2100'],
         ]);
 
         if (auth()->user()?->isSuperAdmin()) {
@@ -209,10 +244,12 @@ class KpiDashboard extends Page
         KpiTargetOverride::query()
             ->where('kpi_id', $this->targetKpiId)
             ->where('user_id', KpiResource::resolveOwnerId())
+            ->where('month', $this->targetMonth)
+            ->where('year', $this->targetYear)
             ->delete();
 
         Notification::make()
-            ->title('Vraćen je globalni cilj.')
+            ->title('Cilj za odabrani period je uklonjen.')
             ->success()
             ->send();
 

@@ -66,7 +66,10 @@ class Kpi extends Model
 
     public function targetOverrides(): HasMany
     {
-        return $this->hasMany(KpiTargetOverride::class)->orderByDesc('id');
+        return $this->hasMany(KpiTargetOverride::class)
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->orderByDesc('id');
     }
 
     public function latestValue(): ?KpiValue
@@ -77,27 +80,31 @@ class Kpi extends Model
             ->first();
     }
 
-    public function valueFor(int $month, int $year): ?KpiValue
-{
-    $user = Auth::user();
+    protected function currentOwnerId(): ?int
+    {
+        $user = Auth::user();
 
-    $ownerId = null;
-
-    if ($user) {
+        if (! $user) {
+            return null;
+        }
 
         if (method_exists($user, 'ownerId')) {
-            $ownerId = $user->ownerId() ?: $user->id;
-        } else {
-            $ownerId = $user->id;
+            return $user->ownerId() ?: $user->id;
         }
+
+        return $user->parent_user_id ?: $user->id;
     }
 
-    return $this->values()
-        ->where('month', $month)
-        ->where('year', $year)
-        ->where('user_id', $ownerId)
-        ->first();
-}
+    public function valueFor(int $month, int $year): ?KpiValue
+    {
+        $ownerId = $this->currentOwnerId();
+
+        return $this->values()
+            ->where('month', $month)
+            ->where('year', $year)
+            ->when($ownerId, fn ($query) => $query->where('user_id', $ownerId))
+            ->first();
+    }
 
     public function previousMonthValue(int $month, int $year): ?KpiValue
     {
@@ -111,26 +118,9 @@ class Kpi extends Model
         return $this->valueFor($month, $year - 1);
     }
 
-    public function monthlyTrendForYear(?int $year = null): Collection
-    {
-        $year ??= now()->year;
-
-        return collect(range(1, 12))->map(function (int $month) use ($year) {
-            $record = $this->valueFor($month, $year);
-
-            return [
-                'month' => $month,
-                'label' => str_pad((string) $month, 2, '0', STR_PAD_LEFT),
-                'value' => $record?->value,
-                'formatted' => $this->formatNumberOnly($record?->value),
-                'has_value' => $record?->value !== null,
-            ];
-        });
-    }
-
     public function targetOverrideFor(?int $userId = null): ?KpiTargetOverride
     {
-        $userId ??= Auth::id();
+        $userId ??= $this->currentOwnerId();
 
         if (! $userId) {
             return null;
@@ -138,6 +128,34 @@ class Kpi extends Model
 
         return $this->targetOverrides()
             ->where('user_id', $userId)
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    public function targetOverrideForPeriod(int $month, int $year, ?int $userId = null): ?KpiTargetOverride
+    {
+        $userId ??= $this->currentOwnerId();
+
+        if (! $userId) {
+            return null;
+        }
+
+        return $this->targetOverrides()
+            ->where('user_id', $userId)
+            ->whereNotNull('month')
+            ->whereNotNull('year')
+            ->where(function ($query) use ($month, $year) {
+                $query->where('year', '<', $year)
+                    ->orWhere(function ($q) use ($month, $year) {
+                        $q->where('year', $year)
+                            ->where('month', '<=', $month);
+                    });
+            })
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->orderByDesc('id')
             ->first();
     }
 
@@ -151,6 +169,20 @@ class Kpi extends Model
     public function effectiveWarningOffset(?int $userId = null): ?float
     {
         $override = $this->targetOverrideFor($userId);
+
+        return $override?->warning_offset ?? $this->warning_offset;
+    }
+
+    public function effectiveTargetValueForPeriod(int $month, int $year, ?int $userId = null): ?float
+    {
+        $override = $this->targetOverrideForPeriod($month, $year, $userId);
+
+        return $override?->target_value ?? $this->target_value;
+    }
+
+    public function effectiveWarningOffsetForPeriod(int $month, int $year, ?int $userId = null): ?float
+    {
+        $override = $this->targetOverrideForPeriod($month, $year, $userId);
 
         return $override?->warning_offset ?? $this->warning_offset;
     }
@@ -172,6 +204,46 @@ class Kpi extends Model
             'target_value' => $this->evaluateTargetValue($value, $target, $warningOffset),
             default => 'neutral',
         };
+    }
+
+    public function evaluateStatusForPeriod(?float $value, int $month, int $year, ?int $userId = null): string
+    {
+        $targetValue = $this->effectiveTargetValueForPeriod($month, $year, $userId);
+        $warningOffset = (float) ($this->effectiveWarningOffsetForPeriod($month, $year, $userId) ?? 0);
+
+        if ($value === null || $targetValue === null) {
+            return 'neutral';
+        }
+
+        $target = (float) $targetValue;
+
+        return match ($this->direction) {
+            'lower_better' => $this->evaluateLowerBetter($value, $target, $warningOffset),
+            'higher_better' => $this->evaluateHigherBetter($value, $target, $warningOffset),
+            'target_value' => $this->evaluateTargetValue($value, $target, $warningOffset),
+            default => 'neutral',
+        };
+    }
+
+    public function monthlyTrendForYear(?int $year = null, ?int $userId = null): Collection
+    {
+        $year ??= now()->year;
+        $userId ??= $this->currentOwnerId();
+
+        return collect(range(1, 12))->map(function (int $month) use ($year, $userId) {
+            $record = $this->valueFor($month, $year);
+            $target = $this->effectiveTargetValueForPeriod($month, $year, $userId);
+
+            return [
+                'month' => $month,
+                'label' => str_pad((string) $month, 2, '0', STR_PAD_LEFT),
+                'value' => $record?->value,
+                'formatted' => $this->formatNumberOnly($record?->value),
+                'has_value' => $record?->value !== null,
+                'target_value' => $target,
+                'formatted_target' => $this->formatNumberOnly($target),
+            ];
+        });
     }
 
     protected function evaluateLowerBetter(float $value, float $target, float $warningOffset): string

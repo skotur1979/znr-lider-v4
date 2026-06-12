@@ -13,12 +13,14 @@ class ViewKpi extends ViewRecord
 
     protected function getViewData(): array
     {
-        $record = $this->record->load('values');
+        $ownerId = KpiResource::resolveOwnerId();
+
+        $record = $this->record->load(['values', 'targetOverrides']);
 
         return [
             'record' => $record,
-            'trend' => $record->monthlyTrendForYear(now()->year),
-            'ownerId' => KpiResource::resolveOwnerId(),
+            'trend' => $record->monthlyTrendForYear(now()->year, $ownerId),
+            'ownerId' => $ownerId,
         ];
     }
 }

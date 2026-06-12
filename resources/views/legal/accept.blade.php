@@ -15,7 +15,7 @@
         }
 
         .container {
-            max-width: 760px;
+            max-width: 820px;
             margin: 0 auto;
             background: white;
             border-radius: 18px;
@@ -33,6 +33,14 @@
 
         p {
             line-height: 1.6;
+        }
+
+        .logo {
+            font-size: 15px;
+            font-weight: bold;
+            color: #f59e0b;
+            margin-bottom: 20px;
+            letter-spacing: .4px;
         }
 
         .warning-box {
@@ -92,11 +100,17 @@
             text-decoration: underline;
         }
 
-        .pdf-links {
+        .document-list {
             margin-top: 18px;
-            padding-top: 18px;
-            border-top: 1px solid #e5e7eb;
+            padding: 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #f9fafb;
             font-size: 14px;
+        }
+
+        .document-list ul {
+            margin-bottom: 0;
         }
 
         .button {
@@ -125,48 +139,33 @@
             color: #6b7280;
             line-height: 1.6;
         }
-
-        .logo {
-            font-size: 15px;
-            font-weight: bold;
-            color: #f59e0b;
-            margin-bottom: 20px;
-            letter-spacing: .4px;
-        }
     </style>
 </head>
 <body>
 
 <div class="container">
 
-    <div class="logo">
-        ZNR LIDER
-    </div>
+    <div class="logo">ZNR LIDER</div>
 
-    <h1>
-        Prije nastavka korištenja sustava
-    </h1>
+    <h1>Prije nastavka korištenja sustava</h1>
 
     <p>
-        Za korištenje aplikacije ZNR Lider potrebno je prihvatiti
-        Uvjete korištenja i Pravila privatnosti.
+        Za korištenje aplikacije ZNR Lider potrebno je prihvatiti važeće pravne dokumente.
     </p>
 
     <div class="warning-box">
         <strong>Važno:</strong><br><br>
-
-        Korisnik aplikacije odgovoran je za zakonitost unosa podataka
-        radnika i drugih osobnih podataka te potvrđuje da ima pravnu osnovu
-        za obradu podataka sukladno važećim GDPR i drugim zakonskim propisima.
-
+        Korisnik aplikacije odgovoran je za zakonitost unosa podataka radnika i drugih
+        osobnih podataka te potvrđuje da ima pravnu osnovu za obradu podataka sukladno
+        GDPR-u i drugim važećim propisima.
         <br><br>
-
-        ZNR Lider djeluje kao tehnički sustav za obradu, pohranu i vođenje evidencija.
+        ZNR Lider djeluje kao softverski sustav za tehničku obradu, pohranu, prikaz i
+        vođenje evidencija.
     </div>
 
     <div class="info-box">
-        Prihvaćanje uvjeta evidentira se radi sigurnosti sustava,
-        audit evidencije i dokazivanja prihvaćanja pravnih dokumenata.
+        Prihvaćanje uvjeta evidentira se radi sigurnosti sustava, audit evidencije i
+        dokazivanja prihvaćanja pravnih dokumenata.
     </div>
 
     @if ($errors->any())
@@ -183,12 +182,9 @@
         <div class="checkbox-group">
             <label>
                 <input type="checkbox" name="accepted_terms" value="1" required>
-
                 <span>
                     Prihvaćam
-                    <a href="{{ route('legal.terms') }}" target="_blank">
-                        Uvjete korištenja
-                    </a>
+                    <a href="{{ route('legal.terms') }}" target="_blank">Opće uvjete korištenja</a>
                     verzija {{ $termsVersion }}.
                 </span>
             </label>
@@ -197,13 +193,54 @@
         <div class="checkbox-group">
             <label>
                 <input type="checkbox" name="accepted_privacy" value="1" required>
-
                 <span>
                     Prihvaćam
-                    <a href="{{ route('legal.privacy') }}" target="_blank">
-                        Pravila privatnosti
-                    </a>
+                    <a href="{{ route('legal.privacy') }}" target="_blank">Pravila privatnosti</a>
                     verzija {{ $privacyVersion }}.
+                </span>
+            </label>
+        </div>
+
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" name="accepted_cookies" value="1" required>
+                <span>
+                    Upoznat/a sam s
+                    <a href="{{ route('legal.cookies') }}" target="_blank">Politikom kolačića</a>
+                    verzija {{ config('legal.cookies_version') }}.
+                </span>
+            </label>
+        </div>
+
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" name="accepted_dpa" value="1" required>
+                <span>
+                    Prihvaćam
+                    <a href="{{ route('legal.dpa') }}" target="_blank">Ugovor o obradi podataka (DPA)</a>
+                    verzija {{ config('legal.dpa_version') }}.
+                </span>
+            </label>
+        </div>
+
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" name="accepted_security" value="1" required>
+                <span>
+                    Upoznat/a sam s
+                    <a href="{{ route('legal.security') }}" target="_blank">Politikom sigurnosti</a>
+                    verzija {{ config('legal.security_version') }}.
+                </span>
+            </label>
+        </div>
+
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" name="accepted_retention" value="1" required>
+                <span>
+                    Upoznat/a sam s
+                    <a href="{{ route('legal.retention') }}" target="_blank">Politikom zadržavanja i brisanja podataka</a>
+                    verzija {{ config('legal.retention_version') }}.
                 </span>
             </label>
         </div>
@@ -211,10 +248,8 @@
         <div class="checkbox-group" style="margin-bottom: 28px;">
             <label>
                 <input type="checkbox" name="newsletter_opt_in" value="1">
-
                 <span>
-                    Želim primati novosti, sigurnosne obavijesti i informacije
-                    vezane uz sustav ZNR Lider putem e-maila.
+                    Želim primati novosti, sigurnosne obavijesti i informacije vezane uz sustav ZNR Lider putem e-maila.
                 </span>
             </label>
         </div>
@@ -223,24 +258,30 @@
             Prihvati i nastavi
         </button>
 
-        <div class="pdf-links">
+        <div class="document-list">
+            <strong>Pravni dokumenti:</strong>
+
+            <ul>
+                <li><a href="{{ route('legal.terms') }}" target="_blank">Opći uvjeti korištenja</a></li>
+                <li><a href="{{ route('legal.privacy') }}" target="_blank">Pravila privatnosti</a></li>
+                <li><a href="{{ route('legal.cookies') }}" target="_blank">Politika kolačića</a></li>
+                <li><a href="{{ route('legal.dpa') }}" target="_blank">Ugovor o obradi podataka (DPA)</a></li>
+                <li><a href="{{ route('legal.security') }}" target="_blank">Politika sigurnosti</a></li>
+                <li><a href="{{ route('legal.retention') }}" target="_blank">Politika zadržavanja i brisanja podataka</a></li>
+                <li><a href="{{ route('legal.faq') }}" target="_blank">Često postavljana pitanja</a></li>
+            </ul>
+
+            <br>
+
             <strong>PDF dokumenti:</strong><br><br>
 
-            <a href="{{ route('legal.terms.pdf') }}" target="_blank">
-                📄 Uvjeti korištenja PDF
-            </a>
-
-            <br><br>
-
-            <a href="{{ route('legal.privacy.pdf') }}" target="_blank">
-                📄 Pravila privatnosti PDF
-            </a>
+            <a href="{{ route('legal.terms.pdf') }}" target="_blank">📄 Opći uvjeti korištenja PDF</a><br><br>
+            <a href="{{ route('legal.privacy.pdf') }}" target="_blank">📄 Pravila privatnosti PDF</a>
         </div>
 
         <div class="footer-note">
-            Datum i vrijeme prihvaćanja, IP adresa i tehnički podaci preglednika
-            mogu biti evidentirani radi sigurnosti sustava, zaštite podataka
-            i audit evidencije.
+            Datum i vrijeme prihvaćanja, IP adresa i tehnički podaci preglednika mogu biti evidentirani
+            radi sigurnosti sustava, zaštite podataka i audit evidencije.
         </div>
     </form>
 

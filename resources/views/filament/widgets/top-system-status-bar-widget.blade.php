@@ -158,7 +158,7 @@
                         <x-filament::icon icon="heroicon-o-trophy" class="tsb-score-svg" />
                     </div>
                     <div>
-                        <span class="tsb-score-label">Rekord LTA</span>
+                        <span class="tsb-score-label">Rekord bez LTA</span>
                         <span class="tsb-score-value">{{ $recordDaysWithoutLta ?? '—' }}</span>
                         <span class="tsb-score-small">{{ $recordDaysWithoutLta !== null ? 'dana' : '' }}</span>
                     </div>
@@ -252,17 +252,25 @@
         .dark .tsb-report-title{color:#ffffff;}
 
         .tsb-score-card{
-            min-width:118px;
-            height:62px;
-            display:flex;
-            align-items:center;
-            gap:10px;
-            padding:10px 13px;
-            border-radius:15px;
-            border:1px solid rgba(148,163,184,.16);
-            background:rgba(255,255,255,.70);
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
-        }
+        min-width:118px;
+        height:62px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:10px;
+        padding:10px 13px;
+        border-radius:15px;
+        border:1px solid rgba(148,163,184,.16);
+        background:rgba(255,255,255,.70);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    }
+        .tsb-score-card > div:last-child{
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        text-align:center;
+    }
 
         .dark .tsb-score-card{background:rgba(255,255,255,.045);border-color:rgba(148,163,184,.18);}
         .tsb-score-danger{border-color:rgba(239,68,68,.30);background:rgba(239,68,68,.075);}
@@ -302,11 +310,11 @@
         .tsb-score-record .tsb-score-icon{color:#3b82f6;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);}
         .tsb-score-svg{width:18px;height:18px;}
 
-        .tsb-score-label{display:block;font-size:.70rem;line-height:1;font-weight:850;color:#64748b;white-space:nowrap;}
+        .tsb-score-label{display:block;font-size:.70rem;line-height:1;font-weight:850;color:#64748b;white-space:nowrap;text-align:center;}
         .dark .tsb-score-label{color:#cbd5e1;}
-        .tsb-score-value{display:block;margin-top:4px;font-size:1.34rem;line-height:1;font-weight:1000;color:#0f172a;letter-spacing:-.02em;}
+        .tsb-score-value{display:block;margin-top:4px;font-size:1.34rem;line-height:1;font-weight:1000;color:#0f172a;letter-spacing:-.02em;text-align:center;}
         .dark .tsb-score-value{color:#ffffff;}
-        .tsb-score-small{display:block;margin-top:2px;font-size:.66rem;line-height:1;font-weight:800;color:#16a34a;white-space:nowrap;}
+        .tsb-score-small{display:block;margin-top:2px;font-size:.66rem;line-height:1;font-weight:800;color:#16a34a;white-space:nowrap;text-align:center;}
         .dark .tsb-score-small{color:#86efac;}
         .tsb-score-record .tsb-score-small{color:#60a5fa;}
 

@@ -79,13 +79,25 @@ class User extends Authenticatable
     }
 
     public function hasAcceptedCurrentLegalTerms(): bool
-    {
-        return $this->accepted_terms_at
-            && $this->accepted_privacy_at
-            && $this->terms_version === config('legal.terms_version')
-            && $this->privacy_version === config('legal.privacy_version')
-            && ! $this->legal_consent_withdrawn_at;
+{
+    if ($this->legal_consent_withdrawn_at) {
+        return false;
     }
+
+    if (! $this->accepted_terms_at || ! $this->accepted_privacy_at) {
+        return false;
+    }
+
+    if ($this->terms_version !== config('legal.terms_version')) {
+        return false;
+    }
+
+    if ($this->privacy_version !== config('legal.privacy_version')) {
+        return false;
+    }
+
+    return true;
+}
 
     public function hasRequestedAccountDeletion(): bool
     {

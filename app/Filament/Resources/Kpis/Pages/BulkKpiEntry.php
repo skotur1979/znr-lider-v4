@@ -59,7 +59,25 @@ class BulkKpiEntry extends Page
 
             $query->where(function (Builder $q) use ($ownerId) {
                 $q->where('user_id', $ownerId)
-                    ->orWhereNull('user_id');
+                    ->orWhere(function (Builder $global) use ($ownerId) {
+                        $global->whereNull('user_id')
+                            ->whereNotExists(function ($sub) use ($ownerId) {
+                                $sub->selectRaw('1')
+                                    ->from('kpis as org_kpis')
+                                    ->where('org_kpis.user_id', $ownerId)
+                                    ->whereNull('org_kpis.deleted_at')
+                                    ->where(function ($match) {
+                                        $match->where(function ($bySource) {
+                                            $bySource->whereNotNull('kpis.source_key')
+                                                ->whereColumn('org_kpis.source_key', 'kpis.source_key');
+                                        })
+                                        ->orWhere(function ($byName) {
+                                            $byName->whereNull('kpis.source_key')
+                                                ->whereColumn('org_kpis.name', 'kpis.name');
+                                        });
+                                    });
+                            });
+                    });
             });
         }
 

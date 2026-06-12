@@ -465,9 +465,9 @@ class DashboardCalendarWidget extends Widget
             });
     }
 
-    protected function fireItems(Carbon $start, Carbon $end): Collection
+        protected function fireItems(Carbon $start, Carbon $end): Collection
     {
-        return $this->fireBaseQuery()
+        $periodic = $this->fireBaseQuery()
             ->select(['id', 'place', 'examination_valid_until'])
             ->whereNotNull('examination_valid_until')
             ->whereBetween('examination_valid_until', [$start->toDateString(), $end->toDateString()])
@@ -476,7 +476,7 @@ class DashboardCalendarWidget extends Widget
             ->map(function (Fire $fire) {
                 return [
                     'date' => Carbon::parse($fire->examination_valid_until),
-                    'title' => 'Aparat: ' . $fire->place,
+                    'title' => 'Vatrogasni aparat - periodički: ' . $fire->place,
                     'url' => \App\Filament\Resources\Fires\FireResource::getUrl('view', [
                         'record' => $fire,
                     ]),
@@ -485,6 +485,35 @@ class DashboardCalendarWidget extends Widget
                     'sort' => 40,
                 ];
             });
+
+        $regular = $this->fireBaseQuery()
+            ->select(['id', 'place', 'regular_examination_valid_from'])
+            ->whereNotNull('regular_examination_valid_from')
+            ->whereBetween('regular_examination_valid_from', [
+                $start->copy()->subMonthsNoOverflow(3)->toDateString(),
+                $end->copy()->subMonthsNoOverflow(3)->toDateString(),
+            ])
+            ->orderBy('regular_examination_valid_from')
+            ->get()
+            ->map(function (Fire $fire) {
+                $regularUntil = Carbon::parse($fire->regular_examination_valid_from)
+                    ->addMonthsNoOverflow(3);
+
+                return [
+                    'date' => $regularUntil,
+                    'title' => 'Vatrogasni aparat - redovni pregled: ' . $fire->place,
+                    'url' => \App\Filament\Resources\Fires\FireResource::getUrl('view', [
+                        'record' => $fire,
+                    ]),
+                    'class' => 'fire',
+                    'type' => 'default',
+                    'sort' => 41,
+                ];
+            })
+            ->filter(fn (array $item) => $item['date']->betweenIncluded($start, $end))
+            ->values();
+
+        return $periodic->merge($regular);
     }
 
     protected function miscellaneousItems(Carbon $start, Carbon $end): Collection

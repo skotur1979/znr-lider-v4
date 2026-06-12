@@ -23,9 +23,19 @@ class EnsureLegalAccepted
         if ($request->routeIs(
             'legal.accept',
             'legal.accept.store',
+
             'legal.privacy',
+            'legal.privacy.pdf',
+
             'legal.terms',
+            'legal.terms.pdf',
+
             'legal.cookies',
+            'legal.dpa',
+            'legal.security',
+            'legal.retention',
+            'legal.faq',
+
             'logout',
         )) {
             return $next($request);

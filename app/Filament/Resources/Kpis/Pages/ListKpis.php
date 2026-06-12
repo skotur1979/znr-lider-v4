@@ -14,6 +14,22 @@ class ListKpis extends ListRecords
 {
     protected static string $resource = KpiResource::class;
 
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
+{
+    return new \Illuminate\Support\HtmlString('
+        <div class="flex items-center gap-2">
+            <span>KPI</span>
+
+            <span
+                title="KPI = Key Performance Indicators (Ključni pokazatelji uspješnosti)"
+                class="cursor-help text-primary-500"
+            >
+                ⓘ
+            </span>
+        </div>
+    ');
+}
+
     protected function getHeaderActions(): array
     {
         return [

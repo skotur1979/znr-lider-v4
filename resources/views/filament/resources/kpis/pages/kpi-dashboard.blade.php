@@ -729,12 +729,16 @@
             <div class="kpi-modal-body">
                 <div style="font-size:13px; line-height:1.5; opacity:.9; padding:10px 12px; border-radius:12px; background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.16);">
                     @if($targetUsesOverride)
-                        Trenutno koristiš <strong>svoj organizacijski cilj</strong>.
+                        Za ovaj period već postoji <strong>poseban cilj organizacije</strong>.
+                        Promjena vrijedi od <strong>{{ str_pad((string) $targetMonth, 2, '0', STR_PAD_LEFT) }}/{{ $targetYear }}</strong>.
+                        <br>
                         Globalni cilj je <strong>{{ $globalTargetValue !== null ? number_format((float) $globalTargetValue, 2, ',', '.') : '-' }}</strong>,
                         a globalna tolerancija je <strong>{{ $globalWarningOffset !== null ? number_format((float) $globalWarningOffset, 2, ',', '.') : '-' }}</strong>.
                     @else
-                        Trenutno koristiš <strong>globalni cilj</strong>.
-                        Ako spremiš ove vrijednosti, postavit će se poseban cilj samo za tvoju organizaciju.
+                        Postavit će se <strong>poseban cilj organizacije</strong> koji vrijedi od odabranog mjeseca i godine nadalje.
+                        <br>
+                        Globalni cilj je <strong>{{ $globalTargetValue !== null ? number_format((float) $globalTargetValue, 2, ',', '.') : '-' }}</strong>,
+                        a globalna tolerancija je <strong>{{ $globalWarningOffset !== null ? number_format((float) $globalWarningOffset, 2, ',', '.') : '-' }}</strong>.
                     @endif
                 </div>
 
@@ -753,12 +757,36 @@
                         <div style="color:#dc2626;font-size:12px;margin-top:6px;">{{ $message }}</div>
                     @enderror
                 </div>
+
+                <div>
+                    <label class="kpi-label">Vrijedi od mjeseca</label>
+                    <select wire:model="targetMonth" class="kpi-input">
+                        @for ($m = 1; $m <= 12; $m++)
+                            <option value="{{ $m }}">{{ str_pad($m, 2, '0', STR_PAD_LEFT) }}</option>
+                        @endfor
+                    </select>
+                    @error('targetMonth')
+                        <div style="color:#dc2626;font-size:12px;margin-top:6px;">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div>
+                    <label class="kpi-label">Vrijedi od godine</label>
+                    <select wire:model="targetYear" class="kpi-input">
+                        @for ($y = now()->year - 5; $y <= now()->year + 2; $y++)
+                            <option value="{{ $y }}">{{ $y }}</option>
+                        @endfor
+                    </select>
+                    @error('targetYear')
+                        <div style="color:#dc2626;font-size:12px;margin-top:6px;">{{ $message }}</div>
+                    @enderror
+                </div>
             </div>
 
             <div class="kpi-modal-actions">
                 @if($targetUsesOverride)
                     <x-filament::button type="button" color="danger" wire:click="resetTargetOverride">
-                        Vrati globalni cilj
+                        Ukloni cilj za ovaj period
                     </x-filament::button>
                 @endif
 
@@ -769,9 +797,9 @@
                 <x-filament::button type="submit">
                     Spremi
                 </x-filament::button>
-                </div>
-            </form>
-        </div>
-    @endif
+            </div>
+        </form>
+    </div>
+@endif
 </div>
 </x-filament-panels::page>

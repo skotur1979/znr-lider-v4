@@ -1,7 +1,23 @@
 @php
-    $effectiveTarget = $record->effectiveTargetValue($ownerId);
     $latestValue = $record->latestValue();
-    $currentStatus = $record->evaluateStatus($latestValue?->value, $ownerId);
+
+    $targetMonth = $latestValue?->month ?? now()->month;
+    $targetYear = $latestValue?->year ?? now()->year;
+
+    $effectiveTarget = $record->effectiveTargetValueForPeriod(
+        (int) $targetMonth,
+        (int) $targetYear,
+        $ownerId
+    );
+
+    $currentStatus = $latestValue
+        ? $record->evaluateStatusForPeriod(
+            $latestValue?->value,
+            (int) $latestValue->month,
+            (int) $latestValue->year,
+            $ownerId
+        )
+        : 'neutral';
 
     $statusText = match($currentStatus) {
         'success' => 'U cilju',
@@ -18,13 +34,21 @@
     };
 
     $points = collect($trend)->values();
+
     $numericValues = $points->pluck('value')->filter(fn ($v) => $v !== null);
+    $numericTargets = $points->pluck('target_value')->filter(fn ($v) => $v !== null);
 
     $min = 0;
     $max = $numericValues->max();
 
     if ($max === null) {
         $max = 1;
+    }
+
+    $targetMax = $numericTargets->max();
+
+    if ($targetMax !== null) {
+        $max = max((float) $max, (float) $targetMax);
     }
 
     if ($effectiveTarget !== null) {
@@ -63,14 +87,6 @@
         ];
     }
 
-    $targetY = null;
-
-    if ($effectiveTarget !== null) {
-        $targetNormalized = ((float) $effectiveTarget - $min) / (($max - $min) ?: 1);
-        $targetY = $chartBottom - ($targetNormalized * $chartHeight);
-        $targetY = round($targetY, 2);
-    }
-
     $svgPoints = [];
 
     foreach ($points as $index => $item) {
@@ -97,6 +113,47 @@
         ->filter()
         ->map(fn ($p) => $p['x'] . ',' . $p['y'])
         ->implode(' ');
+
+    $targetPoints = [];
+
+    foreach ($points as $index => $item) {
+        $x = $chartLeft + ($index * $stepX);
+        $target = $item['target_value'] ?? null;
+
+        if ($target === null) {
+            $targetPoints[] = null;
+            continue;
+        }
+
+        $normalized = ((float) $target - $min) / (($max - $min) ?: 1);
+        $y = $chartBottom - ($normalized * $chartHeight);
+
+        $targetPoints[] = [
+            'x' => round($x, 2),
+            'y' => round($y, 2),
+            'value' => $record->formatNumberOnly($target),
+        ];
+    }
+
+    $filteredTargetPoints = collect($targetPoints)->filter()->values();
+
+    $targetStepPath = '';
+
+    if ($filteredTargetPoints->isNotEmpty()) {
+        $firstTargetPoint = $filteredTargetPoints->first();
+
+        $targetStepPath = 'M ' . $firstTargetPoint['x'] . ' ' . $firstTargetPoint['y'];
+
+        for ($i = 1; $i < $filteredTargetPoints->count(); $i++) {
+            $previousPoint = $filteredTargetPoints[$i - 1];
+            $currentPoint = $filteredTargetPoints[$i];
+
+            $targetStepPath .= ' L ' . $currentPoint['x'] . ' ' . $previousPoint['y'];
+            $targetStepPath .= ' L ' . $currentPoint['x'] . ' ' . $currentPoint['y'];
+        }
+    }
+
+    $lastTargetPoint = $filteredTargetPoints->last();
 @endphp
 
 <style>
@@ -209,6 +266,37 @@
         border-top-color: rgba(255,255,255,.10);
     }
 
+    .kpi-chart-legend {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+        font-size: 12px;
+        font-weight: 700;
+        opacity: .85;
+        margin-bottom: 12px;
+    }
+
+    .kpi-chart-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+    }
+
+    .kpi-chart-legend-line {
+        width: 28px;
+        height: 0;
+        border-top: 3px solid currentColor;
+        display: inline-block;
+    }
+
+    .kpi-chart-legend-target {
+        width: 28px;
+        height: 0;
+        border-top: 2px dashed #ef4444;
+        display: inline-block;
+    }
+
     @media (max-width: 1100px) {
         .kpi-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -286,6 +374,18 @@
         <div style="font-size:15px;font-weight:800;margin-bottom:8px;">Trend po mjesecima ({{ now()->year }})</div>
         <div style="font-size:13px;opacity:.75;margin-bottom:12px;">Pregled mjesečnih vrijednosti za odabrani KPI</div>
 
+        <div class="kpi-chart-legend">
+            <span class="kpi-chart-legend-item">
+                <span class="kpi-chart-legend-line text-primary-500"></span>
+                Vrijednost
+            </span>
+
+            <span class="kpi-chart-legend-item">
+                <span class="kpi-chart-legend-target"></span>
+                Cilj kroz godinu
+            </span>
+        </div>
+
         <div style="overflow-x:auto;">
             <svg viewBox="0 0 900 280" class="min-w-[900px] w-full">
                 @foreach($gridLines as $line)
@@ -328,27 +428,27 @@
                     stroke-width="1"
                 />
 
-                @if($effectiveTarget !== null && $targetY !== null)
-                    <line
-                        x1="{{ $chartLeft }}"
-                        y1="{{ $targetY }}"
-                        x2="{{ $chartRight }}"
-                        y2="{{ $targetY }}"
+                @if($targetStepPath !== '')
+                    <path
+                        d="{{ $targetStepPath }}"
+                        fill="none"
                         stroke="#ef4444"
                         stroke-width="2"
                         stroke-dasharray="6 6"
                     />
 
-                    <text
-                        x="{{ $chartRight - 6 }}"
-                        y="{{ $targetY - 6 }}"
-                        text-anchor="end"
-                        font-size="11"
-                        font-weight="800"
-                        fill="#ef4444"
-                    >
-                        CILJ: {{ $record->formatNumberOnly($effectiveTarget) }}
-                    </text>
+                    @if($lastTargetPoint)
+                        <text
+                            x="{{ $chartRight - 6 }}"
+                            y="{{ max(12, $lastTargetPoint['y'] - 6) }}"
+                            text-anchor="end"
+                            font-size="11"
+                            font-weight="800"
+                            fill="#ef4444"
+                        >
+                            CILJ: {{ $lastTargetPoint['value'] }}
+                        </text>
+                    @endif
                 @endif
 
                 @if($polyline !== '')

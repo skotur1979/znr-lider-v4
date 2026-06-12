@@ -188,16 +188,30 @@ class KpiResource extends BaseResource
         return $table
         ->paginated([10, 25, 50,'all'])
             ->columns([
-    TextColumn::make('name')
-        ->label('Naziv KPI-a')
-        ->searchable()
-        ->sortable()
-        ->weight('bold')
-        ->wrap()
-        ->toggleable(),
+            TextColumn::make('name')
+            ->label('Naziv KPI-a')
+            ->searchable()
+            ->sortable()
+            ->weight('bold')
+            ->wrap()
+            ->formatStateUsing(function (string $state, Kpi $record): string {
+                return match ($record->source_key) {
+                    'afr' => 'AFR – Stopa učestalosti ozljeda',
+                    'asr' => 'ASR – Stopa težine ozljeda',
+                    default => $state,
+                };
+            })
+            ->tooltip(function (Kpi $record): ?string {
+                return match ($record->source_key) {
+                    'afr' => 'Accident Frequency Rate',
+                    'asr' => 'Accident Severity Rate',
+                    default => null,
+                };
+            })
+            ->toggleable(),
 
-    static::userTableColumn()
-        ->toggleable(),
+        static::userTableColumn()
+            ->toggleable(),
 
     TextColumn::make('category')
         ->label('Kategorija')
@@ -317,70 +331,91 @@ class KpiResource extends BaseResource
                     ]),
             ])
             ->actions([
-                ActionGroup::make([
-                    ViewAction::make()->label('Prikaži'),
+        ActionGroup::make([
+            ViewAction::make()
+                ->label('Prikaži'),
 
-                    EditAction::make()
-                        ->label('Uredi')
-                        ->visible(function (Kpi $record): bool {
-                            if (auth()->user()?->isSuperAdmin()) {
-                                return true;
-                            }
+            EditAction::make()
+                ->label('Uredi')
+                ->visible(function (Kpi $record): bool {
+                    if (auth()->user()?->isSuperAdmin()) {
+                        return true;
+                    }
 
-                            return filled($record->user_id);
-                        }),
+                    // Organizacijske KPI-e korisnici mogu uređivati
+                    return filled($record->user_id);
+                }),
 
-                    DeleteAction::make()
-                        ->label('Deaktiviraj')
+            DeleteAction::make()
+                ->label('Deaktiviraj')
+                ->requiresConfirmation()
+                ->visible(function (Kpi $record): bool {
+                    if (auth()->user()?->isSuperAdmin()) {
+                        return true;
+                    }
+
+                    // Organizacijski automatski KPI-i se ne smiju deaktivirati
+                    if (static::isProtectedAutomaticKpi($record)) {
+                        return false;
+                    }
+
+                    // Organizacijski ručni KPI-i se mogu deaktivirati
+                    return filled($record->user_id);
+                }),
+
+            RestoreAction::make()
+                ->label('Vrati')
+                ->requiresConfirmation()
+                ->visible(function (Kpi $record): bool {
+                    if (! $record->trashed()) {
+                        return false;
+                    }
+
+                    if (auth()->user()?->isSuperAdmin()) {
+                        return true;
+                    }
+
+                    return filled($record->user_id);
+                }),
+
+            ForceDeleteAction::make()
+                ->label('Trajno obriši')
+                ->requiresConfirmation()
+                ->visible(function (Kpi $record): bool {
+                    if (! $record->trashed()) {
+                        return false;
+                    }
+
+                    if (auth()->user()?->isSuperAdmin()) {
+                        return true;
+                    }
+
+                    // Zaštićeni automatski KPI-i se nikada ne brišu
+                    if (static::isProtectedAutomaticKpi($record)) {
+                        return false;
+                    }
+
+                    return filled($record->user_id);
+                }),
+        ])
+            ->icon(Heroicon::EllipsisVertical)
+            ->label(''),
+    ])
+                ->bulkActions([
+                    DeleteBulkAction::make()
+                        ->label('Deaktiviraj označeno')
                         ->requiresConfirmation()
-                        ->visible(function (Kpi $record): bool {
-                            if (auth()->user()?->isSuperAdmin()) {
-                                return true;
-                            }
+                        ->visible(fn () => auth()->user()?->isSuperAdmin()),
 
-                            return filled($record->user_id);
-                        }),
-
-                    RestoreAction::make()
-                        ->label('Vrati')
+                    RestoreBulkAction::make()
+                        ->label('Vrati označeno')
                         ->requiresConfirmation()
-                        ->visible(function (Kpi $record): bool {
-                            if (auth()->user()?->isSuperAdmin()) {
-                                return $record->trashed();
-                            }
+                        ->visible(fn () => auth()->user()?->isSuperAdmin()),
 
-                            return $record->trashed() && filled($record->user_id);
-                        }),
-
-                    ForceDeleteAction::make()
-                        ->label('Trajno obriši')
+                    ForceDeleteBulkAction::make()
+                        ->label('Trajno obriši označeno')
                         ->requiresConfirmation()
-                        ->visible(function (Kpi $record): bool {
-                            if (auth()->user()?->isSuperAdmin()) {
-                                return $record->trashed();
-                            }
-
-                            return $record->trashed() && filled($record->user_id);
-                        }),
-                ])
-                    ->icon(Heroicon::EllipsisVertical)
-                    ->label(''),
-            ])
-            ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Deaktiviraj označeno')
-                    ->requiresConfirmation()
-                    ->visible(fn () => auth()->user()?->isSuperAdmin()),
-
-                RestoreBulkAction::make()
-                    ->label('Vrati označeno')
-                    ->requiresConfirmation()
-                    ->visible(fn () => auth()->user()?->isSuperAdmin()),
-
-                ForceDeleteBulkAction::make()
-                    ->label('Trajno obriši označeno')
-                    ->requiresConfirmation()
-                    ->visible(fn () => auth()->user()?->isSuperAdmin()),
+                        ->visible(fn () => auth()->user()?->isSuperAdmin()),
             ]);
     }
 
@@ -403,7 +438,32 @@ class KpiResource extends BaseResource
             'edit' => Pages\EditKpi::route('/{record}/edit'),
         ];
     }
+    protected static function protectedAutomaticSourceKeys(): array
+{
+    return [
+        'near_miss_count',
+        'negative_observation_count',
+        'inspection_count',
 
+        'corrective_actions_delay_days',
+        'corrective_actions_open',
+        'corrective_actions_closed',
+        'corrective_actions_in_progress',
+
+        'non_hazardous_waste_kg',
+        'hazardous_waste_kg',
+        'municipal_waste_kg',
+    ];
+}
+    protected static function isProtectedAutomaticKpi(Kpi $record): bool
+{
+    return $record->calculation_type === 'automatic'
+        && in_array(
+            $record->source_key,
+            static::protectedAutomaticSourceKeys(),
+            true
+        );
+}
     public static function getEloquentQuery(): Builder
 {
     $model = static::getModel();
@@ -425,9 +485,15 @@ class KpiResource extends BaseResource
     }
 
     return $query->where(function (Builder $q) use ($ownerId) {
-        $q->where('user_id', $ownerId)
-            ->orWhereNull('user_id');
-    });
+    $q->where('user_id', $ownerId)
+        ->orWhere(function (Builder $global) {
+            $global->whereNull('user_id')
+                ->whereNotIn(
+                'source_key',
+                static::protectedAutomaticSourceKeys()
+            );
+        });
+});
 }
 protected static function latestVisibleKpiValue(Kpi $record): ?KpiValue
 {
@@ -455,13 +521,11 @@ protected static function latestVisibleKpiValue(Kpi $record): ?KpiValue
 
     public static function getNavigationBadge(): ?string
 {
-    $model = static::getModel();
-
-    $query = $model::query();
-
-    $query->withoutGlobalScopes([
-        \Illuminate\Database\Eloquent\SoftDeletingScope::class,
-    ]);
+    $query = static::getModel()::query()
+        ->withoutGlobalScopes([
+            \Illuminate\Database\Eloquent\SoftDeletingScope::class,
+        ])
+        ->withoutTrashed();
 
     if (! static::isSuperAdmin()) {
         $ownerId = static::ownerId();
@@ -472,10 +536,16 @@ protected static function latestVisibleKpiValue(Kpi $record): ?KpiValue
 
         $query->where(function (Builder $q) use ($ownerId) {
             $q->where('user_id', $ownerId)
-                ->orWhereNull('user_id');
+                ->orWhere(function (Builder $global) {
+                    $global->whereNull('user_id')
+                        ->whereNotIn(
+                        'source_key',
+                        static::protectedAutomaticSourceKeys()
+                    );
+                });
         });
     }
 
     return (string) $query->count();
-    }
+}
 }

@@ -24,17 +24,31 @@ class LegalAcceptanceController extends Controller
         $data = $request->validate([
             'accepted_terms' => ['accepted'],
             'accepted_privacy' => ['accepted'],
+            'accepted_cookies' => ['accepted'],
+            'accepted_dpa' => ['accepted'],
+            'accepted_security' => ['accepted'],
+            'accepted_retention' => ['accepted'],
             'newsletter_opt_in' => ['nullable', 'boolean'],
         ], [
-            'accepted_terms.accepted' => 'Potrebno je prihvatiti Uvjete korištenja.',
+            'accepted_terms.accepted' => 'Potrebno je prihvatiti Opće uvjete korištenja.',
             'accepted_privacy.accepted' => 'Potrebno je prihvatiti Pravila privatnosti.',
+            'accepted_cookies.accepted' => 'Potrebno je potvrditi Politiku kolačića.',
+            'accepted_dpa.accepted' => 'Potrebno je prihvatiti Ugovor o obradi podataka.',
+            'accepted_security.accepted' => 'Potrebno je potvrditi Politiku sigurnosti.',
+            'accepted_retention.accepted' => 'Potrebno je potvrditi Politiku zadržavanja i brisanja podataka.',
         ]);
 
         $user = $request->user();
 
         $acceptedAt = now();
+
         $termsVersion = config('legal.terms_version');
         $privacyVersion = config('legal.privacy_version');
+        $cookiesVersion = config('legal.cookies_version');
+        $dpaVersion = config('legal.dpa_version');
+        $securityVersion = config('legal.security_version');
+        $retentionVersion = config('legal.retention_version');
+
         $newsletter = (bool) ($data['newsletter_opt_in'] ?? false);
 
         $user->forceFill([
@@ -52,8 +66,24 @@ class LegalAcceptanceController extends Controller
             'user_name' => $user->name,
             'user_email' => $user->email,
             'organization_name' => $user->organization_name ?: $user->owner()?->organization_name,
+
             'terms_version' => $termsVersion,
             'privacy_version' => $privacyVersion,
+            'cookies_version' => $cookiesVersion,
+            'dpa_version' => $dpaVersion,
+            'security_version' => $securityVersion,
+            'retention_version' => $retentionVersion,
+
+            'accepted_documents' => [
+                'terms' => $termsVersion,
+                'privacy' => $privacyVersion,
+                'cookies' => $cookiesVersion,
+                'dpa' => $dpaVersion,
+                'security' => $securityVersion,
+                'retention' => $retentionVersion,
+                'accepted_at' => $acceptedAt->toDateTimeString(),
+            ],
+
             'newsletter_opt_in' => $newsletter,
             'accepted_at' => $acceptedAt,
             'ip_address' => $request->ip(),
@@ -63,8 +93,13 @@ class LegalAcceptanceController extends Controller
         ActivityLogger::log(
             module: 'GDPR',
             action: 'legal_acceptance',
-            title: 'Prihvaćeni uvjeti korištenja i pravila privatnosti',
-            description: 'Korisnik je prihvatio uvjete verzija ' . $termsVersion . ' i pravila privatnosti verzija ' . $privacyVersion . '.',
+            title: 'Prihvaćeni pravni dokumenti',
+            description: 'Korisnik je prihvatio pravne dokumente: uvjeti ' . $termsVersion .
+                ', privatnost ' . $privacyVersion .
+                ', kolačići ' . $cookiesVersion .
+                ', DPA ' . $dpaVersion .
+                ', sigurnost ' . $securityVersion .
+                ', zadržavanje podataka ' . $retentionVersion . '.',
             record: $user,
         );
 

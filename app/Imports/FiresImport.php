@@ -264,6 +264,7 @@ class FiresImport implements ToCollection
             'datum_periodickog_servisa' => 'datum_periodickog_servisa',
             'vrijedi_do' => 'vrijedi_do',
             'datum_redovnog_pregleda' => 'datum_redovnog_pregleda',
+            'redovni_pregled_vrijedi_do' => 'redovni_pregled_vrijedi_do',
             'serviser' => 'serviser',
             'uocljivost' => 'uocljivost',
 

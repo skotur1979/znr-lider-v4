@@ -21,21 +21,38 @@ class LegalAcceptanceInfolist
                         ->label('E-mail'),
 
                     TextEntry::make('organization_name')
-                        ->label('Organizacija'),
+                        ->label('Organizacija')
+                        ->placeholder('-'),
 
                     TextEntry::make('accepted_at')
                         ->label('Datum prihvaćanja')
                         ->dateTime('d.m.Y. H:i'),
                 ]),
 
-            Section::make('Prihvaćeni dokumenti')
+            Section::make('Prihvaćeni pravni dokumenti')
                 ->columns(2)
                 ->schema([
                     TextEntry::make('terms_version')
-                        ->label('Verzija uvjeta korištenja'),
+                        ->label('Uvjeti korištenja'),
 
                     TextEntry::make('privacy_version')
-                        ->label('Verzija pravila privatnosti'),
+                        ->label('Pravila privatnosti'),
+
+                    TextEntry::make('cookies_version')
+                        ->label('Politika kolačića')
+                        ->placeholder('-'),
+
+                    TextEntry::make('dpa_version')
+                        ->label('Ugovor o obradi podataka / DPA')
+                        ->placeholder('-'),
+
+                    TextEntry::make('security_version')
+                        ->label('Politika sigurnosti')
+                        ->placeholder('-'),
+
+                    TextEntry::make('retention_version')
+                        ->label('Politika zadržavanja i brisanja podataka')
+                        ->placeholder('-'),
 
                     TextEntry::make('newsletter_opt_in')
                         ->label('Newsletter')
@@ -46,10 +63,12 @@ class LegalAcceptanceInfolist
                 ->columns(1)
                 ->schema([
                     TextEntry::make('ip_address')
-                        ->label('IP adresa'),
+                        ->label('IP adresa')
+                        ->placeholder('-'),
 
                     TextEntry::make('user_agent')
                         ->label('Preglednik / uređaj')
+                        ->placeholder('-')
                         ->columnSpanFull(),
                 ]),
         ]);

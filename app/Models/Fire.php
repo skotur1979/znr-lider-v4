@@ -45,7 +45,18 @@ class Fire extends Model
             set: fn ($value) => ['factory_number/year_of_production' => $value],
         );
     }
+    protected function regularExaminationValidUntil(): Attribute
+{
+    return Attribute::make(
+        get: function () {
+            if (! $this->regular_examination_valid_from) {
+                return null;
+            }
 
+            return $this->regular_examination_valid_from->copy()->addMonthsNoOverflow(3);
+        },
+    );
+}
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

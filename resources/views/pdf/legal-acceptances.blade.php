@@ -62,6 +62,8 @@
                 <th>Organizacija</th>
                 <th>Uvjeti</th>
                 <th>Privatnost</th>
+                <th>DPA</th>
+                <th>Sigurnost</th>
                 <th>Newsletter</th>
                 <th>IP</th>
             </tr>
@@ -74,13 +76,25 @@
                     <td>{{ $record->user_email }}</td>
                     <td>{{ $record->organization_name ?: '-' }}</td>
                     <td>{{ $record->terms_version }}</td>
+
                     <td>{{ $record->privacy_version }}</td>
+
+                    <td>{{ $record->dpa_version ?: '-' }}</td>
+
+                    <td>{{ $record->security_version ?: '-' }}</td>
+
                     <td>{{ $record->newsletter_opt_in ? 'Da' : 'Ne' }}</td>
+
                     <td>{{ $record->ip_address ?: '-' }}</td>
                 </tr>
                 <tr>
-                    <td colspan="8" class="small">
+                    <td colspan="10" class="small">
                         Preglednik / uređaj: {{ $record->user_agent ?: '-' }}
+                        @if(!empty($record->accepted_documents))
+                    <br>
+                    Paket dokumenata:
+                    {{ implode(', ', array_keys($record->accepted_documents)) }}
+                @endif
                     </td>
                 </tr>
             @endforeach

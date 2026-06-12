@@ -23,25 +23,25 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
     protected bool $showUserColumn = false;
 
     public function __construct(?array $fireIds = null)
-{
-    $user = auth()->user();
+    {
+        $user = auth()->user();
 
-    $this->showUserColumn =
-        (bool) $user?->isSuperAdmin()
-        || (bool) $user?->canCreateSubusers();
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
 
-    $query = FireResource::getEloquentQuery()
-        ->with('user')
-        ->orderBy('place');
+        $query = FireResource::getEloquentQuery()
+            ->with('user')
+            ->orderBy('place');
 
-    if ($fireIds !== null && count($fireIds) > 0) {
-        $query->whereIn('fires.id', $fireIds);
-    } else {
-        $query->withoutTrashed();
+        if ($fireIds !== null && count($fireIds) > 0) {
+            $query->whereIn('fires.id', $fireIds);
+        } else {
+            $query->withoutTrashed();
+        }
+
+        $this->fires = $query->get();
     }
-
-    $this->fires = $query->get();
-}
 
     public function collection()
     {
@@ -61,8 +61,9 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             'Tvor. broj / god. proizv.',
             'Serijski broj eviden. naljepnice',
             'Datum periodičkog servisa',
-            'Vrijedi do',
+            'Periodički servis vrijedi do',
             'Datum redovnog pregleda',
+            'Redovni pregled vrijedi do',
             'Serviser',
             'Uočljivost',
             'Uočeni nedostaci',
@@ -75,9 +76,21 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
     {
         /** @var Fire $fire */
 
-        $serviceFrom = $fire->examination_valid_from ? Carbon::parse($fire->examination_valid_from) : null;
-        $validUntil = $fire->examination_valid_until ? Carbon::parse($fire->examination_valid_until) : null;
-        $regularFrom = $fire->regular_examination_valid_from ? Carbon::parse($fire->regular_examination_valid_from) : null;
+        $serviceFrom = $fire->examination_valid_from
+            ? Carbon::parse($fire->examination_valid_from)
+            : null;
+
+        $validUntil = $fire->examination_valid_until
+            ? Carbon::parse($fire->examination_valid_until)
+            : null;
+
+        $regularFrom = $fire->regular_examination_valid_from
+            ? Carbon::parse($fire->regular_examination_valid_from)
+            : null;
+
+        $regularUntil = $regularFrom
+            ? $regularFrom->copy()->addMonthsNoOverflow(3)
+            : null;
 
         $row = [$fire->place];
 
@@ -92,6 +105,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             $serviceFrom ? ExcelDate::dateTimeToExcel($serviceFrom) : null,
             $validUntil ? ExcelDate::dateTimeToExcel($validUntil) : null,
             $regularFrom ? ExcelDate::dateTimeToExcel($regularFrom) : null,
+            $regularUntil ? ExcelDate::dateTimeToExcel($regularUntil) : null,
             $fire->service,
             $fire->visible,
             $fire->remark,
@@ -107,6 +121,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                 'F' => 'dd.mm.yyyy',
                 'G' => 'dd.mm.yyyy',
                 'H' => 'dd.mm.yyyy',
+                'I' => 'dd.mm.yyyy',
             ];
         }
 
@@ -114,6 +129,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             'E' => 'dd.mm.yyyy',
             'F' => 'dd.mm.yyyy',
             'G' => 'dd.mm.yyyy',
+            'H' => 'dd.mm.yyyy',
         ];
     }
 
@@ -124,7 +140,7 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->fires->count() + 1;
-                $lastCol = $this->showUserColumn ? 'M' : 'L';
+                $lastCol = $this->showUserColumn ? 'N' : 'M';
 
                 $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                     ->getFont()
@@ -159,11 +175,11 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                     ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
                 if ($this->showUserColumn) {
-                    $sheet->getStyle("D2:H{$lastRow}")
+                    $sheet->getStyle("D2:I{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                    $sheet->getStyle("M2:M{$lastRow}")
+                    $sheet->getStyle("N2:N{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
@@ -174,22 +190,24 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                         'D' => 24,
                         'E' => 26,
                         'F' => 18,
-                        'G' => 16,
+                        'G' => 18,
                         'H' => 22,
-                        'I' => 28,
-                        'J' => 22,
-                        'K' => 32,
+                        'I' => 22,
+                        'J' => 28,
+                        'K' => 22,
                         'L' => 32,
-                        'M' => 14,
+                        'M' => 32,
+                        'N' => 14,
                     ];
 
-                    $expiryColumn = 'G';
+                    $periodicExpiryColumn = 'G';
+                    $regularExpiryColumn = 'I';
                 } else {
-                    $sheet->getStyle("C2:G{$lastRow}")
+                    $sheet->getStyle("C2:H{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                    $sheet->getStyle("L2:L{$lastRow}")
+                    $sheet->getStyle("M2:M{$lastRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
@@ -199,16 +217,18 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                         'C' => 24,
                         'D' => 26,
                         'E' => 18,
-                        'F' => 16,
+                        'F' => 18,
                         'G' => 22,
-                        'H' => 28,
-                        'I' => 22,
-                        'J' => 32,
+                        'H' => 22,
+                        'I' => 28,
+                        'J' => 22,
                         'K' => 32,
-                        'L' => 14,
+                        'L' => 32,
+                        'M' => 14,
                     ];
 
-                    $expiryColumn = 'F';
+                    $periodicExpiryColumn = 'F';
+                    $regularExpiryColumn = 'H';
                 }
 
                 foreach ($widths as $column => $width) {
@@ -222,25 +242,33 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
                 }
 
                 $today = Carbon::today();
+                $soonDate = Carbon::today()->addDays(30);
 
                 foreach ($this->fires as $i => $fire) {
                     $row = $i + 2;
 
-                    $until = $fire->examination_valid_until
+                    $periodicUntil = $fire->examination_valid_until
                         ? Carbon::parse($fire->examination_valid_until)
                         : null;
 
-                    if (! $until) {
-                        continue;
+                    if ($periodicUntil) {
+                        if ($periodicUntil->lt($today)) {
+                            $this->fillCell($sheet, "{$periodicExpiryColumn}{$row}", 'FFFF0000');
+                        } elseif ($periodicUntil->lte($soonDate)) {
+                            $this->fillCell($sheet, "{$periodicExpiryColumn}{$row}", 'FFFFFF00');
+                        }
                     }
 
-                    if ($until->lt($today)) {
-                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFF0000');
-                        continue;
-                    }
+                    $regularUntil = $fire->regular_examination_valid_from
+                        ? Carbon::parse($fire->regular_examination_valid_from)->addMonthsNoOverflow(3)
+                        : null;
 
-                    if ($until->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFFFF00');
+                    if ($regularUntil) {
+                        if ($regularUntil->lt($today)) {
+                            $this->fillCell($sheet, "{$regularExpiryColumn}{$row}", 'FFFF0000');
+                        } elseif ($regularUntil->lte($soonDate)) {
+                            $this->fillCell($sheet, "{$regularExpiryColumn}{$row}", 'FFFFFF00');
+                        }
                     }
                 }
 

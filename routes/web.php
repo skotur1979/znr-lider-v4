@@ -98,6 +98,21 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/moj-racun/zahtjev-brisanje', [AccountDeletionController::class, 'requestDeletion'])
         ->name('account.deletion.request');
 
+    Route::view('/ugovor-o-obradi-podataka', 'legal.dpa')
+    ->name('legal.dpa');
+
+    Route::view('/politika-sigurnosti', 'legal.security')
+    ->name('legal.security');
+
+    Route::view('/politika-zadrzavanja-podataka', 'legal.retention')
+    ->name('legal.retention');
+
+    Route::view('/cesto-postavljana-pitanja', 'legal.faq')
+    ->name('legal.faq');
+
+    Route::get('/politika-kolacica/pdf', [LegalDocumentPdfController::class, 'cookies'])
+    ->name('legal.cookies.pdf');
+
     /*
     |--------------------------------------------------------------------------
     | Preview datoteka
