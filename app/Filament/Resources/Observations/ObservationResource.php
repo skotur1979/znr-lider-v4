@@ -7,6 +7,7 @@ use App\Filament\Resources\Observations\Pages;
 use App\Mail\ObservationNotificationMail;
 use App\Models\Employee;
 use App\Models\Observation;
+use App\Services\StorageQuotaService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -309,15 +310,46 @@ protected static function priorityIcon(?string $state): ?string
                             Section::make('Slika i komentar')
                                 ->columns(2)
                                 ->schema([
-                                    FileUpload::make('picture_path')
-                                        ->label('Slika')
-                                        ->image()
-                                        ->disk('public')
-                                        ->directory('observations')
-                                        ->visibility('public')
-                                        ->preserveFilenames()
-                                        ->openable()
-                                        ->downloadable(),
+                            FileUpload::make('picture_path')
+                                ->label('Slika')
+                                ->image()
+                                ->disk('public')
+                                ->directory('observations')
+                                ->visibility('public')
+                                ->preserveFilenames()
+                                ->openable()
+                                ->downloadable()
+                                ->maxSize(30720)
+
+                                ->helperText(function () {
+                                    $ownerId = auth()->user()?->ownerId();
+
+                                    if (! $ownerId) {
+                                        return null;
+                                    }
+
+                                    return 'Iskorištenost prostora organizacije: '
+                                        . app(StorageQuotaService::class)->usageText($ownerId);
+                                })
+
+                                ->rules([
+                                    function () {
+                                        return function (string $attribute, mixed $value, \Closure $fail) {
+                                            $ownerId = auth()->user()?->ownerId();
+
+                                            if (! $ownerId) {
+                                                return;
+                                            }
+
+                                            if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                                $fail(
+                                                    'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                                    . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                                );
+                                            }
+                                        };
+                                    },
+                                ]),
 
                                     Textarea::make('comments')
                                         ->label('Komentar')

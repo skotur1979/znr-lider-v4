@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Users;
 
 use App\Filament\Resources\Users\Pages;
 use App\Models\User;
+use App\Services\StorageQuotaService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -26,6 +27,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+
 
 class UserResource extends Resource
 {
@@ -273,49 +275,59 @@ class UserResource extends Resource
                 ->label('Prima tjedni izvještaj na e-mail')
                 ->default(false),
 
-            Section::make('GDPR / prihvaćanje uvjeta')
+            Section::make('Prostor organizacije')
                 ->visible(fn () => Auth::user()?->isSuperAdmin())
                 ->columns(2)
                 ->schema([
-                    Placeholder::make('gdpr_status')
-                        ->label('Status')
-                        ->content(fn (?User $record): string => $record?->hasAcceptedCurrentLegalTerms()
-                            ? 'Prihvaćeno'
-                            : 'Nije prihvaćeno'),
+                    TextInput::make('storage_quota_mb')
+                        ->label('Limit prostora organizacije (GB)')
+                        ->numeric()
+                        ->default(20)
+                        ->formatStateUsing(function ($state, ?User $record) {
+                            if (! $record) {
+                                return 20;
+                            }
 
-                    Placeholder::make('newsletter_status')
-                        ->label('Newsletter')
-                        ->content(fn (?User $record): string => $record?->newsletter_opt_in ? 'Da' : 'Ne'),
+                            $owner = $record->owner();
 
-                    Placeholder::make('accepted_terms_at_info')
-                        ->label('Uvjeti korištenja')
-                        ->content(fn (?User $record): string => $record?->accepted_terms_at
-                            ? $record->accepted_terms_at->format('d.m.Y. H:i') . ' / verzija ' . ($record->terms_version ?? '-')
-                            : '-'),
+                            return round((($owner->storage_quota_mb ?? 20480) / 1024), 0);
+                        })
+                        ->dehydrateStateUsing(fn ($state) => (int) $state * 1024)
+                        ->disabled(fn (?User $record): bool => $record?->parent_user_id !== null)
+                        ->dehydrated(fn (?User $record): bool => $record?->parent_user_id === null)
+                        ->helperText(function (?User $record) {
+                            if (! $record) {
+                                return 'Zadani limit je 20 GB.';
+                            }
 
-                    Placeholder::make('accepted_privacy_at_info')
-                        ->label('Pravila privatnosti')
-                        ->content(fn (?User $record): string => $record?->accepted_privacy_at
-                            ? $record->accepted_privacy_at->format('d.m.Y. H:i') . ' / verzija ' . ($record->privacy_version ?? '-')
-                            : '-'),
+                            if ($record->parent_user_id) {
+                                return 'Limit prostora određuje superadmin na glavnom korisniku organizacije. Svi korisnici organizacije dijele isti prostor.';
+                            }
 
-                    Placeholder::make('account_status_info')
-                        ->label('Status računa')
-                        ->content(fn (?User $record): string => match ($record?->account_status) {
-                            'active' => 'Aktivan',
-                            'deactivated' => 'Deaktiviran',
-                            'anonymized' => 'Anonimiziran',
-                            'archived' => 'Arhiviran',
-                            default => '-',
+                            return 'Ovdje superadmin povećava ili smanjuje prostor cijeloj organizaciji.';
                         }),
 
-                    Placeholder::make('gdpr_request_status_info')
-                        ->label('GDPR zahtjev')
-                        ->content(fn (?User $record): string => match ($record?->gdpr_request_status) {
-                            'requested' => 'Zaprimljen',
-                            'processing' => 'U obradi',
-                            'completed' => 'Riješen',
-                            default => '-',
+                    Placeholder::make('storage_usage_info')
+                        ->label('Trenutna iskorištenost')
+                        ->content(function (?User $record): string {
+                            if (! $record) {
+                                return '-';
+                            }
+
+                            $owner = $record->owner();
+                            $ownerId = $owner->id;
+
+                            $quotaGb = round(($owner->storage_quota_mb ?? 20480) / 1024, 0);
+
+                            return 'Organizacija '
+                                . ($owner->organization_name ?: $owner->name)
+                                . ' ima '
+                                . $quotaGb
+                                . ' GB, a svi korisnici organizacije dijele taj prostor. '
+                                . app(StorageQuotaService::class)->usageText($ownerId)
+                                . ' ('
+                                . app(StorageQuotaService::class)->usagePercent($ownerId)
+                                . '%)';
                         }),
                 ])
                 ->columnSpanFull(),
@@ -422,6 +434,24 @@ class UserResource extends Resource
                     ->label('Organizacija')
                     ->searchable()
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('storage_quota_mb')
+                    ->label('Limit prostora')
+                    ->formatStateUsing(function ($state, User $record): string {
+                        $owner = $record->owner();
+
+                        return round((($owner->storage_quota_mb ?? 20480) / 1024), 0) . ' GB';
+                    })
+                    ->description(function (User $record): ?string {
+                        if (! $record->parent_user_id) {
+                            return 'Organizacija';
+                        }
+
+                        return 'Dijeli prostor organizacije';
+                    })
+                    ->sortable()
+                    ->toggleable()
+                    ->visible(fn () => Auth::user()?->isSuperAdmin()),
 
                 Tables\Columns\TextColumn::make('email')
                     ->label('E-mail')
@@ -813,6 +843,7 @@ class UserResource extends Resource
         $authUser = Auth::user();
 
         if (! $authUser?->isSuperAdmin()) {
+            unset($data['storage_quota_mb']);
             unset($data['quick_actions']);
             unset($data['can_manage_subusers']);
             unset($data['is_active']);

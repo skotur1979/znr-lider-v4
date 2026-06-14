@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\LearningMaterials\Pages;
 use App\Models\LearningCategory;
 use App\Models\LearningMaterial;
+use App\Services\StorageQuotaService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -201,6 +202,40 @@ class LearningMaterialResource extends BaseResource
                                     ->openable()
                                     ->downloadable()
                                     ->previewable()
+
+                                    ->helperText(function () {
+                                        $ownerId = auth()->user()?->ownerId();
+
+                                        if (! $ownerId) {
+                                            return 'Možeš dodati najviše 10 dokumenata. Svaki dokument može biti maksimalno 30 MB. Video datoteke se ne uploadaju.';
+                                        }
+
+                                        return 'Možeš dodati najviše 10 dokumenata. Svaki dokument može biti maksimalno 30 MB. '
+                                            . 'Video datoteke se ne uploadaju.'
+                                            . PHP_EOL
+                                            . 'Iskorištenost prostora organizacije: '
+                                            . app(StorageQuotaService::class)->usageText($ownerId);
+                                    })
+
+                                    ->rules([
+                                        function () {
+                                            return function (string $attribute, mixed $value, \Closure $fail) {
+                                                $ownerId = auth()->user()?->ownerId();
+
+                                                if (! $ownerId) {
+                                                    return;
+                                                }
+
+                                                if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                                    $fail(
+                                                        'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                                        . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                                    );
+                                                }
+                                            };
+                                        },
+                                    ])
+
                                     ->acceptedFileTypes([
                                         'application/pdf',
                                         'application/msword',
@@ -216,7 +251,7 @@ class LearningMaterialResource extends BaseResource
                                         'application/zip',
                                         'application/x-rar-compressed',
                                     ])
-                                    ->helperText('Možeš dodati najviše 10 dokumenata. Svaki dokument može biti maksimalno 30 MB. Video datoteke se ne uploadaju.')
+
                                     ->columnSpanFull(),
                             ]),
                     ]),

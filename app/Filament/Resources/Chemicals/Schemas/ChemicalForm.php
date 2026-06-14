@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Chemicals\Schemas;
 
 use App\Enums\HazardStatement;
 use App\Enums\PrecautionaryStatement;
+use App\Services\StorageQuotaService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
@@ -128,30 +129,58 @@ class ChemicalForm
                             ->schema([
                                 Section::make('Prilozi')
                                     ->schema([
-                                        FileUpload::make('attachments')
-                                            ->label('Dodaj priloge (max. 10, do 30 MB po datoteci)')
-                                            ->directory('chemicals')
-                                            ->disk('public')
-                                            ->visibility('public')
-                                            ->acceptedFileTypes([
-                                                'application/pdf',
-                                                'application/msword',
-                                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                                'application/vnd.ms-excel',
-                                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                                'image/jpeg',
-                                                'image/png',
-                                                'image/gif',
-                                                'image/webp',
-                                                'application/zip',
-                                                'application/x-rar-compressed',
-                                            ])
-                                            ->maxSize(30720)
-                                            ->multiple()
-                                            ->maxFiles(10)
-                                            ->preserveFilenames()
-                                            ->openable()
-                                            ->downloadable(),
+                    FileUpload::make('attachments')
+                        ->label('Dodaj priloge (max. 10, do 30 MB po datoteci)')
+                        ->directory('chemicals')
+                        ->disk('public')
+                        ->visibility('public')
+                        ->acceptedFileTypes([
+                            'application/pdf',
+                            'application/msword',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            'application/vnd.ms-excel',
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'image/jpeg',
+                            'image/png',
+                            'image/gif',
+                            'image/webp',
+                            'application/zip',
+                            'application/x-rar-compressed',
+                        ])
+                        ->maxSize(30720)
+                        ->multiple()
+                        ->maxFiles(10)
+                        ->preserveFilenames()
+                        ->openable()
+                        ->downloadable()
+                        ->helperText(function () {
+                            $ownerId = auth()->user()?->ownerId();
+
+                            if (! $ownerId) {
+                                return null;
+                            }
+
+                            return 'Iskorištenost prostora organizacije: '
+                                . app(StorageQuotaService::class)->usageText($ownerId);
+                        })
+                        ->rules([
+                            function () {
+                                return function (string $attribute, mixed $value, \Closure $fail) {
+                                    $ownerId = auth()->user()?->ownerId();
+
+                                    if (! $ownerId) {
+                                        return;
+                                    }
+
+                                    if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                        $fail(
+                                            'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                            . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                        );
+                                    }
+                                };
+                            },
+                        ]),
                                     ]),
                             ]),
                     ]),

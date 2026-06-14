@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Incidents;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Incidents\Pages;
 use App\Models\Incident;
+use App\Services\StorageQuotaService;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -179,60 +180,119 @@ class IncidentResource extends BaseResource
                         ->columns(2)
                         ->columnSpanFull()
                         ->schema([
-                            FileUpload::make('image_path')
-                                ->label('Slika')
-                                ->image()
-                                ->disk('public')
-                                ->directory('incidents')
-                                ->visibility('public')
-                                ->preserveFilenames()
-                                ->openable()
-                                ->downloadable(),
+                    FileUpload::make('image_path')
+                        ->label('Slika')
+                        ->image()
+                        ->disk('public')
+                        ->directory('incidents')
+                        ->visibility('public')
+                        ->preserveFilenames()
+                        ->openable()
+                        ->downloadable()
+                        ->maxSize(30720)
 
-                            FileUpload::make('investigation_report')
-                                ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
-                                ->disk('public')
-                                ->directory('pdfs')
-                                ->multiple()
-                                ->maxFiles(5)
-                                ->maxSize(30720)
-                                ->preserveFilenames()
-                                ->openable()
-                                ->downloadable()
-                                ->acceptedFileTypes([
-                                    'application/pdf',
-                                    'application/msword',
-                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                    'application/vnd.ms-excel',
-                                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                    'image/jpeg',
-                                    'image/png',
-                                    'image/gif',
-                                    'image/webp',
-                                    'application/zip',
-                                    'application/x-rar-compressed',
-                                ])
-                                ->reactive()
-                                ->afterStateUpdated(function ($state, callable $set) {
-                                    $maxTotalMB = 150;
-                                    $totalBytes = 0;
+                        ->helperText(function () {
+                            $ownerId = auth()->user()?->ownerId();
 
-                                    if (is_array($state)) {
-                                        foreach ($state as $file) {
-                                            if ($file instanceof UploadedFile) {
-                                                $totalBytes += $file->getSize();
-                                            }
-                                        }
+                            if (! $ownerId) {
+                                return null;
+                            }
+
+                            return 'Iskorištenost prostora organizacije: '
+                                . app(StorageQuotaService::class)->usageText($ownerId);
+                        })
+
+                        ->rules([
+                            function () {
+                                return function (string $attribute, mixed $value, \Closure $fail) {
+                                    $ownerId = auth()->user()?->ownerId();
+
+                                    if (! $ownerId) {
+                                        return;
                                     }
 
-                                    if ($totalBytes > $maxTotalMB * 1024 * 1024) {
-                                        $set('investigation_report', []);
+                                    if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                        $fail(
+                                            'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                            . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                        );
+                                    }
+                                };
+                            },
+                        ]),
 
-                                        Notification::make()
-                                            ->title("Ukupna veličina svih datoteka ne smije biti veća od {$maxTotalMB} MB.")
-                                            ->danger()
-                                            ->persistent()
-                                            ->send();
+                    FileUpload::make('investigation_report')
+                        ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
+                        ->disk('public')
+                        ->directory('pdfs')
+                        ->multiple()
+                        ->maxFiles(5)
+                        ->maxSize(30720)
+                        ->preserveFilenames()
+                        ->openable()
+                        ->downloadable()
+                        ->helperText(function () {
+                            $ownerId = auth()->user()?->ownerId();
+
+                            if (! $ownerId) {
+                                return null;
+                            }
+
+                            return 'Iskorištenost prostora organizacije: '
+                                . app(StorageQuotaService::class)->usageText($ownerId);
+                        })
+                        ->rules([
+                            function () {
+                                return function (string $attribute, mixed $value, \Closure $fail) {
+                                    $ownerId = auth()->user()?->ownerId();
+
+                                    if (! $ownerId) {
+                                        return;
+                                    }
+
+                                    if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                        $fail(
+                                            'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                            . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                        );
+                                    }
+                                };
+                            },
+                        ])
+                        ->acceptedFileTypes([
+                            'application/pdf',
+                            'application/msword',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            'application/vnd.ms-excel',
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'image/jpeg',
+                            'image/png',
+                            'image/gif',
+                            'image/webp',
+                            'application/zip',
+                            'application/x-rar-compressed',
+                        ])
+                        ->reactive()
+                        ->afterStateUpdated(function ($state, callable $set) {
+                            $maxTotalMB = 150;
+                            $totalBytes = 0;
+
+                            if (is_array($state)) {
+                                foreach ($state as $file) {
+                                    if ($file instanceof UploadedFile) {
+                                        $totalBytes += $file->getSize();
+                                    }
+                                }
+                            }
+
+                            if ($totalBytes > $maxTotalMB * 1024 * 1024) {
+                                $set('investigation_report', []);
+
+                                Notification::make()
+                                    ->title("Ukupna veličina svih datoteka ne smije biti veća od {$maxTotalMB} MB.")
+                                    ->danger()
+                                    ->persistent()
+                                    ->send();
                                     }
                                 }),
                         ]),

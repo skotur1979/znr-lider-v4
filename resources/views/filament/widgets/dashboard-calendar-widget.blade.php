@@ -1,5 +1,64 @@
 <x-filament-widgets::widget>
     <style>
+        .storage-widget {
+        margin-top: 10px;
+        padding: 12px 16px;
+        border-radius: 16px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, .08);
+        font-size: 12px;
+    }
+
+    .dark .storage-widget {
+        background: rgba(15, 23, 42, .45);
+        border: 1px solid rgba(148, 163, 184, .14);
+        box-shadow: none;
+    }
+
+    .storage-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 9px;
+        font-size: 14px;
+        font-weight: 800;
+        color: #334155;
+    }
+
+    .dark .storage-header {
+        color: #cbd5e1;
+    }
+
+    .storage-percent {
+        font-size: 13px;
+        font-weight: 900;
+        color: #334155;
+        white-space: nowrap;
+    }
+
+    .dark .storage-percent {
+        color: #cbd5e1;
+    }
+
+    .storage-progress {
+        width: 100%;
+        height: 8px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #e2e8f0;
+    }
+
+    .dark .storage-progress {
+        background: rgba(255, 255, 255, .08);
+    }
+
+    .storage-progress-bar {
+        height: 100%;
+        border-radius: 999px;
+        transition: width .4s ease;
+    }
         .znr-cal-wrap{
             margin-top: 0px;
             border-radius: 16px;
@@ -1137,6 +1196,50 @@
             </div>
         @endforeach
     </div>
+
+    @php
+    $storageOwnerId = auth()->user()?->ownerId();
+    $storageService = app(\App\Services\StorageQuotaService::class);
+
+    $percent = $storageOwnerId ? $storageService->usagePercent($storageOwnerId) : 0;
+
+    $quotaMb = $storageOwnerId ? $storageService->quotaMbForOwner($storageOwnerId) : 20480;
+    $usedMb = $storageOwnerId ? $storageService->usedMbForOwner($storageOwnerId) : 0;
+    $remainingMb = max(0, $quotaMb - $usedMb);
+
+    $usedGb = round($usedMb / 1024, 2);
+    $quotaGb = round($quotaMb / 1024, 2);
+    $remainingGb = round($remainingMb / 1024, 2);
+@endphp
+
+@php
+    $displayPercent = $percent > 0 ? max($percent, 2) : 0;
+
+    $barColor = $percent >= 90
+        ? 'linear-gradient(90deg,#ef4444,#dc2626)'
+        : ($percent >= 70
+            ? 'linear-gradient(90deg,#f59e0b,#d97706)'
+            : 'linear-gradient(90deg,#3b82f6,#2563eb)');
+@endphp
+
+<div class="storage-widget">
+    <div class="storage-header">
+        <span>
+            Prostor organizacije: {{ $usedGb }} GB / {{ $quotaGb }} GB
+        </span>
+
+        @if ($percent >= 1)
+            <span class="storage-percent">{{ $percent }}%</span>
+        @endif
+    </div>
+
+    <div class="storage-progress">
+        <div
+            class="storage-progress-bar"
+            style="width: {{ $displayPercent }}%; background: {{ $barColor }};"
+        ></div>
+    </div>
+</div>
 
     @if ($showTaskModal)
         <div class="znr-task-modal">

@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Fires\Pages;
 use App\Models\Fire;
 use App\Support\ExpiryBadge;
+use App\Services\StorageQuotaService;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -171,28 +172,65 @@ class FireResource extends BaseResource
                     Section::make('Prilozi')
                         ->columnSpan(1)
                         ->schema([
-                            FileUpload::make('pdf')
-                                ->label('Dodaj prilog (max. 10)')
-                                ->disk('public')
-                                ->directory('fires')
-                                ->multiple()
-                                ->maxFiles(10)
-                                ->maxSize(30720)
-                                ->preserveFilenames()
-                                ->openable()
-                                ->downloadable()
-                                ->acceptedFileTypes([
-                                    'application/pdf',
-                                    'application/msword',
-                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                    'application/vnd.ms-excel',
-                                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                    'image/jpeg',
-                                    'image/png',
-                                    'image/gif',
-                                    'image/webp',
-                                    'application/zip',
-                                    'application/x-rar-compressed',
+                    FileUpload::make('pdf')
+                        ->label('Dodaj prilog (max. 10)')
+                        ->disk('public')
+                        ->directory('fires')
+                        ->multiple()
+                        ->maxFiles(10)
+                        ->maxSize(30720)
+                        ->preserveFilenames()
+                        ->openable()
+                        ->downloadable()
+
+                        ->helperText(function () {
+                            $ownerId = auth()->user()?->ownerId();
+
+                            if (! $ownerId) {
+                                return null;
+                            }
+
+                            return 'Iskorištenost prostora organizacije: '
+                                . app(StorageQuotaService::class)->usageText($ownerId);
+                        })
+
+                        ->rules([
+                            function () {
+                                return function (
+                                    string $attribute,
+                                    mixed $value,
+                                    \Closure $fail
+                                ) {
+                                    $ownerId = auth()->user()?->ownerId();
+
+                                    if (! $ownerId) {
+                                        return;
+                                    }
+
+                                    if (! app(StorageQuotaService::class)
+                                        ->canUpload($value, $ownerId)) {
+
+                                        $fail(
+                                            'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                            .'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                        );
+                                    }
+                                };
+                            },
+                        ])
+
+                        ->acceptedFileTypes([
+                            'application/pdf',
+                            'application/msword',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            'application/vnd.ms-excel',
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'image/jpeg',
+                            'image/png',
+                            'image/gif',
+                            'image/webp',
+                            'application/zip',
+                            'application/x-rar-compressed',
                                 ]),
                         ]),
                 ]),

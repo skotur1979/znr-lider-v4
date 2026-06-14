@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\RiskAssessments\Pages;
 use App\Filament\Resources\RiskAssessments\Schemas\RiskAssessmentInfolist;
 use App\Models\RiskAssessment;
+use App\Services\StorageQuotaService;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -140,30 +141,60 @@ class RiskAssessmentResource extends BaseResource
                 ]),
 
             Section::make('Prilozi')
-                ->collapsible()
-                ->schema([
-                    Repeater::make('attachments')
-                        ->relationship('attachments')
-                        ->label('Prilozi')
-                        ->columns(2)
-                        ->schema([
-                            TextInput::make('naziv')
-                                ->label('Naziv dokumenta')
-                                ->required(),
+    ->collapsible()
+    ->schema([
+        Repeater::make('attachments')
+            ->relationship('attachments')
+            ->label('Prilozi')
+            ->columns(2)
+            ->schema([
+                TextInput::make('naziv')
+                    ->label('Naziv dokumenta')
+                    ->required(),
 
-                            FileUpload::make('file_path')
-                                ->label('Dokument')
-                                ->disk('public')
-                                ->directory('risk-assessments/attachments')
-                                ->visibility('public')
-                                ->preserveFilenames()
-                                ->openable()
-                                ->downloadable()
-                                ->maxSize(30720)
-                                ->required(),
-                        ])
-                        ->collapsible(),
-                ]),
+                FileUpload::make('file_path')
+                    ->label('Dokument')
+                    ->disk('public')
+                    ->directory('risk-assessments/attachments')
+                    ->visibility('public')
+                    ->preserveFilenames()
+                    ->openable()
+                    ->downloadable()
+                    ->maxSize(30720)
+                    ->required()
+
+                    ->helperText(function () {
+                        $ownerId = auth()->user()?->ownerId();
+
+                        if (! $ownerId) {
+                            return null;
+                        }
+
+                        return 'Iskorištenost prostora organizacije: '
+                            . app(StorageQuotaService::class)->usageText($ownerId);
+                    })
+
+                    ->rules([
+                        function () {
+                            return function (string $attribute, mixed $value, \Closure $fail) {
+                                $ownerId = auth()->user()?->ownerId();
+
+                                if (! $ownerId) {
+                                    return;
+                                }
+
+                                if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                    $fail(
+                                        'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                        . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                    );
+                                }
+                            };
+                        },
+                    ]),
+            ])
+            ->collapsible(),
+    ]),
         ]);
     }
 

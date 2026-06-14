@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Miscellaneouses\Pages;
 use App\Models\Category;
 use App\Models\Miscellaneous;
+use App\Services\StorageQuotaService;
 use Carbon\Carbon;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -170,28 +171,65 @@ class MiscellaneousResource extends BaseResource
                                     'style' => 'height:100%;',
                                 ])
                                 ->schema([
-                                    FileUpload::make('pdf')
-                                        ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
-                                        ->disk('public')
-                                        ->directory('pdfs')
-                                        ->multiple()
-                                        ->maxFiles(5)
-                                        ->maxSize(30720)
-                                        ->preserveFilenames()
-                                        ->openable()
-                                        ->downloadable()
-                                        ->acceptedFileTypes([
-                                            'application/pdf',
-                                            'application/msword',
-                                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                            'application/vnd.ms-excel',
-                                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                            'image/jpeg',
-                                            'image/png',
-                                            'image/gif',
-                                            'image/webp',
-                                            'application/zip',
-                                            'application/x-rar-compressed',
+                            FileUpload::make('pdf')
+                                ->label('Dodaj priloge (max. 5, do 30 MB po datoteci)')
+                                ->disk('public')
+                                ->directory('pdfs')
+                                ->multiple()
+                                ->maxFiles(5)
+                                ->maxSize(30720)
+                                ->preserveFilenames()
+                                ->openable()
+                                ->downloadable()
+
+                                ->helperText(function () {
+                                    $ownerId = auth()->user()?->ownerId();
+
+                                    if (! $ownerId) {
+                                        return null;
+                                    }
+
+                                    return 'Iskorištenost prostora organizacije: '
+                                        . app(StorageQuotaService::class)->usageText($ownerId);
+                                })
+
+                                ->rules([
+                                    function () {
+                                        return function (
+                                            string $attribute,
+                                            mixed $value,
+                                            \Closure $fail
+                                        ) {
+                                            $ownerId = auth()->user()?->ownerId();
+
+                                            if (! $ownerId) {
+                                                return;
+                                            }
+
+                                            if (! app(StorageQuotaService::class)
+                                                ->canUpload($value, $ownerId)) {
+
+                                                $fail(
+                                                    'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                                    .'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                                );
+                                            }
+                                        };
+                                    },
+                                ])
+
+                                ->acceptedFileTypes([
+                                    'application/pdf',
+                                    'application/msword',
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                    'application/vnd.ms-excel',
+                                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                    'image/jpeg',
+                                    'image/png',
+                                    'image/gif',
+                                    'image/webp',
+                                    'application/zip',
+                                    'application/x-rar-compressed',
                                         ])
                                         ->columnSpanFull(),
                                 ]),

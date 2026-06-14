@@ -42,6 +42,7 @@ class User extends Authenticatable
         'gdpr_request_processed_at',
 
         'last_activity_at',
+        'storage_quota_mb',
 
         'email_2fa_code_hash',
         'email_2fa_expires_at',
@@ -71,6 +72,7 @@ class User extends Authenticatable
             'legal_consent_withdrawn_at' => 'datetime',
             'account_deletion_requested_at' => 'datetime',
             'deleted_at' => 'datetime',
+            'storage_quota_mb' => 'integer',
             'gdpr_request_processed_at' => 'datetime',
             'last_activity_at' => 'datetime',
             'email_2fa_expires_at' => 'datetime',

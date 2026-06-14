@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Employees\Schemas;
 
+use App\Services\StorageQuotaService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
@@ -13,8 +14,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 
 class EmployeeForm
 {
@@ -28,32 +27,30 @@ class EmployeeForm
             ->timezone('Europe/Zagreb');
 
         return $schema->schema([
-            // ✅ user_id (admin bira, user automatski)
             Select::make('user_id')
-    ->label('Korisnik')
-    ->relationship('user', 'name')
-    ->searchable()
-    ->preload()
-    ->required()
-    ->visible(fn (string $operation): bool => auth()->user()?->isSuperAdmin() && $operation === 'create')
-    ->dehydrated(fn (string $operation): bool => auth()->user()?->isSuperAdmin() && $operation === 'create'),
+                ->label('Korisnik')
+                ->relationship('user', 'name')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->visible(fn (string $operation): bool => auth()->user()?->isSuperAdmin() && $operation === 'create')
+                ->dehydrated(fn (string $operation): bool => auth()->user()?->isSuperAdmin() && $operation === 'create'),
 
-Hidden::make('user_id')
-    ->default(fn () => auth()->id())
-    ->visible(fn (string $operation): bool => ! auth()->user()?->isSuperAdmin() && $operation === 'create')
-    ->dehydrated(fn (string $operation): bool => ! auth()->user()?->isSuperAdmin() && $operation === 'create'),
+            Hidden::make('user_id')
+                ->default(fn () => auth()->user()?->ownerId())
+                ->visible(fn (string $operation): bool => ! auth()->user()?->isSuperAdmin() && $operation === 'create')
+                ->dehydrated(fn (string $operation): bool => ! auth()->user()?->isSuperAdmin() && $operation === 'create'),
 
             Tabs::make('EmployeeTabs')
                 ->columnSpanFull()
                 ->tabs([
                     Tab::make('Osnovno')
                         ->schema([
-                            // ✅ 2 stupca kao v2: lijevo osobni, desno liječnički
                             Section::make('Osobni podatci')
                                 ->columns(2)
                                 ->columnSpan(1)
                                 ->schema([
-                                    TextInput::make('name')->label('Prezime i ime (obavezno)')->required()->maxLength(255)->columnSpanFull(),
+                                    TextInput::make('name')->label('Prezime i ime (obavezno)')->required()->maxLength(255),
 
                                     Select::make('gender')
                                         ->label('Spol')
@@ -61,29 +58,27 @@ Hidden::make('user_id')
                                         ->native(false),
 
                                     TextInput::make('OIB')
-    ->label('OIB')
-    ->maxLength(32)
-    ->rule(function ($record) {
-        return \Illuminate\Validation\Rule::unique('employees', 'OIB')
-            ->where(function ($query) {
-                $query->where('user_id', auth()->user()?->ownerId())
-                    ->whereNull('deleted_at');
-            })
-            ->ignore($record?->id);
-    })
-    ->validationMessages([
-        'unique' => 'Već postoji zaposlenik s istim OIB-om.',
-    ]),
+                                        ->label('OIB')
+                                        ->maxLength(32)
+                                        ->rule(function ($record) {
+                                            return \Illuminate\Validation\Rule::unique('employees', 'OIB')
+                                                ->where(function ($query) {
+                                                    $query->where('user_id', auth()->user()?->ownerId())
+                                                        ->whereNull('deleted_at');
+                                                })
+                                                ->ignore($record?->id);
+                                        })
+                                        ->validationMessages([
+                                            'unique' => 'Već postoji zaposlenik s istim OIB-om.',
+                                        ]),
+
                                     TextInput::make('phone')->label('Telefon/Mobitel')->maxLength(50),
                                     TextInput::make('email')->label('Email')->email()->maxLength(255),
-
                                     TextInput::make('job_title')->label('Zanimanje')->maxLength(255),
                                     TextInput::make('education')->label('Školska sprema')->maxLength(255),
-
                                     TextInput::make('place_of_birth')->label('Datum i mjesto rođenja')->maxLength(255)->columnSpanFull(),
                                     TextInput::make('name_of_parents')->label('Ime oca – majke')->maxLength(255)->columnSpanFull(),
                                     TextInput::make('address')->label('Adresa')->maxLength(255)->columnSpanFull(),
-
                                     TextInput::make('workplace')->label('Radno mjesto')->maxLength(255)->columnSpanFull(),
                                     TextInput::make('organization_unit')->label('Organizacijska jedinica')->maxLength(255),
                                     TextInput::make('contract_type')->label('Vrsta ugovora')->maxLength(255),
@@ -103,7 +98,8 @@ Hidden::make('user_id')
                                         ->label('Članak 3. točke')
                                         ->rows(2)
                                         ->columnSpanFull(),
-                                        Textarea::make('remark')
+
+                                    Textarea::make('remark')
                                         ->label('Napomena liječnika')
                                         ->rows(3)
                                         ->columnSpanFull(),
@@ -113,7 +109,6 @@ Hidden::make('user_id')
 
                     Tab::make('Rokovi i osposobljavanja')
                         ->schema([
-                            // ✅ 2 stupca “kartice” kao u v2 (pregledno, kompaktno)
                             Section::make('Zaštita na radu – Rad na siguran način')
                                 ->columns(2)
                                 ->columnSpan(1)
@@ -139,20 +134,20 @@ Hidden::make('user_id')
                                 ]),
 
                             Section::make('Toksikologija – Rad s opasnim kemikalijama')
-                            ->columns(2)
-                            ->columnSpan(1)
-                            ->schema([
-                                $date('toxicology_valid_from', 'Vrijedi od'),
-                                $date('toxicology_valid_until', 'Vrijedi do'),
-                            ]),
+                                ->columns(2)
+                                ->columnSpan(1)
+                                ->schema([
+                                    $date('toxicology_valid_from', 'Vrijedi od'),
+                                    $date('toxicology_valid_until', 'Vrijedi do'),
+                                ]),
 
-                        Section::make('Rukovanje zapaljivim tvarima')
-                            ->columns(2)
-                            ->columnSpan(1)
-                            ->schema([
-                                $date('handling_flammable_materials_valid_from', 'Vrijedi od'),
-                                $date('handling_flammable_materials_valid_until', 'Vrijedi do'),
-                            ]),
+                            Section::make('Rukovanje zapaljivim tvarima')
+                                ->columns(2)
+                                ->columnSpan(1)
+                                ->schema([
+                                    $date('handling_flammable_materials_valid_from', 'Vrijedi od'),
+                                    $date('handling_flammable_materials_valid_until', 'Vrijedi do'),
+                                ]),
 
                             Section::make('Ovlaštenik poslodavca za ZNR')
                                 ->columns(2)
@@ -170,22 +165,22 @@ Hidden::make('user_id')
                                 ->columnSpanFull()
                                 ->schema([
                                     Repeater::make('certificates')
-    ->label('Popis edukacija / ovlaštenja')
-    ->relationship()
-    ->createItemButtonLabel('Dodaj novi zapis')
-    ->defaultItems(0)
-    ->minItems(0)
-    ->columns(3)
-    ->collapsible()
-    ->itemLabel(fn ($state) => filled($state['title'] ?? null) ? $state['title'] : 'Nova stavka')
-    ->schema([
-        TextInput::make('title')
-            ->label('Naziv')
-            ->maxLength(191),
+                                        ->label('Popis edukacija / ovlaštenja')
+                                        ->relationship()
+                                        ->createItemButtonLabel('Dodaj novi zapis')
+                                        ->defaultItems(0)
+                                        ->minItems(0)
+                                        ->columns(3)
+                                        ->collapsible()
+                                        ->itemLabel(fn ($state) => filled($state['title'] ?? null) ? $state['title'] : 'Nova stavka')
+                                        ->schema([
+                                            TextInput::make('title')
+                                                ->label('Naziv')
+                                                ->maxLength(191),
 
-        $date('valid_from', 'Vrijedi od'),
-        $date('valid_until', 'Vrijedi do'),
-    ]),
+                                            $date('valid_from', 'Vrijedi od'),
+                                            $date('valid_until', 'Vrijedi do'),
+                                        ]),
                                 ]),
                         ]),
 
@@ -201,10 +196,34 @@ Hidden::make('user_id')
                                 ->maxSize(30720)
                                 ->preserveFilenames()
                                 ->openable()
-                                ->downloadable(),
+                                ->downloadable()
+                                ->helperText(function () {
+                                    $ownerId = auth()->user()?->ownerId();
+
+                                    if (! $ownerId) {
+                                        return null;
+                                    }
+
+                                    return 'Iskorištenost prostora organizacije: ' . app(StorageQuotaService::class)->usageText($ownerId);
+                                })
+                                ->rules([
+                                    function () {
+                                        return function (string $attribute, mixed $value, \Closure $fail) {
+                                            $ownerId = auth()->user()?->ownerId();
+
+                                            if (! $ownerId) {
+                                                return;
+                                            }
+
+                                            if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                                $fail('Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. Obrišite nepotrebne priloge ili kontaktirajte administratora.');
+                                            }
+                                        };
+                                    },
+                                ]),
                         ]),
                 ]),
         ])
-        ->columns(1); // root: sve ide kroz tabove (nema uske kolone)
+        ->columns(1);
     }
 }
