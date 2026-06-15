@@ -15,6 +15,9 @@ return [
                  * The list of directories and files that will be included in the backup.
                  */
                 'include' => [
+                    storage_path('app/private'),
+                    storage_path('app/public'),
+                    public_path('storage'),
                 ],
 
                 /*
@@ -23,7 +26,9 @@ return [
                  * Directories used by the backup process will automatically be excluded.
                  */
                 'exclude' => [
-                    base_path(),
+                    storage_path('app/backup-temp'),
+                    storage_path('app/private/ZNR LIDER'),
+                    storage_path('app/ZNR LIDER'),
                 ],
 
                 /*
@@ -143,7 +148,7 @@ return [
             /*
              * The filename prefix used for the backup zip file.
              */
-            'filename_prefix' => 'znr-lider-db-',
+            'filename_prefix' => 'znr-lider-backup-',
 
             /*
              * The disk names on which the backups will be stored.
