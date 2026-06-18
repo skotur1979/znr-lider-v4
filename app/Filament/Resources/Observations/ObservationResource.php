@@ -406,8 +406,19 @@ protected static function priorityIcon(?string $state): ?string
 
     TextColumn::make('item')
         ->label('Opis')
-        ->wrap()
-        ->limit(70)
+        ->searchable()
+        ->html()
+        ->formatStateUsing(function (?string $state) {
+            $text = trim((string) $state);
+
+            $text = mb_strlen($text) > 55
+                ? mb_substr($text, 0, 55) . '...'
+                : $text;
+
+            return nl2br(e(wordwrap($text, 18, "\n", true)));
+        })
+        ->tooltip(fn ($record) => $record->item)
+        ->alignment(Alignment::Center)
         ->toggleable(),
 
     TextColumn::make('potential_incident_type')
@@ -419,6 +430,7 @@ protected static function priorityIcon(?string $state): ?string
     ImageColumn::make('picture_path')
         ->label('Slika')
         ->disk('public')
+        ->alignment(Alignment::Center)
         ->visibility('public')
         ->height(50)
         ->width(80)
@@ -432,8 +444,18 @@ protected static function priorityIcon(?string $state): ?string
 
     TextColumn::make('action')
         ->label('Potrebna radnja')
-        ->wrap()
-        ->limit(70)
+        ->searchable()
+        ->html()
+        ->formatStateUsing(function (?string $state) {
+            $text = trim((string) $state);
+
+            $text = mb_strlen($text) > 75
+                ? mb_substr($text, 0, 75) . '...'
+                : $text;
+
+            return nl2br(e(wordwrap($text, 22, "\n", true)));
+        })
+        ->tooltip(fn ($record) => $record->action)
         ->toggleable(),
 
     TextColumn::make('responsible')

@@ -161,12 +161,16 @@ class StorageQuotaService
     }
 
     public function usageText(int $ownerId): string
-    {
-        $usedGb = round($this->usedMbForOwner($ownerId) / 1024, 2);
-        $quotaGb = round($this->quotaMbForOwner($ownerId) / 1024, 2);
+{
+    $usedMb = $this->usedMbForOwner($ownerId);
+    $quotaMb = $this->quotaMbForOwner($ownerId);
 
-        return "{$usedGb} GB / {$quotaGb} GB";
+    if ($usedMb < 1024) {
+        return round($usedMb, 2) . ' MB / ' . round($quotaMb / 1024, 2) . ' GB';
     }
+
+    return round($usedMb / 1024, 2) . ' GB / ' . round($quotaMb / 1024, 2) . ' GB';
+}
 
     public function remainingText(int $ownerId): string
     {

@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 
 class UserResource extends Resource
@@ -53,6 +54,24 @@ class UserResource extends Resource
         return static::shouldRegisterNavigation();
     }
 
+    public static function canCreate(): bool
+    {
+    $authUser = Auth::user();
+
+    if (! $authUser) {
+        return false;
+    }
+
+    if ($authUser->isSuperAdmin()) {
+        return true;
+    }
+
+    if (! $authUser->canCreateSubusers()) {
+        return false;
+    }
+
+    return $authUser->owner()->canAddMoreSubusers();
+}
     protected static function getModuleGroups(): array
     {
         return [
@@ -226,6 +245,27 @@ class UserResource extends Resource
                     ];
                 })
                 ->default(fn () => $authUser?->isSuperAdmin() ? 'org_admin' : 'org_user'),
+
+            Placeholder::make('subusers_limit_info')
+                ->label('Podkorisnici organizacije')
+                ->content(function () use ($authUser): string {
+
+                    if (! $authUser || $authUser->isSuperAdmin()) {
+                        return 'Superadmin nema ograničenje broja korisnika.';
+                    }
+
+                    $owner = $authUser->owner();
+
+                    return
+                        'Iskorišteno: '
+                        . $owner->subusersCountForLimit()
+                        . ' od '
+                        . User::MAX_SUBUSERS_PER_ORGANIZATION
+                        . PHP_EOL
+                        . 'Preostalo mjesta: '
+                        . $owner->remainingSubusers();
+                })
+                ->visible(fn () => ! Auth::user()?->isSuperAdmin()),
 
             Select::make('parent_user_id')
                 ->label('Glavni korisnik organizacije')
@@ -460,6 +500,7 @@ class UserResource extends Resource
 
                 Tables\Columns\TextColumn::make('role')
                     ->label('Uloga')
+                    ->alignment('center')
                     ->badge()
                     ->formatStateUsing(fn (?string $state) => match ($state) {
                         'super_admin', 'admin' => 'Super admin',
@@ -474,20 +515,58 @@ class UserResource extends Resource
                         default => 'gray',
                     }),
 
-                Tables\Columns\IconColumn::make('can_manage_subusers')
+                Tables\Columns\TextColumn::make('subusers_usage')
                     ->label('Podkorisnici')
+                    ->alignment('center')
+                    ->state(function (User $record) {
+
+                        if ($record->parent_user_id) {
+                            return null;
+                        }
+
+                        return $record->subusersCountForLimit()
+                            . ' / '
+                            . User::MAX_SUBUSERS_PER_ORGANIZATION;
+                    })
+                    ->placeholder('')
+                    ->badge()
+                    ->color(function (User $record) {
+
+                        if ($record->parent_user_id) {
+                            return 'gray';
+                        }
+
+                        $count = $record->subusersCountForLimit();
+
+                        if ($count >= User::MAX_SUBUSERS_PER_ORGANIZATION) {
+                            return 'danger';
+                        }
+
+                        if ($count >= 4) {
+                            return 'warning';
+                        }
+
+                        return 'success';
+                    }),
+
+                Tables\Columns\IconColumn::make('can_manage_subusers')
+                    ->label('Može dodavati')
+                    ->alignment('center')
                     ->boolean(),
 
                 Tables\Columns\IconColumn::make('daily_status_email_enabled')
                     ->label('Dnevni')
+                    ->alignment('center')
                     ->boolean(),
 
                 Tables\Columns\IconColumn::make('weekly_status_email_enabled')
                     ->label('Tjedni')
+                    ->alignment('center')
                     ->boolean(),
 
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('Aktivan')
+                    ->alignment('center')
                     ->boolean(),
 
                 Tables\Columns\TextColumn::make('account_status')
@@ -808,6 +887,21 @@ class UserResource extends Resource
         $data = static::resetLegalAcceptance($data);
 
         $authUser = Auth::user();
+        if (! $authUser?->isSuperAdmin()) {
+        $owner = $authUser->owner();
+
+        if (! $owner->canAddMoreSubusers()) {
+            Notification::make()
+                ->title('Dosegnut je limit podkorisnika.')
+                ->body('Organizacija može imati najviše ' . User::MAX_SUBUSERS_PER_ORGANIZATION . ' podkorisnika.')
+                ->danger()
+                ->send();
+
+            throw ValidationException::withMessages([
+                'email' => 'Dosegnut je maksimalan broj podkorisnika za ovu organizaciju.',
+            ]);
+        }
+    }
 
         if ($authUser?->isSuperAdmin()) {
             $data['is_admin'] = false;

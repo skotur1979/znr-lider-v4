@@ -13,6 +13,35 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable, SoftDeletes;
 
+public const MAX_SUBUSERS_PER_ORGANIZATION = 5;
+
+public function subusersCountForLimit(): int
+{
+    return self::query()
+        ->where('parent_user_id', $this->ownerId())
+        ->where('role', 'org_user')
+        ->withoutTrashed()
+        ->count();
+}
+
+public function canAddMoreSubusers(): bool
+{
+    return $this->subusersCountForLimit() < self::MAX_SUBUSERS_PER_ORGANIZATION;
+}
+
+public function subusersLimitText(): string
+{
+    return $this->subusersCountForLimit() . ' / ' . self::MAX_SUBUSERS_PER_ORGANIZATION;
+}
+
+public function remainingSubusers(): int
+{
+    return max(
+        0,
+        self::MAX_SUBUSERS_PER_ORGANIZATION - $this->subusersCountForLimit()
+    );
+}
+
     protected $fillable = [
         'name',
         'organization_name',

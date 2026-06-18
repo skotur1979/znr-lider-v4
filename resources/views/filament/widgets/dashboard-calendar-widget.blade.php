@@ -1207,9 +1207,7 @@
     $usedMb = $storageOwnerId ? $storageService->usedMbForOwner($storageOwnerId) : 0;
     $remainingMb = max(0, $quotaMb - $usedMb);
 
-    $usedGb = round($usedMb / 1024, 2);
-    $quotaGb = round($quotaMb / 1024, 2);
-    $remainingGb = round($remainingMb / 1024, 2);
+    $usageText = $storageService->usageText($storageOwnerId);
 @endphp
 
 @php
@@ -1225,7 +1223,7 @@
 <div class="storage-widget">
     <div class="storage-header">
         <span>
-            Prostor organizacije: {{ $usedGb }} GB / {{ $quotaGb }} GB
+            Prostor organizacije: {{ $usageText }}
         </span>
 
         @if ($percent >= 1)
