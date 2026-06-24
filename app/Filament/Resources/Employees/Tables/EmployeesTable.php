@@ -78,55 +78,55 @@ class EmployeesTable
                     ->toggleable(),
 
                 TextColumn::make('occupational_safety_valid_from')
-    ->label('ZNR')
-    ->state(function (Employee $record): string {
+                    ->label('ZNR')
+                    ->state(function (Employee $record): string {
 
-        if ($record->occupational_safety_valid_from) {
-            return Carbon::parse($record->occupational_safety_valid_from)
-                ->format('d.m.Y.');
-        }
+                        if ($record->occupational_safety_valid_from) {
+                            return Carbon::parse($record->occupational_safety_valid_from)
+                                ->format('d.m.Y.');
+                        }
 
-        if ($record->znrTrainingDueDate()) {
-            return 'Rok: ' . $record->znrTrainingDueLabel();
-        }
+                        if ($record->znrTrainingDueDate()) {
+                            return 'Rok: ' . $record->znrTrainingDueLabel();
+                        }
 
-        return '—';
-    })
-    ->badge()
+                        return '—';
+                    })
+                    ->badge()
 
-    ->color(function (Employee $record) {
+                    ->color(function (Employee $record) {
 
-        if ($record->occupational_safety_valid_from) {
-            return 'success';
-        }
+                        if ($record->occupational_safety_valid_from) {
+                            return 'success';
+                        }
 
-        return ExpiryBadge::color($record->znrTrainingDueDate());
-    })
+                        return ExpiryBadge::color($record->znrTrainingDueDate());
+                    })
 
-    ->icon(function (Employee $record) {
+                    ->icon(function (Employee $record) {
 
-        if ($record->occupational_safety_valid_from) {
-            return 'heroicon-m-check-circle';
-        }
+                        if ($record->occupational_safety_valid_from) {
+                            return 'heroicon-m-check-circle';
+                        }
 
-        return ExpiryBadge::icon($record->znrTrainingDueDate());
-    })
+                        return ExpiryBadge::icon($record->znrTrainingDueDate());
+                    })
 
-    ->tooltip(function (Employee $record) {
+                    ->tooltip(function (Employee $record) {
 
-        if ($record->occupational_safety_valid_from) {
-            return 'Osposobljavanje evidentirano';
-        }
+                        if ($record->occupational_safety_valid_from) {
+                            return 'Osposobljavanje evidentirano';
+                        }
 
-        return ExpiryBadge::tooltip($record->znrTrainingDueDate());
-    })
+                        return ExpiryBadge::tooltip($record->znrTrainingDueDate());
+                    })
 
-    ->sortable(query: function (Builder $query, string $direction): Builder {
-        return $query->orderBy('occupational_safety_valid_from', $direction);
-    })
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->orderBy('occupational_safety_valid_from', $direction);
+                    })
 
-    ->alignment(Alignment::Center)
-    ->toggleable(),
+                    ->alignment(Alignment::Center)
+                    ->toggleable(),
 
                 TextColumn::make('toxicology_valid_until')
                     ->label('Toksikologija (do)')
@@ -135,6 +135,16 @@ class EmployeesTable
                     ->color(fn ($state) => ExpiryBadge::color($state))
                     ->icon(fn ($state) => ExpiryBadge::icon($state))
                     ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
+                    ->sortable()
+                    ->alignment(Alignment::Center)
+                    ->toggleable(),
+
+                    TextColumn::make('first_aid_valid_from')
+                    ->label('Prva pomoć (od)')
+                    ->date('d.m.Y.')
+                    ->badge()
+                    ->color(fn ($state) => $state ? 'success' : 'gray')
+                    ->icon(fn ($state) => $state ? 'heroicon-m-check-circle' : 'heroicon-m-minus-circle')
                     ->sortable()
                     ->alignment(Alignment::Center)
                     ->toggleable(),

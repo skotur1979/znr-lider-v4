@@ -2,17 +2,18 @@
 
 namespace App\Services;
 
-use App\Models\Chemical;
-use App\Models\Employee;
-use App\Models\Fire;
-use App\Models\Machine;
-use App\Models\Miscellaneous;
 use App\Filament\Resources\Chemicals\ChemicalResource;
 use App\Filament\Resources\Employees\EmployeeResource;
 use App\Filament\Resources\Fires\FireResource;
 use App\Filament\Resources\Machines\MachineResource;
 use App\Filament\Resources\Miscellaneouses\MiscellaneousResource;
+use App\Models\Chemical;
+use App\Models\Employee;
+use App\Models\Fire;
+use App\Models\Machine;
+use App\Models\Miscellaneous;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
 class GlobalSearchService
@@ -41,20 +42,19 @@ class GlobalSearchService
     }
 
     protected function scopeUser(Builder $query): Builder
-{
-    if (! Auth::user()?->isAdmin()) {
+    {
+        if (! Auth::user()?->isAdmin()) {
+            $ownerId = Auth::user()?->ownerId();
 
-        $ownerId = Auth::user()?->ownerId();
+            if (! $ownerId) {
+                return $query->whereRaw('1 = 0');
+            }
 
-        if (! $ownerId) {
-            return $query->whereRaw('1 = 0');
+            $query->where('user_id', $ownerId);
         }
 
-        $query->where('user_id', $ownerId);
+        return $query;
     }
-
-    return $query;
-}
 
     protected function resourceRecordUrl(string $resourceClass, $record): string
     {
@@ -70,7 +70,6 @@ class GlobalSearchService
     protected function rankRecord(array $values, string $term): int
     {
         $termLower = mb_strtolower(trim($term));
-
         $bestScore = 999;
 
         foreach ($values as $value) {
@@ -116,20 +115,97 @@ class GlobalSearchService
 
     protected function searchEmployees(string $term): array
     {
-        $items = $this->scopeUser(Employee::query())
+        $items = $this->scopeUser(
+            Employee::query()->with('certificates')
+        )
             ->whereNull('deleted_at')
             ->where(function (Builder $query) use ($term) {
-                $query->where('name', 'like', "%{$term}%")
+                $query
+                    ->where('name', 'like', "%{$term}%")
                     ->orWhere('OIB', 'like', "%{$term}%")
-                    ->orWhere('workplace', 'like', "%{$term}%");
+                    ->orWhere('workplace', 'like', "%{$term}%")
+                    ->orWhere('job_title', 'like', "%{$term}%")
+                    ->orWhere('organization_unit', 'like', "%{$term}%")
+                    ->orWhere('article', 'like', "%{$term}%")
+                    ->orWhere('education', 'like', "%{$term}%")
+                    ->orWhere('contract_type', 'like', "%{$term}%")
+
+                    ->orWhereHas('certificates', function (Builder $certificateQuery) use ($term) {
+                        $certificateQuery->where('title', 'like', "%{$term}%");
+                    })
+
+                    ->orWhere(function (Builder $q) use ($term) {
+                        if ($this->matchesAny($term, ['prva pomoć', 'prva pomoc', 'first aid'])) {
+                            $q->whereNotNull('first_aid_valid_from')
+                                ->orWhereNotNull('first_aid_valid_until');
+                        }
+                    })
+
+                    ->orWhere(function (Builder $q) use ($term) {
+                        if ($this->matchesAny($term, ['ovlaštenik', 'ovlastenik', 'ovlaštenik poslodavca', 'ovlastenik poslodavca'])) {
+                            $q->whereNotNull('employers_authorization_valid_from')
+                                ->orWhereNotNull('employers_authorization_valid_until');
+                        }
+                    })
+
+                    ->orWhere(function (Builder $q) use ($term) {
+                        if ($this->matchesAny($term, ['toksikologija', 'otrovi'])) {
+                            $q->whereNotNull('toxicology_valid_from')
+                                ->orWhereNotNull('toxicology_valid_until');
+                        }
+                    })
+
+                    ->orWhere(function (Builder $q) use ($term) {
+                        if ($this->matchesAny($term, ['zapaljive', 'zapaljive tvari', 'rukovanje zapaljivim tvarima'])) {
+                            $q->whereNotNull('handling_flammable_materials_valid_from')
+                                ->orWhereNotNull('handling_flammable_materials_valid_until');
+                        }
+                    })
+
+                    ->orWhere(function (Builder $q) use ($term) {
+                        if ($this->matchesAny($term, ['znr', 'zaštita na radu', 'zastita na radu'])) {
+                            $q->whereNotNull('occupational_safety_valid_from');
+                        }
+                    })
+
+                    ->orWhere(function (Builder $q) use ($term) {
+                        if ($this->matchesAny($term, ['zop', 'požar', 'pozar', 'zaštita od požara', 'zastita od pozara'])) {
+                            $q->whereNotNull('fire_protection_valid_from')
+                                ->orWhereNotNull('fire_protection_statement_at');
+                        }
+                    })
+
+                    ->orWhere(function (Builder $q) use ($term) {
+                        if ($this->matchesAny($term, ['evakuacija', 'voditelj evakuacije'])) {
+                            $q->whereNotNull('evacuation_valid_from');
+                        }
+                    })
+
+                    ->orWhere(function (Builder $q) use ($term) {
+                        if ($this->matchesAny($term, ['liječnički', 'lijecnicki', 'pregled', 'liječnički pregled', 'lijecnicki pregled'])) {
+                            $q->whereNotNull('medical_examination_valid_until');
+                        }
+                    });
             })
             ->get()
             ->map(function (Employee $record) use ($term) {
+                $matchedCertificate = $record->certificates
+                    ->first(function ($certificate) use ($term) {
+                        return str_contains(
+                            mb_strtolower($certificate->title ?? ''),
+                            mb_strtolower($term)
+                        );
+                    });
+
+                $matchedCategories = $this->matchedEmployeeCategories($record, $term);
+
                 return [
                     'title' => $record->name ?: 'Bez naziva',
                     'subtitle' => collect([
-                        $record->OIB ? 'OIB: ' . $record->OIB : null,
                         $record->workplace ? 'Radno mjesto: ' . $record->workplace : null,
+                        $matchedCertificate ? 'Certifikat: ' . $matchedCertificate->title : null,
+                        ! empty($matchedCategories) ? 'Kategorija: ' . implode(', ', $matchedCategories) : null,
+                        $record->OIB ? 'OIB: ' . $record->OIB : null,
                     ])->filter()->implode(' · '),
                     'url' => $this->resourceRecordUrl(EmployeeResource::class, $record),
                     'icon' => 'heroicon-o-users',
@@ -137,6 +213,13 @@ class GlobalSearchService
                         $record->name,
                         $record->OIB,
                         $record->workplace,
+                        $record->job_title,
+                        $record->organization_unit,
+                        $record->article,
+                        $record->education,
+                        $record->contract_type,
+                        $matchedCertificate?->title,
+                        ...$matchedCategories,
                     ], $term),
                 ];
             })
@@ -145,33 +228,123 @@ class GlobalSearchService
         return $this->sortResults($items);
     }
 
+    protected function matchedEmployeeCategories(Employee $record, string $term): array
+    {
+        $categories = [];
+
+        if ($this->matchesAny($term, ['prva pomoć', 'prva pomoc', 'first aid'])
+            && ($record->first_aid_valid_from || $record->first_aid_valid_until)) {
+            $categories[] = 'Prva pomoć';
+        }
+
+        if ($this->matchesAny($term, ['ovlaštenik', 'ovlastenik', 'ovlaštenik poslodavca', 'ovlastenik poslodavca'])
+            && ($record->employers_authorization_valid_from || $record->employers_authorization_valid_until)) {
+            $categories[] = 'Ovlaštenik poslodavca za ZNR';
+        }
+
+        if ($this->matchesAny($term, ['toksikologija', 'otrovi'])
+            && ($record->toxicology_valid_from || $record->toxicology_valid_until)) {
+            $categories[] = 'Toksikologija';
+        }
+
+        if ($this->matchesAny($term, ['zapaljive', 'zapaljive tvari', 'rukovanje zapaljivim tvarima'])
+            && ($record->handling_flammable_materials_valid_from || $record->handling_flammable_materials_valid_until)) {
+            $categories[] = 'Rukovanje zapaljivim tvarima';
+        }
+
+        if ($this->matchesAny($term, ['znr', 'zaštita na radu', 'zastita na radu'])
+            && $record->occupational_safety_valid_from) {
+            $categories[] = 'Zaštita na radu';
+        }
+
+        if ($this->matchesAny($term, ['zop', 'požar', 'pozar', 'zaštita od požara', 'zastita od pozara'])
+            && ($record->fire_protection_valid_from || $record->fire_protection_statement_at)) {
+            $categories[] = 'ZOP / Zaštita od požara';
+        }
+
+        if ($this->matchesAny($term, ['evakuacija', 'voditelj evakuacije'])
+            && $record->evacuation_valid_from) {
+            $categories[] = 'Evakuacija';
+        }
+
+        if ($this->matchesAny($term, ['liječnički', 'lijecnicki', 'pregled', 'liječnički pregled', 'lijecnicki pregled'])
+            && $record->medical_examination_valid_until) {
+            $categories[] = 'Liječnički pregled';
+        }
+
+        return $categories;
+    }
+
+    protected function matchesAny(string $term, array $needles): bool
+    {
+        $term = mb_strtolower(trim($term));
+
+        foreach ($needles as $needle) {
+            $needle = mb_strtolower($needle);
+
+            if ($term === $needle || str_contains($needle, $term) || str_contains($term, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     protected function searchMachines(string $term): array
     {
         $items = $this->scopeUser(Machine::query())
             ->whereNull('deleted_at')
             ->where(function (Builder $query) use ($term) {
                 $query->where('name', 'like', "%{$term}%")
-                    ->orWhere('factory_number', 'like', "%{$term}%")
                     ->orWhere('manufacturer', 'like', "%{$term}%")
-                    ->orWhere('location', 'like', "%{$term}%");
+                    ->orWhere('factory_number', 'like', "%{$term}%")
+                    ->orWhere('inventory_number', 'like', "%{$term}%")
+                    ->orWhere('report_number', 'like', "%{$term}%")
+                    ->orWhere('examined_by', 'like', "%{$term}%")
+                    ->orWhere('location', 'like', "%{$term}%")
+                    ->orWhere('remark', 'like', "%{$term}%");
             })
             ->get()
             ->map(function (Machine $record) use ($term) {
                 return [
                     'title' => $record->name ?: 'Bez naziva',
                     'subtitle' => collect([
-                        $record->factory_number ? 'Tv. broj: ' . $record->factory_number : null,
-                        $record->manufacturer ? 'Proizvođač: ' . $record->manufacturer : null,
-                        $record->location ? 'Lokacija: ' . $record->location : null,
-                    ])->filter()->implode(' · '),
+                    $record->factory_number
+                        ? 'Tv. broj: ' . $record->factory_number
+                        : null,
+
+                    $record->inventory_number
+                        ? 'Inventarni broj: ' . $record->inventory_number
+                        : null,
+
+                    $record->report_number
+                        ? 'Broj zapisnika: ' . $record->report_number
+                        : null,
+
+                    $record->manufacturer
+                        ? 'Proizvođač: ' . $record->manufacturer
+                        : null,
+
+                    $record->examined_by
+                        ? 'Ispitao: ' . $record->examined_by
+                        : null,
+
+                    $record->location
+                        ? 'Lokacija: ' . $record->location
+                        : null,
+                ])->filter()->implode(' · '),
                     'url' => $this->resourceRecordUrl(MachineResource::class, $record),
                     'icon' => 'heroicon-o-cog-6-tooth',
                     'score' => $this->rankRecord([
-                        $record->name,
-                        $record->factory_number,
-                        $record->manufacturer,
-                        $record->location,
-                    ], $term),
+                    $record->name,
+                    $record->manufacturer,
+                    $record->factory_number,
+                    $record->inventory_number,
+                    $record->report_number,
+                    $record->examined_by,
+                    $record->location,
+                    $record->remark,
+                ], $term),
                 ];
             })
             ->toArray();
@@ -187,6 +360,7 @@ class GlobalSearchService
                 $query->where('place', 'like', "%{$term}%")
                     ->orWhere('type', 'like', "%{$term}%")
                     ->orWhere('serial_label_number', 'like', "%{$term}%")
+                    ->orWhere('service', 'like', "%{$term}%")
                     ->orWhereRaw("`factory_number/year_of_production` LIKE ?", ["%{$term}%"]);
             })
             ->get()
@@ -197,6 +371,7 @@ class GlobalSearchService
                         $record->type ? 'Tip: ' . $record->type : null,
                         $record->serial_label_number ? 'Serijski broj: ' . $record->serial_label_number : null,
                         $record->factory_number_year_of_production ? 'Tv. broj / god.: ' . $record->factory_number_year_of_production : null,
+                        $record->service ? 'Servis: ' . $record->service : null,
                     ])->filter()->implode(' · '),
                     'url' => $this->resourceRecordUrl(FireResource::class, $record),
                     'icon' => 'heroicon-o-fire',
@@ -205,6 +380,7 @@ class GlobalSearchService
                         $record->type,
                         $record->serial_label_number,
                         $record->factory_number_year_of_production,
+                        $record->service,
                     ], $term),
                 ];
             })
@@ -220,6 +396,8 @@ class GlobalSearchService
             ->where(function (Builder $query) use ($term) {
                 $query->where('name', 'like', "%{$term}%")
                     ->orWhere('examiner', 'like', "%{$term}%")
+                    ->orWhere('report_number', 'like', "%{$term}%")
+                    ->orWhere('remark', 'like', "%{$term}%")
                     ->orWhereHas('category', function (Builder $categoryQuery) use ($term) {
                         $categoryQuery->where('name', 'like', "%{$term}%");
                     });
@@ -230,16 +408,27 @@ class GlobalSearchService
                 return [
                     'title' => $record->name ?: 'Bez naziva',
                     'subtitle' => collect([
-                        $record->category?->name ? 'Kategorija: ' . $record->category->name : null,
-                        $record->examiner ? 'Ispitao: ' . $record->examiner : null,
-                    ])->filter()->implode(' · '),
+                    $record->category?->name
+                        ? 'Kategorija: ' . $record->category->name
+                        : null,
+
+                    $record->examiner
+                        ? 'Ispitao: ' . $record->examiner
+                        : null,
+
+                    $record->report_number
+                        ? 'Broj zapisnika: ' . $record->report_number
+                        : null,
+                ])->filter()->implode(' · '),
                     'url' => $this->resourceRecordUrl(MiscellaneousResource::class, $record),
                     'icon' => 'heroicon-o-wrench-screwdriver',
                     'score' => $this->rankRecord([
-                        $record->name,
-                        $record->category?->name,
-                        $record->examiner,
-                    ], $term),
+                    $record->name,
+                    $record->category?->name,
+                    $record->examiner,
+                    $record->report_number,
+                    $record->remark,
+                ], $term),
                 ];
             })
             ->toArray();
