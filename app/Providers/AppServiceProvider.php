@@ -4,16 +4,19 @@ namespace App\Providers;
 
 use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
+use App\Models\ActivityLog;
 use App\Models\OperationalLog;
 use App\Services\ActivityLogger;
-use App\Models\ActivityLog;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 
@@ -26,6 +29,31 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        ResetPassword::toMailUsing(function (object $notifiable, string $token) {
+            $expireMinutes = (int) config('auth.passwords.users.expire', 60);
+
+            $url = URL::temporarySignedRoute(
+                'filament.admin.auth.password-reset.reset',
+                now()->addMinutes($expireMinutes),
+                [
+                    'token' => $token,
+                    'email' => $notifiable->getEmailForPasswordReset(),
+                ],
+            );
+
+            return (new MailMessage)
+                ->subject('Resetiranje lozinke - ZNR LIDER')
+                ->greeting('Poštovani,')
+                ->line('Zaprimljen je zahtjev za resetiranje lozinke vašeg korisničkog računa u sustavu ZNR LIDER.')
+                ->line('Ako ste vi zatražili promjenu lozinke, kliknite na gumb ispod.')
+                ->action('Resetiraj lozinku', $url)
+                ->line("Poveznica za resetiranje lozinke vrijedi {$expireMinutes} minuta.")
+                ->line('Ako niste zatražili promjenu lozinke, nije potrebno poduzimati nikakve radnje.')
+                ->line('Ako gumb ne radi, kopirajte i otvorite sljedeću poveznicu u internetskom pregledniku:')
+                ->line($url)
+                ->salutation('Srdačan pozdrav,' . PHP_EOL . 'ZNR LIDER');
+        });
+
         Livewire::component(
             'app.filament.widgets.dashboard-deadlines-grid',
             DashboardDeadlinesGrid::class
@@ -71,9 +99,7 @@ class AppServiceProvider extends ServiceProvider
             if (! $model instanceof Model) {
                 return;
             }
-            // VAŽNO:
-            // ActivityLog mora zadržati stvarnog korisnika koji je napravio akciju.
-            // Ne smije se pregaziti ownerId-em.
+
             if ($model instanceof ActivityLog) {
                 return;
             }

@@ -34,7 +34,21 @@
             gap: 26px;
             align-items: stretch;
         }
+        
+        /* Sakrij drugi red Filament notifikacije ako prijevod nije pronađen */
+        .fi-notification-body {
+            display: none !important;
+        }
 
+        /* Malo profesionalniji izgled notifikacije */
+        .fi-notification {
+            border-radius: 14px !important;
+        }
+
+        .fi-notification-title {
+            font-weight: 800 !important;
+            line-height: 1.4 !important;
+        }
         .znr-panel {
             position: relative;
             overflow: hidden;
@@ -546,19 +560,19 @@
                     <p>Unesite korisničke podatke za siguran pristup aplikaciji.</p>
                 </div>
 
-                <form wire:submit="authenticate">
+               <form wire:submit="authenticate">
                     {{ $this->form }}
 
                     <div class="znr-login-button">
-                    <x-filament::button
-                        type="submit"
-                        icon="heroicon-m-arrow-right-on-rectangle"
-                        size="lg"
-                        class="w-full"
-                    >
-                        Prijavi se
-                    </x-filament::button>
-                </div>
+                        <x-filament::button
+                            type="submit"
+                            icon="heroicon-m-arrow-right-on-rectangle"
+                            size="lg"
+                            class="w-full"
+                        >
+                            Prijavi se
+                        </x-filament::button>
+                    </div>
                 </form>
 
                 <div class="znr-login-features">

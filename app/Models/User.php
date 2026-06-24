@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Notifications\ResetPasswordNotification;
 
 class User extends Authenticatable
 {
@@ -217,5 +218,9 @@ public function remainingSubusers(): int
     public function legalAcceptances(): HasMany
     {
         return $this->hasMany(\App\Models\LegalAcceptance::class);
+    }
+    public function sendPasswordResetNotification($token): void
+    {
+    $this->notify(new ResetPasswordNotification($token));
     }
 }
