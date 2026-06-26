@@ -7,7 +7,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
-use Filament\Resources\Pages\ListRecords;
+use App\Filament\Resources\Pages\BaseListRecords;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
 use App\Exports\EmployeesExport;
 use App\Imports\EmployeesImport;
 
-class ListEmployees extends ListRecords
+class ListEmployees extends BaseListRecords
 {
     protected static string $resource = EmployeeResource::class;
 
@@ -167,51 +167,75 @@ class ListEmployees extends ListRecords
 
             'certificates_expiring' => $query->where(function (Builder $query) {
 
-                $query->whereHas('certificates', function (Builder $q) {
+            $query->whereHas('certificates', function (Builder $q) {
+                $q->whereDate('valid_until', '>=', Carbon::today())
+                    ->whereDate('valid_until', '<=', Carbon::today()->addDays(30));
+            })
 
-                    $q->whereDate('valid_until', '>=', Carbon::today())
-                        ->whereDate('valid_until', '<=', Carbon::today()->addDays(30));
+            ->orWhere(function (Builder $q) {
+                $q->whereNull('occupational_safety_valid_from')
+                    ->whereNotNull('employeed_at')
+                    ->whereDate('employeed_at', '>=', Carbon::today()->subDays(60))
+                    ->whereDate('employeed_at', '<=', Carbon::today()->subDays(30));
+            })
 
-                })
+            ->orWhere(function (Builder $q) {
+                $q->whereNotNull('toxicology_valid_until')
+                    ->whereDate('toxicology_valid_until', '>=', Carbon::today())
+                    ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30));
+            })
 
-                ->orWhere(function (Builder $q) {
+            ->orWhere(function (Builder $q) {
+                $q->whereNotNull('handling_flammable_materials_valid_until')
+                    ->whereDate('handling_flammable_materials_valid_until', '>=', Carbon::today())
+                    ->whereDate('handling_flammable_materials_valid_until', '<=', Carbon::today()->addDays(30));
+            })
 
-                    $q->whereNull('occupational_safety_valid_from')
-                        ->whereNotNull('employeed_at')
+            ->orWhere(function (Builder $q) {
+                $q->whereNotNull('employers_authorization_valid_until')
+                    ->whereDate('employers_authorization_valid_until', '>=', Carbon::today())
+                    ->whereDate('employers_authorization_valid_until', '<=', Carbon::today()->addDays(30));
+            })
 
-                        ->whereDate(
-                            'employeed_at',
-                            '>=',
-                            Carbon::today()->subDays(60)
-                        )
+            ->orWhere(function (Builder $q) {
+                $q->whereNotNull('first_aid_valid_until')
+                    ->whereDate('first_aid_valid_until', '>=', Carbon::today())
+                    ->whereDate('first_aid_valid_until', '<=', Carbon::today()->addDays(30));
+            });
+        }),
 
-                        ->whereDate(
-                            'employeed_at',
-                            '<=',
-                            Carbon::today()->subDays(30)
-                        );
-                });
-            }),
+        'certificates_expired' => $query->where(function (Builder $query) {
 
-            'certificates_expired' => $query->where(function (Builder $query) {
+            $query->whereHas('certificates', function (Builder $q) {
+                $q->whereDate('valid_until', '<', Carbon::today());
+            })
 
-                $query->whereHas('certificates', function (Builder $q) {
+            ->orWhere(function (Builder $q) {
+                $q->whereNull('occupational_safety_valid_from')
+                    ->whereNotNull('employeed_at')
+                    ->whereDate('employeed_at', '<', Carbon::today()->subDays(60));
+            })
 
-                    $q->whereDate('valid_until', '<', Carbon::today());
+            ->orWhere(function (Builder $q) {
+                $q->whereNotNull('toxicology_valid_until')
+                    ->whereDate('toxicology_valid_until', '<', Carbon::today());
+            })
 
-                })
+            ->orWhere(function (Builder $q) {
+                $q->whereNotNull('handling_flammable_materials_valid_until')
+                    ->whereDate('handling_flammable_materials_valid_until', '<', Carbon::today());
+            })
 
-                ->orWhere(function (Builder $q) {
+            ->orWhere(function (Builder $q) {
+                $q->whereNotNull('employers_authorization_valid_until')
+                    ->whereDate('employers_authorization_valid_until', '<', Carbon::today());
+            })
 
-                    $q->whereNull('occupational_safety_valid_from')
-                        ->whereNotNull('employeed_at')
-                        ->whereDate(
-                            'employeed_at',
-                            '<',
-                            Carbon::today()->subDays(60)
-                        );
-                });
-            }),
+            ->orWhere(function (Builder $q) {
+                $q->whereNotNull('first_aid_valid_until')
+                    ->whereDate('first_aid_valid_until', '<', Carbon::today());
+            });
+        }),
 
             default => $query,
         };

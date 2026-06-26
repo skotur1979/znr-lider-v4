@@ -184,6 +184,53 @@ class EmployeeForm
                                 ]),
                         ]),
 
+                        Tab::make('Alkotestiranje')
+                            ->schema([
+                                Section::make('Evidencija alkotestiranja')
+                                    ->description('Unos rezultata kontrole alkoholiziranosti radnika.')
+                                    ->columnSpanFull()
+                                    ->schema([
+                                        Repeater::make('alcoholTests')
+                                            ->label('Alkotestiranja')
+                                            ->relationship()
+                                            ->createItemButtonLabel('Dodaj alkotestiranje')
+                                            ->defaultItems(0)
+                                            ->minItems(0)
+                                            ->columns(4)
+                                            ->collapsible()
+                                            ->itemLabel(fn ($state) => filled($state['test_date'] ?? null)
+                                                ? 'Alkotestiranje - ' . \Illuminate\Support\Carbon::parse($state['test_date'])->format('d.m.Y.')
+                                                : 'Novo alkotestiranje')
+                                            ->schema([
+                                                Hidden::make('user_id')
+                                                    ->default(fn () => auth()->user()?->ownerId())
+                                                    ->dehydrated(),
+
+                                                $date('test_date', 'Datum kontrole', true),
+
+                                                TextInput::make('result')
+                                                    ->label('Rezultat promila')
+                                                    ->placeholder('0,50')
+                                                    ->suffix('‰')
+                                                    ->maxLength(10)
+                                                    ->rule('regex:/^\d+,\d{2}$/')
+                                                    ->validationMessages([
+                                                        'regex' => 'Rezultat upiši u formatu 0,00 npr. 0,50 ili 0,65.',
+                                                    ])
+                                                    ->helperText('Upisati rezultat u formatu 0,00 npr. 0,50 ili 0,65.'),
+
+                                                TextInput::make('tested_by')
+                                                    ->label('Kontrolu proveo')
+                                                    ->maxLength(255),
+
+                                                Textarea::make('note')
+                                                    ->label('Napomena')
+                                                    ->rows(2)
+                                                    ->columnSpanFull(),
+                                            ]),
+                                    ]),
+                            ]),
+
                     Tab::make('Prilozi')
                         ->schema([
                             FileUpload::make('pdf')

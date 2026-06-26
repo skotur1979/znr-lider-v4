@@ -7,11 +7,11 @@ use App\Filament\Resources\PPELogs\PPELogResource;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
-use Filament\Resources\Pages\ListRecords;
+use App\Filament\Resources\Pages\BaseListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Facades\Excel;
 
-class ListPPELogs extends ListRecords
+class ListPPELogs extends BaseListRecords
 {
     protected static string $resource = PPELogResource::class;
 

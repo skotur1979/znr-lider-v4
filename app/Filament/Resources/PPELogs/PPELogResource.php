@@ -184,7 +184,7 @@ class PPELogResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
-        ->paginated([10, 25, 50,'all'])
+        ->paginated([10, 25, 50, 100,'all'])
             ->modifyQueryUsing(fn (Builder $query) => $query->with([
                 'items' => fn ($subQuery) => $subQuery
                     ->whereNull('return_date')

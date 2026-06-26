@@ -7,12 +7,12 @@ use App\Filament\Resources\Observations\ObservationResource;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Pages\Concerns\ExposesTableToWidgets;
-use Filament\Resources\Pages\ListRecords;
+use App\Filament\Resources\Pages\BaseListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
-class ListObservations extends ListRecords
+class ListObservations extends BaseListRecords
 {
     use ExposesTableToWidgets;
 

@@ -330,6 +330,22 @@ class WorkPermitResource extends BaseResource
         ->label('Vrsta poslova')
         ->searchable()
         ->wrap()
+        ->formatStateUsing(function ($state) {
+
+            $labels = WorkPermit::workTypeOptions();
+
+            if (blank($state)) {
+                return '-';
+            }
+
+            $values = is_array($state)
+                ? $state
+                : explode(',', (string) $state);
+
+            return collect($values)
+                ->map(fn ($value) => trim($labels[trim($value)] ?? trim($value)))
+                ->implode(', ');
+        })
         ->toggleable(),
 
     TextColumn::make('valid_from')

@@ -383,36 +383,48 @@ class MedicalReferralResource extends BaseResource
 
                     Grid::make(3)->schema([
                         Group::make([
-                            Checkbox::make('lifting_enabled')
-                                ->label('Dizanje tereta kg')
-                                ->live(),
+                            Grid::make(2)
+                                ->schema([
+                                    Checkbox::make('lifting_enabled')
+                                        ->label('Dizanje tereta kg')
+                                        ->live(),
 
-                            TextInput::make('lifting_weight')
-                                ->label('')
-                                ->placeholder('kg')
-                                ->visible(fn (Get $get): bool => (bool) $get('lifting_enabled')),
+                                    TextInput::make('lifting_weight')
+                                        ->hiddenLabel()
+                                        ->placeholder('')
+                                        ->numeric()
+                                        ->visible(fn (Get $get): bool => (bool) $get('lifting_enabled')),
+                                ]),
                         ]),
 
                         Group::make([
-                            Checkbox::make('carrying_enabled')
-                                ->label('Prenošenje tereta kg')
-                                ->live(),
+                            Grid::make(2)
+                                ->schema([
+                                    Checkbox::make('carrying_enabled')
+                                        ->label('Prenošenje tereta kg')
+                                        ->live(),
 
-                            TextInput::make('carrying_weight')
-                                ->label('')
-                                ->placeholder('kg')
-                                ->visible(fn (Get $get): bool => (bool) $get('carrying_enabled')),
+                                    TextInput::make('carrying_weight')
+                                        ->hiddenLabel()
+                                        ->placeholder('')
+                                        ->numeric()
+                                        ->visible(fn (Get $get): bool => (bool) $get('carrying_enabled')),
+                                ]),
                         ]),
 
                         Group::make([
-                            Checkbox::make('pushing_enabled')
-                                ->label('Guranje tereta kg')
-                                ->live(),
+                            Grid::make(2)
+                                ->schema([
+                                    Checkbox::make('pushing_enabled')
+                                        ->label('Guranje tereta kg')
+                                        ->live(),
 
-                            TextInput::make('pushing_weight')
-                                ->label('')
-                                ->placeholder('kg')
-                                ->visible(fn (Get $get): bool => (bool) $get('pushing_enabled')),
+                                    TextInput::make('pushing_weight')
+                                        ->hiddenLabel()
+                                        ->placeholder('')
+                                        ->numeric()
+                                        ->visible(fn (Get $get): bool => (bool) $get('pushing_enabled')),
+                                ]),
                         ]),
                     ]),
 

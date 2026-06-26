@@ -167,7 +167,7 @@ class EmployeeInfolist
                             ->description('Popis edukacija za ovog zaposlenika.')
                             ->schema([
                                 RepeatableEntry::make('certificates')
-                                    ->label('')
+                                    ->label('Ceritifikati i edukacije')
                                     ->contained(false)
                                     ->columns(12)
                                     ->schema([
@@ -185,6 +185,41 @@ class EmployeeInfolist
                                             ->date('d.m.Y.')
                                             ->badge()
                                             ->color(fn ($state) => self::rokColor($state))
+                                            ->columnSpan(3),
+                                    ]),
+                            ]),
+                    ]),
+                    Tab::make('Alkotestiranje')->schema([
+                        Section::make('Evidencija alkotestiranja')
+                            ->description('Pregled rezultata kontrole alkoholiziranosti radnika.')
+                            ->schema([
+                                RepeatableEntry::make('alcoholTests')
+                                    ->label('Rezultati alkotestiranja')
+                                    ->contained(false)
+                                    ->columns(12)
+                                    ->schema([
+                                        TextEntry::make('test_date')
+                                            ->label('Datum kontrole')
+                                            ->date('d.m.Y.')
+                                            ->columnSpan(3),
+
+                                        TextEntry::make('result')
+                                            ->label('Rezultat promila')
+                                            ->badge()
+                                            ->formatStateUsing(fn ($state) => filled($state) ? $state . ' ‰' : '—')
+                                            ->color(function ($state) {
+                                                $value = (float) str_replace(',', '.', (string) $state);
+
+                                                return $value > 0.5 ? 'danger' : 'success';
+                                            })
+                                            ->columnSpan(3),
+
+                                        TextEntry::make('tested_by')
+                                            ->label('Kontrolu proveo')
+                                            ->columnSpan(3),
+
+                                        TextEntry::make('note')
+                                            ->label('Napomena')
                                             ->columnSpan(3),
                                     ]),
                             ]),

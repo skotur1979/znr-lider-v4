@@ -6,6 +6,7 @@ use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -82,6 +83,16 @@ class Employee extends Model
         return $this->hasMany(EmployeeCertificate::class, 'employee_id');
     }
 
+    public function alcoholTests(): HasMany
+    {
+        return $this->hasMany(EmployeeAlcoholTest::class, 'employee_id');
+    }
+
+    public function latestAlcoholTest(): HasOne
+    {
+        return $this->hasOne(EmployeeAlcoholTest::class, 'employee_id')->latestOfMany('test_date');
+    }
+
     public function nightWorkReferrals(): HasMany
     {
         return $this->hasMany(NightWorkReferral::class);
@@ -102,9 +113,7 @@ class Employee extends Model
             return null;
         }
 
-        return Carbon::parse($this->employeed_at)
-            ->addDays(60)
-            ->startOfDay();
+        return Carbon::parse($this->employeed_at)->addDays(60)->startOfDay();
     }
 
     public function znrTrainingStatus(): string
@@ -154,9 +163,7 @@ class Employee extends Model
             return 'Nije upisan datum zaposlenja.';
         }
 
-        $dueDate = $this->znrTrainingDueDate();
-
-        return 'ZNR treba položiti najkasnije do ' . $dueDate?->format('d.m.Y.') . ' (60 dana od zaposlenja).';
+        return 'ZNR treba položiti najkasnije do ' . $this->znrTrainingDueDate()?->format('d.m.Y.') . ' (60 dana od zaposlenja).';
     }
 
     public function znrTrainingBadgeColor(): string

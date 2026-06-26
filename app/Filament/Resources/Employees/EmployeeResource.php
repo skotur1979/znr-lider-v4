@@ -70,4 +70,3 @@ class EmployeeResource extends BaseResource
         ];
     }
 }
-

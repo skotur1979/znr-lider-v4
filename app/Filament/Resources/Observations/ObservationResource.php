@@ -569,7 +569,7 @@ protected static function priorityIcon(?string $state): ?string
                         return $query;
                     }),
             ])
-            ->paginated([10, 25, 50, 'all'])
+            ->paginated([10, 25, 50, 100, 'all'])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaži'),

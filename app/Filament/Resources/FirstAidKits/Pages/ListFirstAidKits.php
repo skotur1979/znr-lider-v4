@@ -6,12 +6,12 @@ use App\Exports\FirstAidKitsExport;
 use App\Filament\Resources\FirstAidKits\FirstAidKitResource;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
-use Filament\Resources\Pages\ListRecords;
+use App\Filament\Resources\Pages\BaseListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
-class ListFirstAidKits extends ListRecords
+class ListFirstAidKits extends BaseListRecords
 {
     protected static string $resource = FirstAidKitResource::class;
 

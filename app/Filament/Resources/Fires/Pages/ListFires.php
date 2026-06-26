@@ -10,13 +10,13 @@ use App\Exports\FiresExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
-use Filament\Resources\Pages\ListRecords;
+use App\Filament\Resources\Pages\BaseListRecords;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
-class ListFires extends ListRecords
+class ListFires extends BaseListRecords
 {
     protected static string $resource = FireResource::class;
 

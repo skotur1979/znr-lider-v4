@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Employees\Tables;
 use App\Models\Employee;
 use App\Support\ExpiryBadge;
 use App\Models\EmployeeCertificate;
+use App\Models\EmployeeAlcoholTest;
 use Illuminate\Support\Facades\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables\Table;
@@ -36,6 +37,17 @@ class EmployeesTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+            ->with('latestAlcoholTest')
+            ->orderByDesc(
+                EmployeeAlcoholTest::query()
+                    ->select('test_date')
+                    ->whereColumn('employee_alcohol_tests.employee_id', 'employees.id')
+                    ->latest('test_date')
+                    ->limit(1)
+            )
+            ->orderBy('name')
+        )
             ->columns([
 
                 TextColumn::make('name')
@@ -171,6 +183,28 @@ class EmployeesTable
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
+                    TextColumn::make('latestAlcoholTest.test_date')
+                    ->label('Zadnje alkotestiranje')
+                    ->date('d.m.Y.')
+                    ->sortable()
+                    ->badge()
+                    ->color(fn ($state) => $state ? 'info' : 'gray')
+                    ->alignment(Alignment::Center)
+                    ->toggleable(),
+
+                TextColumn::make('latestAlcoholTest.result')
+                    ->label('Rezultat promila')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => filled($state) ? $state . ' ‰' : '—')
+                    ->color(function ($state) {
+                        $value = (float) str_replace(',', '.', (string) $state);
+
+                        return filled($state) && $value > 0.5 ? 'danger' : 'success';
+                    })
+                    ->placeholder('—')
+                    ->alignment(Alignment::Center)
+                    ->toggleable(),
+
                 ViewColumn::make('certificates')
                     ->label('Ostale edukacije')
                     ->state(fn (Employee $record) => $record->certificates)
@@ -303,6 +337,21 @@ class EmployeesTable
                         });
                     }),
 
+                     SelectFilter::make('alcohol_test_status')
+                        ->label('Status alkotestiranja')
+                        ->placeholder('Svi zaposlenici')
+                        ->options([
+                            'done' => 'Provedeno alkotestiranje',
+                            'missing' => 'Nije provedeno alkotestiranje',
+                        ])
+                        ->query(function (Builder $query, array $data): Builder {
+                            return match ($data['value'] ?? null) {
+                                'done' => $query->whereHas('alcoholTests'),
+                                'missing' => $query->whereDoesntHave('alcoholTests'),
+                                default => $query,
+                            };
+                        }),
+
                 Filter::make('medical_examination_expired')
                 ->label('Liječnički (istekao)')
                 ->query(function (Builder $query): Builder {
@@ -338,7 +387,7 @@ class EmployeesTable
                         ->whereDate('employeed_at', '>=', Carbon::today()->subDays(60))
                         ->whereDate('employeed_at', '<=', Carbon::today()->subDays(30));
                 }),
-
+    
             Filter::make('toxicology_expired')
                 ->label('Toksikologija (istekla)')
                 ->query(function (Builder $query): Builder {
@@ -425,7 +474,7 @@ class EmployeesTable
                     ->modalCancelActionLabel('Odustani'),
             ])
 
-            ->paginated([10, 25, 50, 'all']);
+            ->paginated([10, 25, 50, 100, 'all']);
     }
 
     private static function isOnlyTrashed(HasTable $livewire): bool

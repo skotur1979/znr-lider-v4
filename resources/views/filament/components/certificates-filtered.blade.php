@@ -39,9 +39,9 @@
                 };
 
                 $znrIcon = match ($znrStatus) {
-                    'expired' => 'heroicon-m-exclamation-triangle',
-                    'expiring' => 'heroicon-m-clock',
-                    default => 'heroicon-m-information-circle',
+                    'expired' => 'heroicon-o-x-circle',
+                    'expiring' => 'heroicon-o-exclamation-triangle',
+                    default => 'heroicon-o-check-circle',
                 };
 
                 $znrTooltip = $record->znrTrainingTooltip();

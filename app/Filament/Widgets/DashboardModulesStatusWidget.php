@@ -720,60 +720,61 @@ class DashboardModulesStatusWidget extends Widget
         ];
     }
 
-    protected function resolveEmployeesMedicalExpiredUrl(): string
-    {
-        return url('/admin/employees?pregled=medical_expired');
-    }
+   protected function resolveEmployeesMedicalExpiredUrl(): string
+{
+    return url('/admin/employees?pregled=medical_expired&tableRecordsPerPage=all');
+}
 
     protected function resolveEmployeesMedicalSoonUrl(): string
     {
-        return url('/admin/employees?pregled=medical_expiring');
+        return url('/admin/employees?pregled=medical_expiring&tableRecordsPerPage=all');
     }
 
     protected function resolveEmployeesCertificatesExpiredUrl(): string
     {
-        return url('/admin/employees?pregled=certificates_expired');
+        return url('/admin/employees?pregled=certificates_expired&tableRecordsPerPage=all');
     }
 
     protected function resolveEmployeesCertificatesSoonUrl(): string
     {
-        return url('/admin/employees?pregled=certificates_expiring');
+        return url('/admin/employees?pregled=certificates_expiring&tableRecordsPerPage=all');
     }
 
     protected function resolveMachinesExpiredUrl(): string
     {
-        return url('/admin/machines?pregled=isteklo');
+        return url('/admin/machines?pregled=isteklo&tableRecordsPerPage=all');
     }
 
     protected function resolveMachinesSoonUrl(): string
     {
-        return url('/admin/machines?pregled=uskoro');
+        return url('/admin/machines?pregled=uskoro&tableRecordsPerPage=all');
     }
 
     protected function resolveFiresExpiredUrl(): string
     {
-        return url('/admin/fires?pregled=isteklo');
+        return url('/admin/fires?pregled=isteklo&tableRecordsPerPage=all');
     }
 
     protected function resolveFiresSoonUrl(): string
     {
-        return url('/admin/fires?pregled=uskoro');
+        return url('/admin/fires?pregled=uskoro&tableRecordsPerPage=all');
     }
 
     protected function resolveMiscellaneousExpiredUrl(): string
     {
-        return url('/admin/miscellaneouses?pregled=isteklo');
+        return url('/admin/miscellaneouses?pregled=isteklo&tableRecordsPerPage=all');
     }
 
     protected function resolveMiscellaneousSoonUrl(): string
     {
-        return url('/admin/miscellaneouses?pregled=uskoro');
+        return url('/admin/miscellaneouses?pregled=uskoro&tableRecordsPerPage=all');
     }
 
     protected function resolvePpeExpiredUrl(): string
     {
         return PPELogResource::getUrl('index', [
             'pregled' => 'isteklo',
+            'tableRecordsPerPage' => 'all',
         ]);
     }
 
@@ -781,26 +782,27 @@ class DashboardModulesStatusWidget extends Widget
     {
         return PPELogResource::getUrl('index', [
             'pregled' => 'uskoro',
+            'tableRecordsPerPage' => 'all',
         ]);
     }
 
     protected function resolveFirstAidExpiredUrl(): string
     {
-        return url('/admin/first-aid-kits?pregled=isteklo');
+        return url('/admin/first-aid-kits?pregled=isteklo&tableRecordsPerPage=all');
     }
 
     protected function resolveFirstAidSoonUrl(): string
     {
-        return url('/admin/first-aid-kits?pregled=uskoro');
+        return url('/admin/first-aid-kits?pregled=uskoro&tableRecordsPerPage=all');
     }
 
     protected function resolveObservationsExpiredUrl(): string
     {
-        return url('/admin/observations?pregled=isteklo');
+        return url('/admin/observations?pregled=isteklo&tableRecordsPerPage=all');
     }
 
     protected function resolveObservationsSoonUrl(): string
     {
-        return url('/admin/observations?pregled=uskoro');
+        return url('/admin/observations?pregled=uskoro&tableRecordsPerPage=all');
     }
 }

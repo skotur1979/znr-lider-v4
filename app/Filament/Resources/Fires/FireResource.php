@@ -362,7 +362,7 @@ class FireResource extends BaseResource
                         ->whereDate('examination_valid_until', '>=', Carbon::today())
                         ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))),
             ])
-            ->paginated([10, 25, 50, 'all'])
+            ->paginated([10, 25, 50, 100, 'all'])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaži'),
