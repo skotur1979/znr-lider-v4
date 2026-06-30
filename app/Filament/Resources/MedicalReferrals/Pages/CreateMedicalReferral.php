@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\MedicalReferrals\Pages;
 
 use App\Filament\Resources\MedicalReferrals\MedicalReferralResource;
+use App\Models\MedicalReferral;
+use App\Services\FormVersionService;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Auth;
 
@@ -12,7 +14,8 @@ class CreateMedicalReferral extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['user_id'] = Auth::id();
+        $data['user_id'] = Auth::user()?->ownerId() ?? Auth::id();
+        $data['form_version'] = $data['form_version'] ?? FormVersionService::currentRa1();
 
         return $data;
     }

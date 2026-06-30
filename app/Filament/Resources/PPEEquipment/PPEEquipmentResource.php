@@ -6,6 +6,8 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\PPEEquipment\Pages;
 use App\Models\PPEEquipment;
 use BackedEnum;
+use App\Services\StorageQuotaService;
+use Filament\Forms\Components\FileUpload as FormFileUpload;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -109,6 +111,55 @@ class PPEEquipmentResource extends BaseResource
                         ->label('Aktivno')
                         ->default(true)
                         ->inline(false),
+
+                    FormFileUpload::make('attachments')
+                        ->label('Certifikati i upute za korištenje OZO (max. 5, do 30 MB po datoteci)')
+                        ->disk('public')
+                        ->directory('ppe-equipment/attachments')
+                        ->multiple()
+                        ->maxFiles(5)
+                        ->maxSize(30720)
+                        ->preserveFilenames()
+                        ->openable()
+                        ->downloadable()
+                        ->columnSpanFull()
+                        ->helperText(function () {
+                            $ownerId = auth()->user()?->ownerId();
+
+                            if (! $ownerId) {
+                                return null;
+                            }
+
+                            return 'Iskorištenost prostora organizacije: ' . app(StorageQuotaService::class)->usageText($ownerId);
+                        })
+                        ->rules([
+                            function () {
+                                return function (string $attribute, mixed $value, \Closure $fail) {
+                                    $ownerId = auth()->user()?->ownerId();
+
+                                    if (! $ownerId) {
+                                        return;
+                                    }
+
+                                    if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                        $fail('Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. Obrišite nepotrebne priloge ili kontaktirajte administratora.');
+                                    }
+                                };
+                            },
+                        ])
+                        ->acceptedFileTypes([
+                            'application/pdf',
+                            'application/msword',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            'application/vnd.ms-excel',
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'image/jpeg',
+                            'image/png',
+                            'image/gif',
+                            'image/webp',
+                            'application/zip',
+                            'application/x-rar-compressed',
+                        ]),
                 ]),
         ]);
     }
@@ -143,6 +194,61 @@ class PPEEquipmentResource extends BaseResource
         ->label('Aktivno')
         ->boolean()
         ->alignCenter()
+        ->toggleable(),
+
+    TextColumn::make('attachments')
+        ->label('Prilozi')
+        ->alignCenter()
+        ->html()
+        ->state(function (PPEEquipment $record): string {
+            if (! is_array($record->attachments) || count($record->attachments) === 0) {
+                return '<span style="color:#6b7280;">0</span>';
+            }
+
+            return collect($record->attachments)
+                ->map(function ($file, $index) {
+                    $url = route('file.preview', [
+                        'file' => ltrim($file, '/'),
+                    ]);
+
+                    $name = e(basename($file));
+                    $number = $index + 1;
+
+                    return '<a href="' . e($url) . '"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="' . $name . '"
+                        onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                        style="
+                            display:inline-flex;
+                            align-items:center;
+                            justify-content:center;
+                            min-width:28px;
+                            height:24px;
+                            padding:0 8px;
+                            margin:1px 2px;
+                            border-radius:7px;
+                            background:rgba(59,130,246,.15);
+                            border:1px solid rgba(59,130,246,.35);
+                            color:#93c5fd;
+                            font-size:12px;
+                            font-weight:700;
+                            text-decoration:none;
+                            cursor:pointer;
+                        "
+                    >📎 ' . $number . '</a>';
+                })
+                ->implode('');
+        })
+        ->tooltip(function (PPEEquipment $record): string {
+            if (! is_array($record->attachments) || count($record->attachments) === 0) {
+                return 'Nema priloga';
+            }
+
+            return collect($record->attachments)
+                ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+                ->implode("\n");
+        })
         ->toggleable(),
 
     TextColumn::make('scope_label')

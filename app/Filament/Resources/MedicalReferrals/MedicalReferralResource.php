@@ -8,6 +8,7 @@ use App\Filament\Resources\MedicalReferrals\Pages\EditMedicalReferral;
 use App\Filament\Resources\MedicalReferrals\Pages\ListMedicalReferrals;
 use App\Filament\Resources\MedicalReferrals\Pages\ViewMedicalReferral;
 use App\Models\Employee;
+use App\Services\FormVersionService;
 use App\Models\MedicalReferral;
 use BackedEnum;
 use Filament\Actions\ActionGroup;
@@ -91,6 +92,13 @@ class MedicalReferralResource extends BaseResource
             Hidden::make('user_id')
                 ->default(fn () => static::ownerId())
                 ->dehydrated(),
+
+                Select::make('form_version')
+                ->label('Verzija RA-1 obrasca')
+                ->options(MedicalReferral::formVersions())
+                ->default(FormVersionService::currentRa1())
+                ->required()
+                ->helperText('Verzija se sprema uz uputnicu. Stare uputnice ostaju na staroj verziji obrasca.'),
 
             Section::make('Povezivanje sa zaposlenikom')
                 ->columnSpanFull()
@@ -504,6 +512,14 @@ class MedicalReferralResource extends BaseResource
     static::userTableColumn()
         ->toggleable(),
 
+    TextColumn::make('form_version_label')
+        ->label('Verzija obrasca')
+        ->alignCenter()
+        ->badge()
+        ->wrap()
+        ->color('gray')
+        ->toggleable(),
+
     TextColumn::make('referral_number')
         ->label('Broj uputnice')
         ->sortable()
@@ -634,7 +650,7 @@ class MedicalReferralResource extends BaseResource
             $newRecord->user_id = static::isSuperAdmin()
                 ? $record->user_id
                 : static::ownerId();
-
+            $newRecord->form_version = $record->form_version ?: FormVersionService::currentRa1();
             $newRecord->save();
 
             Notification::make()

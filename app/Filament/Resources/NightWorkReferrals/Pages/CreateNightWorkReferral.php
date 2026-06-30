@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\NightWorkReferrals\Pages;
 
 use App\Filament\Resources\NightWorkReferrals\NightWorkReferralResource;
+use App\Services\FormVersionService;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Auth;
 
@@ -12,7 +13,8 @@ class CreateNightWorkReferral extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['user_id'] = Auth::id();
+        $data['user_id'] = Auth::user()?->ownerId() ?? Auth::id();
+        $data['form_version'] = $data['form_version'] ?? FormVersionService::currentNr1();
 
         return $data;
     }

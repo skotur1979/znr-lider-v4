@@ -4,6 +4,7 @@ namespace App\Filament\Resources\NightWorkReferrals;
 
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\NightWorkReferrals\Pages;
+use App\Services\FormVersionService;
 use App\Models\Employee;
 use App\Models\NightWorkReferral;
 use BackedEnum;
@@ -87,6 +88,13 @@ class NightWorkReferralResource extends BaseResource
             Hidden::make('user_id')
                 ->default(fn () => static::ownerId())
                 ->dehydrated(),
+
+                Select::make('form_version')
+                ->label('Verzija NR-1 obrasca')
+                ->options(NightWorkReferral::formVersions())
+                ->default(FormVersionService::currentNr1())
+                ->required()
+                ->helperText('Verzija se sprema uz uputnicu. Stare uputnice ostaju na staroj verziji obrasca.'),
 
             Section::make('Povezivanje sa zaposlenikom')
                 ->columnSpanFull()
@@ -427,6 +435,14 @@ class NightWorkReferralResource extends BaseResource
     static::userTableColumn()
         ->toggleable(),
 
+        TextColumn::make('form_version_label')
+        ->label('Verzija obrasca')
+        ->alignCenter()
+        ->badge()
+        ->wrap()
+        ->color('gray')
+        ->toggleable(),
+
     TextColumn::make('referral_number')
         ->label('Broj uputnice')
         ->sortable()
@@ -558,6 +574,7 @@ class NightWorkReferralResource extends BaseResource
                 ? $record->user_id
                 : static::ownerId();
 
+            $newRecord->form_version = $record->form_version ?: FormVersionService::currentNr1();
             $newRecord->save();
 
             Notification::make()

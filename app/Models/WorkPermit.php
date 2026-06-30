@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsActivity;
+use App\Services\FormVersionService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +17,7 @@ class WorkPermit extends Model
 
     protected $fillable = [
         'user_id',
+        'form_version',
         'permit_number',
         'issue_date',
         'valid_from',
@@ -78,7 +80,11 @@ class WorkPermit extends Model
     {
         static::creating(function (self $record) {
             if (blank($record->user_id) && auth()->check()) {
-                $record->user_id = auth()->id();
+                $record->user_id = auth()->user()?->ownerId() ?? auth()->id();
+            }
+
+            if (blank($record->form_version)) {
+                $record->form_version = FormVersionService::currentWorkPermit();
             }
         });
     }
@@ -178,5 +184,16 @@ class WorkPermit extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+    public static function formVersions(): array
+{
+    return FormVersionService::workPermitVersions();
+}
+
+    public function getFormVersionLabelAttribute(): string
+    {
+        return FormVersionService::workPermitVersions()[$this->form_version]
+            ?? $this->form_version
+            ?? FormVersionService::currentWorkPermit();
     }
 }

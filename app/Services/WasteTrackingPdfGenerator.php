@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\WasteTrackingForm;
+use App\Services\FormVersionService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
@@ -12,7 +13,9 @@ class WasteTrackingPdfGenerator
 {
     public function generate(WasteTrackingForm $record): string
     {
-        $templatePath = storage_path('app/pdf/Prateci-list-PL-O.pdf');
+        $formVersion = $record->form_version ?: FormVersionService::currentPlo();
+
+        $templatePath = FormVersionService::templatePath('plo', $formVersion);
 
         if (! file_exists($templatePath)) {
             throw new \RuntimeException('PL-O predložak nije pronađen: ' . $templatePath);

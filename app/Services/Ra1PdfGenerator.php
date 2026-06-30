@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Carbon\Carbon;
+use App\Services\FormVersionService;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
 
@@ -10,7 +11,9 @@ class Ra1PdfGenerator
 {
     public static function generate($referral): string
     {
-        $templatePath = resource_path('templates/RA1-PRAZNA.pdf');
+        $formVersion = $referral->form_version ?: FormVersionService::currentRa1();
+
+        $templatePath = FormVersionService::templatePath('ra1', $formVersion);
 
         $mpdf = new Mpdf([
             'mode' => 'utf-8',
@@ -277,8 +280,8 @@ class Ra1PdfGenerator
         $write(28, 67.8, $jobTitle);
         $write(130, 67.8, $education);
 
-        $write(15, 18,  $referral->employer_name);
-        $write(15, 24,  $referral->employer_address);
+        $write(10, 18,  $referral->employer_name);
+        $write(10, 24,  $referral->employer_address);
         $oibSplit(128, 29, $referral->employer_oib);
 
         $writeOneLineClamp(95, 73, $referral->health_jobs_description, 200);

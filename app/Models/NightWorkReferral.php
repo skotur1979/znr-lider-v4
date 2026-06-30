@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsActivity;
+use App\Services\FormVersionService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,7 @@ class NightWorkReferral extends Model
         'user_id',
         'employee_id',
         'manual_entry',
+        'form_version',
 
         'referral_number',
         'referral_date',
@@ -84,5 +86,27 @@ class NightWorkReferral extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+    public static function formVersions(): array
+    {
+        return FormVersionService::nr1Versions();
+    }
+
+    public function getFormVersionLabelAttribute(): string
+    {
+        return FormVersionService::nr1Versions()[$this->form_version]
+            ?? $this->form_version
+            ?? FormVersionService::currentNr1();
+    }
+
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->employee->name ?? ($this->full_name ?: 'NR-1 Uputnica');
+    }
+
+    public function getFilamentTitleAttribute(): string
+    {
+        return ($this->employee->name ?? $this->full_name ?? 'NR-1')
+            . ' - ' . ($this->referral_number ?: '-');
     }
 }

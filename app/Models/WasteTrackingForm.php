@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsActivity;
+use App\Services\FormVersionService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,7 @@ class WasteTrackingForm extends Model
 
     protected $fillable = [
         'user_id',
+        'form_version',
         'onto_record_id',
 
         // osnovno
@@ -134,6 +136,9 @@ class WasteTrackingForm extends Model
             if (blank($record->status)) {
                 $record->status = 'draft';
             }
+            if (blank($record->form_version)) {
+            $record->form_version = FormVersionService::currentPlo();
+        }
         });
     }
 
@@ -169,5 +174,16 @@ class WasteTrackingForm extends Model
         $waste = $this->ontoRecord?->wasteType?->waste_code ?? $this->waste_code_manual ?? '-';
 
         return "{$doc} / {$waste} / {$date}";
+    }
+    public static function formVersions(): array
+    {
+        return FormVersionService::ploVersions();
+    }
+
+    public function getFormVersionLabelAttribute(): string
+    {
+        return FormVersionService::ploVersions()[$this->form_version]
+            ?? $this->form_version
+            ?? FormVersionService::currentPlo();
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\WorkPermit;
+use App\Services\FormVersionService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
@@ -11,7 +12,9 @@ class WorkPermitPdfGenerator
 {
     public static function generate(WorkPermit $permit): string
     {
-        $templatePath = resource_path('templates/DOZVOLA-ZA-RAD.pdf');
+        $formVersion = $permit->form_version ?: FormVersionService::currentWorkPermit();
+
+        $templatePath = FormVersionService::templatePath('work-permits', $formVersion);
 
         if (! file_exists($templatePath)) {
             throw new \RuntimeException('Nedostaje PDF predložak: ' . $templatePath);

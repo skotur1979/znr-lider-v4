@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Carbon\Carbon;
+use App\Services\FormVersionService;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
 
@@ -10,7 +11,9 @@ class Nr1PdfGenerator
 {
     public static function generate($referral): string
     {
-        $templatePath = resource_path('templates/NR-1 Uputnica.pdf');
+        $formVersion = $referral->form_version ?: FormVersionService::currentNr1();
+
+        $templatePath = FormVersionService::templatePath('nr1', $formVersion);
 
         $mpdf = new Mpdf([
             'mode' => 'utf-8',

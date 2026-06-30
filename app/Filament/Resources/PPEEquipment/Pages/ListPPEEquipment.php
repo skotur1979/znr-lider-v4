@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PPEEquipment\Pages;
 
+use App\Exports\PPEEquipmentExport;
 use App\Filament\Resources\PPEEquipment\PPEEquipmentResource;
 use App\Imports\PPEEquipmentImport;
 use Filament\Actions\Action;
@@ -9,55 +10,87 @@ use Filament\Actions\CreateAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Support\Facades\Storage;
 
 class ListPPEEquipment extends ListRecords
 {
     protected static string $resource = PPEEquipmentResource::class;
 
     protected function getHeaderActions(): array
-{
-    return [
-        Action::make('import_excel')
-            ->label('Import Excel')
-            ->icon('heroicon-o-arrow-up-tray')
-            ->color('success')
-            ->modalHeading('Import OZO opreme')
-            ->form([
-                FileUpload::make('excel_file')
-                    ->label('Excel datoteka')
-                    ->acceptedFileTypes([
-    'application/*',
-])
-                    ->required(),
-            ])
-            ->action(function (array $data) {
-                $file = $data['excel_file'];
+    {
+        return [
+            CreateAction::make()
+                ->label('Nova OZO oprema')
+                ->icon('heroicon-o-plus')
+                ->color('warning'),
 
-                if ($file instanceof TemporaryUploadedFile) {
-                    $path = $file->store('imports', 'local');
-                    $fullPath = Storage::disk('local')->path($path);
-                } else {
-                    $fullPath = Storage::disk('local')->path($file);
-                }
+            Action::make('export_excel')
+                ->label('Izvoz u Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->action(function () {
+                    $ids = $this->getFilteredSortedTableQuery()
+                        ->pluck('ppe_equipments.id')
+                        ->toArray();
 
-                $import = new PPEEquipmentImport();
+                    return Excel::download(
+                        new PPEEquipmentExport($ids),
+                        'registar-ozo-' . now()->format('Y-m-d') . '.xlsx'
+                    );
+                }),
 
-Excel::import($import, $fullPath);
+            Action::make('import_excel')
+                ->label('Uvoz iz Excela')
+                ->icon('heroicon-o-document-arrow-up')
+                ->color('warning')
+                ->form([
+                    FileUpload::make('excel_file')
+                        ->label('Excel datoteka')
+                        ->disk('local')
+                        ->directory('imports')
+                        ->preserveFilenames()
+                        ->acceptedFileTypes([
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'application/vnd.ms-excel',
+                        ])
+                        ->required(),
+                ])
+                ->action(function (array $data) {
+                    $file = $data['excel_file'];
 
-Notification::make()
-    ->title('Import uspješno završen')
-    ->body("Dodano: {$import->created}, ažurirano: {$import->updated}, preskočeno: {$import->skipped}.")
-    ->success()
-    ->send();
-            }),
+                    if (is_array($file)) {
+                        $file = collect($file)->first();
+                    }
 
-        CreateAction::make()
-            ->label('Nova OZO oprema')
-            ->icon('heroicon-o-plus')
-            ->color('warning'),
-    ];
-}
+                    if ($file instanceof TemporaryUploadedFile) {
+                        $path = $file->store('imports', 'local');
+                    } else {
+                        $path = (string) $file;
+                    }
+
+                    if (! Storage::disk('local')->exists($path)) {
+                        Notification::make()
+                            ->title('Excel datoteka nije pronađena')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    $import = new PPEEquipmentImport();
+
+                    Excel::import($import, Storage::disk('local')->path($path));
+
+                    Notification::make()
+                        ->title('Import uspješno završen')
+                        ->body("Dodano: {$import->created}, ažurirano: {$import->updated}, preskočeno: {$import->skipped}.")
+                        ->success()
+                        ->send();
+
+                    $this->resetTable();
+                }),
+        ];
+    }
 }

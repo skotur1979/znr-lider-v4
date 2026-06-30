@@ -57,6 +57,16 @@ public function remainingSubusers(): int
         'daily_status_email_enabled',
         'weekly_status_email_enabled',
 
+        'cookies_version',
+        'dpa_version',
+        'security_version',
+        'retention_version',
+
+        'cookies_accepted_at',
+        'dpa_accepted_at',
+        'security_accepted_at',
+        'retention_accepted_at',
+
         'accepted_terms_at',
         'accepted_privacy_at',
         'terms_version',
@@ -99,6 +109,10 @@ public function remainingSubusers(): int
             'accepted_terms_at' => 'datetime',
             'accepted_privacy_at' => 'datetime',
             'newsletter_opt_in' => 'boolean',
+            'cookies_accepted_at' => 'datetime',
+            'dpa_accepted_at' => 'datetime',
+            'security_accepted_at' => 'datetime',
+            'retention_accepted_at' => 'datetime',
             'legal_consent_withdrawn_at' => 'datetime',
             'account_deletion_requested_at' => 'datetime',
             'deleted_at' => 'datetime',
@@ -116,16 +130,47 @@ public function remainingSubusers(): int
         return false;
     }
 
-    if (! $this->accepted_terms_at || ! $this->accepted_privacy_at) {
-        return false;
-    }
+    $required = [
+        'terms' => [
+            'accepted_at' => 'accepted_terms_at',
+            'version_field' => 'terms_version',
+            'config' => 'legal.terms_version',
+        ],
+        'privacy' => [
+            'accepted_at' => 'accepted_privacy_at',
+            'version_field' => 'privacy_version',
+            'config' => 'legal.privacy_version',
+        ],
+        'cookies' => [
+            'accepted_at' => 'cookies_accepted_at',
+            'version_field' => 'cookies_version',
+            'config' => 'legal.cookies_version',
+        ],
+        'dpa' => [
+            'accepted_at' => 'dpa_accepted_at',
+            'version_field' => 'dpa_version',
+            'config' => 'legal.dpa_version',
+        ],
+        'security' => [
+            'accepted_at' => 'security_accepted_at',
+            'version_field' => 'security_version',
+            'config' => 'legal.security_version',
+        ],
+        'retention' => [
+            'accepted_at' => 'retention_accepted_at',
+            'version_field' => 'retention_version',
+            'config' => 'legal.retention_version',
+        ],
+    ];
 
-    if ($this->terms_version !== config('legal.terms_version')) {
-        return false;
-    }
+    foreach ($required as $item) {
+        if (! $this->{$item['accepted_at']}) {
+            return false;
+        }
 
-    if ($this->privacy_version !== config('legal.privacy_version')) {
-        return false;
+        if ($this->{$item['version_field']} !== config($item['config'])) {
+            return false;
+        }
     }
 
     return true;

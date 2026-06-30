@@ -207,7 +207,7 @@
                 <span>
                     Upoznat/a sam s
                     <a href="{{ route('legal.cookies') }}" target="_blank">Politikom kolačića</a>
-                    verzija {{ config('legal.cookies_version') }}.
+                    verzija {{ $cookiesVersion }}.
                 </span>
             </label>
         </div>
@@ -218,7 +218,7 @@
                 <span>
                     Prihvaćam
                     <a href="{{ route('legal.dpa') }}" target="_blank">Ugovor o obradi podataka (DPA)</a>
-                    verzija {{ config('legal.dpa_version') }}.
+                    verzija {{ $dpaVersion }}.
                 </span>
             </label>
         </div>
@@ -229,7 +229,7 @@
                 <span>
                     Upoznat/a sam s
                     <a href="{{ route('legal.security') }}" target="_blank">Politikom sigurnosti</a>
-                    verzija {{ config('legal.security_version') }}.
+                    verzija {{ $securityVersion }}.
                 </span>
             </label>
         </div>
@@ -240,7 +240,7 @@
                 <span>
                     Upoznat/a sam s
                     <a href="{{ route('legal.retention') }}" target="_blank">Politikom zadržavanja i brisanja podataka</a>
-                    verzija {{ config('legal.retention_version') }}.
+                    verzija {{ $retentionVersion }}.
                 </span>
             </label>
         </div>
@@ -276,7 +276,8 @@
             <strong>PDF dokumenti:</strong><br><br>
 
             <a href="{{ route('legal.terms.pdf') }}" target="_blank">📄 Opći uvjeti korištenja PDF</a><br><br>
-            <a href="{{ route('legal.privacy.pdf') }}" target="_blank">📄 Pravila privatnosti PDF</a>
+            <a href="{{ route('legal.privacy.pdf') }}" target="_blank">📄 Pravila privatnosti PDF</a><br><br>
+            <a href="{{ route('legal.cookies.pdf') }}" target="_blank">📄 Politika kolačića PDF</a>
         </div>
 
         <div class="footer-note">

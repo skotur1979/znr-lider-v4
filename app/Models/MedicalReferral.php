@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsActivity;
+use App\Services\FormVersionService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -18,6 +19,7 @@ class MedicalReferral extends Model
         'user_id',
         'employee_id',
         'manual_entry',
+        'form_version',
 
         'referral_number',
         'referral_date',
@@ -107,5 +109,16 @@ class MedicalReferral extends Model
     {
         return ($this->employee->name ?? $this->full_name ?? 'RA-1')
             . ' - ' . ($this->referral_number ?: '-');
+    }
+    public static function formVersions(): array
+    {
+        return FormVersionService::ra1Versions();
+    }
+
+    public function getFormVersionLabelAttribute(): string
+    {
+        return FormVersionService::ra1Versions()[$this->form_version]
+            ?? $this->form_version
+            ?? FormVersionService::currentRa1();
     }
 }

@@ -31,12 +31,15 @@ class EnsureLegalAccepted
             'legal.terms.pdf',
 
             'legal.cookies',
+            'legal.cookies.pdf',
+
             'legal.dpa',
             'legal.security',
             'legal.retention',
             'legal.faq',
 
             'logout',
+            'email-2fa.*'
         )) {
             return $next($request);
         }

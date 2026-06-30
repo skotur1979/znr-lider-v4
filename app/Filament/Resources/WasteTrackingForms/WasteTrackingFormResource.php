@@ -8,6 +8,7 @@ use App\Filament\Resources\WasteTrackingForms\Pages\EditWasteTrackingForm;
 use App\Filament\Resources\WasteTrackingForms\Pages\ListWasteTrackingForms;
 use App\Filament\Resources\WasteTrackingForms\Pages\ViewWasteTrackingForm;
 use App\Models\OntoRecord;
+use App\Services\FormVersionService;
 use App\Models\WasteTrackingForm;
 use App\Services\OntoService;
 use App\Services\ActivityLogger;
@@ -69,18 +70,25 @@ class WasteTrackingFormResource extends BaseResource
     {
         return $schema->components([
             Select::make('user_id')
-    ->label('Korisnik')
-    ->relationship('user', 'name')
-    ->searchable()
-    ->preload()
-    ->required()
-    ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
-    ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
+                ->label('Korisnik')
+                ->relationship('user', 'name')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
+                ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
 
-           Hidden::make('user_id')
-    ->default(fn () => static::defaultUserId())
-    ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
-    ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
+            Hidden::make('user_id')
+                ->default(fn () => static::defaultUserId())
+                ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
+                ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
+
+            Select::make('form_version')
+                ->label('Verzija PL-O obrasca')
+                ->options(WasteTrackingForm::formVersions())
+                ->default(FormVersionService::currentPlo())
+                ->required()
+                ->helperText('Verzija se sprema uz prateći list. Stari prateći listovi ostaju na staroj verziji obrasca.'),
 
             FormSection::make('POŠILJKA OTPADA (A)')
                 ->schema([
@@ -530,6 +538,14 @@ class WasteTrackingFormResource extends BaseResource
         ->weight('bold')
         ->toggleable(),
 
+    TextColumn::make('form_version_label')
+        ->label('Verzija obrasca')
+        ->alignCenter()
+        ->badge()
+        ->wrap()
+        ->color('gray')
+        ->toggleable(),
+
     static::userTableColumn()
         ->toggleable(),
 
@@ -761,6 +777,7 @@ class WasteTrackingFormResource extends BaseResource
                 $new->user_id = static::defaultUserId();
             }
 
+            $new->form_version = $source->form_version ?: FormVersionService::currentPlo();
             $new->save();
 
             ActivityLogger::status(

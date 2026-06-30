@@ -5,6 +5,8 @@ namespace App\Filament\Resources\WorkPermits;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\WorkPermits\Pages;
 use App\Models\WorkPermit;
+use App\Services\FormVersionService;
+use Filament\Forms\Components\Select;
 use BackedEnum;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -86,6 +88,13 @@ class WorkPermitResource extends BaseResource
                 ->default(fn () => static::defaultUserId())
                 ->dehydrated(fn () => ! static::isSuperAdmin())
                 ->visible(fn () => ! static::isSuperAdmin()),
+
+                Select::make('form_version')
+                ->label('Verzija obrasca dozvole za rad')
+                ->options(WorkPermit::formVersions())
+                ->default(FormVersionService::currentWorkPermit())
+                ->required()
+                ->helperText('Verzija se sprema uz dozvolu. Stare dozvole ostaju na staroj verziji obrasca.'),
 
             Section::make('Osnovni podaci')
                 ->columnSpanFull()
@@ -316,6 +325,14 @@ class WorkPermitResource extends BaseResource
         ->alignment(Alignment::Center)
         ->toggleable(),
 
+    TextColumn::make('form_version_label')
+        ->label('Verzija obrasca')
+        ->alignCenter()
+        ->badge()
+        ->wrap()
+        ->color('gray')
+        ->toggleable(),
+
     static::userTableColumn()
         ->toggleable(),
 
@@ -470,6 +487,7 @@ class WorkPermitResource extends BaseResource
                 ? $record->user_id
                 : static::ownerId();
 
+            $newRecord->form_version = $record->form_version ?: FormVersionService::currentWorkPermit();
             $newRecord->save();
 
             Notification::make()

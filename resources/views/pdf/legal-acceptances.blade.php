@@ -5,7 +5,7 @@
     <style>
         body {
             font-family: DejaVu Sans, sans-serif;
-            font-size: 10px;
+            font-size: 9px;
             color: #111827;
         }
 
@@ -28,20 +28,23 @@
         th {
             background: #1f2937;
             color: #ffffff;
-            padding: 6px;
+            padding: 5px;
             border: 1px solid #d1d5db;
             text-align: left;
+            font-size: 8px;
         }
 
         td {
-            padding: 5px;
+            padding: 4px;
             border: 1px solid #d1d5db;
             vertical-align: top;
+            font-size: 8px;
         }
 
         .small {
-            font-size: 8px;
+            font-size: 7px;
             color: #374151;
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -62,8 +65,10 @@
                 <th>Organizacija</th>
                 <th>Uvjeti</th>
                 <th>Privatnost</th>
+                <th>Kolačići</th>
                 <th>DPA</th>
                 <th>Sigurnost</th>
+                <th>Zadržavanje</th>
                 <th>Newsletter</th>
                 <th>IP</th>
             </tr>
@@ -72,29 +77,38 @@
             @foreach ($records as $record)
                 <tr>
                     <td>{{ optional($record->accepted_at)->format('d.m.Y. H:i') }}</td>
-                    <td>{{ $record->user_name }}</td>
-                    <td>{{ $record->user_email }}</td>
+                    <td>{{ $record->user_name ?: '-' }}</td>
+                    <td>{{ $record->user_email ?: '-' }}</td>
                     <td>{{ $record->organization_name ?: '-' }}</td>
-                    <td>{{ $record->terms_version }}</td>
-
-                    <td>{{ $record->privacy_version }}</td>
-
+                    <td>{{ $record->terms_version ?: '-' }}</td>
+                    <td>{{ $record->privacy_version ?: '-' }}</td>
+                    <td>{{ $record->cookies_version ?: '-' }}</td>
                     <td>{{ $record->dpa_version ?: '-' }}</td>
-
                     <td>{{ $record->security_version ?: '-' }}</td>
-
+                    <td>{{ $record->retention_version ?: '-' }}</td>
                     <td>{{ $record->newsletter_opt_in ? 'Da' : 'Ne' }}</td>
-
                     <td>{{ $record->ip_address ?: '-' }}</td>
                 </tr>
                 <tr>
-                    <td colspan="10" class="small">
+                    <td colspan="12" class="small">
                         Preglednik / uređaj: {{ $record->user_agent ?: '-' }}
-                        @if(!empty($record->accepted_documents))
-                    <br>
-                    Paket dokumenata:
-                    {{ implode(', ', array_keys($record->accepted_documents)) }}
-                @endif
+
+                        @php
+                            $documents = $record->accepted_documents;
+
+                            if (is_string($documents)) {
+                                $decoded = json_decode($documents, true);
+                                $documents = is_array($decoded) ? $decoded : [];
+                            }
+
+                            $documents = is_array($documents) ? $documents : [];
+                        @endphp
+
+                        @if(!empty($documents))
+                            <br>
+                            Paket dokumenata:
+                            {{ implode(', ', array_values($documents)) }}
+                        @endif
                     </td>
                 </tr>
             @endforeach

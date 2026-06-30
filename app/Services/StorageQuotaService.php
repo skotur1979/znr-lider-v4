@@ -11,6 +11,7 @@ use App\Models\LearningMaterial;
 use App\Models\Machine;
 use App\Models\Miscellaneous;
 use App\Models\Observation;
+use App\Models\PPEEquipment;
 use App\Models\RiskAttachment;
 use App\Models\User;
 use Illuminate\Support\Facades\Schema;
@@ -48,6 +49,7 @@ class StorageQuotaService
             Observation::class => ['picture_path'],
             Incident::class => ['image_path', 'investigation_report'],
             LearningMaterial::class => ['files'],
+            PPEEquipment::class => ['attachments'],
         ];
 
         foreach ($tracked as $modelClass => $fields) {
@@ -72,7 +74,7 @@ class StorageQuotaService
                 $query->withTrashed();
             }
 
-            if ($modelClass === \App\Models\RiskAttachment::class) {
+            if ($modelClass === RiskAttachment::class) {
                 $query->whereHas('riskAssessment', function ($q) use ($ownerUserIds) {
                     $q->whereIn('user_id', $ownerUserIds);
                 });
@@ -98,7 +100,7 @@ class StorageQuotaService
                     }
 
                     if (! is_array($files)) {
-                        continue;
+                        $files = [$files];
                     }
 
                     foreach ($files as $file) {
@@ -161,16 +163,16 @@ class StorageQuotaService
     }
 
     public function usageText(int $ownerId): string
-{
-    $usedMb = $this->usedMbForOwner($ownerId);
-    $quotaMb = $this->quotaMbForOwner($ownerId);
+    {
+        $usedMb = $this->usedMbForOwner($ownerId);
+        $quotaMb = $this->quotaMbForOwner($ownerId);
 
-    if ($usedMb < 1024) {
-        return round($usedMb, 2) . ' MB / ' . round($quotaMb / 1024, 2) . ' GB';
+        if ($usedMb < 1024) {
+            return round($usedMb, 2) . ' MB / ' . round($quotaMb / 1024, 2) . ' GB';
+        }
+
+        return round($usedMb / 1024, 2) . ' GB / ' . round($quotaMb / 1024, 2) . ' GB';
     }
-
-    return round($usedMb / 1024, 2) . ' GB / ' . round($quotaMb / 1024, 2) . ' GB';
-}
 
     public function remainingText(int $ownerId): string
     {

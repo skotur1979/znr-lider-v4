@@ -20,11 +20,13 @@ class PPEEquipment extends Model
         'standard',
         'duration_months',
         'is_active',
+        'attachments',
     ];
 
     protected $casts = [
         'duration_months' => 'integer',
         'is_active' => 'boolean',
+        'attachments' => 'array',
     ];
 
     public function user(): BelongsTo
