@@ -27,6 +27,15 @@ class GlobalSearch extends Page
         'fires' => [],
         'miscellaneous' => [],
         'chemicals' => [],
+        'medical_referrals' => [],
+        'night_work_referrals' => [],
+        'documentation_items' => [],
+        'incidents' => [],
+        'kpis' => [],
+        'observations' => [],
+        'work_tasks' => [],
+        'expenses' => [],
+        'learning_materials' => [],
     ];
 
     public function mount(): void
