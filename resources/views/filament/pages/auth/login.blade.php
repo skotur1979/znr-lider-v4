@@ -442,6 +442,34 @@
                 align-items: flex-start;
                 flex-direction: column;
             }
+            .znr-test-notice {
+                margin-top: 14px;
+                padding: 16px 18px;
+                border-radius: 18px;
+                background: linear-gradient(
+                    135deg,
+                    rgba(245, 158, 11, .12),
+                    rgba(234, 88, 12, .05)
+                );
+                border: 1px solid rgba(245, 158, 11, .28);
+            }
+
+            .znr-test-title {
+                color: #fbbf24;
+                font-size: 14px;
+                font-weight: 900;
+                margin-bottom: 10px;
+            }
+
+            .znr-test-text {
+                color: #e5e7eb;
+                font-size: 13px;
+                line-height: 1.6;
+            }
+
+            .znr-test-text + .znr-test-text {
+                margin-top: 8px;
+            }
         }
     </style>
 
@@ -547,9 +575,21 @@
                     <div class="znr-trust-item">✓ Višekorisnički sustav organizacije</div>
                 </div>
 
-                <div class="znr-contact">
-                    <strong>Kontakt podaci</strong>
-                    <a href="mailto:znr.lider@gmail.com">znr.lider@gmail.com</a>
+                <div class="znr-test-notice">
+                    <div class="znr-test-title">
+                        ⚠ TESTNA VERZIJA APLIKACIJE
+                    </div>
+
+                    <div class="znr-test-text">
+                        ZNR LIDER trenutno se nalazi u fazi razvoja i internog testiranja.
+                        Aplikacija se koristi isključivo za vlastite potrebe radi razvoja,
+                        provjere funkcionalnosti i ispitivanja rada sustava.
+                    </div>
+
+                    <div class="znr-test-text">
+                        Sustav nije dostupan za komercijalno korištenje niti se za njegovo
+                        korištenje naplaćuje bilo kakva naknada.
+                    </div>
                 </div>
             </section>
 

@@ -31,6 +31,66 @@
                 'accent' => '#8b5cf6',
                 'accent_soft' => 'rgba(139, 92, 246, 0.14)',
             ],
+            'medical_referrals' => [
+                'label' => 'RA-1 Uputnice',
+                'icon' => '📄',
+                'accent' => '#f97316',
+                'accent_soft' => 'rgba(249, 115, 22, 0.14)',
+            ],
+            'night_work_referrals' => [
+                'label' => 'NR-1 Uputnice',
+                'icon' => '📄',
+                'accent' => '#06b6d4',
+                'accent_soft' => 'rgba(6, 182, 212, 0.14)',
+            ],
+
+            'documentation_items' => [
+                'label' => 'Dokumentacija',
+                'icon' => '🗂️',
+                'accent' => '#64748b',
+                'accent_soft' => 'rgba(100, 116, 139, 0.14)',
+            ],
+
+            'incidents' => [
+                'label' => 'Incidenti - Ozljede',
+                'icon' => '👁️',
+                'accent' => '#ef4444',
+                'accent_soft' => 'rgba(239, 68, 68, 0.14)',
+            ],
+
+            'kpis' => [
+                'label' => 'KPI',
+                'icon' => '📊',
+                'accent' => '#22c55e',
+                'accent_soft' => 'rgba(34, 197, 94, 0.14)',
+            ],
+
+            'observations' => [
+                'label' => 'Zapažanja',
+                'icon' => '⚠️',
+                'accent' => '#eab308',
+                'accent_soft' => 'rgba(234, 179, 8, 0.14)',
+            ],
+
+            'work_tasks' => [
+                'label' => 'Radni zadaci',
+                'icon' => '📋',
+                'accent' => '#3b82f6',
+                'accent_soft' => 'rgba(59, 130, 246, 0.14)',
+            ],
+
+            'expenses' => [
+                'label' => 'Troškovi',
+                'icon' => '💶',
+                'accent' => '#a855f7',
+                'accent_soft' => 'rgba(168, 85, 247, 0.14)',
+            ],
+            'learning_materials' => [
+                'label' => 'Edukacijski centar',
+                'icon' => '🎓',
+                'accent' => '#14b8a6',
+                'accent_soft' => 'rgba(20, 184, 166, 0.14)',
+            ],
         ];
 
         $visibleGroups = collect($groups)->filter(fn ($group, $key) => ! empty($results[$key] ?? []));

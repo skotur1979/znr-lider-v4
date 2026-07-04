@@ -15,7 +15,7 @@ use Filament\Support\Enums\Alignment;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class AlcoholTestsRelationManager extends RelationManager
+class EmployeeAlcoholTestsRelationManager extends RelationManager
 {
     protected static string $relationship = 'alcoholTests';
 

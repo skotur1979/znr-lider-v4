@@ -23,9 +23,9 @@ abstract class BaseResource extends Resource
         return null;
     }
 
-    protected static function user()
+    protected static function user(): ?\App\Models\User
     {
-        return Auth::user();
+    return filament()->auth()->user() ?? Auth::user();
     }
 
     protected static function isSuperAdmin(): bool

@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Filament\Facades\Filament;
 
 class EmailTwoFactorController extends Controller
 {
     public function verify(Request $request)
     {
-        $user = $request->user();
+        $user = Filament::auth()->user() ?? auth()->user();
 
         abort_unless($user && $user->isSuperAdmin(), 403);
 
@@ -29,7 +30,7 @@ class EmailTwoFactorController extends Controller
             'code' => ['required', 'digits:6'],
         ]);
 
-        $user = $request->user();
+        $user = Filament::auth()->user() ?? auth()->user();
 
         abort_unless($user && $user->isSuperAdmin(), 403);
 
@@ -63,7 +64,7 @@ class EmailTwoFactorController extends Controller
 
     public function resend(Request $request)
     {
-        $user = $request->user();
+        $user = Filament::auth()->user() ?? auth()->user();
 
         abort_unless($user && $user->isSuperAdmin(), 403);
 
