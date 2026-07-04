@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use Filament\Facades\Filament;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -10,7 +11,7 @@ class EnsureSuperAdminEmail2FA
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
+        $user = Filament::auth()->user() ?? $request->user();
 
         if (! $user) {
             return $next($request);

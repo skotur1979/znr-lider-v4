@@ -2,46 +2,21 @@
 
 namespace App\Models;
 
+use App\Notifications\ResetPasswordNotification;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Notifications\ResetPasswordNotification;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     use HasFactory, Notifiable, SoftDeletes;
 
-public const MAX_SUBUSERS_PER_ORGANIZATION = 5;
-
-public function subusersCountForLimit(): int
-{
-    return self::query()
-        ->where('parent_user_id', $this->ownerId())
-        ->where('role', 'org_user')
-        ->withoutTrashed()
-        ->count();
-}
-
-public function canAddMoreSubusers(): bool
-{
-    return $this->subusersCountForLimit() < self::MAX_SUBUSERS_PER_ORGANIZATION;
-}
-
-public function subusersLimitText(): string
-{
-    return $this->subusersCountForLimit() . ' / ' . self::MAX_SUBUSERS_PER_ORGANIZATION;
-}
-
-public function remainingSubusers(): int
-{
-    return max(
-        0,
-        self::MAX_SUBUSERS_PER_ORGANIZATION - $this->subusersCountForLimit()
-    );
-}
+    public const MAX_SUBUSERS_PER_ORGANIZATION = 5;
 
     protected $fillable = [
         'name',
@@ -56,23 +31,19 @@ public function remainingSubusers(): int
         'is_active',
         'daily_status_email_enabled',
         'weekly_status_email_enabled',
-
         'cookies_version',
         'dpa_version',
         'security_version',
         'retention_version',
-
         'cookies_accepted_at',
         'dpa_accepted_at',
         'security_accepted_at',
         'retention_accepted_at',
-
         'accepted_terms_at',
         'accepted_privacy_at',
         'terms_version',
         'privacy_version',
         'newsletter_opt_in',
-
         'legal_consent_withdrawn_at',
         'legal_consent_withdrawn_reason',
         'account_deletion_requested_at',
@@ -80,10 +51,8 @@ public function remainingSubusers(): int
         'account_status',
         'gdpr_request_status',
         'gdpr_request_processed_at',
-
         'last_activity_at',
         'storage_quota_mb',
-
         'email_2fa_code_hash',
         'email_2fa_expires_at',
         'email_2fa_verified_at',
@@ -124,77 +93,17 @@ public function remainingSubusers(): int
         ];
     }
 
-    public function hasAcceptedCurrentLegalTerms(): bool
-{
-    if ($this->legal_consent_withdrawn_at) {
-        return false;
-    }
-
-    $required = [
-        'terms' => [
-            'accepted_at' => 'accepted_terms_at',
-            'version_field' => 'terms_version',
-            'config' => 'legal.terms_version',
-        ],
-        'privacy' => [
-            'accepted_at' => 'accepted_privacy_at',
-            'version_field' => 'privacy_version',
-            'config' => 'legal.privacy_version',
-        ],
-        'cookies' => [
-            'accepted_at' => 'cookies_accepted_at',
-            'version_field' => 'cookies_version',
-            'config' => 'legal.cookies_version',
-        ],
-        'dpa' => [
-            'accepted_at' => 'dpa_accepted_at',
-            'version_field' => 'dpa_version',
-            'config' => 'legal.dpa_version',
-        ],
-        'security' => [
-            'accepted_at' => 'security_accepted_at',
-            'version_field' => 'security_version',
-            'config' => 'legal.security_version',
-        ],
-        'retention' => [
-            'accepted_at' => 'retention_accepted_at',
-            'version_field' => 'retention_version',
-            'config' => 'legal.retention_version',
-        ],
-    ];
-
-    foreach ($required as $item) {
-        if (! $this->{$item['accepted_at']}) {
-            return false;
-        }
-
-        if ($this->{$item['version_field']} !== config($item['config'])) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-    public function hasRequestedAccountDeletion(): bool
+    public function canAccessPanel(Panel $panel): bool
     {
-        return (bool) $this->account_deletion_requested_at;
-    }
-
-    public function parentUser(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'parent_user_id');
-    }
-
-    public function subusers(): HasMany
-    {
-        return $this->hasMany(User::class, 'parent_user_id');
+        return $this->isSuperAdmin()
+            || $this->isOrgAdmin()
+            || $this->isOrgUser();
     }
 
     public function isSuperAdmin(): bool
     {
         return (bool) ($this->is_admin ?? false)
-            || in_array($this->role, ['admin', 'super_admin'], true);
+            || in_array($this->role, ['admin', 'super_admin', 'superadmin'], true);
     }
 
     public function isOrgAdmin(): bool
@@ -226,6 +135,30 @@ public function remainingSubusers(): int
         return $this;
     }
 
+    public function subusersCountForLimit(): int
+    {
+        return self::query()
+            ->where('parent_user_id', $this->ownerId())
+            ->where('role', 'org_user')
+            ->withoutTrashed()
+            ->count();
+    }
+
+    public function canAddMoreSubusers(): bool
+    {
+        return $this->subusersCountForLimit() < self::MAX_SUBUSERS_PER_ORGANIZATION;
+    }
+
+    public function subusersLimitText(): string
+    {
+        return $this->subusersCountForLimit() . ' / ' . self::MAX_SUBUSERS_PER_ORGANIZATION;
+    }
+
+    public function remainingSubusers(): int
+    {
+        return max(0, self::MAX_SUBUSERS_PER_ORGANIZATION - $this->subusersCountForLimit());
+    }
+
     public function moduleAccess(): array
     {
         if ($this->isSuperAdmin()) {
@@ -255,17 +188,61 @@ public function remainingSubusers(): int
         return $this->isOrgAdmin() && $this->can_manage_subusers;
     }
 
+    public function hasAcceptedCurrentLegalTerms(): bool
+    {
+        if ($this->legal_consent_withdrawn_at) {
+            return false;
+        }
+
+        $required = [
+            'terms' => ['accepted_at' => 'accepted_terms_at', 'version_field' => 'terms_version', 'config' => 'legal.terms_version'],
+            'privacy' => ['accepted_at' => 'accepted_privacy_at', 'version_field' => 'privacy_version', 'config' => 'legal.privacy_version'],
+            'cookies' => ['accepted_at' => 'cookies_accepted_at', 'version_field' => 'cookies_version', 'config' => 'legal.cookies_version'],
+            'dpa' => ['accepted_at' => 'dpa_accepted_at', 'version_field' => 'dpa_version', 'config' => 'legal.dpa_version'],
+            'security' => ['accepted_at' => 'security_accepted_at', 'version_field' => 'security_version', 'config' => 'legal.security_version'],
+            'retention' => ['accepted_at' => 'retention_accepted_at', 'version_field' => 'retention_version', 'config' => 'legal.retention_version'],
+        ];
+
+        foreach ($required as $item) {
+            if (! $this->{$item['accepted_at']}) {
+                return false;
+            }
+
+            if ($this->{$item['version_field']} !== config($item['config'])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function hasRequestedAccountDeletion(): bool
+    {
+        return (bool) $this->account_deletion_requested_at;
+    }
+
+    public function parentUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'parent_user_id');
+    }
+
+    public function subusers(): HasMany
+    {
+        return $this->hasMany(User::class, 'parent_user_id');
+    }
+
     public function operationalLogs(): HasMany
     {
-        return $this->hasMany(\App\Models\OperationalLog::class);
+        return $this->hasMany(OperationalLog::class);
     }
 
     public function legalAcceptances(): HasMany
     {
-        return $this->hasMany(\App\Models\LegalAcceptance::class);
+        return $this->hasMany(LegalAcceptance::class);
     }
+
     public function sendPasswordResetNotification($token): void
     {
-    $this->notify(new ResetPasswordNotification($token));
+        $this->notify(new ResetPasswordNotification($token));
     }
 }
