@@ -251,15 +251,28 @@ class ItemsRelationManager extends RelationManager
                     ->alignCenter()
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                ImageColumn::make('signature')
+                TextColumn::make('signature')
                     ->label('Potpis')
-                    ->disk('public')
-                    ->height(40)
-                    ->width(100)
-                    ->extraImgAttributes([
-                        'class' => 'bg-white rounded-md p-0.5 ring-1 ring-gray-300 dark:ring-gray-600',
-                        'style' => 'object-fit:contain;',
-                    ])
+                    ->html()
+                    ->state(function ($record): string {
+                        if (blank($record->signature)) {
+                            return '<span style="color:#6b7280;">—</span>';
+                        }
+                
+                        $url = str_starts_with($record->signature, 'data:image')
+                            ? $record->signature
+                            : route('file.preview', ['file' => ltrim($record->signature, '/')]);
+                
+                        return '<img src="' . e($url) . '" style="
+                            width:120px;
+                            height:45px;
+                            object-fit:contain;
+                            background:white;
+                            border:1px solid #d1d5db;
+                            border-radius:6px;
+                            padding:2px;
+                        " />';
+                    })
                     ->toggleable(),
             ])
             ->filters([
