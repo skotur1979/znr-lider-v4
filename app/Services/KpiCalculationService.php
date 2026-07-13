@@ -399,20 +399,20 @@ class KpiCalculationService
         if (! class_exists(Incident::class) || ! Schema::hasTable('incidents')) {
             return null;
         }
-
-        $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
-
+    
         $lastLta = $this->userScopedQuery(Incident::query())
             ->where('type_of_incident', 'LTA')
-            ->whereDate('date_occurred', '<=', $periodEnd->toDateString())
+            ->whereNotNull('date_occurred')
             ->orderByDesc('date_occurred')
             ->first();
-
+    
         if (! $lastLta?->date_occurred) {
             return null;
         }
-
-        return (float) Carbon::parse($lastLta->date_occurred)->diffInDays($periodEnd);
+    
+        return (float) Carbon::parse($lastLta->date_occurred)
+            ->startOfDay()
+            ->diffInDays(now()->startOfDay());
     }
 
     protected function ltaCount(int $month, int $year): ?float
