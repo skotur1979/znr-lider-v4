@@ -844,38 +844,103 @@ class WasteTrackingFormResource extends BaseResource
             ->toArray();
     }
 
-    protected static function generateDocumentNumberFromOnto(?OntoRecord $ontoRecord): string
+    public static function generateDocumentNumberFromOnto(?OntoRecord $ontoRecord): string
     {
         if (! $ontoRecord) {
             return '';
         }
-
+    
         $ontoRecord->loadMissing([
             'wasteType',
+            'organization',
             'organizationLocation.organization',
         ]);
-
-        $rawWasteCode = (string) ($ontoRecord->wasteType?->waste_code ?? '');
-        $ploWasteCode = preg_replace('/\s+/', '', $rawWasteCode);
-
-        $oib = preg_replace('/\D/', '', (string) ($ontoRecord->organizationLocation?->organization?->oib ?? ''));
-
-        $unitCode = str_pad((string) ($ontoRecord->organizationLocation?->unit_code ?? '001'), 3, '0', STR_PAD_LEFT);
-        $internalCode = str_pad((string) ($ontoRecord->organizationLocation?->internal_code ?? '001'), 3, '0', STR_PAD_LEFT);
-
-        $prefix = $ploWasteCode . '-' . $oib . '-' . $unitCode . $internalCode;
-
-        $query = static::getModel()::query();
-
-        if (! static::isSuperAdmin()) {
-            $query->where('user_id', static::ownerId());
-        }
-
-        $nextOrdinal = $query
+    
+        $wasteCode = preg_replace(
+            '/\D/',
+            '',
+            (string) ($ontoRecord->wasteType?->waste_code ?? '')
+        );
+    
+        $oib = preg_replace(
+            '/\D/',
+            '',
+            (string) (
+                $ontoRecord->organization?->oib
+                ?? $ontoRecord->organizationLocation?->organization?->oib
+                ?? ''
+            )
+        );
+    
+        // Prva tri znaka – oznaka organizacijske jedinice.
+        // Ako oznaka nije unesena, koristi se 000.
+        $unitCodeRaw = preg_replace(
+            '/\D/',
+            '',
+            (string) ($ontoRecord->organizationLocation?->unit_code ?? '')
+        );
+    
+        $unitCode = filled($unitCodeRaw)
+            ? substr(str_pad($unitCodeRaw, 3, '0', STR_PAD_LEFT), -3)
+            : '000';
+    
+        // Druga tri znaka – interna oznaka lokacije.
+        // Ako nije unesena, koristi se 000.
+        $internalCodeRaw = preg_replace(
+            '/\D/',
+            '',
+            (string) ($ontoRecord->organizationLocation?->internal_code ?? '')
+        );
+    
+        $internalCode = filled($internalCodeRaw)
+            ? substr(str_pad($internalCodeRaw, 3, '0', STR_PAD_LEFT), -3)
+            : '000';
+    
+        $prefix = $wasteCode
+            . '-'
+            . $oib
+            . '-'
+            . $unitCode
+            . $internalCode;
+    
+        $year = (int) ($ontoRecord->year ?: now()->year);
+    
+        /*
+         * Traži najveći redni broj koji je već korišten za isti prefiks
+         * i istu godinu. Uključuju se i deaktivirani zapisi kako se isti
+         * broj ne bi ponovno koristio.
+         */
+        $existingNumbers = static::getModel()::query()
+            ->withTrashed()
             ->where('document_number', 'like', $prefix . '-%')
-            ->count() + 1;
-
-        return $prefix . '-' . $nextOrdinal;
+            ->whereHas('ontoRecord', function (Builder $query) use ($year): void {
+                $query->where('year', $year);
+            });
+    
+        if (! static::isSuperAdmin()) {
+            $existingNumbers->where('user_id', static::ownerId());
+        }
+    
+        $highestOrdinal = $existingNumbers
+            ->pluck('document_number')
+            ->map(function (?string $documentNumber) use ($prefix): int {
+                if (! $documentNumber) {
+                    return 0;
+                }
+    
+                $suffix = str_replace($prefix . '-', '', $documentNumber);
+    
+                return ctype_digit($suffix)
+                    ? (int) $suffix
+                    : 0;
+            })
+            ->max() ?? 0;
+    
+        $nextOrdinal = $highestOrdinal + 1;
+    
+        return $prefix
+            . '-'
+            . str_pad((string) $nextOrdinal, 2, '0', STR_PAD_LEFT);
     }
 
     private static function isOnlyTrashed(HasTable $livewire): bool

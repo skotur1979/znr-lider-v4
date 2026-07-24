@@ -223,28 +223,35 @@ class UserResource extends Resource
                 ->unique(ignoreRecord: true),
 
             TextInput::make('password')
-                ->label('Lozinka')
+                ->label(fn (string $operation): string =>
+                    $operation === 'create' ? 'Lozinka' : 'Nova lozinka'
+                )
                 ->password()
                 ->revealable()
-                ->required(fn (string $operation) => $operation === 'create')
-                ->dehydrated(fn ($state) => filled($state)),
+                ->required(fn (string $operation): bool => $operation === 'create')
+                ->dehydrated(fn (?string $state): bool => filled($state))
+                ->helperText(fn (string $operation): ?string =>
+                    $operation === 'edit'
+                        ? 'Ostavite prazno ako ne želite promijeniti postojeću lozinku.'
+                        : null
+                ),
 
             Select::make('role')
                 ->label('Uloga')
+                ->options([
+                    'org_admin' => 'Glavni korisnik organizacije',
+                    'org_user' => 'Podkorisnik organizacije',
+                ])
+                ->default(fn () => $authUser?->isSuperAdmin() ? 'org_admin' : 'org_user')
                 ->required()
-                ->options(function () use ($authUser) {
-                    if ($authUser?->isSuperAdmin()) {
-                        return [
-                            'org_admin' => 'Glavni korisnik organizacije',
-                            'org_user' => 'Podkorisnik organizacije',
-                        ];
-                    }
-
-                    return [
-                        'org_user' => 'Podkorisnik organizacije',
-                    ];
-                })
-                ->default(fn () => $authUser?->isSuperAdmin() ? 'org_admin' : 'org_user'),
+                ->native(false)
+                ->disabled(fn (): bool => ! Auth::user()?->isSuperAdmin())
+                ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin())
+                ->helperText(fn (): ?string =>
+                    Auth::user()?->isSuperAdmin()
+                        ? 'Superadmin može promijeniti ulogu korisnika.'
+                        : 'Ulogu korisnika može promijeniti samo superadmin.'
+                ),
 
             Placeholder::make('subusers_limit_info')
                 ->label('Podkorisnici organizacije')

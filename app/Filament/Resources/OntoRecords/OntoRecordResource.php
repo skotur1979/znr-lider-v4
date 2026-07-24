@@ -41,6 +41,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use RuntimeException;
+use App\Filament\Resources\WasteTrackingForms\WasteTrackingFormResource;
 
 class OntoRecordResource extends BaseResource
 {
@@ -124,8 +125,20 @@ class OntoRecordResource extends BaseResource
 
                     Select::make('waste_type_id')
                         ->label('Vrsta otpada')
-                        ->relationship('wasteType', 'name')
-                        ->getOptionLabelFromRecordUsing(fn (WasteType $record) => $record->display_name)
+                        ->relationship(
+                            name: 'wasteType',
+                            titleAttribute: 'name',
+                            modifyQueryUsing: function (Builder $query): Builder {
+                                if (static::isSuperAdmin()) {
+                                    return $query;
+                                }
+                    
+                                return $query->where('user_id', static::ownerId());
+                            },
+                        )
+                        ->getOptionLabelFromRecordUsing(
+                            fn (WasteType $record): string => $record->display_name
+                        )
                         ->searchable(['waste_code', 'name'])
                         ->preload()
                         ->required(),
@@ -296,7 +309,17 @@ class OntoRecordResource extends BaseResource
 
                 SelectFilter::make('waste_type_id')
                     ->label('Vrsta otpada')
-                    ->relationship('wasteType', 'name')
+                    ->relationship(
+                        name: 'wasteType',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: function (Builder $query): Builder {
+                            if (static::isSuperAdmin()) {
+                                return $query;
+                            }
+                
+                            return $query->where('user_id', static::ownerId());
+                        },
+                    )
                     ->searchable()
                     ->preload(),
 
@@ -435,55 +458,135 @@ class OntoRecordResource extends BaseResource
                         }),
 
                     Action::make('create_tracking_form')
-                        ->label('Novi prateći list')
-                        ->icon('heroicon-o-document-text')
-                        ->color('info')
-                        ->visible(fn (OntoRecord $record) => ! $record->is_closed)
-                        ->form([
-                            TextInput::make('document_number')
-                                ->label('Broj PL-O')
-                                ->maxLength(255),
+    ->label('Novi prateći list')
+    ->icon('heroicon-o-document-text')
+    ->color('info')
+    ->visible(fn (OntoRecord $record): bool => ! $record->is_closed)
 
-                            DatePicker::make('handover_date')
-                                ->label('Datum predaje')
-                                ->native(false)
-                                ->default(now()),
+    ->fillForm(function (OntoRecord $record): array {
+        $record->loadMissing([
+            'organization',
+            'organizationLocation',
+            'wasteType',
+        ]);
 
-                            TextInput::make('quantity_kg')
-                                ->label('Količina (kg)')
-                                ->required()
-                                ->numeric()
-                                ->minValue(0.01),
+        return [
+            'document_number' => WasteTrackingFormResource::generateDocumentNumberFromOnto($record),
+            'handover_date' => now(),
+            'quantity_kg' => null,
+            'description' => $record->wasteType?->name ?? '',
+            'note' => null,
+        ];
+    })
 
-                            Textarea::make('description')
-                                ->label('Opis')
-                                ->rows(2)
-                                ->default(fn (OntoRecord $record) => $record->wasteType?->name),
+    ->form([
+        TextInput::make('document_number')
+            ->label('Broj PL-O')
+            ->required()
+            ->maxLength(255)
+            ->helperText('Broj je automatski predložen, ali ga možete ručno promijeniti.'),
 
-                            Textarea::make('note')
-                                ->label('Napomena')
-                                ->rows(3),
-                        ])
-                        ->action(function (OntoRecord $record, array $data): void {
-                            WasteTrackingForm::create([
-                                'user_id' => static::ownerId(),
-                                'onto_record_id' => $record->id,
-                                'document_number' => $data['document_number'] ?? null,
-                                'handover_date' => $data['handover_date'] ?? now()->format('Y-m-d'),
-                                'quantity_kg' => $data['quantity_kg'],
-                                'description' => $data['description'] ?? $record->wasteType?->name,
-                                'sender_name' => $record->organization?->company_name,
-                                'sender_oib' => $record->organization?->oib,
-                                'sender_address' => $record->organizationLocation?->address ?? $record->organization?->address,
-                                'note' => $data['note'] ?? null,
-                            ]);
+        DatePicker::make('handover_date')
+            ->label('Datum predaje')
+            ->native(false)
+            ->displayFormat('d.m.Y.')
+            ->required(),
 
-                            Notification::make()
-                                ->title('Prateći list je kreiran.')
-                                ->body('Otvoren je kao nacrt i možeš ga dalje urediti u modulu Prateći listovi.')
-                                ->success()
-                                ->send();
-                        }),
+        TextInput::make('quantity_kg')
+            ->label('Količina (kg)')
+            ->required()
+            ->numeric()
+            ->minValue(0.01),
+
+        Textarea::make('description')
+            ->label('Opis otpada')
+            ->rows(2)
+            ->required(),
+
+        Textarea::make('note')
+            ->label('Napomena')
+            ->rows(3),
+    ])
+
+            ->action(function (OntoRecord $record, array $data): void {
+                $record->loadMissing([
+                    'organization',
+                    'organizationLocation',
+                    'wasteType',
+                ]);
+        
+                $rawWasteCode = (string) ($record->wasteType?->waste_code ?? '');
+        
+                $wasteCodeDigits = preg_replace(
+                    '/\D/',
+                    '',
+                    str_replace('*', '', $rawWasteCode)
+                );
+        
+                $displayWasteCode = '';
+        
+                if ($wasteCodeDigits !== '') {
+                    $displayWasteCode = trim(
+                        chunk_split($wasteCodeDigits, 2, ' ')
+                    );
+        
+                    if (str_contains($rawWasteCode, '*')) {
+                        $displayWasteCode .= '*';
+                    }
+                }
+        
+                $description = filled($data['description'] ?? null)
+                    ? trim((string) $data['description'])
+                    : (string) ($record->wasteType?->name ?? '');
+        
+                $trackingForm = WasteTrackingForm::create([
+                    'user_id' => static::ownerId(),
+                    'onto_record_id' => $record->id,
+        
+                    'document_number' => filled($data['document_number'] ?? null)
+                        ? trim((string) $data['document_number'])
+                        : WasteTrackingFormResource::generateDocumentNumberFromOnto($record),
+        
+                    'handover_date' => $data['handover_date'] ?? now(),
+                    'quantity_kg' => $data['quantity_kg'],
+        
+                    'waste_code_manual' => $displayWasteCode,
+                    'waste_description' => $description,
+                    'description' => $description,
+        
+                    'waste_kind' => str_contains($rawWasteCode, '*')
+                        ? 'opasni'
+                        : 'neopasni',
+        
+                    'sender_name' => $record->organization?->company_name,
+                    'sender_person_name' => $record->organization?->company_name,
+                    'sender_oib' => $record->organization?->oib,
+                    'sender_nkd_code' => $record->organization?->nkd_code,
+                    'sender_contact_person' => $record->organization?->contact_person,
+                    'sender_contact_data' => $record->organization?->contact_data,
+        
+                    'sender_address' => $record->organizationLocation?->address
+                        ?? $record->organization?->address,
+        
+                    'dispatch_point' => $record->organizationLocation?->address
+                        ?? $record->organization?->address,
+        
+                    'note' => $data['note'] ?? null,
+                    'status' => 'draft',
+                ]);
+        
+                Notification::make()
+                    ->title('Prateći list je kreiran.')
+                    ->body('Broj pratećeg lista, ključni broj i opis otpada automatski su popunjeni.')
+                    ->success()
+                    ->send();
+        
+                redirect(
+                    WasteTrackingFormResource::getUrl('edit', [
+                        'record' => $trackingForm,
+                    ])
+                );
+            }),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')

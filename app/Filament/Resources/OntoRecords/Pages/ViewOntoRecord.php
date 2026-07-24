@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\OntoRecords\Pages;
 
 use App\Filament\Resources\OntoRecords\OntoRecordResource;
+use App\Filament\Resources\WasteTrackingForms\WasteTrackingFormResource;
 use App\Models\WasteTrackingForm;
 use App\Services\OntoService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -16,6 +17,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
 use RuntimeException;
+
 
 class ViewOntoRecord extends ViewRecord
 {
@@ -150,8 +152,8 @@ class ViewOntoRecord extends ViewRecord
                     ]);
 
                     $pdf = Pdf::loadView('pdf.onto-record', [
-    'record' => $record,
-])->setPaper('a4', 'landscape');
+            'record' => $record,
+        ])->setPaper('a4', 'landscape');
 
                     return response()->streamDownload(
                         fn () => print($pdf->output()),
@@ -160,63 +162,145 @@ class ViewOntoRecord extends ViewRecord
                 }),
 
             Action::make('create_tracking_form')
-                ->label('Novi prateći list')
-                ->icon('heroicon-o-document-text')
-                ->color('info')
-                ->visible(fn () => ! $this->record->is_closed)
-                ->form([
-                    TextInput::make('document_number')
-                        ->label('Broj PL-O')
-                        ->maxLength(255),
+    ->label('Novi prateći list')
+    ->icon('heroicon-o-document-text')
+    ->color('info')
+    ->visible(fn () => ! $this->record->is_closed)
 
-                    DatePicker::make('handover_date')
-                        ->label('Datum predaje')
-                        ->native(false)
-                        ->default(now()),
+    ->fillForm(function (): array {
+        $record = $this->record->loadMissing([
+            'organization',
+            'organizationLocation',
+            'wasteType',
+        ]);
 
-                    TextInput::make('quantity_kg')
-                        ->label('Količina (kg)')
-                        ->required()
-                        ->numeric()
-                        ->minValue(0.01),
+        return [
+            'document_number' =>
+                WasteTrackingFormResource::generateDocumentNumberFromOnto($record),
 
-                    Textarea::make('description')
-                        ->label('Opis')
-                        ->rows(2)
-                        ->default($this->record->wasteType?->name),
+            'handover_date' => now(),
+            'quantity_kg' => null,
+            'description' => $record->wasteType?->name ?? '',
+            'note' => null,
+        ];
+    })
 
-                    Textarea::make('note')
-                        ->label('Napomena')
-                        ->rows(3),
-                ])
-                ->action(function (array $data): void {
-                    WasteTrackingForm::create([
-                        'user_id' => Auth::id(),
-                        'onto_record_id' => $this->record->id,
-                        'document_number' => $data['document_number'] ?? null,
-                        'handover_date' => $data['handover_date'] ?? now()->format('Y-m-d'),
-                        'quantity_kg' => $data['quantity_kg'],
-                        'description' => $data['description'] ?? $this->record->wasteType?->name,
-                        'sender_name' => $this->record->organization?->company_name
-                            ?? $this->record->organization?->name,
-                        'sender_oib' => $this->record->organization?->oib,
-                        'sender_address' => $this->record->organizationLocation?->address
-                            ?? $this->record->organization?->address,
-                        'note' => $data['note'] ?? null,
-                    ]);
+    ->form([
+        TextInput::make('document_number')
+            ->label('Broj PL-O')
+            ->required()
+            ->maxLength(255)
+            ->helperText('Broj je automatski predložen, ali ga možete ručno promijeniti.'),
 
-                    Notification::make()
-                        ->title('Prateći list je kreiran.')
-                        ->body('Otvoren je kao nacrt u modulu Prateći listovi.')
-                        ->success()
-                        ->send();
+        DatePicker::make('handover_date')
+            ->label('Datum predaje')
+            ->native(false)
+            ->displayFormat('d.m.Y.')
+            ->required(),
 
-                    $this->redirect(static::getResource()::getUrl('view', ['record' => $this->record]));
-                }),
+        TextInput::make('quantity_kg')
+            ->label('Količina (kg)')
+            ->required()
+            ->numeric()
+            ->minValue(0.01),
+
+        Textarea::make('description')
+            ->label('Opis otpada')
+            ->rows(2)
+            ->required(),
+
+        Textarea::make('note')
+            ->label('Napomena')
+            ->rows(3),
+    ])
+
+    ->action(function (array $data): void {
+        $record = $this->record->loadMissing([
+            'organization',
+            'organizationLocation',
+            'wasteType',
+        ]);
+
+        $rawWasteCode = (string) ($record->wasteType?->waste_code ?? '');
+
+        $wasteCodeDigits = preg_replace(
+            '/\D/',
+            '',
+            str_replace('*', '', $rawWasteCode)
+        );
+
+        $displayWasteCode = '';
+
+        if ($wasteCodeDigits !== '') {
+            $displayWasteCode = trim(
+                chunk_split($wasteCodeDigits, 2, ' ')
+            );
+
+            if (str_contains($rawWasteCode, '*')) {
+                $displayWasteCode .= '*';
+            }
+        }
+
+        $description = filled($data['description'] ?? null)
+            ? trim((string) $data['description'])
+            : (string) ($record->wasteType?->name ?? '');
+
+        $trackingForm = WasteTrackingForm::create([
+            'user_id' => Auth::user()?->ownerId() ?? Auth::id(),
+            'onto_record_id' => $record->id,
+
+            'document_number' => filled($data['document_number'] ?? null)
+                ? trim((string) $data['document_number'])
+                : WasteTrackingFormResource::generateDocumentNumberFromOnto($record),
+
+            'handover_date' => $data['handover_date'] ?? now(),
+            'quantity_kg' => $data['quantity_kg'],
+
+            'waste_code_manual' => $displayWasteCode,
+            'waste_description' => $description,
+            'description' => $description,
+
+            'waste_kind' => str_contains($rawWasteCode, '*')
+                ? 'opasni'
+                : 'neopasni',
+
+            'sender_name' => $record->organization?->company_name
+                ?? $record->organization?->name,
+
+            'sender_person_name' => $record->organization?->company_name
+                ?? $record->organization?->name,
+
+            'sender_oib' => $record->organization?->oib,
+            'sender_nkd_code' => $record->organization?->nkd_code,
+            'sender_contact_person' => $record->organization?->contact_person,
+            'sender_contact_data' => $record->organization?->contact_data,
+
+            'sender_address' => $record->organizationLocation?->address
+                ?? $record->organization?->address,
+
+            'dispatch_point' => $record->organizationLocation?->address
+                ?? $record->organization?->address,
+
+            'note' => $data['note'] ?? null,
+            'status' => 'draft',
+        ]);
+
+        Notification::make()
+            ->title('Prateći list je kreiran.')
+            ->body('Broj PL-O, ključni broj i opis otpada automatski su popunjeni.')
+            ->success()
+            ->send();
+
+        $this->redirect(
+            WasteTrackingFormResource::getUrl('edit', [
+                'record' => $trackingForm,
+            ])
+        );
+    }),
         ];
     }
 
-    protected function getViewData(): array
+      protected function getViewData(): array
     {
         $record = $this->getRecord()->load([
             'organization',
