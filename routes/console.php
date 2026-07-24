@@ -28,7 +28,7 @@ Schedule::command('kpi:generate')
 
 Schedule::command('emails:send-daily-status')
     ->weekdays()
-    ->at('06:30')
+    ->at('08:30')
     ->timezone('Europe/Zagreb')
     ->withoutOverlapping()
     ->name('daily-status-email');
@@ -41,7 +41,7 @@ Schedule::command('emails:send-daily-status')
 
 Schedule::command('emails:send-weekly-status')
     ->mondays()
-    ->at('07:00')
+    ->at('08:00')
     ->timezone('Europe/Zagreb')
     ->withoutOverlapping()
     ->name('weekly-status-email');

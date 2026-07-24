@@ -8,7 +8,6 @@ use App\Services\StorageQuotaService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -64,21 +63,59 @@ class ChemicalForm
                                 Section::make('Označavanje opasnosti')
                                     ->columns(2)
                                     ->schema([
-                                        TagsInput::make('hazard_pictograms')
+                                        Select::make('hazard_pictograms')
                                             ->label('Piktogrami opasnosti')
-                                            ->suggestions([
-                                                'GHS01',
-                                                'GHS02',
-                                                'GHS03',
-                                                'GHS04',
-                                                'GHS05',
-                                                'GHS06',
-                                                'GHS07',
-                                                'GHS08',
-                                                'GHS09',
+                                            ->options([
+                                                'GHS01' => 'GHS01 – Eksplozivno',
+                                                'GHS02' => 'GHS02 – Zapaljivo',
+                                                'GHS03' => 'GHS03 – Oksidirajuće',
+                                                'GHS04' => 'GHS04 – Plin pod tlakom',
+                                                'GHS05' => 'GHS05 – Korozivno',
+                                                'GHS06' => 'GHS06 – Akutna toksičnost',
+                                                'GHS07' => 'GHS07 – Nadražujuće / štetno',
+                                                'GHS08' => 'GHS08 – Ozbiljna opasnost za zdravlje',
+                                                'GHS09' => 'GHS09 – Opasno za okoliš',
                                             ])
-                                            ->placeholder('npr. GHS05, GHS07')
+                                            ->multiple()
+                                            ->searchable()
+                                            ->preload()
+                                            ->native(false)
+                                            ->default([])
                                             ->nullable()
+                                            ->placeholder('Odaberi jedan ili više piktograma')
+                                            ->helperText('Možete odabrati više piktograma opasnosti.')
+                                            ->afterStateHydrated(function (Select $component, mixed $state): void {
+                                                if (! is_array($state)) {
+                                                    $state = filled($state) ? [$state] : [];
+                                                }
+                                        
+                                                $normalized = collect($state)
+                                                    ->flatMap(function ($value): array {
+                                                        return preg_split('/\s*[,;]\s*/', (string) $value) ?: [];
+                                                    })
+                                                    ->map(fn ($value) => strtoupper(trim($value)))
+                                                    ->filter(fn ($value) => preg_match('/^GHS0[1-9]$/', $value))
+                                                    ->unique()
+                                                    ->values()
+                                                    ->all();
+                                        
+                                                $component->state($normalized);
+                                            })
+                                            ->dehydrateStateUsing(function (mixed $state): array {
+                                                if (! is_array($state)) {
+                                                    $state = filled($state) ? [$state] : [];
+                                                }
+                                        
+                                                return collect($state)
+                                                    ->flatMap(function ($value): array {
+                                                        return preg_split('/\s*[,;]\s*/', (string) $value) ?: [];
+                                                    })
+                                                    ->map(fn ($value) => strtoupper(trim($value)))
+                                                    ->filter(fn ($value) => preg_match('/^GHS0[1-9]$/', $value))
+                                                    ->unique()
+                                                    ->values()
+                                                    ->all();
+                                            })
                                             ->columnSpanFull(),
 
                                         Select::make('h_statements')

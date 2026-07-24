@@ -502,7 +502,12 @@ class FindingsRelationManager extends RelationManager
 
             CreateAction::make()
                 ->label('Dodaj nalaz')
-                ->mutateDataUsing(fn (array $data): array => $this->mutateFindingData($data)),
+                ->modalHeading('Napravi novi nalaz')
+                ->modalSubmitActionLabel('Napravi')
+                ->modalCancelActionLabel('Odustani')
+                ->mutateDataUsing(
+                    fn (array $data): array => $this->mutateFindingData($data)
+                ),
         ])
             ->actions([
                 ActionGroup::make([

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Questions\Schemas;
 
+use App\Models\Test;
 use Filament\Forms;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
@@ -23,20 +24,40 @@ class QuestionForm
                 ->schema([
                     Select::make('test_id')
                         ->label('Test')
-                        ->relationship(
-                            name: 'test',
-                            titleAttribute: 'naziv',
-                            modifyQueryUsing: function (Builder $q) {
-                                if (! Auth::user()?->isSuperAdmin()) {
-                                    $q->where(function (Builder $qq) {
-                                        $qq->whereNull('user_id')
-                                            ->orWhere('user_id', Auth::id());
-                                    });
-                                }
+                        ->options(function (): array {
+                            $user = Auth::user();
+                    
+                            if (! $user) {
+                                return [];
                             }
-                        )
-                        ->searchable(false)
+                    
+                            $query = Test::query()
+                                ->orderBy('naziv');
+                    
+                            if (! $user->isSuperAdmin()) {
+                                $ownerId = $user->ownerId();
+                    
+                                $organizationUserIds = \App\Models\User::query()
+                                    ->where('id', $ownerId)
+                                    ->orWhere('parent_user_id', $ownerId)
+                                    ->pluck('id');
+                    
+                                $query->where(function (Builder $query) use ($organizationUserIds): void {
+                                    $query
+                                        ->whereNull('user_id')
+                                        ->orWhereIn('user_id', $organizationUserIds);
+                                });
+                            }
+                    
+                            return $query
+                                ->pluck('naziv', 'id')
+                                ->toArray();
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->native(false)
                         ->required()
+                        ->placeholder('Odaberite test')
                         ->columnSpanFull(),
 
                     TextInput::make('tekst')

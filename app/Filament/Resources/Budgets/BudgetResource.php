@@ -5,8 +5,10 @@ namespace App\Filament\Resources\Budgets;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Budgets\Pages;
 use App\Models\Budget;
+use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
+use Filament\Notifications\Notification;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
@@ -79,7 +81,7 @@ class BudgetResource extends BaseResource
                 TextColumn::make('godina')
                     ->label('Godina')
                     ->sortable(),
-static::userTableColumn(),
+                    static::userTableColumn(),
                 TextColumn::make('ukupni_budget')
                     ->label('Ukupni budžet (€)')
                     ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.') . ' €')
@@ -90,11 +92,42 @@ static::userTableColumn(),
                     ->view('filament.tables.columns.budget-status'),
             ])
             ->actions([
-                EditAction::make()->label('Uredi'),
+                EditAction::make()
+                    ->label('Uredi'),
+            
+                DeleteAction::make()
+                    ->label('Obriši')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading('Obriši budžet')
+                    ->modalDescription(
+                        'Jeste li sigurni da želite obrisati ovaj budžet?'
+                    )
+                    ->modalSubmitActionLabel('Obriši')
+                    ->modalCancelActionLabel('Odustani')
+                    ->visible(
+                        fn (Budget $record): bool =>
+                            (int) $record->expenses_count === 0
+                    ),
+            
+                Action::make('cannot_delete')
+                    ->label('Budžet se ne može obrisati dok postoje troškovi')
+                    ->icon('heroicon-o-lock-closed')
+                    ->color('gray')
+                    ->visible(
+                        fn (Budget $record): bool =>
+                            (int) $record->expenses_count > 0
+                    )
+                    ->action(function (): void {
+                        Notification::make()
+                            ->title('Brisanje budžeta nije moguće')
+                            ->body('Najprije obrišite sve troškove povezane s ovim budžetom.')
+                            ->warning()
+                            ->send();
+                    }),
             ])
-            ->bulkActions([
-                DeleteBulkAction::make()->label('Obriši označeno'),
-            ])
+            ->bulkActions([])
             ->headerActions([
                 CreateAction::make()
                     ->label('Novi budžet')
@@ -110,15 +143,19 @@ static::userTableColumn(),
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery();
+{
+    $query = parent::getEloquentQuery()
+        ->withCount('expenses');
 
-        if (Auth::user()?->isSuperAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::user()?->ownerId());
+    if (Auth::user()?->isSuperAdmin()) {
+        return $query;
     }
+
+    return $query->where(
+        'user_id',
+        Auth::user()?->ownerId()
+    );
+}
 
     public static function getNavigationBadge(): ?string
     {

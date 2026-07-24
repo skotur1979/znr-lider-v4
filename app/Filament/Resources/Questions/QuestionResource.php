@@ -120,7 +120,9 @@ class QuestionResource extends BaseResource
             ])
             ->bulkActions([
                 DeleteBulkAction::make()->label('Obriši označeno'),
-            ]);
+            ])
+            ->paginated([5, 10, 25, 50, 'all'])
+            ->defaultPaginationPageOption(10);
     }
 
     protected static function organizationUserIds(): array
