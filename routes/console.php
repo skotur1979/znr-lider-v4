@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\SystemTaskMonitor;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -10,15 +11,29 @@ Artisan::command('inspire', function () {
 
 /*
 |--------------------------------------------------------------------------
+| Scheduler heartbeat
+|--------------------------------------------------------------------------
+*/
+
+Schedule::call(function (): void {
+    app(SystemTaskMonitor::class)->heartbeat();
+})
+    ->name('system-scheduler-heartbeat')
+    ->everyMinute()
+    ->timezone('Europe/Zagreb')
+    ->withoutOverlapping();
+
+/*
+|--------------------------------------------------------------------------
 | KPI - automatsko generiranje
 |--------------------------------------------------------------------------
 */
 
 Schedule::command('kpi:generate')
+    ->name('kpi-generate')
     ->dailyAt('01:10')
     ->timezone('Europe/Zagreb')
-    ->withoutOverlapping()
-    ->name('kpi-generate');
+    ->withoutOverlapping();
 
 /*
 |--------------------------------------------------------------------------
@@ -27,11 +42,11 @@ Schedule::command('kpi:generate')
 */
 
 Schedule::command('emails:send-daily-status')
+    ->name('daily-status-email')
     ->weekdays()
     ->at('08:30')
     ->timezone('Europe/Zagreb')
-    ->withoutOverlapping()
-    ->name('daily-status-email');
+    ->withoutOverlapping();
 
 /*
 |--------------------------------------------------------------------------
@@ -40,11 +55,11 @@ Schedule::command('emails:send-daily-status')
 */
 
 Schedule::command('emails:send-weekly-status')
+    ->name('weekly-status-email')
     ->mondays()
     ->at('08:00')
     ->timezone('Europe/Zagreb')
-    ->withoutOverlapping()
-    ->name('weekly-status-email');
+    ->withoutOverlapping();
 
 /*
 |--------------------------------------------------------------------------
@@ -53,16 +68,16 @@ Schedule::command('emails:send-weekly-status')
 */
 
 Schedule::command('activitylogs:cleanup')
+    ->name('cleanup-activity-logs')
     ->dailyAt('02:00')
     ->timezone('Europe/Zagreb')
-    ->withoutOverlapping()
-    ->name('cleanup-activity-logs');
+    ->withoutOverlapping();
 
 Schedule::command('temp:cleanup')
+    ->name('cleanup-temp')
     ->dailyAt('02:15')
     ->timezone('Europe/Zagreb')
-    ->withoutOverlapping()
-    ->name('cleanup-temp');
+    ->withoutOverlapping();
 
 /*
 |--------------------------------------------------------------------------
@@ -71,10 +86,30 @@ Schedule::command('temp:cleanup')
 */
 
 Schedule::command('backup:run --only-db')
+    ->name('backup-database')
     ->dailyAt('02:30')
     ->timezone('Europe/Zagreb')
     ->withoutOverlapping()
-    ->name('backup-database');
+    ->before(function (): void {
+        app(SystemTaskMonitor::class)->start(
+            'database_backup',
+            'Dnevni backup baze'
+        );
+    })
+    ->onSuccess(function (): void {
+        app(SystemTaskMonitor::class)->success(
+            taskKey: 'database_backup',
+            taskName: 'Dnevni backup baze',
+            message: 'Dnevni backup baze uspješno je izrađen.',
+        );
+    })
+    ->onFailure(function (): void {
+        app(SystemTaskMonitor::class)->failure(
+            taskKey: 'database_backup',
+            taskName: 'Dnevni backup baze',
+            error: 'Naredba backup:run --only-db nije uspješno završena.',
+        );
+    });
 
 /*
 |--------------------------------------------------------------------------
@@ -83,10 +118,30 @@ Schedule::command('backup:run --only-db')
 */
 
 Schedule::command('backup:run')
-    ->weeklyOn(0, '03:00') // Nedjelja u 03:00
+    ->name('backup-full')
+    ->weeklyOn(0, '03:00')
     ->timezone('Europe/Zagreb')
     ->withoutOverlapping()
-    ->name('backup-full');
+    ->before(function (): void {
+        app(SystemTaskMonitor::class)->start(
+            'full_backup',
+            'Tjedni kompletni backup'
+        );
+    })
+    ->onSuccess(function (): void {
+        app(SystemTaskMonitor::class)->success(
+            taskKey: 'full_backup',
+            taskName: 'Tjedni kompletni backup',
+            message: 'Kompletni backup uspješno je izrađen.',
+        );
+    })
+    ->onFailure(function (): void {
+        app(SystemTaskMonitor::class)->failure(
+            taskKey: 'full_backup',
+            taskName: 'Tjedni kompletni backup',
+            error: 'Tjedni kompletni backup nije uspješno završen.',
+        );
+    });
 
 /*
 |--------------------------------------------------------------------------
@@ -95,7 +150,27 @@ Schedule::command('backup:run')
 */
 
 Schedule::command('backup:clean')
+    ->name('backup-clean')
     ->dailyAt('04:00')
     ->timezone('Europe/Zagreb')
     ->withoutOverlapping()
-    ->name('backup-clean');
+    ->before(function (): void {
+        app(SystemTaskMonitor::class)->start(
+            'backup_cleanup',
+            'Čišćenje starih backupa'
+        );
+    })
+    ->onSuccess(function (): void {
+        app(SystemTaskMonitor::class)->success(
+            taskKey: 'backup_cleanup',
+            taskName: 'Čišćenje starih backupa',
+            message: 'Stari backupi uspješno su očišćeni.',
+        );
+    })
+    ->onFailure(function (): void {
+        app(SystemTaskMonitor::class)->failure(
+            taskKey: 'backup_cleanup',
+            taskName: 'Čišćenje starih backupa',
+            error: 'Čišćenje starih backupa nije uspješno završeno.',
+        );
+    });
