@@ -366,16 +366,77 @@
                 margin-bottom: 12px;
             ">
 
-            {{-- cPanel hosting račun --}}
+           {{-- Hosting račun --}}
         <div>
+            @php
+                $hostingCritical = collect($hostingChecks)
+                    ->contains(fn (array $check): bool =>
+                        ($check['status'] ?? null) === 'critical'
+                    );
+
+                $hostingWarning = collect($hostingChecks)
+                    ->contains(fn (array $check): bool =>
+                        ($check['status'] ?? null) === 'warning'
+                    );
+
+                $hostingOverallStatus = match (true) {
+                    $hostingCritical => 'critical',
+                    $hostingWarning => 'warning',
+                    default => 'ok',
+                };
+
+                $hostingOverallColor = $statusColors[$hostingOverallStatus]
+                    ?? '#71717a';
+            @endphp
+
             <h2 style="
                 font-size: 20px;
                 font-weight: 700;
                 margin-bottom: 12px;
             ">
-                cPanel hosting račun
+                🖥️ Hosting račun
             </h2>
 
+            {{-- Ukupna ocjena hostinga --}}
+            <div style="
+                background: #18181b;
+                border: 2px solid {{ $hostingOverallColor }};
+                border-radius: 14px;
+                padding: 18px;
+                margin-bottom: 14px;
+            ">
+                <div style="
+                    font-size: 13px;
+                    color: #a1a1aa;
+                ">
+                    Ukupni status hosting računa
+                </div>
+
+                <div style="
+                    font-size: 22px;
+                    font-weight: 700;
+                    color: white;
+                    margin-top: 6px;
+                ">
+                    @if ($hostingOverallStatus === 'ok')
+                        ✅ HOSTING RAČUN JE U REDU
+                    @elseif ($hostingOverallStatus === 'critical')
+                        ❌ HOSTING RAČUN JE KRITIČAN
+                    @else
+                        ⚠️ HOSTING RAČUN IMA UPOZORENJE
+                    @endif
+                </div>
+
+                <div style="
+                    font-size: 13px;
+                    color: #d4d4d8;
+                    margin-top: 8px;
+                ">
+                    Provjera zauzeća prostora i broja datoteka na cPanel računu.
+                </div>
+            </div>
+
+            {{-- Pojedinačne provjere --}}
             <div class="
                 grid
                 grid-cols-1
