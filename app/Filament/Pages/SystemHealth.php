@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,8 @@ class SystemHealth extends Page
 
     public array $summary = [];
 
+    public array $hostingChecks = [];
+
     public string $backupOutput = '';
 
     public function mount(): void
@@ -66,6 +69,7 @@ class SystemHealth extends Page
         $this->loadConfigurationChecks();
         $this->loadTaskChecks();
         $this->loadServerChecks();
+        $this->loadHostingChecks();
         $this->loadBackupOutput();
         $this->calculateSummary();
     }
@@ -361,6 +365,169 @@ class SystemHealth extends Page
         }
     }
 
+    protected function loadHostingChecks(): void
+{
+    if (PHP_OS_FAMILY === 'Windows') {
+        $this->hostingChecks = [
+            [
+                'label' => 'cPanel prostor računa',
+                'value' => 'Dostupno samo na serveru',
+                'status' => 'info',
+                'note' => 'cPanel UAPI nije dostupan u lokalnom Windows okruženju.',
+            ],
+            [
+                'label' => 'cPanel broj datoteka',
+                'value' => 'Dostupno samo na serveru',
+                'status' => 'info',
+                'note' => 'Podatak o inode potrošnji učitava se na produkcijskom serveru.',
+            ],
+        ];
+
+        return;
+    }
+
+    try {
+        $result = Process::timeout(15)->run([
+            'uapi',
+            '--output=json',
+            'Quota',
+            'get_quota_info',
+        ]);
+
+        if (! $result->successful()) {
+            $this->hostingChecks = [
+                [
+                    'label' => 'cPanel kvota',
+                    'value' => 'Nije dostupna',
+                    'status' => 'warning',
+                    'note' => trim($result->errorOutput())
+                        ?: 'cPanel UAPI naredba nije uspješno izvršena.',
+                ],
+            ];
+
+            return;
+        }
+
+        $response = json_decode($result->output(), true);
+
+        $data = $response['result']['data'] ?? null;
+
+        if (! is_array($data)) {
+            $this->hostingChecks = [
+                [
+                    'label' => 'cPanel kvota',
+                    'value' => 'Neispravan odgovor',
+                    'status' => 'warning',
+                    'note' => 'cPanel UAPI nije vratio očekivane podatke.',
+                ],
+            ];
+
+            return;
+        }
+
+        $megabytesUsed = (float) ($data['megabytes_used'] ?? 0);
+        $megabyteLimit = (float) ($data['megabyte_limit'] ?? 0);
+        $megabytesRemain = (float) ($data['megabytes_remain'] ?? 0);
+
+        $inodeUsed = (int) ($data['inodes_used'] ?? 0);
+        $inodeLimit = (int) ($data['inode_limit'] ?? 0);
+        $inodeRemain = (int) ($data['inodes_remain'] ?? 0);
+
+        $storageUsedText = $this->formatBytes(
+            (int) round($megabytesUsed * 1024 * 1024)
+        );
+
+        if ($megabyteLimit > 0) {
+            $storagePercentage = round(
+                ($megabytesUsed / $megabyteLimit) * 100,
+                1
+            );
+
+            $storageStatus = match (true) {
+                $storagePercentage >= 95 => 'critical',
+                $storagePercentage >= 85 => 'warning',
+                default => 'ok',
+            };
+
+            $storageValue = number_format(
+                $storagePercentage,
+                1,
+                ',',
+                '.'
+            ) . '% zauzeto';
+
+            $storageNote =
+                'Iskorišteno: '
+                . $storageUsedText
+                . ' od '
+                . $this->formatBytes(
+                    (int) round($megabyteLimit * 1024 * 1024)
+                )
+                . '. Slobodno: '
+                . $this->formatBytes(
+                    (int) round($megabytesRemain * 1024 * 1024)
+                )
+                . '.';
+        } else {
+            $storageStatus = 'ok';
+            $storageValue = $storageUsedText . ' iskorišteno';
+            $storageNote =
+                'cPanel račun nema postavljeno ograničenje prostora u MB.';
+        }
+
+        $inodePercentage = $inodeLimit > 0
+            ? round(($inodeUsed / $inodeLimit) * 100, 1)
+            : null;
+
+        $inodeStatus = match (true) {
+            $inodePercentage === null => 'info',
+            $inodePercentage >= 95 => 'critical',
+            $inodePercentage >= 80 => 'warning',
+            default => 'ok',
+        };
+
+        $inodeValue = $inodeLimit > 0
+            ? number_format($inodePercentage, 1, ',', '.')
+                . '% iskorišteno'
+            : number_format($inodeUsed, 0, ',', '.');
+
+        $inodeNote = $inodeLimit > 0
+            ? 'Iskorišteno: '
+                . number_format($inodeUsed, 0, ',', '.')
+                . ' od '
+                . number_format($inodeLimit, 0, ',', '.')
+                . '. Preostalo: '
+                . number_format($inodeRemain, 0, ',', '.')
+                . ' datoteka i direktorija.'
+            : 'cPanel nije vratio ograničenje broja datoteka.';
+
+        $this->hostingChecks = [
+            [
+                'label' => 'cPanel prostor računa',
+                'value' => $storageValue,
+                'status' => $storageStatus,
+                'note' => $storageNote,
+            ],
+            [
+                'label' => 'cPanel broj datoteka',
+                'value' => $inodeValue,
+                'status' => $inodeStatus,
+                'note' => $inodeNote,
+            ],
+        ];
+    } catch (Throwable $exception) {
+        report($exception);
+
+        $this->hostingChecks = [
+            [
+                'label' => 'cPanel kvota',
+                'value' => 'Provjera nije uspjela',
+                'status' => 'warning',
+                'note' => $exception->getMessage(),
+            ],
+        ];
+    }
+}
     protected function loadServerChecks(): void
     {
         $diskTotal = @disk_total_space(base_path());
@@ -520,10 +687,14 @@ class SystemHealth extends Page
 
         $serverStatuses = collect($this->serverChecks)
             ->pluck('status');
+        
+            $hostingStatuses = collect($this->hostingChecks)
+            ->pluck('status');
 
         $statuses = $configurationStatuses
             ->merge($taskStatuses)
-            ->merge($serverStatuses);
+            ->merge($serverStatuses)
+            ->merge($hostingStatuses);
 
         $critical = $statuses
             ->filter(

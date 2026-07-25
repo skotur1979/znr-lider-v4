@@ -365,6 +365,75 @@
                 color: white;
                 margin-bottom: 12px;
             ">
+
+            {{-- cPanel hosting račun --}}
+        <div>
+            <h2 style="
+                font-size: 20px;
+                font-weight: 700;
+                margin-bottom: 12px;
+            ">
+                cPanel hosting račun
+            </h2>
+
+            <div class="
+                grid
+                grid-cols-1
+                md:grid-cols-2
+                gap-4
+            ">
+                @foreach ($hostingChecks as $check)
+                    @php
+                        $status = $check['status'] ?? 'info';
+
+                        $color = $statusColors[$status]
+                            ?? '#71717a';
+                    @endphp
+
+                    <div style="
+                        background: #18181b;
+                        border: 1px solid {{ $color }};
+                        border-radius: 14px;
+                        padding: 18px;
+                    ">
+                        <div style="
+                            font-size: 13px;
+                            color: #a1a1aa;
+                        ">
+                            {{ $check['label'] }}
+                        </div>
+
+                        <div style="
+                            font-size: 22px;
+                            font-weight: 700;
+                            color: white;
+                            margin-top: 6px;
+                        ">
+                            @if ($status === 'ok')
+                                ✅
+                            @elseif ($status === 'critical')
+                                ❌
+                            @elseif ($status === 'warning')
+                                ⚠️
+                            @else
+                                ℹ️
+                            @endif
+
+                            {{ $check['value'] }}
+                        </div>
+
+                        <div style="
+                            font-size: 13px;
+                            color: #d4d4d8;
+                            margin-top: 8px;
+                            line-height: 1.5;
+                        ">
+                            {{ $check['note'] }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
                 Backup status
             </h2>
 
