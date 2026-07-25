@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\SystemTaskRun;
 use BackedEnum;
+use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
@@ -20,7 +21,8 @@ class SystemHealth extends Page
 {
     protected string $view = 'filament.pages.system-health';
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedHeart;
+    protected static string|BackedEnum|null $navigationIcon =
+        Heroicon::OutlinedHeart;
 
     protected static ?string $navigationLabel = 'Status sustava';
 
@@ -28,7 +30,8 @@ class SystemHealth extends Page
 
     protected static ?string $slug = 'status-sustava';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Administracija';
+    protected static string|UnitEnum|null $navigationGroup =
+        'Administracija';
 
     protected static ?int $navigationSort = 98;
 
@@ -70,46 +73,58 @@ class SystemHealth extends Page
     protected function loadConfigurationChecks(): void
     {
         $appUrl = (string) config('app.url');
+
         $isLocalUrl = str_contains($appUrl, '127.0.0.1')
             || str_contains($appUrl, 'localhost');
 
         $storageLinked = File::exists(public_path('storage'));
 
         $backupPath = storage_path('app/private/ZNR LIDER');
+
         $backupFolderExists = File::exists($backupPath);
 
         $mailDriver = (string) config('mail.default');
+
         $queueDriver = (string) config('queue.default');
+
+        $isProduction = app()->environment('production');
+
+        $debugEnabled = (bool) config('app.debug');
+
+        $backupCommandAvailable =
+            $this->artisanCommandExists('backup:list');
 
         $this->checks = [
             [
                 'label' => 'Okruženje',
                 'value' => app()->environment(),
-                'ok' => app()->environment('production'),
-                'note' => app()->environment('production')
-                    ? 'Produkcijsko okruženje'
-                    : 'Lokalno ili testno okruženje.',
+                'status' => $isProduction ? 'ok' : 'warning',
+                'note' => $isProduction
+                    ? 'Aplikacija radi u produkcijskom okruženju.'
+                    : 'Aplikacija radi u lokalnom ili testnom okruženju.',
             ],
             [
                 'label' => 'Debug mode',
-                'value' => config('app.debug') ? 'UKLJUČEN' : 'ISKLJUČEN',
-                'ok' => ! config('app.debug'),
-                'note' => config('app.debug')
-                    ? 'Prije produkcije postaviti APP_DEBUG=false.'
-                    : 'Ispravno za produkciju.',
+                'value' => $debugEnabled ? 'UKLJUČEN' : 'ISKLJUČEN',
+                'status' => $debugEnabled ? 'warning' : 'ok',
+                'note' => $debugEnabled
+                    ? 'Za produkciju preporučuje se APP_DEBUG=false.'
+                    : 'Debug način rada ispravno je isključen.',
             ],
             [
                 'label' => 'APP URL',
                 'value' => $appUrl,
-                'ok' => ! $isLocalUrl,
+                'status' => $isLocalUrl ? 'warning' : 'ok',
                 'note' => $isLocalUrl
-                    ? 'Prije produkcije postaviti stvarnu domenu.'
-                    : 'URL izgleda produkcijski.',
+                    ? 'Postavljena je lokalna adresa aplikacije.'
+                    : 'Postavljena je produkcijska adresa aplikacije.',
             ],
             [
                 'label' => 'Mail driver',
                 'value' => $mailDriver,
-                'ok' => $mailDriver === 'smtp',
+                'status' => $mailDriver === 'smtp'
+                    ? 'ok'
+                    : 'warning',
                 'note' => $mailDriver === 'smtp'
                     ? 'SMTP slanje e-mailova je uključeno.'
                     : 'Trenutni mail driver nije SMTP.',
@@ -117,28 +132,42 @@ class SystemHealth extends Page
             [
                 'label' => 'Queue driver',
                 'value' => $queueDriver,
-                'ok' => true,
+                'status' => 'ok',
                 'note' => $queueDriver === 'sync'
-                    ? 'Sync je prihvatljiv dok se ne koristi queue worker.'
+                    ? 'Sync je prihvatljiv dok aplikacija ne koristi queue worker.'
                     : 'Za ovaj queue driver mora biti aktivan queue worker.',
             ],
             [
                 'label' => 'Storage link',
-                'value' => $storageLinked ? 'LINKED' : 'NIJE LINKED',
-                'ok' => $storageLinked,
-                'note' => 'Provjera poveznice public/storage.',
+                'value' => $storageLinked
+                    ? 'LINKED'
+                    : 'NIJE LINKED',
+                'status' => $storageLinked
+                    ? 'ok'
+                    : 'critical',
+                'note' => $storageLinked
+                    ? 'Poveznica public/storage postoji.'
+                    : 'Nedostaje poveznica public/storage.',
             ],
             [
                 'label' => 'Backup folder',
-                'value' => $backupFolderExists ? 'Postoji' : 'Nije pronađen',
-                'ok' => $backupFolderExists,
-                'note' => 'Provjera mape storage/app/private/ZNR LIDER.',
+                'value' => $backupFolderExists
+                    ? 'Postoji'
+                    : 'Nije pronađen',
+                'status' => $backupFolderExists
+                    ? 'ok'
+                    : 'critical',
+                'note' => $backupFolderExists
+                    ? 'Mapa za spremanje backupa je dostupna.'
+                    : 'Mapa storage/app/private/ZNR LIDER nije pronađena.',
             ],
             [
                 'label' => 'Backup command',
                 'value' => 'backup:list',
-                'ok' => $this->artisanCommandExists('backup:list'),
-                'note' => $this->artisanCommandExists('backup:list')
+                'status' => $backupCommandAvailable
+                    ? 'ok'
+                    : 'critical',
+                'note' => $backupCommandAvailable
                     ? 'Backup naredba je dostupna.'
                     : 'Naredba backup:list nije pronađena.',
             ],
@@ -150,46 +179,70 @@ class SystemHealth extends Page
         $definitions = [
             'scheduler_heartbeat' => [
                 'name' => 'Laravel scheduler',
+                'schedule' => 'Svake minute',
+                'next_run' => $this->nextMinute(),
                 'warning_minutes' => 5,
                 'critical_minutes' => 15,
             ],
             'database_backup' => [
                 'name' => 'Dnevni backup baze',
+                'schedule' => 'Svaki dan u 02:30',
+                'next_run' => $this->nextDailyAt('02:30'),
                 'warning_minutes' => 26 * 60,
                 'critical_minutes' => 48 * 60,
             ],
             'full_backup' => [
                 'name' => 'Tjedni kompletni backup',
+                'schedule' => 'Nedjeljom u 03:00',
+                'next_run' => $this->nextWeeklyAt(
+                    Carbon::SUNDAY,
+                    '03:00'
+                ),
                 'warning_minutes' => 8 * 24 * 60,
                 'critical_minutes' => 10 * 24 * 60,
             ],
             'daily_status_email' => [
                 'name' => 'Dnevni status e-mail',
+                'schedule' => 'Radnim danom u 08:30',
+                'next_run' => $this->nextWeekdayAt('08:30'),
                 'warning_minutes' => 36 * 60,
                 'critical_minutes' => 48 * 60,
             ],
             'weekly_status_email' => [
                 'name' => 'Tjedni status e-mail',
+                'schedule' => 'Ponedjeljkom u 08:00',
+                'next_run' => $this->nextWeeklyAt(
+                    Carbon::MONDAY,
+                    '08:00'
+                ),
                 'warning_minutes' => 8 * 24 * 60,
                 'critical_minutes' => 10 * 24 * 60,
             ],
             'kpi_generation' => [
                 'name' => 'Automatsko generiranje KPI vrijednosti',
+                'schedule' => 'Svaki dan u 01:10',
+                'next_run' => $this->nextDailyAt('01:10'),
                 'warning_minutes' => 36 * 60,
                 'critical_minutes' => 48 * 60,
             ],
             'activity_cleanup' => [
                 'name' => 'Čišćenje aktivnosti',
+                'schedule' => 'Svaki dan u 02:00',
+                'next_run' => $this->nextDailyAt('02:00'),
                 'warning_minutes' => 36 * 60,
                 'critical_minutes' => 48 * 60,
             ],
             'temp_files_cleanup' => [
                 'name' => 'Čišćenje privremenih datoteka',
+                'schedule' => 'Svaki dan u 02:15',
+                'next_run' => $this->nextDailyAt('02:15'),
                 'warning_minutes' => 36 * 60,
                 'critical_minutes' => 48 * 60,
             ],
             'backup_cleanup' => [
                 'name' => 'Čišćenje starih backupa',
+                'schedule' => 'Svaki dan u 04:00',
+                'next_run' => $this->nextDailyAt('04:00'),
                 'warning_minutes' => 36 * 60,
                 'critical_minutes' => 48 * 60,
             ],
@@ -197,18 +250,26 @@ class SystemHealth extends Page
 
         if (! Schema::hasTable('system_task_runs')) {
             $this->taskChecks = collect($definitions)
-                ->map(function (array $definition, string $key): array {
-                    return [
-                        'key' => $key,
-                        'label' => $definition['name'],
-                        'status' => 'never_run',
-                        'status_label' => 'Tablica nije dostupna',
-                        'last_run' => null,
-                        'message' => 'Migracija system_task_runs još nije izvršena.',
-                        'processed_count' => null,
-                        'duration_ms' => null,
-                    ];
-                })
+                ->map(
+                    function (
+                        array $definition,
+                        string $key
+                    ): array {
+                        return [
+                            'key' => $key,
+                            'label' => $definition['name'],
+                            'status' => 'critical',
+                            'status_label' => 'Tablica nije dostupna',
+                            'last_run' => null,
+                            'schedule' => $definition['schedule'],
+                            'next_run' => $definition['next_run'],
+                            'message' =>
+                                'Migracija system_task_runs nije izvršena.',
+                            'processed_count' => null,
+                            'duration_ms' => null,
+                        ];
+                    }
+                )
                 ->values()
                 ->all();
 
@@ -229,10 +290,13 @@ class SystemHealth extends Page
                 $this->taskChecks[] = [
                     'key' => $key,
                     'label' => $definition['name'],
-                    'status' => 'never_run',
-                    'status_label' => 'Nije pokrenuto',
+                    'status' => 'info',
+                    'status_label' => 'Još nije izvršeno',
                     'last_run' => null,
-                    'message' => 'Zadatak još nema evidentirano izvršenje.',
+                    'schedule' => $definition['schedule'],
+                    'next_run' => $definition['next_run'],
+                    'message' =>
+                        'Zadatak još nema evidentirano izvršenje.',
                     'processed_count' => null,
                     'duration_ms' => null,
                 ];
@@ -247,21 +311,28 @@ class SystemHealth extends Page
             if ($task->status === 'failed') {
                 $status = 'critical';
                 $statusLabel = 'Neuspješno';
+            } elseif ($task->status === 'running') {
+                $status = 'warning';
+                $statusLabel = 'U tijeku';
             } elseif (! $referenceTime) {
-                $status = 'never_run';
-                $statusLabel = 'Nije završeno';
+                $status = 'info';
+                $statusLabel = 'Još nije završeno';
             } else {
-                $minutesSinceRun = $referenceTime->diffInMinutes(now());
+                $minutesSinceRun = $referenceTime
+                    ->diffInMinutes(now());
 
-                if ($minutesSinceRun > $definition['critical_minutes']) {
+                if (
+                    $minutesSinceRun >
+                    $definition['critical_minutes']
+                ) {
                     $status = 'critical';
                     $statusLabel = 'Kritično kašnjenje';
-                } elseif ($minutesSinceRun > $definition['warning_minutes']) {
+                } elseif (
+                    $minutesSinceRun >
+                    $definition['warning_minutes']
+                ) {
                     $status = 'warning';
                     $statusLabel = 'Kasni';
-                } elseif ($task->status === 'running') {
-                    $status = 'warning';
-                    $statusLabel = 'U tijeku';
                 } else {
                     $status = 'ok';
                     $statusLabel = 'U redu';
@@ -270,7 +341,8 @@ class SystemHealth extends Page
 
             $this->taskChecks[] = [
                 'key' => $key,
-                'label' => $task->task_name ?: $definition['name'],
+                'label' => $task->task_name
+                    ?: $definition['name'],
                 'status' => $status,
                 'status_label' => $statusLabel,
                 'last_run' => $referenceTime
@@ -279,7 +351,10 @@ class SystemHealth extends Page
                         ->timezone('Europe/Zagreb')
                         ->format('d.m.Y. H:i:s')
                     : null,
-                'message' => $task->message ?: 'Nema dodatne poruke.',
+                'schedule' => $definition['schedule'],
+                'next_run' => $definition['next_run'],
+                'message' => $task->message
+                    ?: 'Nema dodatne poruke.',
                 'processed_count' => $task->processed_count,
                 'duration_ms' => $task->duration_ms,
             ];
@@ -289,20 +364,27 @@ class SystemHealth extends Page
     protected function loadServerChecks(): void
     {
         $diskTotal = @disk_total_space(base_path());
+
         $diskFree = @disk_free_space(base_path());
 
-        $diskUsed = is_numeric($diskTotal) && is_numeric($diskFree)
-            ? (int) $diskTotal - (int) $diskFree
-            : null;
+        $diskUsed = is_numeric($diskTotal)
+            && is_numeric($diskFree)
+                ? (int) $diskTotal - (int) $diskFree
+                : null;
 
         $diskPercentage = is_numeric($diskTotal)
             && (int) $diskTotal > 0
             && $diskUsed !== null
-                ? round(($diskUsed / (int) $diskTotal) * 100, 1)
+                ? round(
+                    ($diskUsed / (int) $diskTotal) * 100,
+                    1
+                )
                 : null;
 
         $databaseOk = true;
-        $databaseMessage = 'Veza s bazom podataka je dostupna.';
+
+        $databaseMessage =
+            'Veza s bazom podataka je dostupna.';
 
         try {
             DB::connection()->getPdo();
@@ -312,6 +394,7 @@ class SystemHealth extends Page
         }
 
         $failedJobs = 0;
+
         $pendingJobs = 0;
 
         try {
@@ -326,45 +409,76 @@ class SystemHealth extends Page
                 $pendingJobs = DB::table('jobs')->count();
             }
         } catch (Throwable) {
-            // Status baze već se zasebno prikazuje.
+            // Status veze s bazom prikazuje se zasebno.
         }
 
         $diskStatus = match (true) {
             $diskPercentage === null => 'warning',
-            $diskPercentage >= 90 => 'critical',
-            $diskPercentage >= 80 => 'warning',
+            $diskPercentage >= 95 => 'critical',
+            $diskPercentage >= 85 => 'warning',
             default => 'ok',
         };
+
+        $diskNote = match (true) {
+            $diskPercentage === null =>
+                'Podatak o prostoru nije dostupan.',
+
+            $diskPercentage >= 95 =>
+                'Kritično malo slobodnog prostora. Potrebno je odmah osloboditi prostor.',
+
+            $diskPercentage >= 85 =>
+                'Slobodnog prostora je sve manje. Preporučuje se čišćenje ili povećanje prostora.',
+
+            default =>
+                'Na disku ima dovoljno slobodnog prostora.',
+        };
+
+        if (is_numeric($diskFree)) {
+            $diskNote .= ' Slobodno: '
+                . $this->formatBytes((int) $diskFree)
+                . '.';
+        }
 
         $this->serverChecks = [
             [
                 'label' => 'Prostor na disku',
                 'value' => $diskPercentage !== null
-                    ? number_format($diskPercentage, 1, ',', '.') . '% zauzeto'
+                    ? number_format(
+                        $diskPercentage,
+                        1,
+                        ',',
+                        '.'
+                    ) . '% zauzeto'
                     : 'Nije dostupno',
                 'status' => $diskStatus,
-                'note' => is_numeric($diskFree)
-                    ? 'Slobodno: ' . $this->formatBytes((int) $diskFree)
-                    : 'Podatak o slobodnom prostoru nije dostupan.',
+                'note' => $diskNote,
             ],
             [
                 'label' => 'Baza podataka',
-                'value' => $databaseOk ? 'Dostupna' : 'Nedostupna',
-                'status' => $databaseOk ? 'ok' : 'critical',
+                'value' => $databaseOk
+                    ? 'Dostupna'
+                    : 'Nedostupna',
+                'status' => $databaseOk
+                    ? 'ok'
+                    : 'critical',
                 'note' => $databaseMessage,
             ],
             [
                 'label' => 'Poslovi na čekanju',
                 'value' => (string) $pendingJobs,
-                'status' => $pendingJobs > 100 ? 'warning' : 'ok',
+                'status' => $pendingJobs > 100
+                    ? 'warning'
+                    : 'ok',
                 'note' => config('queue.default') === 'sync'
                     ? 'Queue koristi sync način rada.'
-                    : 'Broj zapisa koji čekaju izvršenje.',
+                    : 'Broj poslova koji čekaju izvršenje.',
             ],
             [
                 'label' => 'Neuspjeli queue poslovi',
                 'value' => (string) $failedJobs,
-                'status' => $failedJobs > 0 ? 'critical' : 'ok',
+                'status' => $failedJobs > 0
+                    ? 'critical'
+                    : 'ok',
                 'note' => $failedJobs > 0
                     ? 'Postoje neuspjeli poslovi koje treba provjeriti.'
                     : 'Nema evidentiranih neuspjelih poslova.',
@@ -375,7 +489,8 @@ class SystemHealth extends Page
     protected function loadBackupOutput(): void
     {
         if (! $this->artisanCommandExists('backup:list')) {
-            $this->backupOutput = 'Naredba backup:list nije dostupna.';
+            $this->backupOutput =
+                'Naredba backup:list nije dostupna.';
 
             return;
         }
@@ -387,9 +502,10 @@ class SystemHealth extends Page
 
             $this->backupOutput = $output !== ''
                 ? $output
-                : 'Backup naredba nije vratila nikakav rezultat.';
+                : 'Backup naredba nije vratila rezultat.';
         } catch (Throwable $exception) {
-            $this->backupOutput = 'Greška pri dohvaćanju backup statusa: '
+            $this->backupOutput =
+                'Greška pri dohvaćanju backup statusa: '
                 . $exception->getMessage();
         }
     }
@@ -397,7 +513,7 @@ class SystemHealth extends Page
     protected function calculateSummary(): void
     {
         $configurationStatuses = collect($this->checks)
-            ->map(fn (array $check): string => $check['ok'] ? 'ok' : 'critical');
+            ->pluck('status');
 
         $taskStatuses = collect($this->taskChecks)
             ->pluck('status');
@@ -410,18 +526,31 @@ class SystemHealth extends Page
             ->merge($serverStatuses);
 
         $critical = $statuses
-            ->filter(fn (string $status): bool => $status === 'critical')
+            ->filter(
+                fn (string $status): bool =>
+                    $status === 'critical'
+            )
             ->count();
 
         $warning = $statuses
             ->filter(
                 fn (string $status): bool =>
-                    in_array($status, ['warning', 'never_run'], true)
+                    $status === 'warning'
+            )
+            ->count();
+
+        $info = $statuses
+            ->filter(
+                fn (string $status): bool =>
+                    $status === 'info'
             )
             ->count();
 
         $ok = $statuses
-            ->filter(fn (string $status): bool => $status === 'ok')
+            ->filter(
+                fn (string $status): bool =>
+                    $status === 'ok'
+            )
             ->count();
 
         $this->summary = [
@@ -433,14 +562,93 @@ class SystemHealth extends Page
             'ok' => $ok,
             'warning' => $warning,
             'critical' => $critical,
+            'info' => $info,
             'updated_at' => now()
                 ->timezone('Europe/Zagreb')
                 ->format('d.m.Y. H:i:s'),
         ];
     }
 
-    protected function artisanCommandExists(string $command): bool
+    protected function nextMinute(): string
     {
+        return now('Europe/Zagreb')
+            ->addMinute()
+            ->startOfMinute()
+            ->format('d.m.Y. H:i');
+    }
+
+    protected function nextDailyAt(string $time): string
+    {
+        [$hour, $minute] = array_map(
+            'intval',
+            explode(':', $time)
+        );
+
+        $now = now('Europe/Zagreb');
+
+        $next = $now->copy()
+            ->setTime($hour, $minute, 0);
+
+        if ($next->lessThanOrEqualTo($now)) {
+            $next->addDay();
+        }
+
+        return $next->format('d.m.Y. H:i');
+    }
+
+    protected function nextWeekdayAt(string $time): string
+    {
+        [$hour, $minute] = array_map(
+            'intval',
+            explode(':', $time)
+        );
+
+        $now = now('Europe/Zagreb');
+
+        $next = $now->copy()
+            ->setTime($hour, $minute, 0);
+
+        if ($next->lessThanOrEqualTo($now)) {
+            $next->addDay();
+        }
+
+        while ($next->isWeekend()) {
+            $next->addDay();
+        }
+
+        return $next->format('d.m.Y. H:i');
+    }
+
+    protected function nextWeeklyAt(
+        int $dayOfWeek,
+        string $time
+    ): string {
+        [$hour, $minute] = array_map(
+            'intval',
+            explode(':', $time)
+        );
+
+        $now = now('Europe/Zagreb');
+
+        $daysUntil = (
+            $dayOfWeek - $now->dayOfWeek + 7
+        ) % 7;
+
+        $next = $now->copy()
+            ->startOfDay()
+            ->addDays($daysUntil)
+            ->setTime($hour, $minute, 0);
+
+        if ($next->lessThanOrEqualTo($now)) {
+            $next->addWeek();
+        }
+
+        return $next->format('d.m.Y. H:i');
+    }
+
+    protected function artisanCommandExists(
+        string $command
+    ): bool {
         try {
             return array_key_exists(
                 $command,
@@ -499,7 +707,9 @@ class SystemHealth extends Page
         if (! $user?->email) {
             Notification::make()
                 ->title('Testni mail nije poslan.')
-                ->body('Prijavljeni korisnik nema upisanu e-mail adresu.')
+                ->body(
+                    'Prijavljeni korisnik nema e-mail adresu.'
+                )
                 ->danger()
                 ->send();
 
@@ -518,7 +728,11 @@ class SystemHealth extends Page
 
             Notification::make()
                 ->title('Testni mail je poslan.')
-                ->body('Poruka je poslana na ' . $user->email . '.')
+                ->body(
+                    'Poruka je poslana na '
+                    . $user->email
+                    . '.'
+                )
                 ->success()
                 ->send();
         } catch (Throwable $exception) {
