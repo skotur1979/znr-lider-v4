@@ -5,6 +5,8 @@ namespace App\Filament\Resources\Observations;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Observations\Pages;
 use App\Mail\ObservationNotificationMail;
+use App\Models\ActivityLog;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Employee;
 use App\Models\Observation;
 use App\Services\StorageQuotaService;
@@ -731,6 +733,27 @@ protected static function priorityIcon(?string $state): ?string
                                     'sent_at' => now(),
                                 ]);
 
+                                $user = Auth::user();
+
+                                ActivityLog::create([
+                                    'user_id' => $user?->id,
+                                    'owner_id' => $user?->ownerId(),
+                                    'module' => 'Zapažanja',
+                                    'action' => 'sent',
+                                    'record_type' => $record::class,
+                                    'record_id' => $record->getKey(),
+                                    'title' => 'Zapažanje poslano e-mailom',
+                                    'description' =>
+                                        'Zapažanje na lokaciji „'
+                                        . ($record->location ?: 'Nije navedena')
+                                        . '” poslano je na: '
+                                        . implode(', ', $emails),
+                                    'url' => ObservationResource::getUrl('view', [
+                                        'record' => $record,
+                                    ]),
+                                    'ip_address' => request()->ip(),
+                                ]);
+
                                 \Filament\Notifications\Notification::make()
                                     ->title('Zapažanje je poslano')
                                     ->body(
@@ -751,7 +774,6 @@ protected static function priorityIcon(?string $state): ?string
                                     ->send();
                             }
                         }),
-
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()

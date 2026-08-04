@@ -21,10 +21,15 @@ class ActivityLogResource extends BaseResource
     protected static bool $hasOwnership = false;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-bell-alert';
+
     protected static string|UnitEnum|null $navigationGroup = 'Upravljanje';
+
     protected static ?string $navigationLabel = 'Zadnje aktivnosti';
+
     protected static ?string $modelLabel = 'Aktivnost';
+
     protected static ?string $pluralModelLabel = 'Zadnje aktivnosti';
+
     protected static ?int $navigationSort = 99;
 
     protected static function getModuleKey(): ?string
@@ -58,63 +63,66 @@ class ActivityLogResource extends BaseResource
     }
 
     public static function getEloquentQuery(): Builder
-{
-    $query = ActivityLog::query()
-        ->with(['user', 'owner'])
-        ->latest();
+    {
+        $query = ActivityLog::query()
+            ->with(['user', 'owner'])
+            ->latest();
 
-    $user = auth()->user();
+        $user = auth()->user();
 
-    if (! $user) {
-        return $query->whereRaw('1 = 0');
-    }
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
 
-    // Super admin vidi sve aktivnosti
-    if ($user->isSuperAdmin()) {
-        return $query;
-    }
-
-    // Glavni korisnik organizacije vidi sve aktivnosti svoje organizacije
-    if ($user->canCreateSubusers()) {
-        return $query->where('owner_id', $user->ownerId());
-    }
-
-    // Podkorisnik vidi samo svoje aktivnosti
-    return $query->where('user_id', $user->id);
-}
-
-public static function getNavigationBadge(): ?string
-{
-    $user = auth()->user();
-
-    if (! $user) {
-        return null;
-    }
-
-    $cacheKey = 'activity_log_badge_'
-        . $user->id
-        . '_'
-        . now()->format('Y-m-d-H');
-
-    return cache()->remember($cacheKey, now()->addMinutes(5), function () use ($user) {
-
-        $query = ActivityLog::query();
-
+        // Superadmin vidi sve aktivnosti.
         if ($user->isSuperAdmin()) {
-            return (string) $query->count();
+            return $query;
         }
 
+        // Glavni korisnik vidi sve aktivnosti svoje organizacije.
         if ($user->canCreateSubusers()) {
-            return (string) $query
-                ->where('owner_id', $user->ownerId())
-                ->count();
+            return $query->where('owner_id', $user->ownerId());
         }
 
-        return (string) $query
-            ->where('user_id', $user->id)
-            ->count();
-    });
-}
+        // Podkorisnik vidi samo svoje aktivnosti.
+        return $query->where('user_id', $user->id);
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        $cacheKey = 'activity_log_badge_'
+            . $user->id
+            . '_'
+            . now()->format('Y-m-d-H');
+
+        return cache()->remember(
+            $cacheKey,
+            now()->addMinutes(5),
+            function () use ($user): string {
+                $query = ActivityLog::query();
+
+                if ($user->isSuperAdmin()) {
+                    return (string) $query->count();
+                }
+
+                if ($user->canCreateSubusers()) {
+                    return (string) $query
+                        ->where('owner_id', $user->ownerId())
+                        ->count();
+                }
+
+                return (string) $query
+                    ->where('user_id', $user->id)
+                    ->count();
+            }
+        );
+    }
 
     public static function getNavigationBadgeColor(): ?string
     {
@@ -151,25 +159,27 @@ public static function getNavigationBadge(): ?string
                 TextColumn::make('action')
                     ->label('Radnja')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
                         'created' => 'Kreirano',
                         'updated' => 'Uređeno',
                         'deleted' => 'Obrisano',
                         'import' => 'Import',
                         'export' => 'Export',
                         'status' => 'Status',
+                        'sent' => 'Poslano',
                         'login' => 'Prijava',
                         'logout' => 'Odjava',
                         'failed_login' => 'Neuspješna prijava',
                         default => $state ?? '-',
                     })
-                    ->color(fn (?string $state) => match ($state) {
+                    ->color(fn (?string $state): string => match ($state) {
                         'created' => 'success',
                         'updated' => 'warning',
                         'deleted' => 'danger',
                         'import' => 'info',
                         'export' => 'gray',
                         'status' => 'primary',
+                        'sent' => 'info',
                         'login' => 'success',
                         'logout' => 'gray',
                         'failed_login' => 'danger',
@@ -186,18 +196,28 @@ public static function getNavigationBadge(): ?string
 
                 TextColumn::make('description')
                     ->label('Detalji')
+                    ->searchable()
                     ->wrap()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->placeholder('-')
+                    ->tooltip(fn (ActivityLog $record): ?string =>
+                        filled($record->description)
+                            ? $record->description
+                            : null
+                    )
+                    ->toggleable(),
 
                 TextColumn::make('ip_address')
                     ->label('IP')
+                    ->placeholder('-')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('module')
                     ->label('Modul')
-                    ->options(fn () => ActivityLog::query()
+                    ->placeholder('Svi moduli')
+                    ->options(fn (): array => ActivityLog::query()
                         ->whereNotNull('module')
+                        ->where('module', '<>', '')
                         ->distinct()
                         ->orderBy('module')
                         ->limit(100)
@@ -206,6 +226,7 @@ public static function getNavigationBadge(): ?string
 
                 SelectFilter::make('action')
                     ->label('Radnja')
+                    ->placeholder('Sve radnje')
                     ->options([
                         'created' => 'Kreirano',
                         'updated' => 'Uređeno',
@@ -213,6 +234,7 @@ public static function getNavigationBadge(): ?string
                         'import' => 'Import',
                         'export' => 'Export',
                         'status' => 'Status',
+                        'sent' => 'Poslano',
                         'login' => 'Prijava',
                         'logout' => 'Odjava',
                         'failed_login' => 'Neuspješna prijava',
@@ -221,12 +243,20 @@ public static function getNavigationBadge(): ?string
             ->actions([
                 DeleteAction::make()
                     ->label('Izbriši')
-                    ->visible(fn () => auth()->user()?->isSuperAdmin() === true),
+                    ->requiresConfirmation()
+                    ->visible(
+                        fn (): bool =>
+                        auth()->user()?->isSuperAdmin() === true
+                    ),
             ])
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Izbriši označeno')
-                    ->visible(fn () => auth()->user()?->isSuperAdmin() === true),
+                    ->requiresConfirmation()
+                    ->visible(
+                        fn (): bool =>
+                        auth()->user()?->isSuperAdmin() === true
+                    ),
             ]);
     }
 
