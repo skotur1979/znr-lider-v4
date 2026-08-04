@@ -39,6 +39,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use App\Support\ExpiryBadge;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
@@ -430,15 +431,42 @@ protected static function priorityIcon(?string $state): ?string
     ImageColumn::make('picture_path')
         ->label('Slika')
         ->disk('public')
-        ->alignment(Alignment::Center)
         ->visibility('public')
-        ->height(50)
-        ->width(80)
-        ->extraImgAttributes(['style' => 'object-fit: cover; border-radius: 6px;'])
-        ->getStateUsing(fn (Observation $record) => $record->picture_path ?: null)
-        ->url(fn (Observation $record) => $record->picture_path
-            ? Storage::disk('public')->url($record->picture_path)
-            : null)
+        ->alignment(Alignment::Center)
+        ->height(60)
+        ->width(90)
+        ->extraImgAttributes([
+            'style' => '
+                width: 90px;
+                height: 60px;
+                object-fit: cover;
+                border-radius: 8px;
+            ',
+        ])
+        ->getStateUsing(function (Observation $record): ?string {
+            if (blank($record->picture_path)) {
+                return null;
+            }
+
+            return Str::of($record->picture_path)
+                ->replaceFirst('/storage/', '')
+                ->replaceFirst('storage/', '')
+                ->ltrim('/')
+                ->toString();
+        })
+        ->url(function (Observation $record): ?string {
+            if (blank($record->picture_path)) {
+                return null;
+            }
+
+            $path = Str::of($record->picture_path)
+                ->replaceFirst('/storage/', '')
+                ->replaceFirst('storage/', '')
+                ->ltrim('/')
+                ->toString();
+
+            return Storage::disk('public')->url($path);
+        })
         ->openUrlInNewTab()
         ->toggleable(),
 
@@ -590,23 +618,41 @@ protected static function priorityIcon(?string $state): ?string
                                 ->default(fn (Observation $record) => $record->notification_emails ?? [])
                                 ->required(),
                         ])
-                        ->action(function (Observation $record, array $data) {
+                        ->action(function (Observation $record, array $data): void {
                             $emails = collect($data['emails'] ?? [])
-                                ->filter()
+                                ->map(fn ($email) => trim((string) $email))
+                                ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
                                 ->unique()
                                 ->values()
                                 ->all();
 
-                            foreach ($emails as $email) {
-                                Mail::to($email)->send(new ObservationNotificationMail($record));
+                            if (empty($emails)) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Zapažanje nije poslano')
+                                    ->body('Upišite barem jednu ispravnu e-mail adresu.')
+                                    ->warning()
+                                    ->send();
+
+                                return;
                             }
 
-                            $record->update([
+                            foreach ($emails as $email) {
+                                Mail::to($email)->send(
+                                    new ObservationNotificationMail($record)
+                                );
+                            }
+
+                            $record->updateQuietly([
                                 'notification_emails' => $emails,
                                 'sent_at' => now(),
                             ]);
-                        })
-                        ->successNotificationTitle('Zapažanje je poslano'),
+
+                            \Filament\Notifications\Notification::make()
+                                ->title('Zapažanje je poslano')
+                                ->body('Poruka je poslana na ' . count($emails) . ' e-mail adresa.')
+                                ->success()
+                                ->send();
+                        }),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')

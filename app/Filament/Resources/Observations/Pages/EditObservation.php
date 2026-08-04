@@ -15,6 +15,8 @@ class EditObservation extends EditRecord
 
     protected array $oldData = [];
 
+    protected array $oldNotificationEmails = [];
+
     protected function getHeaderActions(): array
     {
         return [
@@ -54,6 +56,15 @@ class EditObservation extends EditRecord
             'comments',
         ]);
 
+        $this->oldNotificationEmails = collect(
+            $this->record->notification_emails ?? []
+        )
+            ->map(fn ($email) => trim((string) $email))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         if (blank($data['priority'] ?? null)) {
             $data['priority'] = 'medium';
         }
@@ -62,17 +73,33 @@ class EditObservation extends EditRecord
             $data['status'] = 'Not started';
         }
 
+        $data['notification_emails'] = collect(
+            $data['notification_emails'] ?? []
+        )
+            ->map(fn ($email) => trim((string) $email))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         return $data;
     }
 
     protected function afterSave(): void
     {
         $emails = collect($this->record->notification_emails ?? [])
-            ->push('prvostupnik@gmail.com')
+            ->map(fn ($email) => trim((string) $email))
             ->filter()
             ->unique()
             ->values()
             ->all();
+
+        /*
+         * Ako nema primatelja, ništa se ne šalje.
+         */
+        if (empty($emails)) {
+            return;
+        }
 
         foreach ($emails as $email) {
             Mail::to($email)->send(
@@ -89,8 +116,10 @@ class EditObservation extends EditRecord
             'sent_at' => now(),
         ]);
     }
+
     protected function getRedirectUrl(): string
     {
-        return $this->previousUrl ?? static::getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl('index');
     }
 }

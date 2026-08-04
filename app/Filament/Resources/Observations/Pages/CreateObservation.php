@@ -66,7 +66,7 @@ class CreateObservation extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         if (! Auth::user()?->isAdmin()) {
-            $data['user_id'] = Auth::id();
+            $data['user_id'] = Auth::user()?->ownerId() ?? Auth::id();
         }
 
         if (blank($data['priority'] ?? null)) {
@@ -76,6 +76,16 @@ class CreateObservation extends CreateRecord
         if (blank($data['status'] ?? null)) {
             $data['status'] = 'Not started';
         }
+
+        /*
+         * Očisti prazne i ponovljene e-mail adrese.
+         */
+        $data['notification_emails'] = collect($data['notification_emails'] ?? [])
+            ->map(fn ($email) => trim((string) $email))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
         return $data;
     }
@@ -96,17 +106,26 @@ class CreateObservation extends CreateRecord
         }
 
         $emails = collect($this->record->notification_emails ?? [])
-            ->push('prvostupnik@gmail.com')
+            ->map(fn ($email) => trim((string) $email))
             ->filter()
             ->unique()
             ->values()
             ->all();
 
-        foreach ($emails as $email) {
-            Mail::to($email)->send(new ObservationNotificationMail($this->record));
+        /*
+         * Ako nije upisana nijedna adresa, ništa se ne šalje.
+         */
+        if (empty($emails)) {
+            return;
         }
 
-        $this->record->update([
+        foreach ($emails as $email) {
+            Mail::to($email)->send(
+                new ObservationNotificationMail($this->record)
+            );
+        }
+
+        $this->record->updateQuietly([
             'notification_emails' => $emails,
             'sent_at' => now(),
         ]);
