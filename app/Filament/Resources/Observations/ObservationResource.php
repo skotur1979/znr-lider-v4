@@ -555,15 +555,83 @@ protected static function priorityIcon(?string $state): ?string
                         };
                     }),
 
+                    SelectFilter::make('responsible')
+                    ->label('Odgovorna osoba')
+                    ->placeholder('Sve odgovorne osobe')
+                    ->options(function (): array {
+                        return static::getEloquentQuery()
+                            ->whereNotNull('responsible')
+                            ->where('responsible', '<>', '')
+                            ->distinct()
+                            ->orderBy('responsible')
+                            ->pluck('responsible', 'responsible')
+                            ->toArray();
+                    })
+                    ->searchable()
+                    ->query(function (Builder $query, array $data): Builder {
+                        $responsible = $data['value'] ?? null;
+
+                        if (filled($responsible)) {
+                            $query->where('responsible', $responsible);
+                        }
+
+                        return $query;
+                    }),
+
                 SelectFilter::make('status_action')
                     ->label('Zahtijeva radnju')
                     ->placeholder('Sve')
                     ->options([
-                        'open_action' => 'Nije započeto i U tijeku',
+                        'Not started' => 'Nije započeto',
+                        'In progress' => 'U tijeku',
+                        'Complete' => 'Završeno',
                     ])
-                    ->query(function (Builder $query, array $data) {
-                        return match ($data['value'] ?? null) {
-                            'open_action' => $query->whereIn('status', ['Not started', 'In progress']),
+                    ->query(function (Builder $query, array $data): Builder {
+                        $status = $data['value'] ?? null;
+
+                        if (filled($status)) {
+                            $query->where('status', $status);
+                        }
+
+                        return $query;
+                    }),
+
+                    SelectFilter::make('action_deadline')
+                    ->label('Rok radnje')
+                    ->placeholder('Svi rokovi')
+                    ->options([
+                        'expired' => 'Isteklo',
+                        'expiring' => 'Ističe u sljedećih 30 dana',
+                        'today' => 'Ističe danas',
+                        'without_deadline' => 'Bez upisanog roka',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        return match ($value) {
+                            'expired' => $query
+                                ->whereIn('status', ['Not started', 'In progress'])
+                                ->whereNotNull('target_date')
+                                ->whereDate('target_date', '<', Carbon::today()),
+
+                            'expiring' => $query
+                                ->whereIn('status', ['Not started', 'In progress'])
+                                ->whereNotNull('target_date')
+                                ->whereDate('target_date', '>=', Carbon::today())
+                                ->whereDate(
+                                    'target_date',
+                                    '<=',
+                                    Carbon::today()->addDays(30)
+                                ),
+
+                            'today' => $query
+                                ->whereIn('status', ['Not started', 'In progress'])
+                                ->whereDate('target_date', Carbon::today()),
+
+                            'without_deadline' => $query
+                                ->whereIn('status', ['Not started', 'In progress'])
+                                ->whereNull('target_date'),
+
                             default => $query,
                         };
                     }),
@@ -607,21 +675,35 @@ protected static function priorityIcon(?string $state): ?string
                         ->visible(fn (Observation $record) => ! $record->trashed()),
 
                     Action::make('send_observation')
-                        ->label('Pošalji zapažanje')
+                        ->label('Pošalji zapažanje / podsjetnik')
                         ->icon('heroicon-o-paper-airplane')
                         ->color('info')
-                        ->visible(fn (Observation $record) => ! $record->trashed())
+                        ->modalHeading('Pošalji obavijest odgovornoj osobi')
+                        ->modalDescription(
+                            'Upiši e-mail odgovorne osobe ili druge osobe koju želiš obavijestiti o zapažanju, potrebnoj radnji i roku za provedbu.'
+                        )
+                        ->modalSubmitActionLabel('Pošalji e-mail')
+                        ->modalCancelActionLabel('Odustani')
+                        ->visible(fn (Observation $record): bool => ! $record->trashed())
                         ->form([
                             TagsInput::make('emails')
                                 ->label('Primatelji')
                                 ->placeholder('Upiši e-mail i pritisni Enter')
-                                ->default(fn (Observation $record) => $record->notification_emails ?? [])
+                                ->helperText('Možeš upisati jednu ili više e-mail adresa.')
+                                ->default(fn (Observation $record): array =>
+                                    is_array($record->notification_emails)
+                                        ? $record->notification_emails
+                                        : []
+                                )
                                 ->required(),
                         ])
                         ->action(function (Observation $record, array $data): void {
                             $emails = collect($data['emails'] ?? [])
-                                ->map(fn ($email) => trim((string) $email))
-                                ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
+                                ->map(fn ($email): string => trim((string) $email))
+                                ->filter(fn ($email): bool =>
+                                    filled($email)
+                                    && filter_var($email, FILTER_VALIDATE_EMAIL) !== false
+                                )
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -631,27 +713,43 @@ protected static function priorityIcon(?string $state): ?string
                                     ->title('Zapažanje nije poslano')
                                     ->body('Upišite barem jednu ispravnu e-mail adresu.')
                                     ->warning()
+                                    ->persistent()
                                     ->send();
 
                                 return;
                             }
 
-                            foreach ($emails as $email) {
-                                Mail::to($email)->send(
-                                    new ObservationNotificationMail($record)
-                                );
+                            try {
+                                foreach ($emails as $email) {
+                                    Mail::to($email)->send(
+                                        new ObservationNotificationMail($record)
+                                    );
+                                }
+
+                                $record->updateQuietly([
+                                    'notification_emails' => $emails,
+                                    'sent_at' => now(),
+                                ]);
+
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Zapažanje je poslano')
+                                    ->body(
+                                        count($emails) === 1
+                                            ? 'Poruka je poslana na jednu e-mail adresu.'
+                                            : 'Poruka je poslana na ' . count($emails) . ' e-mail adrese.'
+                                    )
+                                    ->success()
+                                    ->send();
+                            } catch (\Throwable $exception) {
+                                report($exception);
+
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Slanje nije uspjelo')
+                                    ->body('Došlo je do pogreške pri slanju e-maila. Pokušajte ponovno.')
+                                    ->danger()
+                                    ->persistent()
+                                    ->send();
                             }
-
-                            $record->updateQuietly([
-                                'notification_emails' => $emails,
-                                'sent_at' => now(),
-                            ]);
-
-                            \Filament\Notifications\Notification::make()
-                                ->title('Zapažanje je poslano')
-                                ->body('Poruka je poslana na ' . count($emails) . ' e-mail adresa.')
-                                ->success()
-                                ->send();
                         }),
 
                     DeleteAction::make()
