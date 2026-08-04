@@ -194,13 +194,10 @@ class IncidentResource extends BaseResource
                             DatePicker::make('date_occurred')
                                 ->label('Datum nastanka (obavezno)')
                                 ->required()
-                                ->native(false)
-                                ->format('Y-m-d')
                                 ->displayFormat('d.m.Y.')
-                                ->placeholder('dd.mm.gggg.')
                                 ->weekStartsOnMonday()
                                 ->timezone('Europe/Zagreb')
-                                ->live(onBlur: true)
+                                ->reactive()
                                 ->afterStateUpdated(function ($state, callable $set, callable $get): void {
                                     $set(
                                         'working_days_lost',
@@ -213,13 +210,10 @@ class IncidentResource extends BaseResource
 
                             DatePicker::make('date_of_return')
                                 ->label('Datum povratka na posao')
-                                ->native(false)
-                                ->format('Y-m-d')
                                 ->displayFormat('d.m.Y.')
-                                ->placeholder('dd.mm.gggg.')
                                 ->weekStartsOnMonday()
                                 ->timezone('Europe/Zagreb')
-                                ->live(onBlur: true)
+                                ->reactive()
                                 ->after('date_occurred')
                                 ->afterStateUpdated(function ($state, callable $set, callable $get): void {
                                     $set(
