@@ -199,11 +199,59 @@ class ActivityLogResource extends BaseResource
                     ->searchable()
                     ->wrap()
                     ->placeholder('-')
-                    ->tooltip(fn (ActivityLog $record): ?string =>
-                        filled($record->description)
+                    ->formatStateUsing(function (?string $state, ActivityLog $record): string {
+                        $user = auth()->user();
+
+                        if (! $user) {
+                            return '-';
+                        }
+
+                        /*
+                        * Superadmin vidi sve detalje.
+                        */
+                        if ($user->isSuperAdmin()) {
+                            return filled($state) ? $state : '-';
+                        }
+
+                        /*
+                        * Glavni korisnik vidi detalje aktivnosti svoje organizacije.
+                        */
+                        if (
+                            $user->canCreateSubusers()
+                            && (int) $record->owner_id === (int) $user->ownerId()
+                        ) {
+                            return filled($state) ? $state : '-';
+                        }
+
+                        /*
+                        * Podkorisnik vidi detalje samo svojih aktivnosti,
+                        * uključujući e-mail adrese na koje je poslao podsjetnik.
+                        */
+                        if ((int) $record->user_id === (int) $user->id) {
+                            return filled($state) ? $state : '-';
+                        }
+
+                        return '-';
+                    })
+                    ->tooltip(function (ActivityLog $record): ?string {
+                        $user = auth()->user();
+
+                        if (! $user) {
+                            return null;
+                        }
+
+                        $canSeeDetails =
+                            $user->isSuperAdmin()
+                            || (
+                                $user->canCreateSubusers()
+                                && (int) $record->owner_id === (int) $user->ownerId()
+                            )
+                            || (int) $record->user_id === (int) $user->id;
+
+                        return $canSeeDetails && filled($record->description)
                             ? $record->description
-                            : null
-                    )
+                            : null;
+                    })
                     ->toggleable(),
 
                 TextColumn::make('ip_address')
