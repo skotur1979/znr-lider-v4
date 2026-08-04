@@ -84,10 +84,6 @@ class IncidentResource extends BaseResource
     string|\DateTimeInterface|null $start,
     string|\DateTimeInterface|null $end
 ): int {
-    if (blank($start) || blank($end)) {
-        return 0;
-    }
-
     $startDate = static::parseIncidentDate($start);
     $endDate = static::parseIncidentDate($end);
 
@@ -99,47 +95,68 @@ class IncidentResource extends BaseResource
         return 0;
     }
 
+    /*
+     * diffInWeekdays računa radne dane od datuma nastanka
+     * do datuma povratka. Dan povratka nije izgubljeni radni dan,
+     * zato se oduzima jedan dan.
+     */
     return max(
-        $startDate->diffInWeekdays($endDate) - 1,
+        (int) $startDate->diffInWeekdays($endDate) - 1,
         0
     );
 }
 
     protected static function parseIncidentDate(
-    string|\DateTimeInterface|null $value
-): ?Carbon {
-    if (blank($value)) {
+        string|\DateTimeInterface|null $value
+    ): ?Carbon {
+        if (blank($value)) {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)->startOfDay();
+        }
+
+        $value = trim((string) $value);
+
+        /*
+        * Filament ili Eloquent ponekad mogu vratiti datum
+        * zajedno s vremenom.
+        */
+        if (str_contains($value, 'T')) {
+            try {
+                return Carbon::parse($value)->startOfDay();
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        if (str_contains($value, ' ')) {
+            $value = explode(' ', $value)[0];
+        }
+
+        $formats = [
+            'Y-m-d',
+            'd.m.Y.',
+            'd.m.Y',
+            'd/m/Y',
+            'd-m-Y',
+        ];
+
+        foreach ($formats as $format) {
+            try {
+                $date = Carbon::createFromFormat('!' . $format, $value);
+
+                if ($date !== false) {
+                    return $date->startOfDay();
+                }
+            } catch (\Throwable) {
+                // Pokušaj sljedeći format.
+            }
+        }
+
         return null;
     }
-
-    if ($value instanceof \DateTimeInterface) {
-        return Carbon::instance($value)->startOfDay();
-    }
-
-    $value = trim((string) $value);
-
-    $formats = [
-        'Y-m-d',
-        'd.m.Y.',
-        'd.m.Y',
-        'd/m/Y',
-        'd-m-Y',
-    ];
-
-    foreach ($formats as $format) {
-        try {
-            $date = Carbon::createFromFormat($format, $value);
-
-            if ($date !== false) {
-                return $date->startOfDay();
-            }
-        } catch (\Throwable) {
-            // Pokušaj sljedeći podržani format.
-        }
-    }
-
-    return null;
-}
 
     public static function form(Schema $schema): Schema
 {
@@ -217,7 +234,14 @@ class IncidentResource extends BaseResource
                             TextInput::make('working_days_lost')
                                 ->label('Izgubljeni radni dani')
                                 ->numeric()
-                                ->minValue(0),
+                                ->minValue(0)
+                                ->readOnly()
+                                ->dehydrateStateUsing(function ($state, callable $get): int {
+                                    return static::calculateWorkingDaysLost(
+                                        $get('date_occurred'),
+                                        $get('date_of_return'),
+                                    );
+                                }),
                         ]),
 
                     Section::make('Detalji')
