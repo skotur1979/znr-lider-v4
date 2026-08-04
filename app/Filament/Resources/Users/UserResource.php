@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 
 
 class UserResource extends Resource
@@ -238,20 +239,41 @@ class UserResource extends Resource
 
             Select::make('role')
                 ->label('Uloga')
-                ->options([
-                    'org_admin' => 'Glavni korisnik organizacije',
-                    'org_user' => 'Podkorisnik organizacije',
-                ])
+                ->options(function (?User $record): array {
+                    if ($record?->isSuperAdmin()) {
+                        return [
+                            'super_admin' => 'Super admin',
+                        ];
+                    }
+
+                    return [
+                        'org_admin' => 'Glavni korisnik organizacije',
+                        'org_user' => 'Podkorisnik organizacije',
+                    ];
+                })
                 ->default(fn () => $authUser?->isSuperAdmin() ? 'org_admin' : 'org_user')
                 ->required()
                 ->native(false)
-                ->disabled(fn (): bool => ! Auth::user()?->isSuperAdmin())
-                ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin())
-                ->helperText(fn (): ?string =>
-                    Auth::user()?->isSuperAdmin()
+                ->disabled(function (?User $record): bool {
+                    if ($record?->isSuperAdmin()) {
+                        return true;
+                    }
+
+                    return ! Auth::user()?->isSuperAdmin();
+                })
+                ->dehydrated(function (?User $record): bool {
+                    return Auth::user()?->isSuperAdmin()
+                        && ! $record?->isSuperAdmin();
+                })
+                ->helperText(function (?User $record): ?string {
+                    if ($record?->isSuperAdmin()) {
+                        return 'Uloga superadmina ne može se promijeniti.';
+                    }
+
+                    return Auth::user()?->isSuperAdmin()
                         ? 'Superadmin može promijeniti ulogu korisnika.'
-                        : 'Ulogu korisnika može promijeniti samo superadmin.'
-                ),
+                        : 'Ulogu korisnika može promijeniti samo superadmin.';
+                }),
 
             Placeholder::make('subusers_limit_info')
                 ->label('Podkorisnici organizacije')
@@ -509,17 +531,27 @@ class UserResource extends Resource
                     ->label('Uloga')
                     ->alignment('center')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'super_admin', 'admin' => 'Super admin',
-                        'org_admin' => 'Glavni korisnik',
-                        'org_user' => 'Podkorisnik',
-                        default => 'Korisnik',
+                    ->formatStateUsing(function (?string $state, User $record): string {
+                        if ($record->isSuperAdmin()) {
+                            return 'Super admin';
+                        }
+
+                        return match ($state) {
+                            'org_admin' => 'Glavni korisnik',
+                            'org_user' => 'Podkorisnik',
+                            default => 'Korisnik',
+                        };
                     })
-                    ->color(fn (?string $state) => match ($state) {
-                        'super_admin', 'admin' => 'danger',
-                        'org_admin' => 'warning',
-                        'org_user' => 'info',
-                        default => 'gray',
+                    ->color(function (?string $state, User $record): string {
+                        if ($record->isSuperAdmin()) {
+                            return 'danger';
+                        }
+
+                        return match ($state) {
+                            'org_admin' => 'warning',
+                            'org_user' => 'info',
+                            default => 'gray',
+                        };
                     }),
 
                 Tables\Columns\TextColumn::make('subusers_usage')
@@ -860,6 +892,47 @@ class UserResource extends Resource
                             ->success()
                             ->send();
                     }),
+                    Action::make('permanently_delete_user')
+                            ->label('Trajno izbriši')
+                            ->icon('heroicon-o-trash')
+                            ->color('danger')
+                            ->requiresConfirmation()
+                            ->modalHeading('Trajno izbrisati korisnika?')
+                            ->modalDescription(
+                                'Sustav će prije brisanja provjeriti postoje li podkorisnici, '
+                                . 'zapisi, dokumenti, audit tragovi ili drugi povezani podaci. '
+                                . 'Ova se radnja ne može poništiti.'
+                            )
+                            ->modalSubmitActionLabel('Provjeri i trajno izbriši')
+                            ->visible(fn (User $record): bool =>
+                                Auth::user()?->isSuperAdmin()
+                                && ! $record->isSuperAdmin()
+                                && (int) $record->id !== (int) Auth::id()
+                            )
+                            ->action(function (User $record): void {
+                                $blockReason = static::userDeletionBlockReason($record);
+
+                                if ($blockReason !== null) {
+                                    Notification::make()
+                                        ->title('Korisnik nije izbrisan.')
+                                        ->body($blockReason)
+                                        ->danger()
+                                        ->persistent()
+                                        ->send();
+
+                                    return;
+                                }
+
+                                DB::transaction(function () use ($record): void {
+                                    $record->forceDelete();
+                                });
+
+                                Notification::make()
+                                    ->title('Korisnik je trajno izbrisan.')
+                                    ->body('Provjera nije pronašla povezane podatke.')
+                                    ->success()
+                                    ->send();
+                            }),
             ])
             ->bulkActions([]);
     }
@@ -963,7 +1036,129 @@ class UserResource extends Resource
 
         return $data;
     }
+protected static function getUserRelatedRecords(User $record): array
+{
+    $database = DB::getDatabaseName();
 
+    /*
+     * Pronalazi stvarne strane ključeve koji pokazuju na users.id.
+     */
+    $foreignKeys = DB::select(
+        '
+        SELECT TABLE_NAME, COLUMN_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = ?
+          AND REFERENCED_TABLE_NAME = ?
+          AND REFERENCED_COLUMN_NAME = ?
+        ',
+        [$database, 'users', 'id']
+    );
+
+    /*
+     * Dodatno provjerava stupce koji se u aplikaciji koriste
+     * i kada nije postavljen pravi foreign key.
+     */
+    $conventionalColumns = DB::select(
+        '
+        SELECT TABLE_NAME, COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = ?
+          AND COLUMN_NAME IN (
+              "user_id",
+              "owner_id",
+              "parent_user_id",
+              "created_by",
+              "updated_by",
+              "assigned_to",
+              "responsible_user_id"
+          )
+        ',
+        [$database]
+    );
+
+    $references = collect($foreignKeys)
+        ->merge($conventionalColumns)
+        ->unique(fn ($item) => $item->TABLE_NAME . '.' . $item->COLUMN_NAME);
+
+    $relatedRecords = [];
+
+    foreach ($references as $reference) {
+        $table = $reference->TABLE_NAME;
+        $column = $reference->COLUMN_NAME;
+
+        /*
+         * Ne provjeravamo users.id jer je to sam korisnik.
+         * users.parent_user_id se normalno provjerava zbog podkorisnika.
+         */
+        if ($table === 'users' && $column === 'id') {
+            continue;
+        }
+
+        try {
+            $count = DB::table($table)
+                ->where($column, $record->id)
+                ->count();
+
+            if ($count > 0) {
+                $relatedRecords[] = [
+                    'table' => $table,
+                    'column' => $column,
+                    'count' => $count,
+                ];
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            /*
+             * Ako provjera neke tablice ne uspije, iz sigurnosnih razloga
+             * tretiramo je kao zapreku za brisanje.
+             */
+            $relatedRecords[] = [
+                'table' => $table,
+                'column' => $column,
+                'count' => null,
+            ];
+        }
+    }
+
+    return $relatedRecords;
+}
+
+    protected static function userDeletionBlockReason(User $record): ?string
+{
+    if ($record->isSuperAdmin()) {
+        return 'Superadmin se ne može trajno izbrisati.';
+    }
+
+    if ((int) $record->id === (int) Auth::id()) {
+        return 'Ne možete trajno izbrisati korisnički račun s kojim ste trenutačno prijavljeni.';
+    }
+
+    $relatedRecords = static::getUserRelatedRecords($record);
+
+    if (empty($relatedRecords)) {
+        return null;
+    }
+
+    $details = collect($relatedRecords)
+        ->take(5)
+        ->map(function (array $item): string {
+            if ($item['count'] === null) {
+                return $item['table'] . '.' . $item['column'];
+            }
+
+            return $item['table']
+                . '.'
+                . $item['column']
+                . ' (' . $item['count'] . ')';
+        })
+        ->implode(', ');
+
+    return 'Korisnik ima povezane podatke i ne može se trajno izbrisati. '
+        . 'Pronađene veze: '
+        . $details
+        . (count($relatedRecords) > 5 ? ' i druge.' : '.');
+}
     public static function getPages(): array
     {
         return [

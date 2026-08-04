@@ -80,17 +80,66 @@ class IncidentResource extends BaseResource
         };
     }
 
-    protected static function calculateWorkingDaysLost(?string $start, ?string $end): int
-    {
-        if (! $start || ! $end) {
-            return 0;
-        }
-
-        $startDate = Carbon::parse($start);
-        $endDate = Carbon::parse($end);
-
-        return max($startDate->diffInWeekdays($endDate) - 1, 0);
+    protected static function calculateWorkingDaysLost(
+    string|\DateTimeInterface|null $start,
+    string|\DateTimeInterface|null $end
+): int {
+    if (blank($start) || blank($end)) {
+        return 0;
     }
+
+    $startDate = static::parseIncidentDate($start);
+    $endDate = static::parseIncidentDate($end);
+
+    if (! $startDate || ! $endDate) {
+        return 0;
+    }
+
+    if ($endDate->lessThanOrEqualTo($startDate)) {
+        return 0;
+    }
+
+    return max(
+        $startDate->diffInWeekdays($endDate) - 1,
+        0
+    );
+}
+
+    protected static function parseIncidentDate(
+    string|\DateTimeInterface|null $value
+): ?Carbon {
+    if (blank($value)) {
+        return null;
+    }
+
+    if ($value instanceof \DateTimeInterface) {
+        return Carbon::instance($value)->startOfDay();
+    }
+
+    $value = trim((string) $value);
+
+    $formats = [
+        'Y-m-d',
+        'd.m.Y.',
+        'd.m.Y',
+        'd/m/Y',
+        'd-m-Y',
+    ];
+
+    foreach ($formats as $format) {
+        try {
+            $date = Carbon::createFromFormat($format, $value);
+
+            if ($date !== false) {
+                return $date->startOfDay();
+            }
+        } catch (\Throwable) {
+            // Pokušaj sljedeći podržani format.
+        }
+    }
+
+    return null;
+}
 
     public static function form(Schema $schema): Schema
 {
@@ -128,19 +177,34 @@ class IncidentResource extends BaseResource
                             DatePicker::make('date_occurred')
                                 ->label('Datum nastanka (obavezno)')
                                 ->required()
+                                ->native(false)
+                                ->format('Y-m-d')
                                 ->displayFormat('d.m.Y.')
+                                ->placeholder('dd.mm.gggg.')
                                 ->weekStartsOnMonday()
                                 ->timezone('Europe/Zagreb')
-                                ->reactive(),
+                                ->live(onBlur: true)
+                                ->afterStateUpdated(function ($state, callable $set, callable $get): void {
+                                    $set(
+                                        'working_days_lost',
+                                        static::calculateWorkingDaysLost(
+                                            $state,
+                                            $get('date_of_return'),
+                                        )
+                                    );
+                                }),
 
                             DatePicker::make('date_of_return')
                                 ->label('Datum povratka na posao')
+                                ->native(false)
+                                ->format('Y-m-d')
                                 ->displayFormat('d.m.Y.')
+                                ->placeholder('dd.mm.gggg.')
                                 ->weekStartsOnMonday()
                                 ->timezone('Europe/Zagreb')
-                                ->reactive()
+                                ->live(onBlur: true)
                                 ->after('date_occurred')
-                                ->afterStateUpdated(function ($state, $context, $set, $get) {
+                                ->afterStateUpdated(function ($state, callable $set, callable $get): void {
                                     $set(
                                         'working_days_lost',
                                         static::calculateWorkingDaysLost(
@@ -152,7 +216,8 @@ class IncidentResource extends BaseResource
 
                             TextInput::make('working_days_lost')
                                 ->label('Izgubljeni radni dani')
-                                ->numeric(),
+                                ->numeric()
+                                ->minValue(0),
                         ]),
 
                     Section::make('Detalji')
