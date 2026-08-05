@@ -268,7 +268,53 @@ protected static function priorityIcon(?string $state): ?string
                                                 ->options(static::statusOptions())
                                                 ->default('Not started')
                                                 ->required()
+                                                ->live()
                                                 ->columnSpanFull(),
+
+                                            DatePicker::make('completed_at')
+                                                ->label('Datum zatvaranja')
+                                                ->displayFormat('d.m.Y.')
+                                                ->weekStartsOnMonday()
+                                                ->timezone('Europe/Zagreb')
+                                                ->disabled()
+                                                ->dehydrated(false)
+                                                ->visible(fn (callable $get): bool =>
+                                                    $get('status') === 'Complete'
+                                                )
+                                                ->helperText(
+                                                    'Datum se automatski postavlja kada se status promijeni u Završeno.'
+                                                ),
+
+                                            TextInput::make('closing_days')
+                                                ->label('Broj dana do zatvaranja')
+                                                ->disabled()
+                                                ->dehydrated(false)
+                                                ->visible(fn (callable $get): bool =>
+                                                    $get('status') === 'Complete'
+                                                )
+                                                ->formatStateUsing(function ($state, ?Observation $record): string {
+                                                    if (! $record?->created_at || ! $record?->completed_at) {
+                                                        return '-';
+                                                    }
+
+                                                    $days = $record->created_at
+                                                        ->copy()
+                                                        ->startOfDay()
+                                                        ->diffInDays(
+                                                            $record->completed_at
+                                                                ->copy()
+                                                                ->startOfDay()
+                                                        );
+
+                                                    return match ($days) {
+                                                        0 => '0 dana',
+                                                        1 => '1 dan',
+                                                        default => $days . ' dana',
+                                                    };
+                                                })
+                                                ->helperText(
+                                                    'Broj kalendarskih dana od kreiranja zapažanja do njegovog zatvaranja.'
+                                                ),
 
                                             TagsInput::make('notification_emails')
                                                 ->label('E-mail primatelji')
