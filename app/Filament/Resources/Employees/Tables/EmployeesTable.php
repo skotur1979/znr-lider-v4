@@ -30,23 +30,13 @@ class EmployeesTable
     use HasUserTableColumn;
 
     public static function configure(Table $table): Table
-    {
-        return $table
-            ->modifyQueryUsing(
-                fn (Builder $query): Builder => $query
-                    ->with('latestAlcoholTest')
-                    ->orderByDesc(
-                        EmployeeAlcoholTest::query()
-                            ->select('test_date')
-                            ->whereColumn(
-                                'employee_alcohol_tests.employee_id',
-                                'employees.id'
-                            )
-                            ->latest('test_date')
-                            ->limit(1)
-                    )
-                    ->orderBy('name')
-            )
+{
+    return $table
+        ->modifyQueryUsing(
+            fn (Builder $query): Builder => $query
+                ->with('latestAlcoholTest')
+        )
+        ->defaultSort('name', 'asc')
 
             /*
             |--------------------------------------------------------------------------
