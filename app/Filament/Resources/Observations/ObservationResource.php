@@ -276,13 +276,21 @@ protected static function priorityIcon(?string $state): ?string
                                                 ->displayFormat('d.m.Y.')
                                                 ->weekStartsOnMonday()
                                                 ->timezone('Europe/Zagreb')
-                                                ->disabled()
-                                                ->dehydrated(false)
+                                                ->native(false)
+                                                ->required(fn (callable $get): bool =>
+                                                    $get('status') === 'Complete'
+                                                )
                                                 ->visible(fn (callable $get): bool =>
                                                     $get('status') === 'Complete'
                                                 )
+                                                ->rules([
+                                                    'nullable',
+                                                    'date',
+                                                    'after_or_equal:incident_date',
+                                                    'before_or_equal:today',
+                                                ])
                                                 ->helperText(
-                                                    'Datum se automatski postavlja kada se status promijeni u Završeno.'
+                                                    'Upiši stvarni datum kada je radnja završena. Ako datum ne upišeš, sustav će pri spremanju koristiti današnji datum.'
                                                 ),
 
                                             TextInput::make('closing_days')
@@ -293,11 +301,11 @@ protected static function priorityIcon(?string $state): ?string
                                                     $get('status') === 'Complete'
                                                 )
                                                 ->formatStateUsing(function ($state, ?Observation $record): string {
-                                                    if (! $record?->created_at || ! $record?->completed_at) {
+                                                    if (! $record?->incident_date || ! $record?->completed_at) {
                                                         return '-';
                                                     }
 
-                                                    $days = $record->created_at
+                                                    $days = $record->incident_date
                                                         ->copy()
                                                         ->startOfDay()
                                                         ->diffInDays(
@@ -313,7 +321,7 @@ protected static function priorityIcon(?string $state): ?string
                                                     };
                                                 })
                                                 ->helperText(
-                                                    'Broj kalendarskih dana od kreiranja zapažanja do njegovog zatvaranja.'
+                                                    'Broj kalendarskih dana od datuma zapažanja do datuma zatvaranja.'
                                                 ),
 
                                             TagsInput::make('notification_emails')

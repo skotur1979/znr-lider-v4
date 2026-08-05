@@ -58,10 +58,7 @@ class Observation extends Model
             $observation->completed_at = now();
         }
 
-        if (
-            $observation->isDirty('status')
-            && $observation->status !== 'Complete'
-        ) {
+        if ($observation->status !== 'Complete') {
             $observation->completed_at = null;
         }
     });

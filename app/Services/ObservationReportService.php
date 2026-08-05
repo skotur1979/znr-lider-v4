@@ -147,11 +147,11 @@ class ObservationReportService
 
         $averageClosingDays = $completed
             ->map(function (Observation $record): ?int {
-                if (! $record->created_at || ! $record->completed_at) {
+                if (! $record->incident_date || ! $record->completed_at) {
                     return null;
                 }
 
-                return $record->created_at
+                return Carbon::parse($record->incident_date)
                     ->copy()
                     ->startOfDay()
                     ->diffInDays(
@@ -335,11 +335,11 @@ class ObservationReportService
 
             $average = $completed
                 ->map(function (Observation $record): ?int {
-                    if (! $record->created_at || ! $record->completed_at) {
+                    if (! $record->incident_date || ! $record->completed_at) {
                         return null;
                     }
 
-                    return $record->created_at
+                    return Carbon::parse($record->incident_date)
                         ->copy()
                         ->startOfDay()
                         ->diffInDays(
