@@ -41,10 +41,29 @@ class Observation extends Model
         'target_date' => 'date',
         'notification_emails' => 'array',
         'sent_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
+    protected static function booted(): void
+{
+    static::saving(function (Observation $observation): void {
+        if (
+            $observation->status === 'Complete'
+            && blank($observation->completed_at)
+        ) {
+            $observation->completed_at = now();
+        }
+
+        if (
+            $observation->isDirty('status')
+            && $observation->status !== 'Complete'
+        ) {
+            $observation->completed_at = null;
+        }
+    });
+}
 }

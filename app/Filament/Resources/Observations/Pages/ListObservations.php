@@ -24,46 +24,62 @@ class ListObservations extends BaseListRecords
 }
 
     protected function getHeaderActions(): array
-    {
-        return [
-            Actions\CreateAction::make()
-                ->label('Novo zapažanje')
-                ->icon('heroicon-o-plus'),
+{
+    return [
+        Actions\CreateAction::make()
+            ->label('Novo zapažanje')
+            ->icon('heroicon-o-plus'),
 
-            Actions\Action::make('export_pdf')
-    ->label('Izvoz u PDF')
-    ->icon('heroicon-o-arrow-down-tray')
-    ->color('warning')
-    ->action(function () {
-        // ✅ izvozi samo ono što je trenutno filtrirano / pretraženo / sortirano u tablici
-        $observations = $this->getFilteredSortedTableQuery()
-            ->get();
+        Actions\Action::make('reports')
+            ->label('Izvještaji')
+            ->icon('heroicon-o-chart-bar-square')
+            ->color('info')
+            ->url(
+                ObservationResource::getUrl('reports')
+            ),
 
-        $pdf = Pdf::loadView('pdf.observations', compact('observations'))
-    ->setPaper('a4', 'landscape')
-    ->setOptions([
-        'isHtml5ParserEnabled' => true,
-        'isRemoteEnabled' => true,
-        'isPhpEnabled' => true,
-        'dpi' => 96,
-        'defaultFont' => 'DejaVu Sans',
-    ]);
-        return response()->streamDownload(
-            fn () => print($pdf->output()),
-            'zapazanja-' . now()->format('Y-m-d') . '.pdf'
-        );
-    }),
+        Actions\Action::make('export_pdf')
+            ->label('Izvoz popisa u PDF')
+            ->icon('heroicon-o-arrow-down-tray')
+            ->color('warning')
+            ->action(function () {
+                $observations = $this
+                    ->getFilteredSortedTableQuery()
+                    ->get();
 
-            Actions\Action::make('export_excel')
-                ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(fn () => Excel::download(
-                    new ObservationsExport(),
-                    'zapazanja-' . now()->format('Y-m-d') . '.xlsx'
-                )),
-        ];
-    }
+                $pdf = Pdf::loadView(
+                    'pdf.observations',
+                    compact('observations')
+                )
+                    ->setPaper('a4', 'landscape')
+                    ->setOptions([
+                        'isHtml5ParserEnabled' => true,
+                        'isRemoteEnabled' => true,
+                        'isPhpEnabled' => true,
+                        'dpi' => 96,
+                        'defaultFont' => 'DejaVu Sans',
+                    ]);
+
+                return response()->streamDownload(
+                    fn () => print($pdf->output()),
+                    'zapazanja-popis-'
+                        . now()->format('Y-m-d')
+                        . '.pdf'
+                );
+            }),
+
+        Actions\Action::make('export_excel')
+            ->label('Izvoz popisa u Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(fn () => Excel::download(
+                new ObservationsExport(),
+                'zapazanja-popis-'
+                    . now()->format('Y-m-d')
+                    . '.xlsx'
+            )),
+    ];
+}
 
     protected function getHeaderWidgets(): array
     {

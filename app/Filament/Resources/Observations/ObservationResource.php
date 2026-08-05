@@ -853,10 +853,11 @@ protected static function priorityIcon(?string $state): ?string
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListObservations::route('/'),
+            'index' => Pages\ListObservations::route('/'),
             'create' => Pages\CreateObservation::route('/create'),
-            'edit'   => Pages\EditObservation::route('/{record}/edit'),
-            'view'   => Pages\ViewObservation::route('/{record}'),
+            'reports' => Pages\ObservationReports::route('/reports'),
+            'edit' => Pages\EditObservation::route('/{record}/edit'),
+            'view' => Pages\ViewObservation::route('/{record}'),
         ];
     }
 }
