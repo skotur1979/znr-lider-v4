@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\Machines\Pages;
 
 use App\Filament\Resources\Machines\MachineResource;
-use Filament\Actions;
+use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewMachine extends ViewRecord
@@ -12,28 +12,39 @@ class ViewMachine extends ViewRecord
 
     public function mount(int|string $record): void
     {
+        /*
+         * Prvo učitaj stvarni Machine model.
+         */
+        parent::mount($record);
+
+        /*
+         * Zatim provjeri dozvolu pregleda.
+         */
         if (! MachineResource::ensureModulePermission('view')) {
             $this->redirect(
-                MachineResource::getUrl('index')
+                MachineResource::getUrl('index'),
+                navigate: true
             );
-
-            return;
         }
-
-        parent::mount($record);
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Actions\EditAction::make()
+            Action::make('editMachine')
                 ->label('Uredi')
-                ->before(function ($action): void {
-
+                ->icon('heroicon-o-pencil-square')
+                ->color('warning')
+                ->action(function () {
                     if (! MachineResource::ensureModulePermission('update')) {
-                        $action->halt();
+                        return;
                     }
 
+                    return redirect(
+                        MachineResource::getUrl('edit', [
+                            'record' => $this->getRecord(),
+                        ])
+                    );
                 }),
         ];
     }

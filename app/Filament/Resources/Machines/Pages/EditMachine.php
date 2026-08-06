@@ -21,15 +21,23 @@ class EditMachine extends EditRecord
     public bool $showOcrDiffs = false;
 
     public function mount(int|string $record): void
-    {
-        if (! MachineResource::ensureModulePermission('update')) {
-            $this->redirect(MachineResource::getUrl('index'));
+{
+    /*
+     * Filament prvo mora pronaći zapis i pretvoriti
+     * vrijednost iz URL-a u Machine model.
+     */
+    parent::mount($record);
 
-            return;
-        }
-
-        parent::mount($record);
+    /*
+     * Tek nakon toga provjeravamo dozvolu.
+     */
+    if (! MachineResource::ensureModulePermission('update')) {
+        $this->redirect(
+            MachineResource::getUrl('index'),
+            navigate: true
+        );
     }
+}
 
     protected function getHeaderActions(): array
     {

@@ -7,10 +7,10 @@ use App\Filament\Resources\Machines\Pages;
 use App\Models\Machine;
 use App\Support\ExpiryBadge;
 use App\Services\StorageQuotaService;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
@@ -402,14 +402,21 @@ class MachineResource extends BaseResource
                     ViewAction::make()
                         ->label('Prikaži'),
 
-                    EditAction::make()
+                    Action::make('editMachine')
                         ->label('Uredi')
-                        ->before(function ($action): void {
+                        ->icon(Heroicon::PencilSquare)
+                        ->visible(fn (Machine $record): bool => ! $record->trashed())
+                        ->action(function (Machine $record) {
                             if (! static::ensureModulePermission('update')) {
-                                $action->halt();
+                                return;
                             }
-                        })
-                        ->visible(fn (Machine $record): bool => ! $record->trashed()),
+
+                            return redirect(
+                                static::getUrl('edit', [
+                                    'record' => $record,
+                                ])
+                            );
+                        }),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
