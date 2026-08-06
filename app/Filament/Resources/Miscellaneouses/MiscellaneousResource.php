@@ -5,13 +5,15 @@ namespace App\Filament\Resources\Miscellaneouses;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Miscellaneouses\Pages;
 use App\Models\Category;
+use App\Filament\Resources\Categories\CategoryResource;
+use Illuminate\Validation\ValidationException;
 use App\Models\Miscellaneous;
 use App\Services\StorageQuotaService;
 use Carbon\Carbon;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
@@ -102,14 +104,28 @@ class MiscellaneousResource extends BaseResource
                                         ->required()
                                         ->maxLength(255),
                                 ])
-                                ->createOptionUsing(function (array $data): int {
-                                    $category = Category::create([
-                                        'name' => $data['name'],
-                                        'user_id' => Auth::user()?->ownerId(),
+                                ->createOptionUsing(
+                            function (array $data): int {
+                                if (
+                                    ! CategoryResource::allowsModulePermission(
+                                        'create'
+                                    )
+                                ) {
+                                    throw ValidationException::withMessages([
+                                        'category_id' =>
+                                            'Nemate ovlasti za dodavanje kategorije ispitivanja.',
                                     ]);
+                                }
 
-                                    return $category->id;
-                                }),
+                                $category = Category::create([
+                                    'name' => $data['name'],
+                                    'user_id' =>
+                                        Auth::user()?->ownerId(),
+                                ]);
+
+                                return $category->id;
+                            }
+                        ),
 
                             TextInput::make('examiner')
                                 ->label('Ispitao')
@@ -383,54 +399,145 @@ class MiscellaneousResource extends BaseResource
             ->paginated([10, 25, 50, 100, 'all'])
             ->actions([
                 ActionGroup::make([
-                    ViewAction::make()->label('Prikaži'),
+                    ViewAction::make()
+                        ->label('Prikaži'),
 
-                    EditAction::make()
+                    Action::make('editMiscellaneous')
                         ->label('Uredi')
-                        ->visible(fn (Miscellaneous $record) => ! $record->trashed()),
+                        ->icon('heroicon-o-pencil-square')
+                        ->visible(
+                            fn (Miscellaneous $record): bool =>
+                                ! $record->trashed()
+                        )
+                        ->action(function (
+                            Miscellaneous $record
+                        ) {
+                            if (
+                                ! static::allowsModulePermission(
+                                    'update'
+                                )
+                            ) {
+                                return;
+                            }
+
+                            return redirect(
+                                static::getUrl('edit', [
+                                    'record' => $record,
+                                ])
+                            );
+                        }),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (Miscellaneous $record) => ! $record->trashed()),
+                        ->before(
+                            static::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (Miscellaneous $record): bool =>
+                                ! $record->trashed()
+                        ),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (Miscellaneous $record) => $record->trashed()),
+                        ->before(
+                            static::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (Miscellaneous $record): bool =>
+                                $record->trashed()
+                        ),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (Miscellaneous $record) => $record->trashed()),
-                ]),
+                        ->before(
+                            static::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (Miscellaneous $record): bool =>
+                                $record->trashed()
+                        ),
+                ])
+                    ->icon('heroicon-o-ellipsis-vertical')
+                    ->label(''),
             ])
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
-                    ->modalHeading('Deaktiviraj odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-                    ->modalSubmitActionLabel('Deaktiviraj')
-                    ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire)),
+                    ->before(
+                        static::beforeModulePermission(
+                            'delete'
+                        )
+                    )
+                    ->modalHeading(
+                        'Deaktiviraj odabrano'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            ! static::isOnlyTrashed(
+                                $livewire
+                            )
+                    ),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        static::beforeModulePermission(
+                            'delete'
+                        )
+                    )
                     ->modalHeading('Vrati odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti?'
+                    )
                     ->modalSubmitActionLabel('Vrati')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            static::isOnlyTrashed(
+                                $livewire
+                            )
+                    ),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
                     ->requiresConfirmation()
-                    ->modalHeading('Trajno obriši odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
-                    ->modalSubmitActionLabel('Trajno obriši')
-                    ->modalCancelActionLabel('Odustani'),
+                    ->before(
+                        static::beforeModulePermission(
+                            'delete'
+                        )
+                    )
+                    ->modalHeading(
+                        'Trajno obriši odabrano'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno obriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    ),
             ]);
     }
 
