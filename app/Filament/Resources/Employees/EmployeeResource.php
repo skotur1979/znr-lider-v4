@@ -21,7 +21,8 @@ class EmployeeResource extends BaseResource
 {
     protected static ?string $model = Employee::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
+    protected static string|BackedEnum|null $navigationIcon =
+        Heroicon::OutlinedUsers;
 
     protected static ?string $recordTitleAttribute = 'name';
 
@@ -29,10 +30,13 @@ class EmployeeResource extends BaseResource
     protected static ?string $modelLabel = 'Zaposlenik';
     protected static ?string $pluralModelLabel = 'Zaposlenici';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Zaposlenici';
+    protected static string|\UnitEnum|null $navigationGroup =
+        'Zaposlenici';
+
     protected static ?int $navigationSort = 1;
 
     protected static bool $usesSoftDeletes = true;
+
     protected static bool $hasOwnership = true;
 
     protected static function getModuleKey(): ?string
@@ -58,6 +62,11 @@ class EmployeeResource extends BaseResource
     public static function getMaxContentWidth(): MaxWidth|string|null
     {
         return MaxWidth::Full;
+    }
+
+    public static function canCreate(): bool
+    {
+        return static::canCreateModuleRecord();
     }
 
     public static function getPages(): array

@@ -4,13 +4,14 @@ namespace App\Filament\Resources\Employees\Tables;
 
 use App\Filament\Resources\Concerns\HasUserTableColumn;
 use App\Models\Employee;
+use App\Filament\Resources\Employees\EmployeeResource;
+use Filament\Actions\Action;
 use App\Models\EmployeeAlcoholTest;
 use App\Models\EmployeeCertificate;
 use App\Support\ExpiryBadge;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
@@ -713,45 +714,95 @@ class EmployeesTable
                     ViewAction::make()
                         ->label('Prikaži'),
 
-                    EditAction::make()
+                    Action::make('editEmployee')
                         ->label('Uredi')
+                        ->icon('heroicon-o-pencil-square')
                         ->visible(
-                            fn (Employee $record): bool => ! (
-                                method_exists($record, 'trashed')
-                                && $record->trashed()
-                            )
-                        ),
+                            fn (Employee $record): bool =>
+                                ! (
+                                    method_exists(
+                                        $record,
+                                        'trashed'
+                                    )
+                                    && $record->trashed()
+                                )
+                        )
+                        ->action(function (
+                            Employee $record
+                        ) {
+                            if (
+                                ! EmployeeResource::allowsModulePermission(
+                                    'update'
+                                )
+                            ) {
+                                return;
+                            }
+
+                            return redirect(
+                                EmployeeResource::getUrl(
+                                    'edit',
+                                    [
+                                        'record' => $record,
+                                    ]
+                                )
+                            );
+                        }),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(
-                            fn (Employee $record): bool => ! (
-                                method_exists($record, 'trashed')
-                                && $record->trashed()
+                        ->before(
+                            EmployeeResource::beforeModulePermission(
+                                'delete'
                             )
+                        )
+                        ->visible(
+                            fn (Employee $record): bool =>
+                                ! (
+                                    method_exists(
+                                        $record,
+                                        'trashed'
+                                    )
+                                    && $record->trashed()
+                                )
                         ),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
+                        ->before(
+                            EmployeeResource::beforeModulePermission(
+                                'delete'
+                            )
+                        )
                         ->visible(
                             fn (Employee $record): bool =>
-                                method_exists($record, 'trashed')
+                                method_exists(
+                                    $record,
+                                    'trashed'
+                                )
                                 && $record->trashed()
                         ),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
+                        ->before(
+                            EmployeeResource::beforeModulePermission(
+                                'delete'
+                            )
+                        )
                         ->visible(
                             fn (Employee $record): bool =>
-                                method_exists($record, 'trashed')
+                                method_exists(
+                                    $record,
+                                    'trashed'
+                                )
                                 && $record->trashed()
                         ),
-                ])->label('Akcije'),
+                ])
+                    ->label('Akcije'),
             ])
-
             /*
             |--------------------------------------------------------------------------
             | GRUPNE AKCIJE
@@ -762,6 +813,11 @@ class EmployeesTable
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        EmployeeResource::beforeModulePermission(
+                            'delete'
+                        )
+                    )
                     ->modalHeading('Deaktiviraj odabrano')
                     ->modalDescription(
                         'Jesi li siguran/a da želiš to učiniti?'
@@ -776,6 +832,11 @@ class EmployeesTable
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        EmployeeResource::beforeModulePermission(
+                            'delete'
+                        )
+                    )
                     ->modalHeading('Vrati odabrano')
                     ->modalDescription(
                         'Jesi li siguran/a da želiš to učiniti?'
@@ -790,6 +851,11 @@ class EmployeesTable
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        EmployeeResource::beforeModulePermission(
+                            'delete'
+                        )
+                    )
                     ->modalHeading('Trajno obriši odabrano')
                     ->modalDescription(
                         'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
