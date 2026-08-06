@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Observations\Pages;
 
+use App\Filament\Resources\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Inspections\InspectionResource;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Mail\ObservationNotificationMail;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Mail;
 
 class CreateObservation extends CreateRecord
 {
+    use InteractsWithModulePagePermissions;
+
     protected static string $resource = ObservationResource::class;
 
     protected ?string $returnInspectionEditUrl = null;
@@ -31,43 +34,98 @@ class CreateObservation extends CreateRecord
 
     public function mount(): void
     {
+        /*
+         * Kod CreateRecord stranice provjera ide prije
+         * parent::mount(), jer još nema zapisa koji Filament
+         * treba pretvoriti u Eloquent model.
+         */
+        if (
+            $this->redirectIfMissingModulePermission(
+                'create'
+            )
+        ) {
+            return;
+        }
+
         parent::mount();
 
-        $findingId = request()->query('inspection_finding_id');
+        $findingId = request()->query(
+            'inspection_finding_id'
+        );
 
         if ($findingId) {
-            $finding = InspectionFinding::with('inspection')->find($findingId);
+            $finding = InspectionFinding::with(
+                'inspection'
+            )->find($findingId);
 
             if ($finding?->inspection) {
-                $this->returnInspectionEditUrl = InspectionResource::getUrl('edit', [
-                    'record' => $finding->inspection,
-                ]);
+                $this->returnInspectionEditUrl =
+                    InspectionResource::getUrl(
+                        'edit',
+                        [
+                            'record' => $finding->inspection,
+                        ]
+                    );
             }
         }
 
         $this->form->fill([
             'user_id' => request()->query('user_id'),
-            'incident_date' => request()->query('incident_date'),
-            'observation_type' => request()->query('observation_type'),
-            'priority' => request()->query('priority') ?? 'medium',
+            'incident_date' => request()->query(
+                'incident_date'
+            ),
+            'observation_type' => request()->query(
+                'observation_type'
+            ),
+            'priority' => request()->query(
+                'priority'
+            ) ?? 'medium',
             'location' => request()->query('location'),
             'item' => request()->query('item'),
-            'potential_incident_type' => request()->query('potential_incident_type'),
-            'picture_path' => request()->query('picture_path'),
+            'potential_incident_type' => request()->query(
+                'potential_incident_type'
+            ),
+            'picture_path' => request()->query(
+                'picture_path'
+            ),
             'action' => request()->query('action'),
-            'responsible' => request()->query('responsible'),
-            'notification_emails' => request()->query('notification_emails'),
-            'target_date' => request()->query('target_date'),
-            'status' => request()->query('status') ?? 'Not started',
+            'responsible' => request()->query(
+                'responsible'
+            ),
+            'notification_emails' => request()->query(
+                'notification_emails'
+            ),
+            'target_date' => request()->query(
+                'target_date'
+            ),
+            'status' => request()->query(
+                'status'
+            ) ?? 'Not started',
             'comments' => request()->query('comments'),
         ]);
     }
 
-    protected function mutateFormDataBeforeCreate(array $data): array
+    protected function beforeCreate(): void
     {
-        if (! Auth::user()?->isAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId() ?? Auth::id();
-        }
+        /*
+         * Dodatna serverska provjera neposredno prije
+         * spremanja zapisa.
+         */
+        $this->haltIfMissingModulePermission(
+            'create'
+        );
+    }
+
+    protected function mutateFormDataBeforeCreate(
+        array $data
+    ): array {
+        /*
+         * Podkorisnik i glavni korisnik zapise spremaju
+         * na ownerId organizacije.
+         */
+        $data = ObservationResource::fillOwnershipData(
+            $data
+        );
 
         if (blank($data['priority'] ?? null)) {
             $data['priority'] = 'medium';
@@ -80,8 +138,13 @@ class CreateObservation extends CreateRecord
         /*
          * Očisti prazne i ponovljene e-mail adrese.
          */
-        $data['notification_emails'] = collect($data['notification_emails'] ?? [])
-            ->map(fn ($email) => trim((string) $email))
+        $data['notification_emails'] = collect(
+            $data['notification_emails'] ?? []
+        )
+            ->map(
+                fn ($email): string =>
+                    trim((string) $email)
+            )
             ->filter()
             ->unique()
             ->values()
@@ -92,28 +155,40 @@ class CreateObservation extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $findingId = request()->query('inspection_finding_id');
+        $findingId = request()->query(
+            'inspection_finding_id'
+        );
 
         if ($findingId) {
-            $finding = InspectionFinding::find($findingId);
+            $finding = InspectionFinding::find(
+                $findingId
+            );
 
             if ($finding) {
                 $finding->update([
-                    'observation_id' => $this->record?->id,
-                    'workflow_status' => 'converted_to_observation',
+                    'observation_id' =>
+                        $this->record?->id,
+                    'workflow_status' =>
+                        'converted_to_observation',
                 ]);
             }
         }
 
-        $emails = collect($this->record->notification_emails ?? [])
-            ->map(fn ($email) => trim((string) $email))
+        $emails = collect(
+            $this->record->notification_emails ?? []
+        )
+            ->map(
+                fn ($email): string =>
+                    trim((string) $email)
+            )
             ->filter()
             ->unique()
             ->values()
             ->all();
 
         /*
-         * Ako nije upisana nijedna adresa, ništa se ne šalje.
+         * Ako nije upisana nijedna adresa,
+         * ništa se ne šalje.
          */
         if (empty($emails)) {
             return;
@@ -121,7 +196,9 @@ class CreateObservation extends CreateRecord
 
         foreach ($emails as $email) {
             Mail::to($email)->send(
-                new ObservationNotificationMail($this->record)
+                new ObservationNotificationMail(
+                    $this->record
+                )
             );
         }
 
@@ -137,6 +214,8 @@ class CreateObservation extends CreateRecord
             return $this->returnInspectionEditUrl;
         }
 
-        return $this->getResource()::getUrl('index');
+        return $this->getResource()::getUrl(
+            'index'
+        );
     }
 }

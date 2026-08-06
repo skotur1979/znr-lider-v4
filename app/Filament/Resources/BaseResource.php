@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Resources\Concerns\HasModulePermissions;
 use App\Filament\Resources\Concerns\HasUserTableColumn;
 use App\Models\User;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -15,14 +15,15 @@ use Illuminate\Support\Facades\Schema;
 abstract class BaseResource extends Resource
 {
     use HasUserTableColumn;
+    use HasModulePermissions;
 
     protected static bool $usesSoftDeletes = false;
 
     protected static bool $hasOwnership = true;
 
     /**
-     * Svaki Resource koji koristi module organizacije
-     * vraća vlastiti ključ modula.
+     * Svaki modul koji koristi dodjelu modula i dozvola
+     * treba vratiti svoj ključ.
      */
     protected static function getModuleKey(): ?string
     {
@@ -30,8 +31,7 @@ abstract class BaseResource extends Resource
     }
 
     /**
-     * Javno dostupan ključ modula za Page klase
-     * i ostale dijelove aplikacije.
+     * Javno dostupan ključ modula.
      */
     public static function moduleKey(): ?string
     {
@@ -52,89 +52,6 @@ abstract class BaseResource extends Resource
     protected static function ownerId(): ?int
     {
         return static::user()?->ownerId();
-    }
-
-    /**
-     * Provjera dozvole za trenutačni Resource.
-     */
-    public static function canUseModuleAction(
-        string $permission
-    ): bool {
-        $user = static::user();
-
-        if (! $user) {
-            return false;
-        }
-
-        $moduleKey = static::getModuleKey();
-
-        /*
-         * Resourcei bez ključa modula ne koriste
-         * ovaj sustav dozvola.
-         */
-        if (! $moduleKey) {
-            return true;
-        }
-
-        return $user->hasModulePermission(
-            $moduleKey,
-            $permission
-        );
-    }
-
-    public static function canViewModule(): bool
-    {
-        return static::canUseModuleAction('view');
-    }
-
-    public static function canCreateModuleRecord(): bool
-    {
-        return static::canUseModuleAction('create');
-    }
-
-    public static function canUpdateModuleRecord(): bool
-    {
-        return static::canUseModuleAction('update');
-    }
-
-    public static function canDeleteModuleRecord(): bool
-    {
-        return static::canUseModuleAction('delete');
-    }
-
-    /**
-     * Zajednička obavijest kada korisnik nema dozvolu.
-     */
-    public static function notifyMissingModulePermission(
-        ?string $customBody = null
-    ): void {
-        Notification::make()
-            ->title('Nemate ovlasti za ovu akciju')
-            ->body(
-                $customBody
-                    ?: 'Obratite se glavnom korisniku svoje organizacije.'
-            )
-            ->danger()
-            ->send();
-    }
-
-    /**
-     * Provjera dozvole uz automatsko prikazivanje obavijesti.
-     *
-     * Koristit ćemo je na vidljivim gumbima kako gumbi ne bi
-     * nestali, nego bi nakon klika prikazali poruku.
-     */
-    public static function ensureModulePermission(
-        string $permission,
-        ?string $customBody = null
-    ): bool {
-        if (static::canUseModuleAction($permission)) {
-            return true;
-        }
-
-        static::notifyMissingModulePermission($customBody);
-
-        return false;
     }
 
     protected static function modelHasColumn(
@@ -186,13 +103,10 @@ abstract class BaseResource extends Resource
     }
 
     /**
-     * Modul se prikazuje u izborniku samo ako:
+     * Modul se prikazuje ako:
      *
-     * 1. organizacija ima omogućen modul;
-     * 2. podkorisnik ima pravo pregleda.
-     *
-     * Ostale akcije kasnije ostaju vidljive i prikazuju
-     * poruku ako korisnik nema dozvolu.
+     * 1. organizacija ima modul;
+     * 2. korisnik ima pravo pregleda.
      */
     public static function shouldRegisterNavigation(): bool
     {
@@ -251,10 +165,6 @@ abstract class BaseResource extends Resource
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
-        /*
-         * Korisnik bez prava pregleda ne smije dobivati
-         * rezultate ovog modula u globalnoj pretrazi.
-         */
         if (! static::canViewModule()) {
             return parent::getGlobalSearchEloquentQuery()
                 ->whereRaw('1 = 0');
@@ -307,7 +217,12 @@ abstract class BaseResource extends Resource
                     }
                 }
 
-                if (Schema::hasColumn($table, 'active')) {
+                if (
+                    Schema::hasColumn(
+                        $table,
+                        'active'
+                    )
+                ) {
                     $query->where(
                         $table . '.active',
                         true

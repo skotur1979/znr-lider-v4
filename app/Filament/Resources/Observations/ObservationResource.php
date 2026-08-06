@@ -726,9 +726,22 @@ protected static function priorityIcon(?string $state): ?string
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaži'),
 
-                    EditAction::make()
+                    Action::make('editObservation')
                         ->label('Uredi')
-                        ->visible(fn (Observation $record) => ! $record->trashed()),
+                        ->icon(Heroicon::PencilSquare)
+                        ->visible(fn (Observation $record) => ! $record->trashed())
+                        ->action(function (Observation $record) {
+
+                            if (! static::allowsModulePermission('update')) {
+                                return;
+                            }
+
+                            return redirect(
+                                static::getUrl('edit', [
+                                    'record' => $record,
+                                ])
+                            );
+                        }),
 
                     Action::make('send_observation')
                         ->label('Pošalji zapažanje / podsjetnik')
@@ -754,6 +767,9 @@ protected static function priorityIcon(?string $state): ?string
                                 ->required(),
                         ])
                         ->action(function (Observation $record, array $data): void {
+                            if (! static::allowsModulePermission('update')) {
+                        return;
+                    }
                             $emails = collect($data['emails'] ?? [])
                                 ->map(fn ($email): string => trim((string) $email))
                                 ->filter(fn ($email): bool =>
@@ -831,16 +847,25 @@ protected static function priorityIcon(?string $state): ?string
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
+                        ->before(
+                            static::beforeModulePermission('delete')
+                        )
                         ->visible(fn (Observation $record) => ! $record->trashed()),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
+                        ->before(
+                            static::beforeModulePermission('delete')
+                        )
                         ->visible(fn (Observation $record) => $record->trashed()),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
+                        ->before(
+                            static::beforeModulePermission('delete')
+                        )
                         ->visible(fn (Observation $record) => $record->trashed()),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
@@ -850,6 +875,9 @@ protected static function priorityIcon(?string $state): ?string
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        static::beforeModulePermission('delete')
+                    )
                     ->modalHeading('Deaktiviraj odabrano')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Deaktiviraj')
@@ -859,6 +887,9 @@ protected static function priorityIcon(?string $state): ?string
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        static::beforeModulePermission('delete')
+                    )
                     ->modalHeading('Vrati odabrano')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Vrati')
@@ -868,6 +899,9 @@ protected static function priorityIcon(?string $state): ?string
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        static::beforeModulePermission('delete')
+                    )
                     ->modalHeading('Trajno obriši odabrano')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
                     ->modalSubmitActionLabel('Trajno obriši')
