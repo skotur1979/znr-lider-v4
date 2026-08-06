@@ -17,7 +17,6 @@ use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
@@ -671,29 +670,81 @@ class WasteTrackingFormResource extends BaseResource
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaz'),
 
-                    EditAction::make()
+                    Action::make('editWasteTrackingForm')
                         ->label('Uredi')
-                        ->visible(fn (WasteTrackingForm $record) => ! $record->isLocked() && ! $record->trashed()),
+                        ->icon('heroicon-o-pencil-square')
+                        ->visible(
+                            fn (WasteTrackingForm $record): bool =>
+                                ! $record->isLocked()
+                                && ! $record->trashed()
+                        )
+                        ->action(function (
+                            WasteTrackingForm $record
+                        ) {
+                            if (
+                                ! static::allowsModulePermission(
+                                    'update'
+                                )
+                            ) {
+                                return;
+                            }
+
+                            return redirect(
+                                static::getUrl('edit', [
+                                    'record' => $record,
+                                ])
+                            );
+                        }),
 
                     Action::make('lock')
                         ->label('Zaključi')
                         ->icon('heroicon-o-lock-closed')
                         ->color('success')
                         ->requiresConfirmation()
-                        ->modalHeading('Zaključi prateći list')
-                        ->modalDescription('Zaključavanjem će se automatski evidentirati izlaz u ONTO obrascu i skinuti količina sa stanja.')
-                        ->visible(fn (WasteTrackingForm $record) => ! $record->isLocked() && ! $record->trashed())
-                        ->action(function (WasteTrackingForm $record): void {
+                        ->modalHeading(
+                            'Zaključi prateći list'
+                        )
+                        ->modalDescription(
+                            'Zaključavanjem će se automatski evidentirati izlaz u ONTO obrascu i skinuti količina sa stanja.'
+                        )
+                        ->visible(
+                            fn (WasteTrackingForm $record): bool =>
+                                ! $record->isLocked()
+                                && ! $record->trashed()
+                        )
+                        ->action(function (
+                            WasteTrackingForm $record
+                        ): void {
+                            if (
+                                ! static::allowsModulePermission(
+                                    'update'
+                                )
+                            ) {
+                                return;
+                            }
+
                             try {
-                                app(OntoService::class)->lockTrackingForm($record);
-                                 ActivityLogger::status(
-                                module: 'Prateći listovi otpada',
-                                title: 'Prateći list zaključen',
-                                description: 'Zaključen je prateći list: ' . ($record->document_number ?: $record->display_name),
-                                record: $record,
+                                app(OntoService::class)
+                                    ->lockTrackingForm($record);
+
+                                ActivityLogger::status(
+                                    module:
+                                        'Prateći listovi otpada',
+                                    title:
+                                        'Prateći list zaključen',
+                                    description:
+                                        'Zaključen je prateći list: '
+                                        . (
+                                            $record->document_number
+                                            ?: $record->display_name
+                                        ),
+                                    record: $record,
                                 );
+
                                 Notification::make()
-                                    ->title('Prateći list je zaključen.')
+                                    ->title(
+                                        'Prateći list je zaključen.'
+                                    )
                                     ->success()
                                     ->send();
                             } catch (RuntimeException $e) {
@@ -707,27 +758,65 @@ class WasteTrackingFormResource extends BaseResource
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (WasteTrackingForm $record) => ! $record->trashed())
-                        ->modalHeading('Deaktiviraj prateći list')
-                        ->modalDescription('Jesi li siguran/a da želiš deaktivirati ovaj prateći list?'),
+                        ->before(
+                            static::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (WasteTrackingForm $record): bool =>
+                                ! $record->trashed()
+                        )
+                        ->modalHeading(
+                            'Deaktiviraj prateći list'
+                        )
+                        ->modalDescription(
+                            'Jesi li siguran/a da želiš deaktivirati ovaj prateći list?'
+                        ),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (WasteTrackingForm $record) => $record->trashed()),
+                        ->before(
+                            static::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (WasteTrackingForm $record): bool =>
+                                $record->trashed()
+                        ),
 
                     ForceDeleteAction::make()
                         ->label('Trajno izbriši')
                         ->requiresConfirmation()
-                        ->visible(fn (WasteTrackingForm $record) => $record->trashed() && ! $record->isLocked())
-                        ->modalHeading('Trajno izbriši prateći list')
-                        ->modalDescription('Jesi li siguran/a? Ova radnja je nepovratna.'),
+                        ->before(
+                            static::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (WasteTrackingForm $record): bool =>
+                                $record->trashed()
+                                && ! $record->isLocked()
+                        )
+                        ->modalHeading(
+                            'Trajno izbriši prateći list'
+                        )
+                        ->modalDescription(
+                            'Jesi li siguran/a? Ova radnja je nepovratna.'
+                        ),
                 ]),
             ])
             ->bulkActions([
     DeleteBulkAction::make()
         ->label('Deaktiviraj označeno')
         ->requiresConfirmation()
+        ->before(
+            static::beforeModulePermission(
+                'delete'
+            )
+        )
         ->visible(fn (HasTable $livewire) => ! static::isOnlyTrashed($livewire))
         ->modalHeading('Deaktiviraj odabrano')
         ->modalDescription('Jesi li siguran/a da želiš to učiniti?'),
@@ -740,6 +829,13 @@ class WasteTrackingFormResource extends BaseResource
         ->modalHeading('Kopiraj označeni prateći list')
         ->modalDescription('Od označenog pratećeg lista napravit će se novi nacrt s kopiranim podacima.')
         ->action(function (Collection $records, $livewire): void {
+            if (
+                ! static::allowsModulePermission(
+                    'create'
+                )
+            ) {
+                return;
+            }
             if ($records->count() !== 1) {
                 Notification::make()
                     ->title('Označi točno jedan prateći list.')
@@ -798,11 +894,21 @@ class WasteTrackingFormResource extends BaseResource
     RestoreBulkAction::make()
         ->label('Vrati označeno')
         ->requiresConfirmation()
+        ->before(
+            static::beforeModulePermission(
+                'delete'
+            )
+        )
         ->visible(fn (HasTable $livewire) => static::isOnlyTrashed($livewire)),
 
     ForceDeleteBulkAction::make()
         ->label('Trajno izbriši označeno')
         ->requiresConfirmation()
+        ->before(
+            static::beforeModulePermission(
+                'delete'
+            )
+        )
         ->modalHeading('Trajno izbriši odabrano')
         ->modalDescription('Jesi li siguran/a? Ova radnja je nepovratna.'),
 ]);
@@ -964,7 +1070,7 @@ class WasteTrackingFormResource extends BaseResource
 
     public static function canCreate(): bool
     {
-        return static::user() !== null;
+        return static::canCreateModuleRecord();
     }
 
     public static function getPages(): array
