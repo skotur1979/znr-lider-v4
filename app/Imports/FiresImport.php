@@ -87,7 +87,15 @@ class FiresImport implements ToCollection
                 continue;
             }
 
-            $userId = Auth::user()?->ownerId() ?? Auth::id();
+            $user = Auth::user();
+
+                if (! $user) {
+                    $this->skipped++;
+
+                    continue;
+                }
+
+                $userId = $user->ownerId();
 
             $fire = Fire::query()
                 ->where('user_id', $userId)

@@ -13,11 +13,30 @@ class EditFire extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\ViewAction::make()->label('Pregled'),
-            Actions\DeleteAction::make()->requiresConfirmation(),
-            Actions\RestoreAction::make()->requiresConfirmation(),
-            Actions\ForceDeleteAction::make()->requiresConfirmation(),
+            Actions\ViewAction::make()
+                ->label('Pregled'),
+
+            Actions\DeleteAction::make()
+                ->label('Deaktiviraj')
+                ->requiresConfirmation(),
+
+            Actions\RestoreAction::make()
+                ->label('Vrati')
+                ->requiresConfirmation(),
+
+            Actions\ForceDeleteAction::make()
+                ->label('Trajno obriši')
+                ->requiresConfirmation(),
         ];
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        if (! auth()->user()?->isSuperAdmin()) {
+            unset($data['user_id']);
+        }
+
+        return $data;
     }
 
     protected function getRedirectUrl(): string
