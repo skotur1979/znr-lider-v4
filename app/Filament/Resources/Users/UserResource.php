@@ -202,6 +202,57 @@ class UserResource extends Resource
             ->bulkToggleable();
     }
 
+    protected static function modulePermissionCheckbox(
+        string $moduleKey,
+        string $label
+    ): CheckboxList {
+        return CheckboxList::make('module_permissions.' . $moduleKey)
+            ->label($label)
+            ->options(User::MODULE_PERMISSION_ACTIONS)
+            ->default(User::fullModulePermissionSet())
+            ->afterStateHydrated(function ($component, ?User $record) use ($moduleKey): void {
+                if (! $record) {
+                    $component->state(User::fullModulePermissionSet());
+
+                    return;
+                }
+
+                $component->state($record->permissionsForModule($moduleKey));
+            })
+            ->columns(4)
+            ->bulkToggleable()
+            ->visible(function () use ($moduleKey): bool {
+                $authUser = Auth::user();
+
+                return $authUser?->isOrgAdmin() === true
+                    && $authUser->canAccessModule($moduleKey);
+            });
+    }
+
+    protected static function normalizeModulePermissions(
+        mixed $permissions,
+        User $owner
+    ): array {
+        $permissions = is_array($permissions) ? $permissions : [];
+        $normalized = [];
+
+        foreach (User::CONTROLLED_MODULES as $moduleKey => $label) {
+            if (! $owner->canAccessModule($moduleKey)) {
+                continue;
+            }
+
+            $selected = $permissions[$moduleKey] ?? [];
+            $selected = is_array($selected) ? $selected : [];
+
+            $normalized[$moduleKey] = array_values(array_intersect(
+                $selected,
+                array_keys(User::MODULE_PERMISSION_ACTIONS)
+            ));
+        }
+
+        return $normalized;
+    }
+
     public static function form(Schema $schema): Schema
     {
         $authUser = Auth::user();
@@ -399,6 +450,37 @@ class UserResource extends Resource
                                 . '%)';
                         }),
                 ])
+                ->columnSpanFull(),
+
+            Section::make('Dozvole podkorisnika po modulima')
+                ->description(
+                    'Odredi što podkorisnik smije raditi u najvažnijim modulima. '
+                    . 'Pregled dopušta otvaranje modula i izvoz, Dodavanje dopušta novi zapis, uvoz i kopiranje, '
+                    . 'Uređivanje dopušta izmjene, a Brisanje dopušta deaktiviranje, vraćanje i trajno brisanje.'
+                )
+                ->visible(function (?User $record): bool {
+                    $authUser = Auth::user();
+
+                    if (! $authUser?->isOrgAdmin()) {
+                        return false;
+                    }
+
+                    if (! $record) {
+                        return true;
+                    }
+
+                    return $record->isOrgUser()
+                        && (int) $record->parent_user_id === (int) $authUser->ownerId();
+                })
+                ->schema([
+                    static::modulePermissionCheckbox('observations', 'Zapažanja'),
+                    static::modulePermissionCheckbox('employees', 'Zaposlenici'),
+                    static::modulePermissionCheckbox('machines', 'Radna oprema'),
+                    static::modulePermissionCheckbox('waste_tracking_forms', 'Prateći listovi'),
+                    static::modulePermissionCheckbox('miscellaneous', 'Ostala ispitivanja'),
+                    static::modulePermissionCheckbox('categories', 'Kategorije ispitivanja'),
+                ])
+                ->columns(1)
                 ->columnSpanFull(),
 
             Section::make('Uključeni moduli')
@@ -994,6 +1076,8 @@ class UserResource extends Resource
                 $data['parent_user_id'] = null;
             }
 
+            unset($data['module_permissions']);
+
             return $data;
         }
 
@@ -1006,6 +1090,10 @@ class UserResource extends Resource
         $data['account_status'] = 'active';
         $data['gdpr_request_status'] = null;
         $data['quick_actions'] = null;
+        $data['module_permissions'] = static::normalizeModulePermissions(
+            $data['module_permissions'] ?? User::defaultModulePermissions(),
+            $authUser->owner()
+        );
 
         return $data;
     }
@@ -1015,6 +1103,15 @@ class UserResource extends Resource
         $data = static::mergeQuickActions($data);
 
         $authUser = Auth::user();
+
+        if ($authUser?->isOrgAdmin()) {
+            $data['module_permissions'] = static::normalizeModulePermissions(
+                $data['module_permissions'] ?? [],
+                $authUser->owner()
+            );
+        } else {
+            unset($data['module_permissions']);
+        }
 
         if (! $authUser?->isSuperAdmin()) {
             unset($data['storage_quota_mb']);
