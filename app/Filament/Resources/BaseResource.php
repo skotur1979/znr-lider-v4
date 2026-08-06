@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\Concerns\HasModulePermissions;
+use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\Concerns\HasUserTableColumn;
 use App\Models\User;
 use Filament\Resources\Resource;

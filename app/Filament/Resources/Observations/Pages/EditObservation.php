@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\Observations\Pages;
 
-use App\Filament\Resources\Concerns\InteractsWithModulePagePermissions;
+use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Mail\ObservationNotificationMail;
 use Filament\Actions\DeleteAction;

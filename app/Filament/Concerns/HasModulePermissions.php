@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Concerns;
+namespace App\Filament\Concerns;
 
 use Closure;
 use Filament\Notifications\Notification;
