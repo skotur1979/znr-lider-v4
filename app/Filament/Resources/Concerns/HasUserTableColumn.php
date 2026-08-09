@@ -10,10 +10,8 @@ trait HasUserTableColumn
     /**
      * Standardni stupac korisnika za Resource tablice.
      *
-     * Stupac je:
-     * - vidljiv superadminu
-     * - vidljiv glavnom korisniku ako može upravljati podkorisnicima
-     * - standardno skriven običnom podkorisniku
+     * Stupac je vidljiv samo superadminu.
+     * Glavni korisnik i podkorisnici ga ne vide.
      */
     public static function userTableColumn(): TextColumn
     {
@@ -22,10 +20,9 @@ trait HasUserTableColumn
             ->placeholder('-')
             ->searchable()
             ->sortable()
-            ->toggleable(
-                isToggledHiddenByDefault:
-                    ! Auth::user()?->isSuperAdmin()
-                    && ! Auth::user()?->canCreateSubusers()
+            ->visible(
+                fn (): bool =>
+                    Auth::user()?->isSuperAdmin() === true
             );
     }
 }
