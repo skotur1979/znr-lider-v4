@@ -348,13 +348,21 @@ class EditMachine extends EditRecord
     }
 
     protected function mutateFormDataBeforeSave(
-        array $data
-    ): array {
-        unset($data['ocr_source']);
-        unset($data['ocr_original_name']);
+    array $data
+): array {
+    unset($data['ocr_source']);
+    unset($data['ocr_original_name']);
 
-        return $data;
-    }
+    /*
+     * Ownership postojećeg zapisa nikada se
+     * ne mijenja uređivanjem.
+     *
+     * Ovo vrijedi i kada zapis uređuje superadmin.
+     */
+    $data['user_id'] = $this->record->user_id;
+
+    return $data;
+}
 
     protected function getRedirectUrl(): string
     {

@@ -10,6 +10,12 @@ trait HasModulePermissions
     /**
      * Provjerava smije li trenutačni korisnik izvršiti
      * određenu akciju u modulu ovog Resourcea.
+     *
+     * Superadmin ima puni administrativni pristup
+     * postojećim zapisima radi nadzora i podrške.
+     *
+     * Organizacijski korisnici koriste standardne
+     * dozvole modula.
      */
     public static function canUseModuleAction(
         string $permission
@@ -18,6 +24,19 @@ trait HasModulePermissions
 
         if (! $user) {
             return false;
+        }
+
+        /*
+         * Superadmin je sistemski administrator.
+         *
+         * Ne koristi pojedinačne module_permissions,
+         * nego ima puni administrativni pristup.
+         *
+         * Ovo NE mijenja ownership zapisa.
+         * Tenant i ownership logika ostaju u BaseResourceu.
+         */
+        if ($user->isSuperAdmin()) {
+            return true;
         }
 
         $moduleKey = static::getModuleKey();
@@ -60,17 +79,17 @@ trait HasModulePermissions
      * Standardna poruka kada korisnik nema ovlasti.
      */
     public static function notifyMissingModulePermission(
-            ?string $customBody = null
-        ): void {
-            Notification::make()
-                ->title('Nemate ovlasti za akciju')
-                ->body(
-                    $customBody
-                        ?: 'Nemate ovlasti za akciju, kontaktirajte administratora.'
-                )
-                ->danger()
-                ->send();
-        }
+        ?string $customBody = null
+    ): void {
+        Notification::make()
+            ->title('Nemate ovlasti za akciju')
+            ->body(
+                $customBody
+                    ?: 'Nemate ovlasti za akciju, kontaktirajte administratora.'
+            )
+            ->danger()
+            ->send();
+    }
 
     /**
      * Provjerava dozvolu i prikazuje obavijest ako

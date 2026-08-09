@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\RiskAssessments\Pages;
 use App\Filament\Resources\RiskAssessments\Schemas\RiskAssessmentInfolist;
 use App\Models\RiskAssessment;
+use App\Support\SecureFilePreview;
 use App\Services\StorageQuotaService;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -437,15 +438,8 @@ class RiskAssessmentResource extends BaseResource
                                             return null;
                                         }
 
-                                        $url = route(
-                                            'file.preview',
-                                            [
-                                                'file' => ltrim(
-                                                    $attachment
-                                                        ->file_path,
-                                                    '/'
-                                                ),
-                                            ]
+                                        $url = SecureFilePreview::url(
+                                            $file
                                         );
 
                                         $name = e(

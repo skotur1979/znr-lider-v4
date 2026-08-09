@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PPEEquipment;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\PPEEquipment\Pages;
 use App\Models\PPEEquipment;
+use App\Support\SecureFilePreview;
 use App\Services\StorageQuotaService;
 use BackedEnum;
 use Filament\Actions\ActionGroup;
@@ -294,16 +295,9 @@ class PPEEquipmentResource extends BaseResource
                                         $file,
                                         $index
                                     ) {
-                                        $url = route(
-                                            'file.preview',
-                                            [
-                                                'file' =>
-                                                    ltrim(
-                                                        $file,
-                                                        '/'
-                                                    ),
-                                            ]
-                                        );
+                                        $url = SecureFilePreview::url(
+                                        $file
+                                    );
 
                                         $name = e(
                                             basename($file)

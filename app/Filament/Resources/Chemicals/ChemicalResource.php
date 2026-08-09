@@ -7,6 +7,7 @@ use App\Filament\Resources\Chemicals\Pages;
 use App\Filament\Resources\Chemicals\Schemas\ChemicalForm;
 use App\Models\Chemical;
 use BackedEnum;
+use App\Support\SecureFilePreview;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -205,16 +206,9 @@ class ChemicalResource extends BaseResource
                                         $file,
                                         $index
                                     ) {
-                                        $url = route(
-                                            'file.preview',
-                                            [
-                                                'file' =>
-                                                    ltrim(
-                                                        $file,
-                                                        '/'
-                                                    ),
-                                            ]
-                                        );
+                                        $url = SecureFilePreview::url(
+                                        $file
+                                    );
 
                                         $name = e(
                                             basename($file)

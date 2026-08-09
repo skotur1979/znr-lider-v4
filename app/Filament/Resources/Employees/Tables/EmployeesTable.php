@@ -6,6 +6,7 @@ use App\Filament\Resources\Concerns\HasUserTableColumn;
 use App\Models\Employee;
 use App\Filament\Resources\Employees\EmployeeResource;
 use Filament\Actions\Action;
+use App\Support\SecureFilePreview;
 use App\Models\EmployeeAlcoholTest;
 use App\Models\EmployeeCertificate;
 use App\Support\ExpiryBadge;
@@ -332,9 +333,9 @@ class EmployeesTable
                             $file,
                             $index
                         ): string {
-                            $url = route('file.preview', [
-                                'file' => ltrim($file, '/'),
-                            ]);
+                            $url = SecureFilePreview::url(
+                            $file
+                        );
 
                             $name = e(basename($file));
                             $number = $index + 1;

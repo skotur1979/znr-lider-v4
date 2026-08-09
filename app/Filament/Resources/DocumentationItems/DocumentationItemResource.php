@@ -5,6 +5,7 @@ namespace App\Filament\Resources\DocumentationItems;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\DocumentationItems\Pages;
 use App\Models\DocumentationItem;
+use App\Support\SecureFilePreview;
 use App\Services\StorageQuotaService;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -316,16 +317,9 @@ class DocumentationItemResource extends BaseResource
                                         $file,
                                         $index
                                     ) {
-                                        $url = route(
-                                            'file.preview',
-                                            [
-                                                'file' =>
-                                                    ltrim(
-                                                        $file,
-                                                        '/'
-                                                    ),
-                                            ]
-                                        );
+                                        $url = SecureFilePreview::url(
+                                        $file
+                                    );
 
                                         $name = e(
                                             basename($file)
@@ -601,17 +595,9 @@ class DocumentationItemResource extends BaseResource
                                                             function (
                                                                 $file
                                                             ) {
-                                                                $url =
-                                                                    route(
-                                                                        'file.preview',
-                                                                        [
-                                                                            'file' =>
-                                                                                ltrim(
-                                                                                    $file,
-                                                                                    '/'
-                                                                                ),
-                                                                        ]
-                                                                    );
+                                                                $url = SecureFilePreview::url(
+                                                                $file
+                                                            );
 
                                                                 $name =
                                                                     e(

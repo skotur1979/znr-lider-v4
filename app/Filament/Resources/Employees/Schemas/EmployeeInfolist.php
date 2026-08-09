@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Employees\Schemas;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
+use App\Support\SecureFilePreview;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -593,17 +594,9 @@ class EmployeeInfolist
                                                             $file,
                                                             $index
                                                         ) {
-                                                            $url =
-                                                                route(
-                                                                    'file.preview',
-                                                                    [
-                                                                        'file' =>
-                                                                            ltrim(
-                                                                                $file,
-                                                                                '/'
-                                                                            ),
-                                                                    ]
-                                                                );
+                                                            $url = SecureFilePreview::url(
+                                                            $file
+                                                        );
 
                                                             $name =
                                                                 e(

@@ -6,6 +6,7 @@ use App\Models\PPEEquipment;
 use App\Support\ExpiryBadge;
 use App\Support\SignatureStorage;
 use Filament\Actions\Action;
+use App\Support\SecureFilePreview;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -638,24 +639,14 @@ class ItemsRelationManager extends RelationManager
                             }
 
                             $url =
-                                str_starts_with(
-                                    $record
-                                        ->signature,
-                                    'data:image'
-                                )
-                                    ? $record
-                                        ->signature
-                                    : route(
-                                        'file.preview',
-                                        [
-                                            'file' =>
-                                                ltrim(
-                                                    $record
-                                                        ->signature,
-                                                    '/'
-                                                ),
-                                        ]
-                                    );
+                            str_starts_with(
+                                $record->signature,
+                                'data:image'
+                            )
+                                ? $record->signature
+                                : SecureFilePreview::url(
+                                    $record->signature
+                                );
 
                             return
                                 '<img src="'

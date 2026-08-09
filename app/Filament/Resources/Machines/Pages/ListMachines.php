@@ -92,6 +92,10 @@ class ListMachines extends BaseListRecords
                 ->label('Uvoz iz Excela')
                 ->icon('heroicon-o-document-arrow-up')
                 ->color('warning')
+                ->visible(
+                    fn (): bool =>
+                        auth()->user()?->isSuperAdmin() !== true
+                )
                 ->form([
                     FileUpload::make('excel_file')
                         ->label('Excel datoteka')

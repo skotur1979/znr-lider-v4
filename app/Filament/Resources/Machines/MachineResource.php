@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Machines;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Machines\Pages;
 use App\Models\Machine;
+use App\Support\SecureFilePreview;
 use App\Support\ExpiryBadge;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
@@ -419,16 +420,9 @@ class MachineResource extends BaseResource
                                         $file,
                                         $index
                                     ) {
-                                        $url = route(
-                                            'file.preview',
-                                            [
-                                                'file' =>
-                                                    ltrim(
-                                                        $file,
-                                                        '/'
-                                                    ),
-                                            ]
-                                        );
+                                        $url = SecureFilePreview::url(
+                                        $file
+                                    );
 
                                         $name = e(
                                             basename(
@@ -728,15 +722,19 @@ class MachineResource extends BaseResource
                     ),
 
                 BulkAction::make(
-                    'copyAndCreateNew'
+                'copyAndCreateNew'
+            )
+                ->label(
+                    'Kopiraj i napravi novi'
                 )
-                    ->label(
-                        'Kopiraj i napravi novi'
-                    )
-                    ->icon(
-                        Heroicon::DocumentDuplicate
-                    )
-                    ->requiresConfirmation()
+                ->icon(
+                    Heroicon::DocumentDuplicate
+                )
+                ->visible(
+                    fn (): bool =>
+                        ! static::isSuperAdmin()
+                )
+                ->requiresConfirmation()
                     ->modalHeading(
                         'Kopiraj radnu opremu'
                     )
@@ -802,7 +800,7 @@ class MachineResource extends BaseResource
                              * poslovni modul.
                              */
                             $newRecord->user_id =
-                                static::ownerId();
+                            static::defaultUserId();
 
                             $newRecord->save();
 

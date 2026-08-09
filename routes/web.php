@@ -1,7 +1,7 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
 use App\Http\Controllers\TestAttemptController;
@@ -20,11 +20,16 @@ Route::middleware(['auth'])->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/test-attempts/{attempt}', [TestAttemptController::class, 'show'])
-        ->name('test-attempts.show');
+    Route::get(
+        '/test-attempts/{attempt}',
+        [TestAttemptController::class, 'show']
+    )->name('test-attempts.show');
 
-    Route::get('/test-attempts/{attempt}/pdf', [TestAttemptController::class, 'downloadPdf'])
-        ->name('test-attempts.download');
+    Route::get(
+        '/test-attempts/{attempt}/pdf',
+        [TestAttemptController::class, 'downloadPdf']
+    )->name('test-attempts.download');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -32,8 +37,11 @@ Route::middleware(['auth'])->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/admin/znr-general-report/pdf', [ZnrGeneralReportController::class, 'pdf'])
-        ->name('znr.general-report.pdf');
+    Route::get(
+        '/admin/znr-general-report/pdf',
+        [ZnrGeneralReportController::class, 'pdf']
+    )->name('znr.general-report.pdf');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -41,14 +49,21 @@ Route::middleware(['auth'])->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/email-2fa/verify', [EmailTwoFactorController::class, 'verify'])
-        ->name('email-2fa.verify');
+    Route::get(
+        '/email-2fa/verify',
+        [EmailTwoFactorController::class, 'verify']
+    )->name('email-2fa.verify');
 
-    Route::post('/email-2fa/confirm', [EmailTwoFactorController::class, 'confirm'])
-        ->name('email-2fa.confirm');
+    Route::post(
+        '/email-2fa/confirm',
+        [EmailTwoFactorController::class, 'confirm']
+    )->name('email-2fa.confirm');
 
-    Route::post('/email-2fa/resend', [EmailTwoFactorController::class, 'resend'])
-        ->name('email-2fa.resend');
+    Route::post(
+        '/email-2fa/resend',
+        [EmailTwoFactorController::class, 'resend']
+    )->name('email-2fa.resend');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -56,20 +71,31 @@ Route::middleware(['auth'])->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::view('/pravila-privatnosti', 'legal.privacy')
-        ->name('legal.privacy');
+    Route::view(
+        '/pravila-privatnosti',
+        'legal.privacy'
+    )->name('legal.privacy');
 
-    Route::view('/uvjeti-koristenja', 'legal.terms')
-        ->name('legal.terms');
+    Route::view(
+        '/uvjeti-koristenja',
+        'legal.terms'
+    )->name('legal.terms');
 
-    Route::view('/politika-kolacica', 'legal.cookies')
-        ->name('legal.cookies');
+    Route::view(
+        '/politika-kolacica',
+        'legal.cookies'
+    )->name('legal.cookies');
 
-    Route::get('/pravila-privatnosti/pdf', [LegalDocumentPdfController::class, 'privacy'])
-        ->name('legal.privacy.pdf');
+    Route::get(
+        '/pravila-privatnosti/pdf',
+        [LegalDocumentPdfController::class, 'privacy']
+    )->name('legal.privacy.pdf');
 
-    Route::get('/uvjeti-koristenja/pdf', [LegalDocumentPdfController::class, 'terms'])
-        ->name('legal.terms.pdf');
+    Route::get(
+        '/uvjeti-koristenja/pdf',
+        [LegalDocumentPdfController::class, 'terms']
+    )->name('legal.terms.pdf');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -77,11 +103,16 @@ Route::middleware(['auth'])->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/prihvacanje-uvjeta', [LegalAcceptanceController::class, 'show'])
-        ->name('legal.accept');
+    Route::get(
+        '/prihvacanje-uvjeta',
+        [LegalAcceptanceController::class, 'show']
+    )->name('legal.accept');
 
-    Route::post('/prihvacanje-uvjeta', [LegalAcceptanceController::class, 'store'])
-        ->name('legal.accept.store');
+    Route::post(
+        '/prihvacanje-uvjeta',
+        [LegalAcceptanceController::class, 'store']
+    )->name('legal.accept.store');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -89,76 +120,287 @@ Route::middleware(['auth'])->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::post('/gdpr/povlacenje-privole', [LegalAcceptanceController::class, 'withdraw'])
-        ->name('legal.withdraw');
+    Route::post(
+        '/gdpr/povlacenje-privole',
+        [LegalAcceptanceController::class, 'withdraw']
+    )->name('legal.withdraw');
 
-    Route::get('/moji-podaci/export', [UserPrivacyController::class, 'export'])
-        ->name('user.privacy.export');
+    Route::get(
+        '/moji-podaci/export',
+        [UserPrivacyController::class, 'export']
+    )->name('user.privacy.export');
 
-    Route::post('/moj-racun/zahtjev-brisanje', [AccountDeletionController::class, 'requestDeletion'])
-        ->name('account.deletion.request');
+    Route::post(
+        '/moj-racun/zahtjev-brisanje',
+        [AccountDeletionController::class, 'requestDeletion']
+    )->name('account.deletion.request');
 
-    Route::view('/ugovor-o-obradi-podataka', 'legal.dpa')
-    ->name('legal.dpa');
+    Route::view(
+        '/ugovor-o-obradi-podataka',
+        'legal.dpa'
+    )->name('legal.dpa');
 
-    Route::view('/politika-sigurnosti', 'legal.security')
-    ->name('legal.security');
+    Route::view(
+        '/politika-sigurnosti',
+        'legal.security'
+    )->name('legal.security');
 
-    Route::view('/politika-zadrzavanja-podataka', 'legal.retention')
-    ->name('legal.retention');
+    Route::view(
+        '/politika-zadrzavanja-podataka',
+        'legal.retention'
+    )->name('legal.retention');
 
-    Route::view('/cesto-postavljana-pitanja', 'legal.faq')
-    ->name('legal.faq');
+    Route::view(
+        '/cesto-postavljana-pitanja',
+        'legal.faq'
+    )->name('legal.faq');
 
-    Route::get('/politika-kolacica/pdf', [LegalDocumentPdfController::class, 'cookies'])
-    ->name('legal.cookies.pdf');
+    Route::get(
+        '/politika-kolacica/pdf',
+        [LegalDocumentPdfController::class, 'cookies']
+    )->name('legal.cookies.pdf');
+
 
     /*
     |--------------------------------------------------------------------------
-    | Preview datoteka
+    | Siguran preview datoteka
     |--------------------------------------------------------------------------
+    |
+    | Datoteke se mogu otvoriti samo preko privremenog
+    | potpisanog URL-a.
+    |
+    | Organizacijski korisnik smije koristiti samo URL
+    | koji pripada njegovoj organizaciji.
+    |
+    | Superadmin može pregledavati sve priloge radi
+    | administracije i korisničke podrške.
+    |
     */
 
-    Route::get('/preview-file', function (Request $request) {
+    Route::get(
+        '/preview-file',
+        function (Request $request) {
+            $user = $request->user();
 
-        $file = ltrim((string) $request->query('file'), '/');
+            abort_unless(
+                $user,
+                403
+            );
 
-        abort_if($file === '', 404);
+            /*
+             * Owner ID dolazi iz potpisanog URL-a.
+             *
+             * Kod superadmina:
+             * owner = 0
+             *
+             * Kod organizacijskih korisnika:
+             * owner = ownerId()
+             */
+            $ownerId = (int) $request->query(
+                'owner',
+                0
+            );
 
-        abort_if(
-            preg_match('#(^|/)\.\.(/|$)#', $file),
-            403
-        );
+            /*
+             * Organizacijski korisnik smije koristiti
+             * samo link svoje organizacije.
+             *
+             * Superadmin ovu provjeru preskače.
+             */
+            if (! $user->isSuperAdmin()) {
+                $currentOwnerId = (int) $user->ownerId();
 
-        abort_unless(
-            Storage::disk('public')->exists($file),
-            404
-        );
+                abort_unless(
+                    $currentOwnerId > 0
+                    && $ownerId > 0
+                    && $currentOwnerId === $ownerId,
+                    403
+                );
+            }
 
-        $fullPath = storage_path('app/public/' . $file);
+            /*
+             * Normalizacija putanje.
+             */
+            $file = str_replace(
+                '\\',
+                '/',
+                (string) $request->query(
+                    'file',
+                    ''
+                )
+            );
 
-        $fileName = basename($file);
+            $file = ltrim(
+                trim($file),
+                '/'
+            );
 
-        $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            abort_if(
+                $file === '',
+                404
+            );
 
-        $mime = match ($extension) {
-            'pdf'  => 'application/pdf',
-            'doc'  => 'application/msword',
-            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'xls'  => 'application/vnd.ms-excel',
-            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'jpg', 'jpeg' => 'image/jpeg',
-            'png'  => 'image/png',
-            'gif'  => 'image/gif',
-            'webp' => 'image/webp',
-            default => mime_content_type($fullPath) ?: 'application/octet-stream',
-        };
+            /*
+             * Zaštita od null-byte napada.
+             */
+            abort_if(
+                str_contains(
+                    $file,
+                    "\0"
+                ),
+                403
+            );
 
-        return response()->file($fullPath, [
-            'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="' . addslashes($fileName) . '"',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+            /*
+             * Zaštita od directory traversal napada:
+             *
+             * ../
+             * /../
+             * itd.
+             */
+            abort_if(
+                preg_match(
+                    '#(^|/)\.\.(/|$)#',
+                    $file
+                ) === 1,
+                403
+            );
 
-    })->name('file.preview');
+            /*
+             * Datoteka mora postojati
+             * na Laravel public disku.
+             */
+            abort_unless(
+                Storage::disk('public')
+                    ->exists($file),
+                404
+            );
+
+            /*
+             * Dohvaćamo stvarnu putanju datoteke.
+             */
+            $fullPath = Storage::disk('public')
+                ->path($file);
+
+            $publicRoot = realpath(
+                Storage::disk('public')
+                    ->path('')
+            );
+
+            $resolvedPath = realpath(
+                $fullPath
+            );
+
+            /*
+             * Dodatna sigurnosna provjera.
+             *
+             * Čak i ako bi netko pokušao manipulirati
+             * putanjom, stvarna datoteka mora ostati
+             * unutar storage/app/public direktorija.
+             */
+            abort_unless(
+                $publicRoot !== false
+                && $resolvedPath !== false
+                && (
+                    $resolvedPath === $publicRoot
+                    || str_starts_with(
+                        $resolvedPath,
+                        $publicRoot
+                            . DIRECTORY_SEPARATOR
+                    )
+                ),
+                403
+            );
+
+            $fileName = basename(
+                $file
+            );
+
+            $extension = strtolower(
+                pathinfo(
+                    $fileName,
+                    PATHINFO_EXTENSION
+                )
+            );
+
+            /*
+             * MIME tipovi koje aplikacija
+             * standardno koristi.
+             */
+            $mime = match ($extension) {
+                'pdf' =>
+                    'application/pdf',
+
+                'doc' =>
+                    'application/msword',
+
+                'docx' =>
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+
+                'xls' =>
+                    'application/vnd.ms-excel',
+
+                'xlsx' =>
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+
+                'jpg',
+                'jpeg' =>
+                    'image/jpeg',
+
+                'png' =>
+                    'image/png',
+
+                'gif' =>
+                    'image/gif',
+
+                'webp' =>
+                    'image/webp',
+
+                default =>
+                    mime_content_type(
+                        $resolvedPath
+                    )
+                    ?: 'application/octet-stream',
+            };
+
+            /*
+             * Sprječavamo ubacivanje znakova
+             * koji bi mogli oštetiti HTTP zaglavlje.
+             */
+            $safeFileName = str_replace(
+                [
+                    "\r",
+                    "\n",
+                    '"',
+                ],
+                '',
+                $fileName
+            );
+
+            return response()->file(
+                $resolvedPath,
+                [
+                    'Content-Type' =>
+                        $mime,
+
+                    'Content-Disposition' =>
+                        'inline; filename="'
+                        . $safeFileName
+                        . '"',
+
+                    'X-Content-Type-Options' =>
+                        'nosniff',
+
+                    /*
+                     * Dokumenti organizacije ne spremaju
+                     * se u javni browser cache.
+                     */
+                    'Cache-Control' =>
+                        'private, no-store, max-age=0',
+                ]
+            );
+        }
+    )
+        ->middleware('signed')
+        ->name('file.preview');
 });

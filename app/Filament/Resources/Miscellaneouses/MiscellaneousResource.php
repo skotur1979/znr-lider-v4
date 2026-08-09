@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Categories\CategoryResource;
 use App\Filament\Resources\Miscellaneouses\Pages;
 use App\Models\Category;
+use App\Support\SecureFilePreview;
 use App\Models\Miscellaneous;
 use App\Services\StorageQuotaService;
 use Carbon\Carbon;
@@ -499,17 +500,9 @@ class MiscellaneousResource extends BaseResource
                                         $file,
                                         $index
                                     ) {
-                                        $url =
-                                            route(
-                                                'file.preview',
-                                                [
-                                                    'file' =>
-                                                        ltrim(
-                                                            $file,
-                                                            '/'
-                                                        ),
-                                                ]
-                                            );
+                                        $url = SecureFilePreview::url(
+                                        $file
+                                    );
 
                                         $name =
                                             e(
