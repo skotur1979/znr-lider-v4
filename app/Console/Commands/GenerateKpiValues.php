@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\User;
 use App\Services\KpiCalculationService;
 use App\Services\SystemTaskMonitor;
 use Illuminate\Console\Command;
@@ -26,17 +27,75 @@ class GenerateKpiValues extends Command
             $month = (int) ($this->argument('month') ?: now()->month);
             $year = (int) ($this->argument('year') ?: now()->year);
 
-            $service->generateForMonth($month, $year);
+            $totals = [
+                'organizations' => 0,
+                'generated' => 0,
+                'updated' => 0,
+                'skipped' => 0,
+            ];
 
-            $message = "KPI vrijednosti generirane su za {$month}/{$year}.";
+            /*
+             * KPI se generiraju zasebno za svaku aktivnu organizaciju.
+             *
+             * ID glavnog korisnika (org_admin) predstavlja ownerId
+             * cijele organizacije.
+             */
+            User::query()
+                ->where('role', 'org_admin')
+                ->where('is_active', true)
+                ->withoutTrashed()
+                ->orderBy('id')
+                ->chunkById(
+                    100,
+                    function ($users) use (
+                        $service,
+                        $month,
+                        $year,
+                        &$totals
+                    ): void {
+                        foreach ($users as $user) {
+                            $result = $service->generateForOwner(
+                                (int) $user->id,
+                                $month,
+                                $year
+                            );
+
+                            $totals['organizations']++;
+
+                            $totals['generated'] += (int) (
+                                $result['generated'] ?? 0
+                            );
+
+                            $totals['updated'] += (int) (
+                                $result['updated'] ?? 0
+                            );
+
+                            $totals['skipped'] += (int) (
+                                $result['skipped'] ?? 0
+                            );
+                        }
+                    }
+                );
+
+            $message =
+                "KPI vrijednosti generirane su za {$month}/{$year}. "
+                . "Organizacije: {$totals['organizations']} | "
+                . "Kreirano: {$totals['generated']} | "
+                . "Ažurirano: {$totals['updated']} | "
+                . "Preskočeno: {$totals['skipped']}.";
 
             $monitor->success(
                 taskKey: $taskKey,
                 taskName: $taskName,
                 message: $message,
+                processedCount: $totals['organizations'],
                 metadata: [
                     'month' => $month,
                     'year' => $year,
+                    'organizations' => $totals['organizations'],
+                    'generated' => $totals['generated'],
+                    'updated' => $totals['updated'],
+                    'skipped' => $totals['skipped'],
                 ],
             );
 
@@ -51,6 +110,7 @@ class GenerateKpiValues extends Command
             );
 
             report($exception);
+
             $this->error($exception->getMessage());
 
             return self::FAILURE;

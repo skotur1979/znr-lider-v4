@@ -17,13 +17,38 @@ abstract class BaseResource extends Resource
     use HasUserTableColumn;
     use HasModulePermissions;
 
+    /**
+     * Koristi li Resource SoftDeletes.
+     */
     protected static bool $usesSoftDeletes = false;
 
+    /**
+     * Koristi li Resource standardni ownership preko user_id.
+     *
+     * Standardni poslovni modul:
+     * user_id = ownerId()
+     *
+     * Posebni moduli poput Testova imaju vlastitu logiku
+     * i postavljaju $hasOwnership = false.
+     */
     protected static bool $hasOwnership = true;
 
     /**
-     * Svaki modul koji koristi dodjelu modula i dozvola
-     * treba vratiti svoj ključ.
+     * Smije li superadmin kreirati zapise ovog Resourcea.
+     *
+     * Standardno NE.
+     *
+     * Superadmin vidi i administrira postojeće poslovne zapise,
+     * ali ih ne kreira u ime organizacija.
+     *
+     * Iznimke poput Testova / Pitanja / Odgovora mogu postaviti:
+     *
+     * protected static bool $superAdminCanCreate = true;
+     */
+    protected static bool $superAdminCanCreate = false;
+
+    /**
+     * Ključ modula.
      */
     protected static function getModuleKey(): ?string
     {
@@ -38,22 +63,40 @@ abstract class BaseResource extends Resource
         return static::getModuleKey();
     }
 
+    /**
+     * Trenutni korisnik.
+     */
     protected static function user(): ?User
     {
         return filament()->auth()->user()
             ?? Auth::user();
     }
 
+    /**
+     * Superadmin provjera.
+     */
     protected static function isSuperAdmin(): bool
     {
         return static::user()?->isSuperAdmin() === true;
     }
 
+    /**
+     * ID vlasnika organizacije.
+     *
+     * Glavni korisnik:
+     * ownerId() = njegov ID
+     *
+     * Podkorisnik:
+     * ownerId() = ID glavnog korisnika
+     */
     protected static function ownerId(): ?int
     {
         return static::user()?->ownerId();
     }
 
+    /**
+     * Provjera postoji li kolona na model tablici.
+     */
     protected static function modelHasColumn(
         string $column
     ): bool {
@@ -71,6 +114,12 @@ abstract class BaseResource extends Resource
         );
     }
 
+    /**
+     * Standardni multi-tenant scope.
+     *
+     * Superadmin vidi sve.
+     * Organizacijski korisnici vide samo svoju organizaciju.
+     */
     protected static function scopeToOwner(
         Builder $query,
         string $column = 'user_id'
@@ -103,10 +152,13 @@ abstract class BaseResource extends Resource
     }
 
     /**
-     * Modul se prikazuje ako:
+     * Navigacija.
      *
-     * 1. organizacija ima modul;
-     * 2. korisnik ima pravo pregleda.
+     * Superadmin vidi sve.
+     *
+     * Ostali:
+     * - organizacija mora imati modul
+     * - kontrolirani modul mora imati view dozvolu
      */
     public static function shouldRegisterNavigation(): bool
     {
@@ -140,11 +192,71 @@ abstract class BaseResource extends Resource
         return true;
     }
 
+    /**
+     * Pristup listi zapisa.
+     */
     public static function canViewAny(): bool
     {
         return static::shouldRegisterNavigation();
     }
 
+    /**
+     * Kreiranje zapisa.
+     *
+     * Standardno superadmin ne kreira poslovne zapise.
+     *
+     * Iznimke:
+     * protected static bool $superAdminCanCreate = true;
+     */
+    public static function canCreate(): bool
+    {
+        $user = static::user();
+
+        if (! $user) {
+            return false;
+        }
+
+        /**
+         * Superadmin.
+         */
+        if ($user->isSuperAdmin()) {
+            if (! static::$superAdminCanCreate) {
+                return false;
+            }
+
+            return parent::canCreate();
+        }
+
+        /**
+         * Organizacija mora imati modul.
+         */
+        $moduleKey = static::getModuleKey();
+
+        if (
+            $moduleKey
+            && ! $user->canAccessModule($moduleKey)
+        ) {
+            return false;
+        }
+
+        /**
+         * Granularne create dozvole provjeravamo
+         * samo za kontrolirane module.
+         */
+        if (
+            $moduleKey
+            && User::isControlledModule($moduleKey)
+            && ! static::canCreateModuleRecord()
+        ) {
+            return false;
+        }
+
+        return parent::canCreate();
+    }
+
+    /**
+     * Glavni Resource query.
+     */
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
@@ -158,11 +270,17 @@ abstract class BaseResource extends Resource
         return static::scopeToOwner($query);
     }
 
+    /**
+     * Direktni URL recorda mora koristiti isti tenant scope.
+     */
     public static function getRecordRouteBindingEloquentQuery(): Builder
     {
         return static::getEloquentQuery();
     }
 
+    /**
+     * Global search također koristi isti tenant scope.
+     */
     public static function getGlobalSearchEloquentQuery(): Builder
     {
         if (! static::canViewModule()) {
@@ -173,6 +291,9 @@ abstract class BaseResource extends Resource
         return static::getEloquentQuery();
     }
 
+    /**
+     * Navigation badge.
+     */
     public static function getNavigationBadge(): ?string
     {
         $userId = Auth::id() ?? 'guest';
@@ -236,6 +357,15 @@ abstract class BaseResource extends Resource
         );
     }
 
+    /**
+     * Standardni user_id za novi poslovni zapis.
+     *
+     * Organizacijski korisnik:
+     * ownerId()
+     *
+     * Superadmin:
+     * null, jer standardno ne kreira poslovne zapise.
+     */
     public static function defaultUserId(): ?int
     {
         if (! static::$hasOwnership) {
@@ -243,12 +373,15 @@ abstract class BaseResource extends Resource
         }
 
         if (static::isSuperAdmin()) {
-            return Auth::id();
+            return null;
         }
 
         return static::ownerId();
     }
 
+    /**
+     * Standardno popunjavanje ownershipa.
+     */
     public static function fillOwnershipData(
         array $data
     ): array {

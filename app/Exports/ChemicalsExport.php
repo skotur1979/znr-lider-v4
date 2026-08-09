@@ -31,8 +31,11 @@ class ChemicalsExport implements FromCollection, WithHeadings, WithMapping, With
         ->with('user')
         ->orderBy('product_name');
 
-    if ($chemicalIds !== null && count($chemicalIds) > 0) {
-        $query->whereIn('chemicals.id', $chemicalIds);
+        if ($chemicalIds !== null) {
+        $query->whereIn(
+            'chemicals.id',
+            $chemicalIds
+        );
     } else {
         $query->withoutTrashed();
     }

@@ -24,8 +24,10 @@ class KpiValue extends Model
     ];
 
     protected $casts = [
-        'value' => 'float',
-        'auto_generated' => 'boolean',
+    'month' => 'integer',
+    'year' => 'integer',
+    'value' => 'float',
+    'auto_generated' => 'boolean',
     ];
 
     public function kpi(): BelongsTo

@@ -15,32 +15,48 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, WithEvents
+class MachinesExport implements
+    FromCollection,
+    WithHeadings,
+    WithMapping,
+    WithColumnFormatting,
+    WithEvents
 {
     protected $machines;
 
     protected bool $showUserColumn = false;
 
     public function __construct(?array $machineIds = null)
-{
-    $user = auth()->user();
+    {
+        $user = auth()->user();
 
-    $this->showUserColumn =
-        (bool) $user?->isSuperAdmin()
-        || (bool) $user?->canCreateSubusers();
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
 
-    $query = MachineResource::getEloquentQuery()
-        ->with('user')
-        ->orderBy('name');
+        $query = MachineResource::getEloquentQuery()
+            ->with('user')
+            ->orderBy('name');
 
-    if ($machineIds !== null && count($machineIds) > 0) {
-        $query->whereIn('machines.id', $machineIds);
-    } else {
-        $query->withoutTrashed();
+        /*
+         * Ako su ID-evi poslani iz filtrirane tablice,
+         * export mora poštovati točno taj rezultat.
+         *
+         * Važno:
+         * [] znači "filtriranje nije pronašlo ništa"
+         * i zato mora dati prazan export, a ne sve zapise.
+         */
+        if ($machineIds !== null) {
+            $query->whereIn(
+                'machines.id',
+                $machineIds
+            );
+        } else {
+            $query->withoutTrashed();
+        }
+
+        $this->machines = $query->get();
     }
-
-    $this->machines = $query->get();
-}
 
     public function collection()
     {
@@ -75,8 +91,13 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
     {
         /** @var Machine $machine */
 
-        $from = $machine->examination_valid_from ? Carbon::parse($machine->examination_valid_from) : null;
-        $until = $machine->examination_valid_until ? Carbon::parse($machine->examination_valid_until) : null;
+        $from = $machine->examination_valid_from
+            ? Carbon::parse($machine->examination_valid_from)
+            : null;
+
+        $until = $machine->examination_valid_until
+            ? Carbon::parse($machine->examination_valid_until)
+            : null;
 
         $row = [
             $machine->name,
@@ -90,13 +111,19 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
             $machine->manufacturer,
             $machine->factory_number,
             $machine->inventory_number,
-            $from ? ExcelDate::dateTimeToExcel($from) : null,
-            $until ? ExcelDate::dateTimeToExcel($until) : null,
+            $from
+                ? ExcelDate::dateTimeToExcel($from)
+                : null,
+            $until
+                ? ExcelDate::dateTimeToExcel($until)
+                : null,
             $machine->examined_by,
             $machine->report_number,
             $machine->location,
             $machine->remark,
-            is_array($machine->pdf) ? count($machine->pdf) : 0,
+            is_array($machine->pdf)
+                ? count($machine->pdf)
+                : 0,
         ]);
     }
 
@@ -122,48 +149,87 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
                 $sheet = $event->sheet->getDelegate();
 
                 $lastRow = $this->machines->count() + 1;
-                $lastCol = $this->showUserColumn ? 'L' : 'K';
+                $lastCol = $this->showUserColumn
+                    ? 'L'
+                    : 'K';
 
-                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
+                $sheet
+                    ->getStyle(
+                        "A1:{$lastCol}{$lastRow}"
+                    )
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['rgb' => 'FFFFFF'],
-                        'name' => 'DejaVu Sans',
-                        'size' => 10,
-                    ],
-                    'fill' => [
-                        'fillType' => 'solid',
-                        'startColor' => ['rgb' => '1F2937'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => Alignment::HORIZONTAL_CENTER,
-                        'vertical' => Alignment::VERTICAL_CENTER,
-                        'wrapText' => true,
-                    ],
-                ]);
+                $sheet
+                    ->getStyle(
+                        "A1:{$lastCol}1"
+                    )
+                    ->applyFromArray([
+                        'font' => [
+                            'bold' => true,
+                            'color' => [
+                                'rgb' => 'FFFFFF',
+                            ],
+                            'name' => 'DejaVu Sans',
+                            'size' => 10,
+                        ],
+                        'fill' => [
+                            'fillType' => 'solid',
+                            'startColor' => [
+                                'rgb' => '1F2937',
+                            ],
+                        ],
+                        'alignment' => [
+                            'horizontal' =>
+                                Alignment::HORIZONTAL_CENTER,
+                            'vertical' =>
+                                Alignment::VERTICAL_CENTER,
+                            'wrapText' => true,
+                        ],
+                    ]);
 
-                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
-                    ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER)
-                    ->setWrapText(true);
+                if ($lastRow >= 2) {
+                    $sheet
+                        ->getStyle(
+                            "A2:{$lastCol}{$lastRow}"
+                        )
+                        ->getAlignment()
+                        ->setVertical(
+                            Alignment::VERTICAL_CENTER
+                        )
+                        ->setWrapText(true);
 
-                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    $sheet
+                        ->getStyle(
+                            "A2:{$lastCol}{$lastRow}"
+                        )
+                        ->getAlignment()
+                        ->setHorizontal(
+                            Alignment::HORIZONTAL_LEFT
+                        );
+                }
 
                 if ($this->showUserColumn) {
-                    $sheet->getStyle("D2:G{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    if ($lastRow >= 2) {
+                        $sheet
+                            ->getStyle(
+                                "D2:G{$lastRow}"
+                            )
+                            ->getAlignment()
+                            ->setHorizontal(
+                                Alignment::HORIZONTAL_CENTER
+                            );
 
-                    $sheet->getStyle("L2:L{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet
+                            ->getStyle(
+                                "L2:L{$lastRow}"
+                            )
+                            ->getAlignment()
+                            ->setHorizontal(
+                                Alignment::HORIZONTAL_CENTER
+                            );
+                    }
 
                     $widths = [
                         'A' => 30,
@@ -182,13 +248,25 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
 
                     $expiryColumn = 'G';
                 } else {
-                    $sheet->getStyle("C2:F{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    if ($lastRow >= 2) {
+                        $sheet
+                            ->getStyle(
+                                "C2:F{$lastRow}"
+                            )
+                            ->getAlignment()
+                            ->setHorizontal(
+                                Alignment::HORIZONTAL_CENTER
+                            );
 
-                    $sheet->getStyle("K2:K{$lastRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet
+                            ->getStyle(
+                                "K2:K{$lastRow}"
+                            )
+                            ->getAlignment()
+                            ->setHorizontal(
+                                Alignment::HORIZONTAL_CENTER
+                            );
+                    }
 
                     $widths = [
                         'A' => 30,
@@ -208,48 +286,100 @@ class MachinesExport implements FromCollection, WithHeadings, WithMapping, WithC
                 }
 
                 foreach ($widths as $column => $width) {
-                    $sheet->getColumnDimension($column)->setWidth($width);
+                    $sheet
+                        ->getColumnDimension($column)
+                        ->setWidth($width);
                 }
 
-                $sheet->getRowDimension(1)->setRowHeight(30);
+                $sheet
+                    ->getRowDimension(1)
+                    ->setRowHeight(30);
 
-                for ($row = 2; $row <= $lastRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(34);
+                for (
+                    $row = 2;
+                    $row <= $lastRow;
+                    $row++
+                ) {
+                    $sheet
+                        ->getRowDimension($row)
+                        ->setRowHeight(34);
                 }
 
                 $today = Carbon::today();
 
-                foreach ($this->machines as $i => $machine) {
+                foreach (
+                    $this->machines
+                    as $i => $machine
+                ) {
                     $row = $i + 2;
 
-                    $until = $machine->examination_valid_until
-                        ? Carbon::parse($machine->examination_valid_until)
-                        : null;
+                    $until =
+                        $machine->examination_valid_until
+                            ? Carbon::parse(
+                                $machine
+                                    ->examination_valid_until
+                            )
+                            : null;
 
                     if (! $until) {
                         continue;
                     }
 
                     if ($until->lt($today)) {
-                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFF0000');
+                        $this->fillCell(
+                            $sheet,
+                            "{$expiryColumn}{$row}",
+                            'FFFF0000'
+                        );
+
                         continue;
                     }
 
-                    if ($until->lte($today->copy()->addDays(30))) {
-                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFFFF00');
+                    if (
+                        $until->lte(
+                            $today
+                                ->copy()
+                                ->addDays(30)
+                        )
+                    ) {
+                        $this->fillCell(
+                            $sheet,
+                            "{$expiryColumn}{$row}",
+                            'FFFFFF00'
+                        );
                     }
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
+
+                $sheet->setAutoFilter(
+                    "A1:{$lastCol}{$lastRow}"
+                );
             },
         ];
     }
 
-    private function fillCell($sheet, string $cell, string $argb): void
-    {
-        $sheet->getStyle($cell)->getFill()->setFillType(Fill::FILL_SOLID);
-        $sheet->getStyle($cell)->getFill()->getStartColor()->setARGB($argb);
-        $sheet->getStyle($cell)->getFont()->setBold(true);
+    private function fillCell(
+        $sheet,
+        string $cell,
+        string $argb
+    ): void {
+        $sheet
+            ->getStyle($cell)
+            ->getFill()
+            ->setFillType(
+                Fill::FILL_SOLID
+            );
+
+        $sheet
+            ->getStyle($cell)
+            ->getFill()
+            ->getStartColor()
+            ->setARGB($argb);
+
+        $sheet
+            ->getStyle($cell)
+            ->getFont()
+            ->setBold(true);
     }
 }

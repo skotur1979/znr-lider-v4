@@ -17,19 +17,31 @@ class ListLearningMaterials extends Page
 {
     use WithPagination;
 
-    protected static string $resource = LearningMaterialResource::class;
+    protected static string $resource =
+        LearningMaterialResource::class;
 
-    protected string $view = 'filament.resources.learning-materials.pages.list-learning-materials';
+    protected string $view =
+        'filament.resources.learning-materials.pages.list-learning-materials';
 
     public string $search = '';
+
     public string $category = '';
+
     public string $type = '';
 
     protected $queryString = [
-    'search' => ['except' => ''],
-    'category' => ['except' => ''],
-    'type' => ['except' => ''],
-];
+        'search' => [
+            'except' => '',
+        ],
+
+        'category' => [
+            'except' => '',
+        ],
+
+        'type' => [
+            'except' => '',
+        ],
+    ];
 
     protected function getHeaderActions(): array
     {
@@ -62,9 +74,9 @@ class ListLearningMaterials extends Page
 
     public function resetFilters(): void
     {
-        $this->search = null;
-        $this->category = null;
-        $this->type = null;
+        $this->search = '';
+        $this->category = '';
+        $this->type = '';
 
         $this->resetPage();
     }
@@ -73,31 +85,133 @@ class ListLearningMaterials extends Page
     {
         $ownerId = $this->ownerId();
 
-        return LearningMaterial::query()
-            ->with(['category', 'user'])
-            ->where('is_active', true)
-            ->when(! $this->isSuperAdmin(), function (Builder $query) use ($ownerId) {
-                $query->where(function (Builder $q) use ($ownerId) {
-                    $q->where('is_global', true)
-                        ->orWhere('user_id', $ownerId);
-                });
-            })
-            ->when($this->search, function (Builder $query) {
-                $search = trim($this->search);
+        $query = LearningMaterial::query()
+            ->with([
+                'category',
+                'user',
+            ])
+            ->where(
+                'is_active',
+                true
+            );
 
-                $query->where(function (Builder $q) use ($search) {
-                    $q->where('title', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%")
-                        ->orWhere('url', 'like', "%{$search}%");
-                });
-            })
-            ->when($this->category, fn (Builder $query) => $query->where('learning_category_id', $this->category))
-            ->when($this->type, function (Builder $query) {
-                $query->where(function (Builder $q) {
-                    $q->whereJsonContains('content_types', $this->type)
-                        ->orWhere('type', $this->type);
-                });
-            })
+        /**
+         * Organizacija vidi:
+         *
+         * - samo ispravne globalne materijale
+         *   is_global = true + user_id = NULL
+         *
+         * - vlastite organizacijske materijale
+         *   is_global = false + user_id = ownerId()
+         */
+        if (! $this->isSuperAdmin()) {
+            if (! $ownerId) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(
+                    function (
+                        Builder $query
+                    ) use ($ownerId): void {
+                        $query
+                            ->where(
+                                function (
+                                    Builder $global
+                                ): void {
+                                    $global
+                                        ->where(
+                                            'is_global',
+                                            true
+                                        )
+                                        ->whereNull(
+                                            'user_id'
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $organization
+                                ) use ($ownerId): void {
+                                    $organization
+                                        ->where(
+                                            'is_global',
+                                            false
+                                        )
+                                        ->where(
+                                            'user_id',
+                                            $ownerId
+                                        );
+                                }
+                            );
+                    }
+                );
+            }
+        }
+
+        return $query
+            ->when(
+                $this->search,
+                function (
+                    Builder $query
+                ): void {
+                    $search =
+                        trim(
+                            $this->search
+                        );
+
+                    $query->where(
+                        function (
+                            Builder $q
+                        ) use ($search): void {
+                            $q
+                                ->where(
+                                    'title',
+                                    'like',
+                                    "%{$search}%"
+                                )
+                                ->orWhere(
+                                    'description',
+                                    'like',
+                                    "%{$search}%"
+                                )
+                                ->orWhere(
+                                    'url',
+                                    'like',
+                                    "%{$search}%"
+                                );
+                        }
+                    );
+                }
+            )
+            ->when(
+                $this->category,
+                fn (Builder $query) =>
+                    $query->where(
+                        'learning_category_id',
+                        $this->category
+                    )
+            )
+            ->when(
+                $this->type,
+                function (
+                    Builder $query
+                ): void {
+                    $query->where(
+                        function (
+                            Builder $q
+                        ): void {
+                            $q
+                                ->whereJsonContains(
+                                    'content_types',
+                                    $this->type
+                                )
+                                ->orWhere(
+                                    'type',
+                                    $this->type
+                                );
+                        }
+                    );
+                }
+            )
             ->orderBy('sort_order')
             ->orderByDesc('created_at')
             ->paginate(12);
@@ -107,35 +221,99 @@ class ListLearningMaterials extends Page
     {
         $ownerId = $this->ownerId();
 
-        return LearningCategory::query()
-            ->where('is_active', true)
-            ->when(! $this->isSuperAdmin(), function (Builder $query) use ($ownerId) {
-                $query->where(function (Builder $q) use ($ownerId) {
-                    $q->where('is_global', true)
-                        ->orWhere('user_id', $ownerId);
-                });
-            })
+        $query = LearningCategory::query()
+            ->where(
+                'is_active',
+                true
+            );
+
+        /**
+         * Superadmin vidi sve kategorije.
+         *
+         * Organizacija vidi:
+         * - globalne kategorije
+         * - svoje organizacijske kategorije.
+         */
+        if (! $this->isSuperAdmin()) {
+            if (! $ownerId) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(
+                    function (
+                        Builder $query
+                    ) use ($ownerId): void {
+                        $query
+                            ->where(
+                                function (
+                                    Builder $global
+                                ): void {
+                                    $global
+                                        ->where(
+                                            'is_global',
+                                            true
+                                        )
+                                        ->whereNull(
+                                            'user_id'
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $organization
+                                ) use ($ownerId): void {
+                                    $organization
+                                        ->where(
+                                            'is_global',
+                                            false
+                                        )
+                                        ->where(
+                                            'user_id',
+                                            $ownerId
+                                        );
+                                }
+                            );
+                    }
+                );
+            }
+        }
+
+        return $query
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
     }
 
-    public function materialLinks(LearningMaterial $record): array
-    {
+    public function materialLinks(
+        LearningMaterial $record
+    ): array {
         $links = [];
 
         if (! blank($record->url)) {
             $links[] = [
-                'label' => 'Glavni link',
-                'url' => $record->url,
+                'label' =>
+                    'Glavni link',
+
+                'url' =>
+                    $record->url,
             ];
         }
 
-        foreach (($record->links ?? []) as $link) {
-            if (! blank($link['url'] ?? null)) {
+        foreach (
+            ($record->links ?? [])
+            as $link
+        ) {
+            if (
+                ! blank(
+                    $link['url'] ?? null
+                )
+            ) {
                 $links[] = [
-                    'label' => $link['label'] ?? 'Link',
-                    'url' => $link['url'],
+                    'label' =>
+                        $link['label']
+                        ?? 'Link',
+
+                    'url' =>
+                        $link['url'],
                 ];
             }
         }
@@ -143,22 +321,39 @@ class ListLearningMaterials extends Page
         return $links;
     }
 
-    public function materialFiles(LearningMaterial $record): array
-    {
+    public function materialFiles(
+        LearningMaterial $record
+    ): array {
         $files = [];
 
         if (! blank($record->file_path)) {
             $files[] = [
-                'label' => basename($record->file_path),
-                'url' => Storage::disk('public')->url($record->file_path),
+                'label' =>
+                    basename(
+                        $record->file_path
+                    ),
+
+                'url' =>
+                    Storage::disk('public')
+                        ->url(
+                            $record->file_path
+                        ),
             ];
         }
 
-        foreach (($record->files ?? []) as $file) {
+        foreach (
+            ($record->files ?? [])
+            as $file
+        ) {
             if (! blank($file)) {
                 $files[] = [
-                    'label' => basename($file),
-                    'url' => Storage::disk('public')->url($file),
+                    'label' =>
+                        basename($file),
+
+                    'url' =>
+                        Storage::disk(
+                            'public'
+                        )->url($file),
                 ];
             }
         }
@@ -166,49 +361,77 @@ class ListLearningMaterials extends Page
         return $files;
     }
 
-    public function typeLabel(?string $type): string
-    {
-        return LearningMaterialResource::contentTypeLabel($type);
+    public function typeLabel(
+        ?string $type
+    ): string {
+        return LearningMaterialResource::contentTypeLabel(
+            $type
+        );
     }
 
-    public function iconFor(?string $type): string
-    {
+    public function iconFor(
+        ?string $type
+    ): string {
         return match ($type) {
-            'manual' => '📘',
-            'excel_template' => '📊',
-            'pdf_form' => '📄',
-            'faq' => '❓',
-            'example' => '✅',
-            'video' => '🎥',
-            'website' => '🌐',
-            'document' => '📁',
-            'instruction' => '📘',
-            default => '📚',
+            'manual' =>
+                '📘',
+
+            'excel_template' =>
+                '📊',
+
+            'pdf_form' =>
+                '📄',
+
+            'faq' =>
+                '❓',
+
+            'example' =>
+                '✅',
+
+            'video' =>
+                '🎥',
+
+            'website' =>
+                '🌐',
+
+            'document' =>
+                '📁',
+
+            'instruction' =>
+                '📘',
+
+            default =>
+                '📚',
         };
     }
 
-    public function canEditMaterial(LearningMaterial $record): bool
-    {
+    public function canEditMaterial(
+        LearningMaterial $record
+    ): bool {
         if ($this->isSuperAdmin()) {
             return true;
         }
 
-        return ! $record->is_global && (int) $record->user_id === (int) $this->ownerId();
+        if ((bool) $record->is_global) {
+            return false;
+        }
+
+        return (int) $record->user_id
+            === (int) $this->ownerId();
     }
 
     protected function isSuperAdmin(): bool
     {
-        $user = Auth::user();
-
-        return (bool) (
-            $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()
-        );
+        return Auth::user()?->isSuperAdmin()
+            === true;
     }
 
+    /**
+     * Koristimo isti User::ownerId()
+     * kao u ostatku aplikacije.
+     */
     protected function ownerId(): ?int
     {
-        $user = Auth::user();
-
-        return $user?->parent_user_id ?: $user?->id;
+        return Auth::user()?->ownerId();
     }
 }

@@ -513,7 +513,9 @@ class DashboardCalendarWidget extends Widget
             ->filter(fn (array $item) => $item['date']->betweenIncluded($start, $end))
             ->values();
 
-        return $periodic->merge($regular);
+        return collect($periodic->all())
+            ->merge($regular->all())
+            ->values();
     }
 
     protected function miscellaneousItems(Carbon $start, Carbon $end): Collection

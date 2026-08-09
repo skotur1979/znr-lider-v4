@@ -8,8 +8,18 @@ use Filament\Resources\Pages\EditRecord;
 class EditTest extends EditRecord
 {
     protected static string $resource = TestResource::class;
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Ownership testa se nikada ne mijenja kroz edit formu.
+        $data['user_id'] = $this->record->user_id;
+
+        return $data;
+    }
+
     protected function getRedirectUrl(): string
     {
-        return $this->previousUrl ?? static::getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl('index');
     }
 }

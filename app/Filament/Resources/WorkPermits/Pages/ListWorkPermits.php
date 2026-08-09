@@ -26,7 +26,9 @@ class ListWorkPermits extends ListRecords
                 ->action(function () {
                     return Excel::download(
                         new WorkPermitsExport(),
-                        'dozvole-za-rad-' . now()->format('Y-m-d') . '.xlsx'
+                        'dozvole-za-rad-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
                     );
                 }),
         ];

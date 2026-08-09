@@ -3,12 +3,10 @@
 namespace App\Filament\Resources\Employees\RelationManagers;
 
 use App\Filament\Resources\Employees\EmployeeResource;
-use Filament\Actions\Action;
-use Filament\Actions\EditAction;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -31,56 +29,107 @@ class EmployeeAlcoholTestsRelationManager extends RelationManager
     protected static ?string $pluralModelLabel =
         'alkotestiranja';
 
-    public function form(Schema $schema): Schema
+    /**
+     * Vlasnik alkotestiranja uvijek
+     * mora biti vlasnik Employee zapisa.
+     */
+    protected function ownerId(): int
     {
+        $ownerId =
+            (int) (
+                $this
+                    ->getOwnerRecord()
+                    ->user_id
+                ?? 0
+            );
+
+        if ($ownerId <= 0) {
+            abort(403);
+        }
+
+        return $ownerId;
+    }
+
+    public function form(
+        Schema $schema
+    ): Schema {
         return $schema
             ->schema([
-                Hidden::make('user_id')
-                    ->default(
-                        fn () =>
-                            auth()->user()?->ownerId()
+                DatePicker::make(
+                    'test_date'
+                )
+                    ->label(
+                        'Datum kontrole'
                     )
-                    ->dehydrated(),
-
-                DatePicker::make('test_date')
-                    ->label('Datum kontrole')
                     ->required()
-                    ->displayFormat('d.m.Y.')
+                    ->displayFormat(
+                        'd.m.Y.'
+                    )
                     ->weekStartsOnMonday()
-                    ->timezone('Europe/Zagreb'),
+                    ->timezone(
+                        'Europe/Zagreb'
+                    ),
 
-                TextInput::make('result')
-                    ->label('Rezultat')
-                    ->placeholder('npr. 0,0')
+                TextInput::make(
+                    'result'
+                )
+                    ->label(
+                        'Rezultat'
+                    )
+                    ->placeholder(
+                        'npr. 0,0'
+                    )
                     ->maxLength(50),
 
-                TextInput::make('tested_by')
-                    ->label('Kontrolu proveo')
+                TextInput::make(
+                    'tested_by'
+                )
+                    ->label(
+                        'Kontrolu proveo'
+                    )
                     ->maxLength(255),
 
-                Textarea::make('note')
-                    ->label('Napomena')
+                Textarea::make(
+                    'note'
+                )
+                    ->label(
+                        'Napomena'
+                    )
                     ->rows(3)
                     ->columnSpanFull(),
             ])
             ->columns(2);
     }
 
-    public function table(Table $table): Table
-    {
+    public function table(
+        Table $table
+    ): Table {
         return $table
-            ->defaultSort('test_date', 'desc')
+            ->defaultSort(
+                'test_date',
+                'desc'
+            )
             ->columns([
-                TextColumn::make('test_date')
-                    ->label('Datum kontrole')
-                    ->date('d.m.Y.')
+                TextColumn::make(
+                    'test_date'
+                )
+                    ->label(
+                        'Datum kontrole'
+                    )
+                    ->date(
+                        'd.m.Y.'
+                    )
                     ->sortable()
                     ->alignment(
                         Alignment::Center
                     ),
 
-                TextColumn::make('result')
-                    ->label('Rezultat')
+                TextColumn::make(
+                    'result'
+                )
+                    ->label(
+                        'Rezultat'
+                    )
                     ->badge()
                     ->color(
                         fn ($state) =>
@@ -98,23 +147,49 @@ class EmployeeAlcoholTestsRelationManager extends RelationManager
                         Alignment::Center
                     ),
 
-                TextColumn::make('tested_by')
-                    ->label('Kontrolu proveo')
+                TextColumn::make(
+                    'tested_by'
+                )
+                    ->label(
+                        'Kontrolu proveo'
+                    )
                     ->searchable()
                     ->toggleable(),
 
-                TextColumn::make('note')
-                    ->label('Napomena')
+                TextColumn::make(
+                    'note'
+                )
+                    ->label(
+                        'Napomena'
+                    )
                     ->wrap()
                     ->toggleable(),
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->label('Dodaj alkotestiranje')
+                    ->label(
+                        'Dodaj alkotestiranje'
+                    )
                     ->before(
                         EmployeeResource::beforeModulePermission(
                             'update'
                         )
+                    )
+
+                    /*
+                     * user_id se ne uzima
+                     * iz forme nego iz
+                     * Employee zapisa.
+                     */
+                    ->mutateDataUsing(
+                        function (
+                            array $data
+                        ): array {
+                            $data['user_id'] =
+                                $this->ownerId();
+
+                            return $data;
+                        }
                     ),
             ])
             ->actions([
@@ -124,6 +199,22 @@ class EmployeeAlcoholTestsRelationManager extends RelationManager
                         EmployeeResource::beforeModulePermission(
                             'update'
                         )
+                    )
+                    ->mutateDataUsing(
+                        function (
+                            array $data
+                        ): array {
+                            /*
+                             * Ownership se pri
+                             * uređivanju ponovno
+                             * prisilno vraća na
+                             * vlasnika zaposlenika.
+                             */
+                            $data['user_id'] =
+                                $this->ownerId();
+
+                            return $data;
+                        }
                     ),
 
                 DeleteAction::make()
@@ -131,7 +222,7 @@ class EmployeeAlcoholTestsRelationManager extends RelationManager
                     ->requiresConfirmation()
                     ->before(
                         EmployeeResource::beforeModulePermission(
-                            'update'
+                            'delete'
                         )
                     ),
             ]);

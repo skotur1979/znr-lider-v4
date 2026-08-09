@@ -7,6 +7,8 @@ use App\Models\OperationalLog;
 use App\Models\WorkTask;
 use App\Services\ActivityLogger;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Support\Enums\Width;
@@ -15,29 +17,107 @@ use Illuminate\Support\Str;
 
 class EditOperationalLog extends EditRecord
 {
-    protected static string $resource = OperationalLogResource::class;
+    protected static string $resource =
+        OperationalLogResource::class;
 
     protected Width|string|null $maxContentWidth = '7xl';
 
-    protected function mutateFormDataBeforeSave(array $data): array
+    public function mount(int|string $record): void
     {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::id();
-        }
+        /*
+         * Prvo Filament učitava zapis kroz Resource query.
+         *
+         * Obični korisnik već kroz Resource može dohvatiti
+         * samo vlastiti osobni dnevnik.
+         */
+        parent::mount($record);
 
-        $data['items'] = collect($data['items'] ?? [])
-            ->filter(fn (array $item): bool => filled($item['note'] ?? null))
-            ->map(function (array $item): array {
-                return [
-                    'note' => trim((string) ($item['note'] ?? '')),
-                    'create_task' => (bool) ($item['create_task'] ?? false),
-                    'task_id' => $item['task_id'] ?? null,
-                ];
-            })
+        /*
+         * Superadmin smije pregledavati osobne dnevnike,
+         * ali ih ne smije uređivati.
+         *
+         * Ovo štiti i direktan /edit URL.
+         */
+        if (
+            Auth::user()?->isSuperAdmin()
+            || ! OperationalLogResource::canEdit(
+                $this->record
+            )
+        ) {
+            $this->redirect(
+                OperationalLogResource::getUrl(
+                    'view',
+                    [
+                        'record' => $this->record,
+                    ]
+                ),
+                navigate: true
+            );
+
+            return;
+        }
+    }
+
+    protected function beforeSave(): void
+    {
+        /*
+         * Serverska zaštita neposredno prije spremanja.
+         */
+        if (
+            ! OperationalLogResource::canEdit(
+                $this->record
+            )
+        ) {
+            $this->halt();
+        }
+    }
+
+    protected function mutateFormDataBeforeSave(
+        array $data
+    ): array {
+        /*
+         * Vlasnik osobnog dnevnika nikada se
+         * ne može promijeniti kroz uređivanje.
+         */
+        $data['user_id'] = $this->record->user_id;
+
+        $data['items'] = collect(
+            $data['items'] ?? []
+        )
+            ->filter(
+                fn (array $item): bool =>
+                    filled($item['note'] ?? null)
+            )
+            ->map(
+                function (array $item): array {
+                    return [
+                        'note' => trim(
+                            (string) (
+                                $item['note']
+                                ?? ''
+                            )
+                        ),
+
+                        'create_task' => (bool) (
+                            $item['create_task']
+                            ?? false
+                        ),
+
+                        'task_id' =>
+                            $item['task_id']
+                            ?? null,
+                    ];
+                }
+            )
             ->values()
             ->toArray();
 
-        $data['note'] = collect($data['items'])->pluck('note')->implode("\n");
+        $data['note'] = collect(
+            $data['items']
+        )
+            ->pluck('note')
+            ->implode("\n");
+
         $data['type'] = 'note';
 
         return $data;
@@ -48,49 +128,119 @@ class EditOperationalLog extends EditRecord
         /** @var OperationalLog $record */
         $record = $this->record;
 
-        $taskUserId = Auth::user()?->isSuperAdmin()
-            ? $record->user_id
-            : Auth::user()?->ownerId();
+        /*
+         * Dohvaćamo autora dnevnika.
+         *
+         * U ovom trenutku zapis može uređivati
+         * samo sam autor dnevnika.
+         */
+        $record->loadMissing('user');
 
-        $items = collect($record->items ?? [])->values()->toArray();
+        $author = $record->user;
+
+        if (! $author) {
+            return;
+        }
+
+        /*
+         * WorkTask pripada organizaciji autora dnevnika.
+         */
+        $taskUserId = $author->ownerId();
+
+        if (! $taskUserId) {
+            return;
+        }
+
+        $items = collect(
+            $record->items ?? []
+        )
+            ->values()
+            ->toArray();
 
         $createdTasks = 0;
 
         foreach ($items as $index => $item) {
-            if (! empty($item['create_task']) && empty($item['task_id'])) {
-                $task = WorkTask::create([
-                    'user_id' => $taskUserId,
-                    'title' => Str::limit($item['note'], 80),
-                    'description' => $item['note'],
-                    'due_date' => $record->log_date,
-                    'is_done' => false,
-                    'completed_at' => null,
-                ]);
-
-                $items[$index]['task_id'] = $task->id;
-                $createdTasks++;
+            if (
+                empty($item['create_task'])
+                || ! empty($item['task_id'])
+            ) {
+                continue;
             }
+
+            $task = WorkTask::create([
+                'user_id' => $taskUserId,
+
+                'title' => Str::limit(
+                    $item['note'],
+                    80
+                ),
+
+                'description' => $item['note'],
+
+                'due_date' => $record->log_date,
+
+                'is_done' => false,
+
+                'completed_at' => null,
+            ]);
+
+            $items[$index]['task_id'] =
+                $task->id;
+
+            $createdTasks++;
         }
+
+        $hasTasks = collect($items)
+            ->pluck('task_id')
+            ->filter()
+            ->isNotEmpty();
 
         $record->updateQuietly([
             'items' => $items,
-            'note' => collect($items)->pluck('note')->implode("\n"),
-            'converted_type' => collect($items)->whereNotNull('task_id')->count() > 0 ? WorkTask::class : null,
+
+            'note' => collect($items)
+                ->pluck('note')
+                ->implode("\n"),
+
+            'converted_type' =>
+                $hasTasks
+                    ? WorkTask::class
+                    : null,
+
             'converted_id' => null,
-            'status' => collect($items)->whereNotNull('task_id')->count() > 0 ? 'converted' : 'recorded',
+
+            'status' =>
+                $hasTasks
+                    ? 'converted'
+                    : 'recorded',
         ]);
 
         if ($createdTasks > 0) {
             ActivityLogger::status(
                 module: 'Operativni dnevnik',
-                title: 'Naknadno kreirani radni zadaci iz operativnog dnevnika',
-                description: 'Naknadno kreirano radnih zadataka: ' . $createdTasks . '. Datum dnevnika: ' . optional($record->log_date)->format('d.m.Y.'),
+
+                title:
+                    'Naknadno kreirani radni zadaci iz operativnog dnevnika',
+
+                description:
+                    'Naknadno kreirano radnih zadataka: '
+                    . $createdTasks
+                    . '. Datum dnevnika: '
+                    . optional(
+                        $record->log_date
+                    )->format('d.m.Y.'),
+
                 record: $record,
             );
 
             Notification::make()
-                ->title('Kreirani su novi radni zadaci.')
-                ->body('Broj novih radnih zadataka: ' . $createdTasks)
+                ->title(
+                    'Kreirani su novi radni zadaci.'
+                )
+                ->body(
+                    'Broj novih radnih zadataka: '
+                    . $createdTasks
+                )
                 ->success()
                 ->send();
         }
@@ -100,12 +250,42 @@ class EditOperationalLog extends EditRecord
     {
         return [
             DeleteAction::make()
-                ->label('Obriši'),
+                ->label('Obriši')
+                ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        OperationalLogResource::canDelete(
+                            $this->record
+                        )
+                        && ! $this->record->trashed()
+                ),
+
+            RestoreAction::make()
+                ->label('Vrati')
+                ->visible(
+                    fn (): bool =>
+                        OperationalLogResource::canRestore(
+                            $this->record
+                        )
+                ),
+
+            ForceDeleteAction::make()
+                ->label('Trajno izbriši')
+                ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        OperationalLogResource::canForceDelete(
+                            $this->record
+                        )
+                ),
         ];
     }
 
     protected function getRedirectUrl(): string
     {
-        return $this->previousUrl ?? static::getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl(
+                'index'
+            );
     }
 }

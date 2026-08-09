@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Budgets\Schemas;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Illuminate\Support\Facades\Auth;
 
 class BudgetForm
 {
@@ -15,8 +14,8 @@ class BudgetForm
             Section::make('Unos budžeta')
                 ->schema([
                     Hidden::make('user_id')
-                        ->default(fn () => Auth::id())
-                        ->dehydrated(true),
+                        ->default(fn () => auth()->user()?->ownerId())
+                        ->dehydrated(),
 
                     TextInput::make('godina')
                         ->label('Godina')

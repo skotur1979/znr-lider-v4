@@ -14,6 +14,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class InspectionZoneResource extends Resource
 {
@@ -22,8 +23,60 @@ class InspectionZoneResource extends Resource
     protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $slug = 'inspection-zones';
+
     protected static ?string $modelLabel = 'Zona nadzora';
+
     protected static ?string $pluralModelLabel = 'Zone nadzora';
+
+    /**
+     * InspectionZone nema vlastiti user_id.
+     *
+     * Ownership ide:
+     * InspectionZone -> Inspection -> user_id.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery()
+            ->with('inspection');
+
+        $user = auth()->user();
+
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        /*
+         * Superadmin smije administrirati postojeće zone
+         * svih organizacija.
+         */
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        /*
+         * Glavni korisnik i podkorisnici vide samo zone
+         * nadzora svoje organizacije.
+         */
+        return $query->whereHas(
+            'inspection',
+            fn (Builder $inspectionQuery) =>
+                $inspectionQuery->where(
+                    'user_id',
+                    $user->ownerId()
+                )
+        );
+    }
+
+    /**
+     * Zone se ne kreiraju samostalno.
+     *
+     * Kreiraju se isključivo kroz:
+     * Inspection -> ZonesRelationManager.
+     */
+    public static function canCreate(): bool
+    {
+        return false;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -48,7 +101,12 @@ class InspectionZoneResource extends Resource
                         ->label('Postotak')
                         ->disabled()
                         ->dehydrated(false)
-                        ->formatStateUsing(fn ($state) => filled($state) ? $state . '%' : '-'),
+                        ->formatStateUsing(
+                            fn ($state) =>
+                                filled($state)
+                                    ? $state . '%'
+                                    : '-'
+                        ),
 
                     Textarea::make('note')
                         ->label('Napomena zone')
@@ -73,10 +131,17 @@ class InspectionZoneResource extends Resource
                     $percentage = (float) $record->percentage;
 
                     $styles = match (true) {
-                        $percentage < 40 => 'background:#991b1b;color:#ffffff;',
-                        $percentage < 60 => 'background:#f59e0b;color:#111827;',
-                        $percentage < 80 => 'background:#fde047;color:#111827;',
-                        default => 'background:#16a34a;color:#ffffff;',
+                        $percentage < 40 =>
+                            'background:#991b1b;color:#ffffff;',
+
+                        $percentage < 60 =>
+                            'background:#f59e0b;color:#111827;',
+
+                        $percentage < 80 =>
+                            'background:#fde047;color:#111827;',
+
+                        default =>
+                            'background:#16a34a;color:#ffffff;',
                     };
 
                     return '<div style="
@@ -92,7 +157,9 @@ class InspectionZoneResource extends Resource
                         line-height:1;
                         box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
                         ' . $styles . '
-                    ">' . e(number_format($percentage, 0)) . '%</div>';
+                    ">'
+                        . e(number_format($percentage, 0))
+                        . '%</div>';
                 }),
         ]);
     }

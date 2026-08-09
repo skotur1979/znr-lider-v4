@@ -38,6 +38,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -66,6 +67,57 @@ class ObservationResource extends BaseResource
     protected static function getModuleKey(): ?string
     {
         return 'observations';
+    }
+
+    /**
+     * Zapažanja su poslovni zapisi organizacije.
+     *
+     * Superadmin ih može pregledavati, ali ne smije
+     * kreirati niti mijenjati zapise organizacija.
+     */
+    public static function canCreate(): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        return parent::canCreate();
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        return parent::canEdit($record);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        return parent::canDelete($record);
+    }
+
+    public static function canRestore(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        return parent::canRestore($record);
+    }
+
+    public static function canForceDelete(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        return parent::canForceDelete($record);
     }
 
     public static function getMaxContentWidth(): MaxWidth|string|null
@@ -729,7 +781,10 @@ protected static function priorityIcon(?string $state): ?string
                     Action::make('editObservation')
                         ->label('Uredi')
                         ->icon(Heroicon::PencilSquare)
-                        ->visible(fn (Observation $record) => ! $record->trashed())
+                        ->visible(fn (Observation $record) =>
+                            ! static::isSuperAdmin()
+                            && ! $record->trashed()
+                        )
                         ->action(function (Observation $record) {
 
                             if (! static::allowsModulePermission('update')) {
@@ -753,7 +808,10 @@ protected static function priorityIcon(?string $state): ?string
                         )
                         ->modalSubmitActionLabel('Pošalji e-mail')
                         ->modalCancelActionLabel('Odustani')
-                        ->visible(fn (Observation $record): bool => ! $record->trashed())
+                        ->visible(fn (Observation $record): bool =>
+                            ! static::isSuperAdmin()
+                            && ! $record->trashed()
+                        )
                         ->form([
                             TagsInput::make('emails')
                                 ->label('Primatelji')
@@ -767,6 +825,10 @@ protected static function priorityIcon(?string $state): ?string
                                 ->required(),
                         ])
                         ->action(function (Observation $record, array $data): void {
+                            if (static::isSuperAdmin()) {
+                                return;
+                            }
+
                             if (! static::allowsModulePermission('update')) {
                         return;
                     }
@@ -850,7 +912,10 @@ protected static function priorityIcon(?string $state): ?string
                         ->before(
                             static::beforeModulePermission('delete')
                         )
-                        ->visible(fn (Observation $record) => ! $record->trashed()),
+                        ->visible(fn (Observation $record) =>
+                            ! static::isSuperAdmin()
+                            && ! $record->trashed()
+                        ),
 
                     RestoreAction::make()
                         ->label('Vrati')
@@ -858,7 +923,10 @@ protected static function priorityIcon(?string $state): ?string
                         ->before(
                             static::beforeModulePermission('delete')
                         )
-                        ->visible(fn (Observation $record) => $record->trashed()),
+                        ->visible(fn (Observation $record) =>
+                            ! static::isSuperAdmin()
+                            && $record->trashed()
+                        ),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
@@ -866,7 +934,10 @@ protected static function priorityIcon(?string $state): ?string
                         ->before(
                             static::beforeModulePermission('delete')
                         )
-                        ->visible(fn (Observation $record) => $record->trashed()),
+                        ->visible(fn (Observation $record) =>
+                            ! static::isSuperAdmin()
+                            && $record->trashed()
+                        ),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -882,7 +953,10 @@ protected static function priorityIcon(?string $state): ?string
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Deaktiviraj')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+                    ->visible(fn (HasTable $livewire) =>
+                        ! static::isSuperAdmin()
+                        && ! self::isOnlyTrashed($livewire)
+                    ),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
@@ -894,7 +968,10 @@ protected static function priorityIcon(?string $state): ?string
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Vrati')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+                    ->visible(fn (HasTable $livewire) =>
+                        ! static::isSuperAdmin()
+                        && self::isOnlyTrashed($livewire)
+                    ),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
@@ -905,7 +982,8 @@ protected static function priorityIcon(?string $state): ?string
                     ->modalHeading('Trajno obriši odabrano')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
                     ->modalSubmitActionLabel('Trajno obriši')
-                    ->modalCancelActionLabel('Odustani'),
+                    ->modalCancelActionLabel('Odustani')
+                    ->visible(fn (): bool => ! static::isSuperAdmin()),
             ])
             ->defaultSort('incident_date', 'desc');
     }

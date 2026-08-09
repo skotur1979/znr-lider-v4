@@ -2,7 +2,7 @@
 
 namespace App\Exports;
 
-use App\Models\WasteType;
+use App\Filament\Resources\WasteTypes\WasteTypeResource;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -21,7 +21,7 @@ class WasteTypesExport implements FromCollection, WithHeadings, WithMapping, Sho
     {
         $this->filters = $filters;
 
-        $query = WasteType::query();
+        $query = WasteTypeResource::getEloquentQuery();
 
         $status = data_get($this->filters, 'status.value');
 

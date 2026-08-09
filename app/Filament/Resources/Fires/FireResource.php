@@ -5,9 +5,10 @@ namespace App\Filament\Resources\Fires;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Fires\Pages;
 use App\Models\Fire;
-use App\Support\ExpiryBadge;
 use App\Services\StorageQuotaService;
+use App\Support\ExpiryBadge;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -18,12 +19,13 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\MaxWidth;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
@@ -31,13 +33,9 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
-use Filament\Forms\Components\Select;
-use Filament\Actions\BulkAction;
-use Filament\Notifications\Notification;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Filament\Support\Enums\MaxWidth;
 
 class FireResource extends BaseResource
 {
@@ -45,502 +43,965 @@ class FireResource extends BaseResource
 
     protected static bool $usesSoftDeletes = true;
 
-    protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedFire;
+    protected static bool $hasOwnership = true;
 
-    protected static ?string $navigationLabel = 'Vatrogasni aparati';
-    protected static ?string $modelLabel = 'Vatrogasni aparat';
-    protected static ?string $pluralModelLabel = 'Vatrogasni aparati';
+    protected static \BackedEnum|string|null $navigationIcon =
+        Heroicon::OutlinedFire;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Ispitivanja';
+    protected static ?string $navigationLabel =
+        'Vatrogasni aparati';
+
+    protected static ?string $modelLabel =
+        'Vatrogasni aparat';
+
+    protected static ?string $pluralModelLabel =
+        'Vatrogasni aparati';
+
+    protected static \UnitEnum|string|null $navigationGroup =
+        'Ispitivanja';
+
     protected static ?int $navigationSort = 2;
 
     protected static function getModuleKey(): ?string
     {
         return 'fires';
     }
+
     public static function getMaxContentWidth(): MaxWidth|string|null
-{
-    return MaxWidth::Full;
-}
+    {
+        return MaxWidth::Full;
+    }
 
     public static function form(Schema $schema): Schema
-{
-    return $schema
-        ->schema([
-            Select::make('user_id')
-                ->label('Korisnik')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->visible(fn () => static::isSuperAdmin())
-                ->dehydrated(fn () => static::isSuperAdmin())
-                ->hiddenOn('view'),
+    {
+        return $schema
+            ->schema([
+                Section::make('Podaci o vatrogasnom aparatu')
+                    ->columnSpanFull()
+                    ->columns(2)
+                    ->schema([
+                        Section::make('Osnovni podaci')
+                            ->columns(2)
+                            ->schema([
+                                TextInput::make('place')
+                                    ->label(
+                                        'Mjesto gdje se aparat nalazi (obavezno)'
+                                    )
+                                    ->required()
+                                    ->maxLength(255),
 
-            Hidden::make('user_id')
-                ->default(fn () => static::defaultUserId())
-                ->visible(fn () => ! static::isSuperAdmin())
-                ->dehydrated(fn () => ! static::isSuperAdmin()),
+                                TextInput::make('type')
+                                    ->label('Tip aparata')
+                                    ->maxLength(255),
 
-            Section::make('Podaci o vatrogasnom aparatu')
-                ->columnSpanFull()
-                ->columns(2)
-                ->schema([
-                    Section::make('Osnovni podaci')
-                        ->columns(2)
-                        ->schema([
-                            TextInput::make('place')
-                                ->label('Mjesto gdje se aparat nalazi (obavezno)')
-                                ->required()
-                                ->maxLength(255),
+                                TextInput::make(
+                                    'factory_number_year_of_production'
+                                )
+                                    ->label(
+                                        'Tvornički broj/Godina proizvodnje'
+                                    )
+                                    ->maxLength(255)
+                                    ->rule(
+                                        function (?Fire $record) {
+                                            return Rule::unique(
+                                                'fires',
+                                                'factory_number_year_of_production'
+                                            )
+                                                ->where(
+                                                    function ($query) {
+                                                        $ownerId =
+                                                            static::ownerId();
 
-                            TextInput::make('type')
-                                ->label('Tip aparata')
-                                ->maxLength(255),
+                                                        /*
+                                                         * Standardni poslovni
+                                                         * zapis mora pripadati
+                                                         * organizaciji.
+                                                         *
+                                                         * Ako ownerId iz nekog
+                                                         * razloga nije dostupan,
+                                                         * ne širimo unique query
+                                                         * na sve organizacije.
+                                                         */
+                                                        if (! $ownerId) {
+                                                            $query->whereRaw(
+                                                                '1 = 0'
+                                                            );
 
-                            TextInput::make('factory_number_year_of_production')
-                                ->label('Tvornički broj/Godina proizvodnje')
-                                ->maxLength(255)
-                                ->formatStateUsing(fn ($record) => $record?->getAttribute('factory_number/year_of_production'))
-                                ->dehydrateStateUsing(fn ($state) => $state)
-                                ->rule(function ($record) {
-                                    return Rule::unique('fires', 'factory_number/year_of_production')
-                                        ->where(function ($query) {
-                                            $ownerId = static::ownerId();
+                                                            return;
+                                                        }
 
-                                            if ($ownerId) {
-                                                $query->where('user_id', $ownerId);
+                                                        $query->where(
+                                                            'user_id',
+                                                            $ownerId
+                                                        );
+
+                                                        $query->whereNull(
+                                                            'deleted_at'
+                                                        );
+                                                    }
+                                                )
+                                                ->ignore(
+                                                    $record?->id
+                                                );
+                                        }
+                                    )
+                                    ->validationMessages([
+                                        'unique' =>
+                                            'Već postoji vatrogasni aparat s istim tvorničkim brojem / godinom proizvodnje.',
+                                    ]),
+
+                                TextInput::make(
+                                    'serial_label_number'
+                                )
+                                    ->label(
+                                        'Serijski broj evidencijske naljepnice'
+                                    )
+                                    ->maxLength(255),
+                            ]),
+
+                        Section::make('Ispitivanje')
+                            ->columns(2)
+                            ->schema([
+                                DatePicker::make(
+                                    'examination_valid_from'
+                                )
+                                    ->label(
+                                        'Datum periodičkog servisa (obavezno)'
+                                    )
+                                    ->required()
+                                    ->displayFormat('d.m.Y.')
+                                    ->native(false),
+
+                                DatePicker::make(
+                                    'examination_valid_until'
+                                )
+                                    ->label(
+                                        'Vrijedi do (obavezno)'
+                                    )
+                                    ->required()
+                                    ->displayFormat('d.m.Y.')
+                                    ->native(false),
+
+                                TextInput::make('service')
+                                    ->label(
+                                        'Naziv servisera koji je servisirao aparat'
+                                    )
+                                    ->maxLength(255),
+
+                                DatePicker::make(
+                                    'regular_examination_valid_from'
+                                )
+                                    ->label(
+                                        'Datum redovnog pregleda (obavezno)'
+                                    )
+                                    ->helperText(
+                                        'Obavezni redovni pregled najmanje jednom svaka 3 mjeseca.'
+                                    )
+                                    ->required()
+                                    ->displayFormat('d.m.Y.')
+                                    ->native(false),
+                            ]),
+
+                        Section::make('Ostalo')
+                            ->columns(2)
+                            ->schema([
+                                TextInput::make('visible')
+                                    ->label(
+                                        'Uočljivost i dostupnost aparata'
+                                    )
+                                    ->maxLength(255),
+
+                                TextInput::make('remark')
+                                    ->label(
+                                        'Uočeni nedostatci'
+                                    )
+                                    ->maxLength(255),
+
+                                TextInput::make('action')
+                                    ->label(
+                                        'Postupci otklanjanja'
+                                    )
+                                    ->maxLength(255)
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('Prilozi')
+                            ->columnSpan(1)
+                            ->schema([
+                                FileUpload::make('pdf')
+                                    ->label(
+                                        'Dodaj prilog (max. 10)'
+                                    )
+                                    ->disk('public')
+                                    ->directory('fires')
+                                    ->multiple()
+                                    ->maxFiles(10)
+                                    ->maxSize(30720)
+                                    ->preserveFilenames()
+                                    ->openable()
+                                    ->downloadable()
+                                    ->helperText(
+                                        function () {
+                                            $ownerId =
+                                                auth()
+                                                    ->user()
+                                                    ?->ownerId();
+
+                                            if (! $ownerId) {
+                                                return null;
                                             }
 
-                                            $query->whereNull('deleted_at');
-                                        })
-                                        ->ignore($record?->id);
-                                })
-                                ->validationMessages([
-                                    'unique' => 'Već postoji vatrogasni aparat s istim tvorničkim brojem / godinom proizvodnje.',
-                                ]),
+                                            return
+                                                'Iskorištenost prostora organizacije: '
+                                                . app(
+                                                    StorageQuotaService::class
+                                                )->usageText(
+                                                    $ownerId
+                                                );
+                                        }
+                                    )
+                                    ->rules([
+                                        function () {
+                                            return function (
+                                                string $attribute,
+                                                mixed $value,
+                                                \Closure $fail
+                                            ): void {
+                                                $ownerId =
+                                                    auth()
+                                                        ->user()
+                                                        ?->ownerId();
 
-                            TextInput::make('serial_label_number')
-                                ->label('Serijski broj evidencijske naljepnice')
-                                ->maxLength(255),
-                        ]),
+                                                if (! $ownerId) {
+                                                    return;
+                                                }
 
-                    Section::make('Ispitivanje')
-                        ->columns(2)
-                        ->schema([
-                            DatePicker::make('examination_valid_from')
-                                ->label('Datum periodičkog servisa (obavezno)')
-                                ->required()
-                                ->displayFormat('d.m.Y.')
-                                ->native(false),
+                                                if (
+                                                    ! app(
+                                                        StorageQuotaService::class
+                                                    )->canUpload(
+                                                        $value,
+                                                        $ownerId
+                                                    )
+                                                ) {
+                                                    $fail(
+                                                        'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                                        . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                                    );
+                                                }
+                                            };
+                                        },
+                                    ])
+                                    ->acceptedFileTypes([
+                                        'application/pdf',
+                                        'application/msword',
+                                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                        'application/vnd.ms-excel',
+                                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                        'image/jpeg',
+                                        'image/png',
+                                        'image/gif',
+                                        'image/webp',
+                                        'application/zip',
+                                        'application/x-rar-compressed',
+                                    ]),
+                            ]),
+                    ]),
+            ])
+            ->columns(1);
+    }
 
-                            DatePicker::make('examination_valid_until')
-                                ->label('Vrijedi do (obavezno)')
-                                ->required()
-                                ->displayFormat('d.m.Y.')
-                                ->native(false),
-
-                            TextInput::make('service')
-                                ->label('Naziv servisera koji je servisirao aparat')
-                                ->maxLength(255),
-
-                            DatePicker::make('regular_examination_valid_from')
-                            ->label('Datum redovnog pregleda (obavezno)')
-                            ->helperText('Obavezni redovni pregled najmanje jednom svaka 3 mjeseca.')
-                            ->required()
-                            ->displayFormat('d.m.Y.')
-                            ->native(false),
-                        ]),
-
-                    Section::make('Ostalo')
-                        ->columns(2)
-                        ->schema([
-                            TextInput::make('visible')
-                                ->label('Uočljivost i dostupnost aparata')
-                                ->maxLength(255),
-
-                            TextInput::make('remark')
-                                ->label('Uočeni nedostatci')
-                                ->maxLength(255),
-
-                            TextInput::make('action')
-                                ->label('Postupci otklanjanja')
-                                ->maxLength(255)
-                                ->columnSpanFull(),
-                        ]),
-
-                    Section::make('Prilozi')
-                        ->columnSpan(1)
-                        ->schema([
-                    FileUpload::make('pdf')
-                        ->label('Dodaj prilog (max. 10)')
-                        ->disk('public')
-                        ->directory('fires')
-                        ->multiple()
-                        ->maxFiles(10)
-                        ->maxSize(30720)
-                        ->preserveFilenames()
-                        ->openable()
-                        ->downloadable()
-
-                        ->helperText(function () {
-                            $ownerId = auth()->user()?->ownerId();
-
-                            if (! $ownerId) {
-                                return null;
-                            }
-
-                            return 'Iskorištenost prostora organizacije: '
-                                . app(StorageQuotaService::class)->usageText($ownerId);
-                        })
-
-                        ->rules([
-                            function () {
-                                return function (
-                                    string $attribute,
-                                    mixed $value,
-                                    \Closure $fail
-                                ) {
-                                    $ownerId = auth()->user()?->ownerId();
-
-                                    if (! $ownerId) {
-                                        return;
-                                    }
-
-                                    if (! app(StorageQuotaService::class)
-                                        ->canUpload($value, $ownerId)) {
-
-                                        $fail(
-                                            'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
-                                            .'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
-                                        );
-                                    }
-                                };
-                            },
-                        ])
-
-                        ->acceptedFileTypes([
-                            'application/pdf',
-                            'application/msword',
-                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            'application/vnd.ms-excel',
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'image/jpeg',
-                            'image/png',
-                            'image/gif',
-                            'image/webp',
-                            'application/zip',
-                            'application/x-rar-compressed',
-                                ]),
-                        ]),
-                ]),
-        ])
-        ->columns(1);
-}
-
-    public static function infolist(Schema $schema): Schema
-    {
+    public static function infolist(
+        Schema $schema
+    ): Schema {
         return $schema->components([
-            Section::make('Podatci o vatrogasnom aparatu')
+            Section::make(
+                'Podatci o vatrogasnom aparatu'
+            )
                 ->components([
-                    TextEntry::make('place')->label('Mjesto gdje se aparat nalazi'),
-                    TextEntry::make('type')->label('Tip aparata'),
-                    TextEntry::make('factory_number_year_of_production')->label('Tvornički broj/Godina proizvodnje'),
-                    TextEntry::make('serial_label_number')->label('Serijski broj evidencijske naljepnice'),
+                    TextEntry::make('place')
+                        ->label(
+                            'Mjesto gdje se aparat nalazi'
+                        ),
+
+                    TextEntry::make('type')
+                        ->label('Tip aparata'),
+
+                    TextEntry::make(
+                        'factory_number_year_of_production'
+                    )
+                        ->label(
+                            'Tvornički broj/Godina proizvodnje'
+                        ),
+
+                    TextEntry::make(
+                        'serial_label_number'
+                    )
+                        ->label(
+                            'Serijski broj evidencijske naljepnice'
+                        ),
                 ])
                 ->columns(2),
 
-            Section::make('Ispitivanje vatrogasnog aparata')
+            Section::make(
+                'Ispitivanje vatrogasnog aparata'
+            )
                 ->components([
-                    TextEntry::make('examination_valid_from')->label('Datum periodičkog servisa')->date('d.m.Y.'),
-                    TextEntry::make('examination_valid_until')->label('Vrijedi do')->date('d.m.Y.'),
-                    TextEntry::make('service')->label('Naziv servisera'),
-                    TextEntry::make('regular_examination_valid_from')->label('Datum redovnog pregleda')->date('d.m.Y.'),
+                    TextEntry::make(
+                        'examination_valid_from'
+                    )
+                        ->label(
+                            'Datum periodičkog servisa'
+                        )
+                        ->date('d.m.Y.'),
+
+                    TextEntry::make(
+                        'examination_valid_until'
+                    )
+                        ->label('Vrijedi do')
+                        ->date('d.m.Y.'),
+
+                    TextEntry::make('service')
+                        ->label('Naziv servisera'),
+
+                    TextEntry::make(
+                        'regular_examination_valid_from'
+                    )
+                        ->label(
+                            'Datum redovnog pregleda'
+                        )
+                        ->date('d.m.Y.'),
                 ])
                 ->columns(2),
 
             Section::make('Ostalo')
                 ->components([
-                    TextEntry::make('visible')->label('Uočljivost i dostupnost aparata'),
-                    TextEntry::make('remark')->label('Uočeni nedostatci'),
-                    TextEntry::make('action')->label('Postupci otklanjanja'),
+                    TextEntry::make('visible')
+                        ->label(
+                            'Uočljivost i dostupnost aparata'
+                        ),
+
+                    TextEntry::make('remark')
+                        ->label(
+                            'Uočeni nedostatci'
+                        ),
+
+                    TextEntry::make('action')
+                        ->label(
+                            'Postupci otklanjanja'
+                        ),
                 ])
                 ->columns(2),
         ]);
     }
 
-    public static function table(Table $table): Table
-    {
+    public static function table(
+        Table $table
+    ): Table {
         return $table
             ->defaultSort('id', 'desc')
             ->columns([
-    TextColumn::make('place')
-        ->label('Mjesto gdje se aparat nalazi')
-        ->searchable()
-        ->sortable()
-        ->weight('bold')
-        ->toggleable(),
+                TextColumn::make('place')
+                    ->label(
+                        'Mjesto gdje se aparat nalazi'
+                    )
+                    ->searchable()
+                    ->sortable()
+                    ->weight('bold')
+                    ->toggleable(),
 
-    static::userTableColumn()
-        ->toggleable(),
+                static::userTableColumn()
+                    ->toggleable(),
 
-    TextColumn::make('type')
-        ->label('Tip aparata')
-        ->alignment(Alignment::Center)
-        ->searchable()
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make('type')
+                    ->label('Tip aparata')
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('factory_number_year_of_production')
-        ->label('Tvor.broj/Godina proizv.')
-        ->alignment(Alignment::Center)
-        ->searchable()
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make(
+                    'factory_number_year_of_production'
+                )
+                    ->label(
+                        'Tvor.broj/Godina proizv.'
+                    )
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('examination_valid_from')
-        ->label('Datum ispitivanja')
-        ->alignment(Alignment::Center)
-        ->date('d.m.Y.')
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make(
+                    'examination_valid_from'
+                )
+                    ->label('Datum ispitivanja')
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->date('d.m.Y.')
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('examination_valid_until')
-        ->label('Ispitivanje vrijedi do')
-        ->alignment(Alignment::Center)
-        ->date('d.m.Y.')
-        ->badge()
-        ->color(fn ($state) => ExpiryBadge::color($state))
-        ->icon(fn ($state) => ExpiryBadge::icon($state))
-        ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make(
+                    'examination_valid_until'
+                )
+                    ->label(
+                        'Ispitivanje vrijedi do'
+                    )
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->date('d.m.Y.')
+                    ->badge()
+                    ->color(
+                        fn ($state) =>
+                            ExpiryBadge::color(
+                                $state
+                            )
+                    )
+                    ->icon(
+                        fn ($state) =>
+                            ExpiryBadge::icon(
+                                $state
+                            )
+                    )
+                    ->tooltip(
+                        fn ($state) =>
+                            ExpiryBadge::tooltip(
+                                $state
+                            )
+                    )
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('regular_examination_valid_from')
-        ->label('Datum redovnog pregleda')
-        ->alignment(Alignment::Center)
-        ->date('d.m.Y.')
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make(
+                    'regular_examination_valid_from'
+                )
+                    ->label(
+                        'Datum redovnog pregleda'
+                    )
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->date('d.m.Y.')
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('regular_examination_valid_until')
-        ->label('Redovni pregled vrijedi do')
-        ->alignment(Alignment::Center)
-        ->date('d.m.Y.')
-        ->badge()
-        ->color(fn ($state) => ExpiryBadge::color($state))
-        ->icon(fn ($state) => ExpiryBadge::icon($state))
-        ->tooltip(fn ($state) => ExpiryBadge::tooltip($state))
-        ->toggleable(),
-])
+                TextColumn::make(
+                    'regular_examination_valid_until'
+                )
+                    ->label(
+                        'Redovni pregled vrijedi do'
+                    )
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->date('d.m.Y.')
+                    ->badge()
+                    ->color(
+                        fn ($state) =>
+                            ExpiryBadge::color(
+                                $state
+                            )
+                    )
+                    ->icon(
+                        fn ($state) =>
+                            ExpiryBadge::icon(
+                                $state
+                            )
+                    )
+                    ->tooltip(
+                        fn ($state) =>
+                            ExpiryBadge::tooltip(
+                                $state
+                            )
+                    )
+                    ->toggleable(),
+            ])
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status zapisa')
-                    ->placeholder('Odaberi status')
+                    ->placeholder(
+                        'Odaberi status'
+                    )
                     ->options([
-                        'active'  => 'Aktivni zapisi',
-                        'trashed' => 'Deaktivirani zapisi',
-                        'all'     => 'Svi zapisi',
+                        'active' =>
+                            'Aktivni zapisi',
+
+                        'trashed' =>
+                            'Deaktivirani zapisi',
+
+                        'all' =>
+                            'Svi zapisi',
                     ])
-                    ->query(function (Builder $query, array $data) {
-                        $value = $data['value'] ?? null;
+                    ->query(
+                        function (
+                            Builder $query,
+                            array $data
+                        ) {
+                            $value =
+                                $data['value']
+                                ?? null;
 
-                        return match ($value) {
-                            'trashed' => $query->onlyTrashed(),
-                            'all'     => $query->withTrashed(),
-                            default   => $query->withoutTrashed(),
-                        };
-                    }),
+                            return match (
+                                $value
+                            ) {
+                                'trashed' =>
+                                    $query->onlyTrashed(),
 
-                Filter::make('examination_validity_expired')
-                    ->label('Ispitivanje (isteklo)')
-                    ->query(fn (Builder $query) => $query->whereDate('examination_valid_until', '<', Carbon::today())),
+                                'all' =>
+                                    $query->withTrashed(),
 
-                Filter::make('examination_validity_expiring')
-                    ->label('Ispitivanje (uskoro ističe)')
-                    ->query(fn (Builder $query) => $query
-                        ->whereDate('examination_valid_until', '>=', Carbon::today())
-                        ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30))),
+                                default =>
+                                    $query->withoutTrashed(),
+                            };
+                        }
+                    ),
+
+                Filter::make(
+                    'examination_validity_expired'
+                )
+                    ->label(
+                        'Ispitivanje (isteklo)'
+                    )
+                    ->query(
+                        fn (
+                            Builder $query
+                        ) =>
+                            $query->whereDate(
+                                'examination_valid_until',
+                                '<',
+                                Carbon::today()
+                            )
+                    ),
+
+                Filter::make(
+                    'examination_validity_expiring'
+                )
+                    ->label(
+                        'Ispitivanje (uskoro ističe)'
+                    )
+                    ->query(
+                        fn (
+                            Builder $query
+                        ) =>
+                            $query
+                                ->whereDate(
+                                    'examination_valid_until',
+                                    '>=',
+                                    Carbon::today()
+                                )
+                                ->whereDate(
+                                    'examination_valid_until',
+                                    '<=',
+                                    Carbon::today()
+                                        ->addDays(
+                                            30
+                                        )
+                                )
+                    ),
             ])
-            ->paginated([10, 25, 50, 100, 'all'])
+            ->paginated([
+                10,
+                25,
+                50,
+                100,
+                'all',
+            ])
             ->actions([
                 ActionGroup::make([
-                    ViewAction::make()->label('Prikaži'),
+                    ViewAction::make()
+                        ->label('Prikaži'),
 
                     EditAction::make()
                         ->label('Uredi')
-                        ->visible(fn (Fire $record) => ! $record->trashed()),
+                        ->visible(
+                            fn (
+                                Fire $record
+                            ) =>
+                                ! $record->trashed()
+                        ),
 
                     DeleteAction::make()
-                        ->label('Deaktiviraj')
+                        ->label(
+                            'Deaktiviraj'
+                        )
                         ->requiresConfirmation()
-                        ->visible(fn (Fire $record) => ! $record->trashed()),
+                        ->visible(
+                            fn (
+                                Fire $record
+                            ) =>
+                                ! $record->trashed()
+                        ),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (Fire $record) => $record->trashed()),
+                        ->visible(
+                            fn (
+                                Fire $record
+                            ) =>
+                                $record->trashed()
+                        ),
 
                     ForceDeleteAction::make()
-                        ->label('Trajno obriši')
+                        ->label(
+                            'Trajno obriši'
+                        )
                         ->requiresConfirmation()
-                        ->visible(fn (Fire $record) => $record->trashed()),
+                        ->visible(
+                            fn (
+                                Fire $record
+                            ) =>
+                                $record->trashed()
+                        ),
                 ])
-                    ->icon(Heroicon::EllipsisVertical)
+                    ->icon(
+                        Heroicon::EllipsisVertical
+                    )
                     ->label(''),
             ])
             ->bulkActions([
-    BulkAction::make('extendRegularInspection')
-        ->label('Produži pregled za 3 mj.')
-        ->icon(Heroicon::CalendarDays)
-        ->color('warning')
-        ->form([
-            DatePicker::make('regular_examination_valid_from')
-                ->label('Datum redovnog pregleda od kojeg se računa novi rok')
-                ->helperText('Novi rok će se računati: odabrani datum + 3 mjeseca.')
-                ->required()
-                ->displayFormat('d.m.Y.')
-                ->native(false),
-        ])
-        ->requiresConfirmation()
-        ->modalHeading('Produži redovni pregled')
-        ->modalDescription('Odabranim vatrogasnim aparatima upisat će se novi datum redovnog pregleda.')
-        ->modalSubmitActionLabel('Produži')
-        ->modalCancelActionLabel('Odustani')
-        ->action(function (EloquentCollection $records, array $data): void {
-            foreach ($records as $record) {
-                if ($record->trashed()) {
-                    continue;
-                }
+                BulkAction::make(
+                    'extendRegularInspection'
+                )
+                    ->label(
+                        'Produži pregled za 3 mj.'
+                    )
+                    ->icon(
+                        Heroicon::CalendarDays
+                    )
+                    ->color('warning')
+                    ->form([
+                        DatePicker::make(
+                            'regular_examination_valid_from'
+                        )
+                            ->label(
+                                'Datum redovnog pregleda od kojeg se računa novi rok'
+                            )
+                            ->helperText(
+                                'Novi rok će se računati: odabrani datum + 3 mjeseca.'
+                            )
+                            ->required()
+                            ->displayFormat(
+                                'd.m.Y.'
+                            )
+                            ->native(false),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Produži redovni pregled'
+                    )
+                    ->modalDescription(
+                        'Odabranim vatrogasnim aparatima upisat će se novi datum redovnog pregleda.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Produži'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->action(
+                        function (
+                            EloquentCollection $records,
+                            array $data
+                        ): void {
+                            foreach (
+                                $records
+                                as $record
+                            ) {
+                                if (
+                                    $record->trashed()
+                                ) {
+                                    continue;
+                                }
 
-                $record->update([
-                    'regular_examination_valid_from' => $data['regular_examination_valid_from'],
-                ]);
-            }
+                                $record->update([
+                                    'regular_examination_valid_from' =>
+                                        $data[
+                                            'regular_examination_valid_from'
+                                        ],
+                                ]);
+                            }
 
-            Notification::make()
-                ->title('Redovni pregled je produžen')
-                ->body('Odabranim vatrogasnim aparatima ažuriran je datum redovnog pregleda.')
-                ->success()
-                ->send();
-        }),
+                            Notification::make()
+                                ->title(
+                                    'Redovni pregled je produžen'
+                                )
+                                ->body(
+                                    'Odabranim vatrogasnim aparatima ažuriran je datum redovnog pregleda.'
+                                )
+                                ->success()
+                                ->send();
+                        }
+                    ),
 
-    BulkAction::make('extendPeriodicInspection')
-        ->label('Produži ispitivanje za 1 god.')
-        ->icon(Heroicon::ArrowPath)
-        ->color('success')
-        ->form([
-            DatePicker::make('examination_valid_from')
-                ->label('Datum periodičkog servisa / ispitivanja')
-                ->helperText('Polje "Vrijedi do" automatski će se postaviti na odabrani datum + 1 godina.')
-                ->required()
-                ->displayFormat('d.m.Y.')
-                ->native(false),
-        ])
-        ->requiresConfirmation()
-        ->modalHeading('Produži periodički servis / ispitivanje')
-        ->modalDescription('Odabranim vatrogasnim aparatima upisat će se novi datum ispitivanja i rok vrijedi do.')
-        ->modalSubmitActionLabel('Produži')
-        ->modalCancelActionLabel('Odustani')
-        ->action(function (EloquentCollection $records, array $data): void {
-            $from = Carbon::parse($data['examination_valid_from']);
-            $until = $from->copy()->addYearNoOverflow();
+                BulkAction::make(
+                    'extendPeriodicInspection'
+                )
+                    ->label(
+                        'Produži ispitivanje za 1 god.'
+                    )
+                    ->icon(
+                        Heroicon::ArrowPath
+                    )
+                    ->color('success')
+                    ->form([
+                        DatePicker::make(
+                            'examination_valid_from'
+                        )
+                            ->label(
+                                'Datum periodičkog servisa / ispitivanja'
+                            )
+                            ->helperText(
+                                'Polje "Vrijedi do" automatski će se postaviti na odabrani datum + 1 godina.'
+                            )
+                            ->required()
+                            ->displayFormat(
+                                'd.m.Y.'
+                            )
+                            ->native(false),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Produži periodički servis / ispitivanje'
+                    )
+                    ->modalDescription(
+                        'Odabranim vatrogasnim aparatima upisat će se novi datum ispitivanja i rok vrijedi do.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Produži'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->action(
+                        function (
+                            EloquentCollection $records,
+                            array $data
+                        ): void {
+                            $from =
+                                Carbon::parse(
+                                    $data[
+                                        'examination_valid_from'
+                                    ]
+                                );
 
-            foreach ($records as $record) {
-                if ($record->trashed()) {
-                    continue;
-                }
+                            $until =
+                                $from
+                                    ->copy()
+                                    ->addYearNoOverflow();
 
-                $record->update([
-                    'examination_valid_from' => $from->toDateString(),
-                    'examination_valid_until' => $until->toDateString(),
-                ]);
-            }
+                            foreach (
+                                $records
+                                as $record
+                            ) {
+                                if (
+                                    $record->trashed()
+                                ) {
+                                    continue;
+                                }
 
-            Notification::make()
-                ->title('Ispitivanje je produženo')
-                ->body('Odabranim vatrogasnim aparatima ažuriran je datum ispitivanja i rok vrijedi do.')
-                ->success()
-                ->send();
-        }),
+                                $record->update([
+                                    'examination_valid_from' =>
+                                        $from->toDateString(),
 
-    DeleteBulkAction::make()
-        ->label('Deaktiviraj označeno')
-        ->requiresConfirmation()
-        ->modalHeading('Deaktiviraj odabrano')
-        ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-        ->modalSubmitActionLabel('Deaktiviraj')
-        ->modalCancelActionLabel('Odustani')
-        ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+                                    'examination_valid_until' =>
+                                        $until->toDateString(),
+                                ]);
+                            }
 
-    RestoreBulkAction::make()
-        ->label('Vrati označeno')
-        ->requiresConfirmation()
-        ->modalHeading('Vrati odabrano')
-        ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-        ->modalSubmitActionLabel('Vrati')
-        ->modalCancelActionLabel('Odustani')
-        ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+                            Notification::make()
+                                ->title(
+                                    'Ispitivanje je produženo'
+                                )
+                                ->body(
+                                    'Odabranim vatrogasnim aparatima ažuriran je datum ispitivanja i rok vrijedi do.'
+                                )
+                                ->success()
+                                ->send();
+                        }
+                    ),
 
-    BulkAction::make('copyAndCreateNew')
-        ->label('Kopiraj i napravi novi')
-        ->icon(Heroicon::DocumentDuplicate)
-        ->requiresConfirmation()
-        ->modalHeading('Kopiraj vatrogasni aparat')
-        ->modalDescription('Kopirat će se odabrani vatrogasni aparat i otvoriti novi zapis za uređivanje. Prilozi se neće kopirati.')
-        ->modalSubmitActionLabel('Kopiraj i otvori')
-        ->modalCancelActionLabel('Odustani')
-        ->action(function (EloquentCollection $records) {
-            if ($records->count() !== 1) {
-                Notification::make()
-                    ->title('Odaberi samo jedan vatrogasni aparat')
-                    ->body('Za kopiranje može biti označen samo jedan vatrogasni aparat.')
-                    ->danger()
-                    ->send();
+                DeleteBulkAction::make()
+                    ->label(
+                        'Deaktiviraj označeno'
+                    )
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Deaktiviraj odabrano'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->visible(
+                        fn (
+                            HasTable $livewire
+                        ) =>
+                            ! self::isOnlyTrashed(
+                                $livewire
+                            )
+                    ),
 
-                return;
-            }
+                RestoreBulkAction::make()
+                    ->label(
+                        'Vrati označeno'
+                    )
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Vrati odabrano'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Vrati'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->visible(
+                        fn (
+                            HasTable $livewire
+                        ) =>
+                            self::isOnlyTrashed(
+                                $livewire
+                            )
+                    ),
 
-            /** @var Fire $record */
-            $record = $records->first();
+                BulkAction::make(
+                    'copyAndCreateNew'
+                )
+                    ->label(
+                        'Kopiraj i napravi novi'
+                    )
+                    ->icon(
+                        Heroicon::DocumentDuplicate
+                    )
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Kopiraj vatrogasni aparat'
+                    )
+                    ->modalDescription(
+                        'Kopirat će se odabrani vatrogasni aparat i otvoriti novi zapis za uređivanje. Prilozi se neće kopirati.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Kopiraj i otvori'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->action(
+                        function (
+                            EloquentCollection $records
+                        ) {
+                            if (
+                                $records->count()
+                                !== 1
+                            ) {
+                                Notification::make()
+                                    ->title(
+                                        'Odaberi samo jedan vatrogasni aparat'
+                                    )
+                                    ->body(
+                                        'Za kopiranje može biti označen samo jedan vatrogasni aparat.'
+                                    )
+                                    ->danger()
+                                    ->send();
 
-            $newRecord = $record->replicate([
-                'created_at',
-                'updated_at',
-                'deleted_at',
+                                return;
+                            }
+
+                            /** @var Fire $record */
+                            $record =
+                                $records->first();
+
+                            $newRecord =
+                                $record->replicate([
+                                    'created_at',
+                                    'updated_at',
+                                    'deleted_at',
+                                ]);
+
+                            $newRecord->pdf = [];
+
+                            /*
+                             * Novi zapis organizacijskog
+                             * korisnika ostaje unutar iste
+                             * organizacije.
+                             */
+                            $newRecord->user_id =
+                                static::isSuperAdmin()
+                                    ? $record->user_id
+                                    : static::ownerId();
+
+                            $newRecord->save();
+
+                            Notification::make()
+                                ->title(
+                                    'Vatrogasni aparat je kopiran'
+                                )
+                                ->body(
+                                    'Otvara se novi kopirani zapis za uređivanje.'
+                                )
+                                ->success()
+                                ->send();
+
+                            return redirect(
+                                static::getUrl(
+                                    'edit',
+                                    [
+                                        'record' =>
+                                            $newRecord,
+                                    ]
+                                )
+                            );
+                        }
+                    ),
+
+                ForceDeleteBulkAction::make()
+                    ->label(
+                        'Trajno obriši označeno'
+                    )
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Trajno obriši odabrano'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno obriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    ),
             ]);
-
-            $newRecord->pdf = [];
-
-            $newRecord->user_id = static::isSuperAdmin()
-                ? $record->user_id
-                : static::ownerId();
-
-            $newRecord->save();
-
-            Notification::make()
-                ->title('Vatrogasni aparat je kopiran')
-                ->body('Otvara se novi kopirani zapis za uređivanje.')
-                ->success()
-                ->send();
-
-            return redirect(static::getUrl('edit', ['record' => $newRecord]));
-        }),
-
-    ForceDeleteBulkAction::make()
-        ->label('Trajno obriši označeno')
-        ->requiresConfirmation()
-        ->modalHeading('Trajno obriši odabrano')
-        ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
-        ->modalSubmitActionLabel('Trajno obriši')
-        ->modalCancelActionLabel('Odustani'),
-]);
     }
 
-    private static function isOnlyTrashed(HasTable $livewire): bool
-    {
-        $state = $livewire->getTableFilterState('status');
-        $value = data_get($state, 'value');
+    private static function isOnlyTrashed(
+        HasTable $livewire
+    ): bool {
+        $state =
+            $livewire->getTableFilterState(
+                'status'
+            );
+
+        $value =
+            data_get(
+                $state,
+                'value'
+            );
 
         return $value === 'trashed';
     }
@@ -548,10 +1009,23 @@ class FireResource extends BaseResource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListFires::route('/'),
-            'create' => Pages\CreateFire::route('/create'),
-            'view'   => Pages\ViewFire::route('/{record}'),
-            'edit'   => Pages\EditFire::route('/{record}/edit'),
+            'index' =>
+                Pages\ListFires::route('/'),
+
+            'create' =>
+                Pages\CreateFire::route(
+                    '/create'
+                ),
+
+            'view' =>
+                Pages\ViewFire::route(
+                    '/{record}'
+                ),
+
+            'edit' =>
+                Pages\EditFire::route(
+                    '/{record}/edit'
+                ),
         ];
     }
 }

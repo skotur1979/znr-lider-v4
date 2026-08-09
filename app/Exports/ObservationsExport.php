@@ -40,7 +40,7 @@ class ObservationsExport implements
 
     private int $firstDataRow = 7;
 
-    public function __construct()
+    public function __construct(?array $observationIds = null)
     {
         $user = auth()->user();
 
@@ -48,10 +48,25 @@ class ObservationsExport implements
             (bool) $user?->isSuperAdmin()
             || (bool) $user?->canCreateSubusers();
 
-        $this->observations = ObservationResource::getEloquentQuery()
+        $query = ObservationResource::getEloquentQuery()
             ->with('user')
-            ->orderByDesc('incident_date')
-            ->get();
+            ->orderByDesc('incident_date');
+
+        /*
+         * Kada ListObservations proslijedi ID-eve,
+         * Excel mora poštovati trenutačne filtere i sortiranje tablice.
+         *
+         * Važno: i prazan array znači "ne izvozi ništa",
+         * zato razlikujemo null od [].
+         */
+        if ($observationIds !== null) {
+            $query->whereIn(
+                'observations.id',
+                $observationIds
+            );
+        }
+
+        $this->observations = $query->get();
     }
 
     public function startCell(): string

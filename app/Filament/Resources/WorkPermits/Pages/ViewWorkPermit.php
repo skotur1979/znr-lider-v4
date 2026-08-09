@@ -19,19 +19,35 @@ class ViewWorkPermit extends ViewRecord
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('warning')
                 ->action(function () {
-                    $path = WorkPermitPdfGenerator::generate($this->record);
+                    $path = WorkPermitPdfGenerator::generate(
+                        $this->record
+                    );
 
-                    return response()->download(
-                        $path,
-                        basename($path),
-                        ['Content-Type' => 'application/pdf']
-                    )->deleteFileAfterSend(true);
+                    return response()
+                        ->download(
+                            $path,
+                            basename($path),
+                            [
+                                'Content-Type' => 'application/pdf',
+                            ]
+                        )
+                        ->deleteFileAfterSend(true);
                 }),
 
-            Actions\EditAction::make()->label('Uredi'),
-            Actions\DeleteAction::make()->label('Deaktiviraj'),
-            Actions\RestoreAction::make()->label('Vrati'),
-            Actions\ForceDeleteAction::make()->label('Trajno obriši'),
+            Actions\EditAction::make()
+                ->label('Uredi'),
+
+            Actions\DeleteAction::make()
+                ->label('Deaktiviraj')
+                ->requiresConfirmation(),
+
+            Actions\RestoreAction::make()
+                ->label('Vrati')
+                ->requiresConfirmation(),
+
+            Actions\ForceDeleteAction::make()
+                ->label('Trajno obriši')
+                ->requiresConfirmation(),
         ];
     }
 

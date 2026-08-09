@@ -27,7 +27,9 @@ class EmployeeResource extends BaseResource
     protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?string $navigationLabel = 'Zaposlenici';
+
     protected static ?string $modelLabel = 'Zaposlenik';
+
     protected static ?string $pluralModelLabel = 'Zaposlenici';
 
     protected static string|\UnitEnum|null $navigationGroup =
@@ -62,11 +64,6 @@ class EmployeeResource extends BaseResource
     public static function getMaxContentWidth(): MaxWidth|string|null
     {
         return MaxWidth::Full;
-    }
-
-    public static function canCreate(): bool
-    {
-        return static::canCreateModuleRecord();
     }
 
     public static function getPages(): array

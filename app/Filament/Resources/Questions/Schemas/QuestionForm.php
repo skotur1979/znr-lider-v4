@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Questions\Schemas;
 
+use App\Filament\Resources\Tests\TestResource;
 use App\Models\Test;
 use Filament\Forms;
 use Filament\Forms\Components\FileUpload;
@@ -11,8 +12,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 
 class QuestionForm
 {
@@ -24,35 +23,13 @@ class QuestionForm
                 ->schema([
                     Select::make('test_id')
                         ->label('Test')
-                        ->options(function (): array {
-                            $user = Auth::user();
-                    
-                            if (! $user) {
-                                return [];
-                            }
-                    
-                            $query = Test::query()
-                                ->orderBy('naziv');
-                    
-                            if (! $user->isSuperAdmin()) {
-                                $ownerId = $user->ownerId();
-                    
-                                $organizationUserIds = \App\Models\User::query()
-                                    ->where('id', $ownerId)
-                                    ->orWhere('parent_user_id', $ownerId)
-                                    ->pluck('id');
-                    
-                                $query->where(function (Builder $query) use ($organizationUserIds): void {
-                                    $query
-                                        ->whereNull('user_id')
-                                        ->orWhereIn('user_id', $organizationUserIds);
-                                });
-                            }
-                    
-                            return $query
-                                ->pluck('naziv', 'id')
-                                ->toArray();
-                        })
+                        ->options(
+                            fn (): array =>
+                                TestResource::getManageableQuery()
+                                    ->orderBy('naziv')
+                                    ->pluck('naziv', 'id')
+                                    ->toArray()
+                        )
                         ->searchable()
                         ->preload()
                         ->native(false)
@@ -76,7 +53,9 @@ class QuestionForm
 
                     Toggle::make('visestruki_odgovori')
                         ->label('Dozvoli više točnih odgovora')
-                        ->helperText('Omogući ako pitanje ima više ispravnih odgovora.')
+                        ->helperText(
+                            'Omogući ako pitanje ima više ispravnih odgovora.'
+                        )
                         ->columnSpanFull(),
                 ]),
 
@@ -102,7 +81,47 @@ class QuestionForm
                                 ->label('Točan odgovor'),
                         ])
                         ->columns(2)
-                        ->createItemButtonLabel('Dodaj odgovor'),
+                        ->createItemButtonLabel('Dodaj odgovor')
+
+                        /*
+                         * Kada se odgovor kreira kroz Repeater,
+                         * CreateAnswer stranica se NE izvršava.
+                         *
+                         * Zato ownership odgovora postavljamo
+                         * prema testu kojem pripada pitanje.
+                         */
+                        ->mutateRelationshipDataBeforeCreateUsing(
+                            function (array $data, $record): array {
+                                if (! $record) {
+                                    return $data;
+                                }
+
+                                $record->loadMissing('test');
+
+                                $data['user_id'] =
+                                    $record->test?->user_id;
+
+                                return $data;
+                            }
+                        )
+
+                        /*
+                         * Isto pravilo vrijedi i kod uređivanja
+                         * postojećeg odgovora kroz Repeater.
+                         */
+                        ->mutateRelationshipDataBeforeSaveUsing(
+                            function (array $data, $record): array {
+                                /*
+                                 * $record je ovdje Answer zapis,
+                                 * zato ownership ostavljamo
+                                 * kakav već jest.
+                                 */
+                                $data['user_id'] =
+                                    $record?->user_id;
+
+                                return $data;
+                            }
+                        ),
                 ]),
         ]);
     }

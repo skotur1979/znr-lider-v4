@@ -30,6 +30,10 @@ class ListObservations extends BaseListRecords
             Actions\CreateAction::make()
                 ->label('Novo zapažanje')
                 ->icon('heroicon-o-plus')
+                ->visible(
+                    fn (): bool =>
+                        auth()->user()?->isSuperAdmin() !== true
+                )
                 ->before(
                     ObservationResource::beforeModulePermission(
                         'create'
@@ -115,8 +119,19 @@ class ListObservations extends BaseListRecords
                         return null;
                     }
 
+                    /*
+                     * Excel izvozi upravo zapise koji su trenutačno
+                     * vidljivi kroz filtere tablice.
+                     */
+                    $observationIds = $this
+                        ->getFilteredSortedTableQuery()
+                        ->pluck('observations.id')
+                        ->toArray();
+
                     return Excel::download(
-                        new ObservationsExport(),
+                        new ObservationsExport(
+                            $observationIds
+                        ),
                         'zapazanja-popis-'
                             . now()->format('Y-m-d')
                             . '.xlsx'

@@ -13,18 +13,18 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
-use Illuminate\Validation\Rule;
 
 class ChemicalForm
 {
     public static function configure(Schema $schema): Schema
     {
-        $date = fn (string $name, string $label) => DatePicker::make($name)
-            ->label($label)
-            ->displayFormat('d.m.Y.')
-            ->weekStartsOnMonday()
-            ->timezone('Europe/Zagreb')
-            ->nullable();
+        $date = fn (string $name, string $label) =>
+            DatePicker::make($name)
+                ->label($label)
+                ->displayFormat('d.m.Y.')
+                ->weekStartsOnMonday()
+                ->timezone('Europe/Zagreb')
+                ->nullable();
 
         return $schema
             ->schema([
@@ -34,28 +34,33 @@ class ChemicalForm
                         Tab::make('Osnovno')
                             ->schema([
                                 Section::make('Osnovni podatci')
-    ->columns(2)
-    ->schema([
-        TextInput::make('product_name')
-            ->label('Ime proizvoda')
-            ->required()
-            ->maxLength(255),
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('product_name')
+                                            ->label('Ime proizvoda')
+                                            ->required()
+                                            ->maxLength(255),
 
-        TextInput::make('cas_number')
-            ->label('CAS broj')
-            ->maxLength(50),
+                                        TextInput::make('cas_number')
+                                            ->label('CAS broj')
+                                            ->maxLength(50),
 
-        TextInput::make('ufi_number')
-        ->label('UFI broj')
-        ->maxLength(255)
-        ->nullable()
-        ->dehydrateStateUsing(fn ($state) => trim((string) $state) === '/' ? null : $state),
+                                        TextInput::make('ufi_number')
+                                            ->label('UFI broj')
+                                            ->maxLength(255)
+                                            ->nullable()
+                                            ->dehydrateStateUsing(
+                                                fn ($state) =>
+                                                    trim((string) $state) === '/'
+                                                        ? null
+                                                        : $state
+                                            ),
 
-        TextInput::make('usage_location')
-            ->label('Mjesto upotrebe')
-            ->required()
-            ->maxLength(255),
-    ]),
+                                        TextInput::make('usage_location')
+                                            ->label('Mjesto upotrebe')
+                                            ->required()
+                                            ->maxLength(255),
+                                    ]),
                             ]),
 
                         Tab::make('Opasnosti')
@@ -82,45 +87,100 @@ class ChemicalForm
                                             ->native(false)
                                             ->default([])
                                             ->nullable()
-                                            ->placeholder('Odaberi jedan ili više piktograma')
-                                            ->helperText('Možete odabrati više piktograma opasnosti.')
-                                            ->afterStateHydrated(function (Select $component, mixed $state): void {
-                                                if (! is_array($state)) {
-                                                    $state = filled($state) ? [$state] : [];
+                                            ->placeholder(
+                                                'Odaberi jedan ili više piktograma'
+                                            )
+                                            ->helperText(
+                                                'Možete odabrati više piktograma opasnosti.'
+                                            )
+                                            ->afterStateHydrated(
+                                                function (
+                                                    Select $component,
+                                                    mixed $state
+                                                ): void {
+                                                    if (! is_array($state)) {
+                                                        $state = filled($state)
+                                                            ? [$state]
+                                                            : [];
+                                                    }
+
+                                                    $normalized = collect($state)
+                                                        ->flatMap(
+                                                            function ($value): array {
+                                                                return preg_split(
+                                                                    '/\s*[,;]\s*/',
+                                                                    (string) $value
+                                                                ) ?: [];
+                                                            }
+                                                        )
+                                                        ->map(
+                                                            fn ($value) =>
+                                                                strtoupper(
+                                                                    trim(
+                                                                        (string) $value
+                                                                    )
+                                                                )
+                                                        )
+                                                        ->filter(
+                                                            fn ($value) =>
+                                                                preg_match(
+                                                                    '/^GHS0[1-9]$/',
+                                                                    $value
+                                                                )
+                                                        )
+                                                        ->unique()
+                                                        ->values()
+                                                        ->all();
+
+                                                    $component->state(
+                                                        $normalized
+                                                    );
                                                 }
-                                        
-                                                $normalized = collect($state)
-                                                    ->flatMap(function ($value): array {
-                                                        return preg_split('/\s*[,;]\s*/', (string) $value) ?: [];
-                                                    })
-                                                    ->map(fn ($value) => strtoupper(trim($value)))
-                                                    ->filter(fn ($value) => preg_match('/^GHS0[1-9]$/', $value))
-                                                    ->unique()
-                                                    ->values()
-                                                    ->all();
-                                        
-                                                $component->state($normalized);
-                                            })
-                                            ->dehydrateStateUsing(function (mixed $state): array {
-                                                if (! is_array($state)) {
-                                                    $state = filled($state) ? [$state] : [];
+                                            )
+                                            ->dehydrateStateUsing(
+                                                function (mixed $state): array {
+                                                    if (! is_array($state)) {
+                                                        $state = filled($state)
+                                                            ? [$state]
+                                                            : [];
+                                                    }
+
+                                                    return collect($state)
+                                                        ->flatMap(
+                                                            function ($value): array {
+                                                                return preg_split(
+                                                                    '/\s*[,;]\s*/',
+                                                                    (string) $value
+                                                                ) ?: [];
+                                                            }
+                                                        )
+                                                        ->map(
+                                                            fn ($value) =>
+                                                                strtoupper(
+                                                                    trim(
+                                                                        (string) $value
+                                                                    )
+                                                                )
+                                                        )
+                                                        ->filter(
+                                                            fn ($value) =>
+                                                                preg_match(
+                                                                    '/^GHS0[1-9]$/',
+                                                                    $value
+                                                                )
+                                                        )
+                                                        ->unique()
+                                                        ->values()
+                                                        ->all();
                                                 }
-                                        
-                                                return collect($state)
-                                                    ->flatMap(function ($value): array {
-                                                        return preg_split('/\s*[,;]\s*/', (string) $value) ?: [];
-                                                    })
-                                                    ->map(fn ($value) => strtoupper(trim($value)))
-                                                    ->filter(fn ($value) => preg_match('/^GHS0[1-9]$/', $value))
-                                                    ->unique()
-                                                    ->values()
-                                                    ->all();
-                                            })
+                                            )
                                             ->columnSpanFull(),
 
                                         Select::make('h_statements')
                                             ->label('H oznake (opasnosti)')
-                                            ->options(HazardStatement::list())
+                                            ->options(
+                                                HazardStatement::list()
+                                            )
                                             ->searchable()
                                             ->multiple()
                                             ->nullable()
@@ -128,8 +188,12 @@ class ChemicalForm
                                             ->columnSpanFull(),
 
                                         Select::make('p_statements')
-                                            ->label('P oznake (mjere opreza)')
-                                            ->options(PrecautionaryStatement::list())
+                                            ->label(
+                                                'P oznake (mjere opreza)'
+                                            )
+                                            ->options(
+                                                PrecautionaryStatement::list()
+                                            )
                                             ->searchable()
                                             ->multiple()
                                             ->nullable()
@@ -140,11 +204,17 @@ class ChemicalForm
 
                         Tab::make('Količine i izloženost')
                             ->schema([
-                                Section::make('Količine, granične vrijednosti i STL')
+                                Section::make(
+                                    'Količine, granične vrijednosti i STL'
+                                )
                                     ->columns(2)
                                     ->schema([
-                                        TextInput::make('annual_quantity')
-                                            ->label('Godišnje količine (kg/l)')
+                                        TextInput::make(
+                                            'annual_quantity'
+                                        )
+                                            ->label(
+                                                'Godišnje količine (kg/l)'
+                                            )
                                             ->nullable()
                                             ->maxLength(50),
 
@@ -154,11 +224,16 @@ class ChemicalForm
                                             ->maxLength(50),
 
                                         TextInput::make('voc')
-                                            ->label('Hlapljivi organski spojevi (VOC)')
+                                            ->label(
+                                                'Hlapljivi organski spojevi (VOC)'
+                                            )
                                             ->nullable()
                                             ->maxLength(50),
 
-                                        $date('stl_hzjz', 'STL – HZJZ'),
+                                        $date(
+                                            'stl_hzjz',
+                                            'STL – HZJZ'
+                                        ),
                                     ]),
                             ]),
 
@@ -166,58 +241,115 @@ class ChemicalForm
                             ->schema([
                                 Section::make('Prilozi')
                                     ->schema([
-                    FileUpload::make('attachments')
-                        ->label('Dodaj priloge (max. 10, do 30 MB po datoteci)')
-                        ->directory('chemicals')
-                        ->disk('public')
-                        ->visibility('public')
-                        ->acceptedFileTypes([
-                            'application/pdf',
-                            'application/msword',
-                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            'application/vnd.ms-excel',
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'image/jpeg',
-                            'image/png',
-                            'image/gif',
-                            'image/webp',
-                            'application/zip',
-                            'application/x-rar-compressed',
-                        ])
-                        ->maxSize(30720)
-                        ->multiple()
-                        ->maxFiles(10)
-                        ->preserveFilenames()
-                        ->openable()
-                        ->downloadable()
-                        ->helperText(function () {
-                            $ownerId = auth()->user()?->ownerId();
+                                        FileUpload::make(
+                                            'attachments'
+                                        )
+                                            ->label(
+                                                'Dodaj priloge (max. 10, do 30 MB po datoteci)'
+                                            )
+                                            ->directory('chemicals')
+                                            ->disk('public')
+                                            ->visibility('public')
+                                            ->acceptedFileTypes([
+                                                'application/pdf',
+                                                'application/msword',
+                                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                                'application/vnd.ms-excel',
+                                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                                'image/jpeg',
+                                                'image/png',
+                                                'image/gif',
+                                                'image/webp',
+                                                'application/zip',
+                                                'application/x-rar-compressed',
+                                            ])
+                                            ->maxSize(30720)
+                                            ->multiple()
+                                            ->maxFiles(10)
+                                            ->preserveFilenames()
+                                            ->openable()
+                                            ->downloadable()
+                                            ->helperText(
+                                                function (
+                                                    $get,
+                                                    $record
+                                                ) {
+                                                    $user =
+                                                        auth()->user();
 
-                            if (! $ownerId) {
-                                return null;
-                            }
+                                                    if (! $user) {
+                                                        return null;
+                                                    }
 
-                            return 'Iskorištenost prostora organizacije: '
-                                . app(StorageQuotaService::class)->usageText($ownerId);
-                        })
-                        ->rules([
-                            function () {
-                                return function (string $attribute, mixed $value, \Closure $fail) {
-                                    $ownerId = auth()->user()?->ownerId();
+                                                    /*
+                                                     * Organizacijski korisnik koristi
+                                                     * svoj ownerId.
+                                                     *
+                                                     * Kod superadmin pregleda/edita
+                                                     * vlasnika uzimamo iz zapisa.
+                                                     */
+                                                    $ownerId =
+                                                        $user->isSuperAdmin()
+                                                            ? $record?->user_id
+                                                            : $user->ownerId();
 
-                                    if (! $ownerId) {
-                                        return;
-                                    }
+                                                    if (! $ownerId) {
+                                                        return null;
+                                                    }
 
-                                    if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
-                                        $fail(
-                                            'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
-                                            . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
-                                        );
-                                    }
-                                };
-                            },
-                        ]),
+                                                    return
+                                                        'Iskorištenost prostora organizacije: '
+                                                        . app(
+                                                            StorageQuotaService::class
+                                                        )->usageText(
+                                                            (int) $ownerId
+                                                        );
+                                                }
+                                            )
+                                            ->rules([
+                                                function (
+                                                    $get,
+                                                    $record
+                                                ) {
+                                                    return function (
+                                                        string $attribute,
+                                                        mixed $value,
+                                                        \Closure $fail
+                                                    ) use (
+                                                        $record
+                                                    ) {
+                                                        $user =
+                                                            auth()->user();
+
+                                                        if (! $user) {
+                                                            return;
+                                                        }
+
+                                                        $ownerId =
+                                                            $user->isSuperAdmin()
+                                                                ? $record?->user_id
+                                                                : $user->ownerId();
+
+                                                        if (! $ownerId) {
+                                                            return;
+                                                        }
+
+                                                        if (
+                                                            ! app(
+                                                                StorageQuotaService::class
+                                                            )->canUpload(
+                                                                $value,
+                                                                (int) $ownerId
+                                                            )
+                                                        ) {
+                                                            $fail(
+                                                                'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                                                . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                                            );
+                                                        }
+                                                    };
+                                                },
+                                            ]),
                                     ]),
                             ]),
                     ]),

@@ -60,17 +60,17 @@ trait HasModulePermissions
      * Standardna poruka kada korisnik nema ovlasti.
      */
     public static function notifyMissingModulePermission(
-        ?string $customBody = null
-    ): void {
-        Notification::make()
-            ->title('Nemate ovlasti za ovu akciju')
-            ->body(
-                $customBody
-                    ?: 'Obratite se glavnom korisniku svoje organizacije.'
-            )
-            ->danger()
-            ->send();
-    }
+            ?string $customBody = null
+        ): void {
+            Notification::make()
+                ->title('Nemate ovlasti za akciju')
+                ->body(
+                    $customBody
+                        ?: 'Nemate ovlasti za akciju, kontaktirajte administratora.'
+                )
+                ->danger()
+                ->send();
+        }
 
     /**
      * Provjerava dozvolu i prikazuje obavijest ako

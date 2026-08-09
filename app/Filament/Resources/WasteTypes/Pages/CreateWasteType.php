@@ -12,7 +12,17 @@ class CreateWasteType extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['user_id'] = WasteTypeResource::resolveOwnerId() ?: Auth::id();
+        $user = Auth::user();
+
+        abort_unless($user, 403);
+
+        /*
+         * Vrste otpada kreiraju organizacijski korisnici.
+         * Superadmin ih samo administrira.
+         */
+        abort_if($user->isSuperAdmin(), 403);
+
+        $data['user_id'] = $user->ownerId();
 
         return $data;
     }

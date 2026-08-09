@@ -124,7 +124,10 @@ class ListMachines extends BaseListRecords
                         $path = (string) $file;
                     }
 
-                    if (! Storage::disk('local')->exists($path)) {
+                    if (
+                        blank($path)
+                        || ! Storage::disk('local')->exists($path)
+                    ) {
                         Notification::make()
                             ->title('Excel datoteka nije pronađena')
                             ->body(
@@ -141,30 +144,41 @@ class ListMachines extends BaseListRecords
 
                     $import = new MachinesImport();
 
-                    Excel::import(
-                        $import,
-                        $fullPath
-                    );
+                    try {
+                        Excel::import(
+                            $import,
+                            $fullPath
+                        );
 
-                    $total =
-                        $import->created
-                        + $import->updated
-                        + $import->unchanged
-                        + $import->skipped;
+                        $total =
+                            $import->created
+                            + $import->updated
+                            + $import->unchanged
+                            + $import->skipped;
 
-                    Notification::make()
-                        ->title('Uvoz radne opreme je završen')
-                        ->body(
-                            "Ukupno obrađeno: {$total}\n"
-                            . "Novi zapisi: {$import->created}\n"
-                            . "Ažurirani zapisi: {$import->updated}\n"
-                            . "Bez promjene: {$import->unchanged}\n"
-                            . "Preskočeni redovi: {$import->skipped}"
-                        )
-                        ->success()
-                        ->send();
+                        Notification::make()
+                            ->title('Uvoz radne opreme je završen')
+                            ->body(
+                                "Ukupno obrađeno: {$total}\n"
+                                . "Novi zapisi: {$import->created}\n"
+                                . "Ažurirani zapisi: {$import->updated}\n"
+                                . "Bez promjene: {$import->unchanged}\n"
+                                . "Preskočeni redovi: {$import->skipped}"
+                            )
+                            ->success()
+                            ->send();
 
-                    $this->resetTable();
+                        $this->resetTable();
+                    } finally {
+                        /*
+                         * Privremena Excel datoteka više nije potrebna
+                         * nakon završetka importa, bez obzira je li
+                         * import uspio ili je došlo do greške.
+                         */
+                        if (Storage::disk('local')->exists($path)) {
+                            Storage::disk('local')->delete($path);
+                        }
+                    }
                 }),
         ];
     }

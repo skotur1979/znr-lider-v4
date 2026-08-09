@@ -11,12 +11,30 @@ class CreateKpi extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        if (auth()->user()?->isSuperAdmin()) {
+        $user = auth()->user();
+
+        if (! $user) {
+            abort(403);
+        }
+
+        if ($user->isSuperAdmin()) {
+            /*
+             * Superadmin kreira globalnu KPI definiciju.
+             */
             $data['user_id'] = null;
         } else {
-            $data['user_id'] = KpiResource::defaultUserId();
+            /*
+             * Glavni korisnik i podkorisnik kreiraju
+             * KPI svoje organizacije.
+             */
+            $data['user_id'] = $user->ownerId();
         }
 
         return $data;
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
     }
 }

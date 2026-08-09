@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Observations\Pages;
 
+use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Services\ObservationReportService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -10,7 +11,10 @@ use Filament\Resources\Pages\Page;
 
 class ObservationReports extends Page
 {
-    protected static string $resource = ObservationResource::class;
+    use InteractsWithModulePagePermissions;
+
+    protected static string $resource =
+        ObservationResource::class;
 
     protected string $view =
         'filament.resources.observations.pages.observation-reports';
@@ -35,6 +39,24 @@ class ObservationReports extends Page
 
     public function mount(): void
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Dozvola pregleda
+        |--------------------------------------------------------------------------
+        |
+        | Stranica /reports mora biti zaštićena i kada
+        | korisnik ručno upiše URL.
+        |
+        */
+
+        if (
+            $this->redirectIfMissingModulePermission(
+                'view'
+            )
+        ) {
+            return;
+        }
+
         $this->year = (string) now()->year;
 
         $this->loadData();
@@ -96,8 +118,20 @@ class ObservationReports extends Page
 
     public function loadData(): void
     {
-        $this->report = app(ObservationReportService::class)
-            ->report($this->filters());
+        /*
+         * Dodatna zaštita i za Livewire pozive.
+         */
+        if (
+            ! ObservationResource::canViewModule()
+        ) {
+            return;
+        }
+
+        $this->report = app(
+            ObservationReportService::class
+        )->report(
+            $this->filters()
+        );
     }
 
     protected function filters(): array
@@ -119,11 +153,27 @@ class ObservationReports extends Page
         return [
             Action::make('export_report_pdf')
                 ->label('Izvoz izvještaja u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
+                ->icon(
+                    'heroicon-o-arrow-down-tray'
+                )
                 ->color('warning')
                 ->action(function () {
-                    $report = app(ObservationReportService::class)
-                        ->report($this->filters());
+                    /*
+                     * Izvoz spada pod pravo Pregled.
+                     */
+                    if (
+                        ! ObservationResource::allowsModulePermission(
+                            'view'
+                        )
+                    ) {
+                        return null;
+                    }
+
+                    $report = app(
+                        ObservationReportService::class
+                    )->report(
+                        $this->filters()
+                    );
 
                     $pdf = Pdf::loadView(
                         'pdf.observation-reports',
@@ -132,21 +182,28 @@ class ObservationReports extends Page
                             'filters' => $this->filters(),
                         ]
                     )
-                        ->setPaper('a4', 'landscape')
+                        ->setPaper(
+                            'a4',
+                            'landscape'
+                        )
                         ->setOptions([
                             'isHtml5ParserEnabled' => true,
                             'isRemoteEnabled' => true,
                             'isPhpEnabled' => true,
                             'dpi' => 96,
-                            'defaultFont' => 'DejaVu Sans',
+                            'defaultFont' =>
+                                'DejaVu Sans',
                         ]);
 
-                    $yearLabel = $this->year === 'all'
-                        ? 'sve-godine'
-                        : $this->year;
+                    $yearLabel =
+                        $this->year === 'all'
+                            ? 'sve-godine'
+                            : $this->year;
 
                     return response()->streamDownload(
-                        fn () => print($pdf->output()),
+                        fn () => print(
+                            $pdf->output()
+                        ),
                         'izvjestaj-zapazanja-'
                             . $yearLabel
                             . '-'
@@ -159,7 +216,11 @@ class ObservationReports extends Page
                 ->label('Popis zapažanja')
                 ->icon('heroicon-o-arrow-left')
                 ->color('gray')
-                ->url(ObservationResource::getUrl('index')),
+                ->url(
+                    ObservationResource::getUrl(
+                        'index'
+                    )
+                ),
         ];
     }
 

@@ -27,9 +27,11 @@ class SendWeeklyStatusEmails extends Command
 
         try {
             $query = User::query()
+                ->whereIn('role', ['org_admin', 'org_user'])
                 ->where('is_active', true)
                 ->where('weekly_status_email_enabled', true)
-                ->whereNotNull('email');
+                ->whereNotNull('email')
+                ->withoutTrashed();
 
             if ($this->option('user_id')) {
                 $query->where('id', $this->option('user_id'));
@@ -74,6 +76,7 @@ class SendWeeklyStatusEmails extends Command
                     );
                 } catch (Throwable $exception) {
                     $failed++;
+
                     $errors[] = "{$user->email}: {$exception->getMessage()}";
 
                     report($exception);
@@ -119,6 +122,7 @@ class SendWeeklyStatusEmails extends Command
             );
 
             report($exception);
+
             $this->error($exception->getMessage());
 
             return self::FAILURE;

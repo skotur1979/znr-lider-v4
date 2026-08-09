@@ -12,10 +12,9 @@ class CategoryForm
         return $schema
             ->components([
                 TextInput::make('name')
-                    ->required(),
-                TextInput::make('user_id')
-                    ->numeric()
-                    ->default(null),
+                    ->label('Naziv')
+                    ->required()
+                    ->maxLength(255),
             ]);
     }
 }

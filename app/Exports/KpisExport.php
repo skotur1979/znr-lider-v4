@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Filament\Resources\Kpis\KpiResource;
 use App\Models\Kpi;
+use App\Models\KpiValue;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -71,7 +72,9 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
         /** @var Kpi $kpi */
 
         $ownerId = KpiResource::resolveOwnerId();
-        $latestValue = $kpi->latestValue()?->value;
+
+        $latestValue = $this->latestVisibleValue($kpi, $ownerId);
+
         $status = $kpi->evaluateStatus($latestValue, $ownerId);
 
         $row = [
@@ -210,6 +213,24 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
                 $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
+    }
+
+    private function latestVisibleValue(Kpi $kpi, ?int $ownerId): ?float
+    {
+        $query = KpiValue::query()
+            ->where('kpi_id', $kpi->id)
+            ->orderByDesc('year')
+            ->orderByDesc('month');
+
+        if (! auth()->user()?->isSuperAdmin()) {
+            if (! $ownerId) {
+                return null;
+            }
+
+            $query->where('user_id', $ownerId);
+        }
+
+        return $query->first()?->value;
     }
 
     private function directionLabel(?string $value): string

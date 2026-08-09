@@ -6,13 +6,11 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Budgets\Pages;
 use App\Models\Budget;
 use Filament\Actions\Action;
-use Filament\Actions\DeleteAction;
-use Filament\Notifications\Notification;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -20,19 +18,34 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 
 class BudgetResource extends BaseResource
 {
     protected static ?string $model = Budget::class;
 
-    protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedCreditCard;
+    protected static \BackedEnum|string|null $navigationIcon =
+        Heroicon::OutlinedCreditCard;
+
     protected static ?string $navigationLabel = 'Budžet';
+
     protected static ?string $modelLabel = 'Budžet';
+
     protected static ?string $pluralModelLabel = 'Budžet';
-    protected static \UnitEnum|string|null $navigationGroup = 'Upravljanje';
+
+    protected static \UnitEnum|string|null $navigationGroup =
+        'Upravljanje';
+
     protected static ?int $navigationSort = 7;
+
     protected static ?string $recordTitleAttribute = 'godina';
+
+    /*
+     * Standardni poslovni modul.
+     *
+     * BaseResource koristi:
+     * user_id = ownerId()
+     */
+    protected static bool $hasOwnership = true;
 
     protected static function getModuleKey(): ?string
     {
@@ -42,21 +55,6 @@ class BudgetResource extends BaseResource
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            Select::make('user_id')
-    ->label('Korisnik')
-    ->relationship('user', 'name')
-    ->searchable()
-    ->preload()
-    ->required()
-    ->visible(fn () => static::isSuperAdmin())
-    ->dehydrated(fn () => static::isSuperAdmin())
-    ->hiddenOn(['edit', 'view']),
-    
-            Hidden::make('user_id')
-                ->default(fn () => Auth::user()?->ownerId())
-                ->visible(fn () => ! Auth::user()?->isSuperAdmin())
-                ->dehydrated(fn () => ! Auth::user()?->isSuperAdmin()),
-
             Section::make('Unos budžeta')
                 ->columns(2)
                 ->schema([
@@ -81,20 +79,32 @@ class BudgetResource extends BaseResource
                 TextColumn::make('godina')
                     ->label('Godina')
                     ->sortable(),
-                    static::userTableColumn(),
+
+                static::userTableColumn(),
+
                 TextColumn::make('ukupni_budget')
                     ->label('Ukupni budžet (€)')
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.') . ' €')
+                    ->formatStateUsing(
+                        fn ($state) =>
+                            number_format(
+                                (float) $state,
+                                2,
+                                ',',
+                                '.'
+                            ) . ' €'
+                    )
                     ->sortable(),
 
                 ViewColumn::make('stanje_budgeta')
                     ->label('Stanje budžeta')
-                    ->view('filament.tables.columns.budget-status'),
+                    ->view(
+                        'filament.tables.columns.budget-status'
+                    ),
             ])
             ->actions([
                 EditAction::make()
                     ->label('Uredi'),
-            
+
                 DeleteAction::make()
                     ->label('Obriši')
                     ->icon('heroicon-o-trash')
@@ -110,9 +120,11 @@ class BudgetResource extends BaseResource
                         fn (Budget $record): bool =>
                             (int) $record->expenses_count === 0
                     ),
-            
+
                 Action::make('cannot_delete')
-                    ->label('Budžet se ne može obrisati dok postoje troškovi')
+                    ->label(
+                        'Budžet se ne može obrisati dok postoje troškovi'
+                    )
                     ->icon('heroicon-o-lock-closed')
                     ->color('gray')
                     ->visible(
@@ -121,8 +133,12 @@ class BudgetResource extends BaseResource
                     )
                     ->action(function (): void {
                         Notification::make()
-                            ->title('Brisanje budžeta nije moguće')
-                            ->body('Najprije obrišite sve troškove povezane s ovim budžetom.')
+                            ->title(
+                                'Brisanje budžeta nije moguće'
+                            )
+                            ->body(
+                                'Najprije obrišite sve troškove povezane s ovim budžetom.'
+                            )
                             ->warning()
                             ->send();
                     }),
@@ -132,67 +148,42 @@ class BudgetResource extends BaseResource
                 CreateAction::make()
                     ->label('Novi budžet')
                     ->modalHeading('Novi budžet')
-                    ->mutateFormDataUsing(function (array $data): array {
-                        if (! Auth::user()?->isSuperAdmin()) {
-                            $data['user_id'] = Auth::user()?->ownerId();
-                        }
-
-                        return $data;
-                    }),
+                    ->visible(
+                        fn (): bool => static::canCreate()
+                    )
+                    ->mutateFormDataUsing(
+                        fn (array $data): array =>
+                            static::fillOwnershipData($data)
+                    ),
             ]);
     }
 
+    /**
+     * BaseResource već radi tenant scope.
+     *
+     * Ovdje samo dodajemo expenses_count potreban
+     * tablici i zaštiti brisanja.
+     */
     public static function getEloquentQuery(): Builder
-{
-    $query = parent::getEloquentQuery()
-        ->withCount('expenses');
-
-    if (Auth::user()?->isSuperAdmin()) {
-        return $query;
-    }
-
-    return $query->where(
-        'user_id',
-        Auth::user()?->ownerId()
-    );
-}
-
-    public static function getNavigationBadge(): ?string
     {
-        $query = static::getModel()::query();
-
-        if (! Auth::user()?->isSuperAdmin()) {
-            $query->where('user_id', Auth::user()?->ownerId());
-        }
-
-        return (string) $query->count();
-    }
-
-    public static function mutateFormDataBeforeCreate(array $data): array
-    {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId();
-        }
-
-        return $data;
-    }
-
-    public static function mutateFormDataBeforeSave(array $data): array
-    {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId();
-        }
-
-        return $data;
+        return parent::getEloquentQuery()
+            ->withCount('expenses');
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListBudgets::route('/'),
-            'create' => Pages\CreateBudget::route('/create'),
-            'edit' => Pages\EditBudget::route('/{record}/edit'),
-            'view' => Pages\ViewBudget::route('/{record}'),
+            'index' =>
+                Pages\ListBudgets::route('/'),
+
+            'create' =>
+                Pages\CreateBudget::route('/create'),
+
+            'edit' =>
+                Pages\EditBudget::route('/{record}/edit'),
+
+            'view' =>
+                Pages\ViewBudget::route('/{record}'),
         ];
     }
 }

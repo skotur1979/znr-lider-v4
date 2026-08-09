@@ -14,7 +14,11 @@ class ViewNightWorkReferral extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\EditAction::make(),
+            Actions\EditAction::make()
+                ->visible(
+                    fn (): bool =>
+                        auth()->user()?->isSuperAdmin() !== true
+                ),
 
             Actions\Action::make('export_pdf')
                 ->label('Izvoz u PDF')
@@ -24,10 +28,15 @@ class ViewNightWorkReferral extends ViewRecord
                     $record = $this->getRecord();
                     $path = Nr1PdfGenerator::generate($record);
 
-                    return response()->download(
-                        $path,
-                        Nr1PdfGenerator::buildFileName($record, 'd.m.Y.')
-                    )->deleteFileAfterSend(true);
+                    return response()
+                        ->download(
+                            $path,
+                            Nr1PdfGenerator::buildFileName(
+                                $record,
+                                'd.m.Y.'
+                            )
+                        )
+                        ->deleteFileAfterSend(true);
                 }),
         ];
     }

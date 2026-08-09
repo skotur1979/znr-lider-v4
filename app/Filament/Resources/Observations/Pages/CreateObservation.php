@@ -8,7 +8,6 @@ use App\Filament\Resources\Observations\ObservationResource;
 use App\Mail\ObservationNotificationMail;
 use App\Models\InspectionFinding;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 
 class CreateObservation extends CreateRecord
@@ -18,6 +17,8 @@ class CreateObservation extends CreateRecord
     protected static string $resource = ObservationResource::class;
 
     protected ?string $returnInspectionEditUrl = null;
+
+    protected ?int $validatedInspectionFindingId = null;
 
     protected function getFormContentGrid(): ?array
     {
@@ -35,10 +36,11 @@ class CreateObservation extends CreateRecord
     public function mount(): void
     {
         /*
-         * Kod CreateRecord stranice provjera ide prije
-         * parent::mount(), jer još nema zapisa koji Filament
-         * treba pretvoriti u Eloquent model.
-         */
+        |--------------------------------------------------------------------------
+        | Dozvola za kreiranje
+        |--------------------------------------------------------------------------
+        */
+
         if (
             $this->redirectIfMissingModulePermission(
                 'create'
@@ -49,16 +51,36 @@ class CreateObservation extends CreateRecord
 
         parent::mount();
 
-        $findingId = request()->query(
+        /*
+        |--------------------------------------------------------------------------
+        | Provjera nalaza nadzora
+        |--------------------------------------------------------------------------
+        |
+        | inspection_finding_id dolazi iz URL-a i zato ga ne smijemo
+        | prihvatiti bez provjere pripada li nadzor organizaciji
+        | trenutnog korisnika.
+        |
+        */
+
+        $findingId = request()->integer(
             'inspection_finding_id'
         );
 
         if ($findingId) {
-            $finding = InspectionFinding::with(
-                'inspection'
-            )->find($findingId);
+            $finding = InspectionFinding::query()
+                ->with('inspection')
+                ->whereKey($findingId)
+                ->first();
 
-            if ($finding?->inspection) {
+            if (
+                $finding?->inspection
+                && InspectionResource::getEloquentQuery()
+                    ->whereKey($finding->inspection->getKey())
+                    ->exists()
+            ) {
+                $this->validatedInspectionFindingId =
+                    (int) $finding->id;
+
                 $this->returnInspectionEditUrl =
                     InspectionResource::getUrl(
                         'edit',
@@ -69,47 +91,76 @@ class CreateObservation extends CreateRecord
             }
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Početno popunjavanje forme
+        |--------------------------------------------------------------------------
+        */
+
         $this->form->fill([
-            'user_id' => request()->query('user_id'),
+            /*
+             * user_id iz URL-a namjerno se ne koristi.
+             * Ownership će se postaviti preko fillOwnershipData().
+             */
             'incident_date' => request()->query(
                 'incident_date'
             ),
+
             'observation_type' => request()->query(
                 'observation_type'
             ),
+
             'priority' => request()->query(
                 'priority'
             ) ?? 'medium',
-            'location' => request()->query('location'),
-            'item' => request()->query('item'),
+
+            'location' => request()->query(
+                'location'
+            ),
+
+            'item' => request()->query(
+                'item'
+            ),
+
             'potential_incident_type' => request()->query(
                 'potential_incident_type'
             ),
+
             'picture_path' => request()->query(
                 'picture_path'
             ),
-            'action' => request()->query('action'),
+
+            'action' => request()->query(
+                'action'
+            ),
+
             'responsible' => request()->query(
                 'responsible'
             ),
+
             'notification_emails' => request()->query(
                 'notification_emails'
             ),
+
             'target_date' => request()->query(
                 'target_date'
             ),
+
             'status' => request()->query(
                 'status'
             ) ?? 'Not started',
-            'comments' => request()->query('comments'),
+
+            'comments' => request()->query(
+                'comments'
+            ),
         ]);
     }
 
     protected function beforeCreate(): void
     {
         /*
-         * Dodatna serverska provjera neposredno prije
-         * spremanja zapisa.
+         * Dodatna serverska provjera neposredno
+         * prije spremanja.
          */
         $this->haltIfMissingModulePermission(
             'create'
@@ -120,12 +171,24 @@ class CreateObservation extends CreateRecord
         array $data
     ): array {
         /*
-         * Podkorisnik i glavni korisnik zapise spremaju
-         * na ownerId organizacije.
-         */
+        |--------------------------------------------------------------------------
+        | Ownership
+        |--------------------------------------------------------------------------
+        |
+        | Glavni korisnik i podkorisnik spremaju zapis
+        | na ownerId organizacije.
+        |
+        */
+
         $data = ObservationResource::fillOwnershipData(
             $data
         );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Zadane vrijednosti
+        |--------------------------------------------------------------------------
+        */
 
         if (blank($data['priority'] ?? null)) {
             $data['priority'] = 'medium';
@@ -136,8 +199,11 @@ class CreateObservation extends CreateRecord
         }
 
         /*
-         * Očisti prazne i ponovljene e-mail adrese.
-         */
+        |--------------------------------------------------------------------------
+        | E-mail adrese
+        |--------------------------------------------------------------------------
+        */
+
         $data['notification_emails'] = collect(
             $data['notification_emails'] ?? []
         )
@@ -155,24 +221,45 @@ class CreateObservation extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $findingId = request()->query(
-            'inspection_finding_id'
-        );
+        /*
+        |--------------------------------------------------------------------------
+        | Povezivanje s nalazom nadzora
+        |--------------------------------------------------------------------------
+        |
+        | Koristi se samo ID koji je prethodno prošao
+        | tenant provjeru u mount().
+        |
+        */
 
-        if ($findingId) {
-            $finding = InspectionFinding::find(
-                $findingId
-            );
+        if ($this->validatedInspectionFindingId) {
+            $finding = InspectionFinding::query()
+                ->whereKey(
+                    $this->validatedInspectionFindingId
+                )
+                ->first();
 
-            if ($finding) {
+            if (
+                $finding
+                && $finding->inspection
+                && InspectionResource::getEloquentQuery()
+                    ->whereKey($finding->inspection_id)
+                    ->exists()
+            ) {
                 $finding->update([
                     'observation_id' =>
                         $this->record?->id,
+
                     'workflow_status' =>
                         'converted_to_observation',
                 ]);
             }
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Automatsko slanje e-maila
+        |--------------------------------------------------------------------------
+        */
 
         $emails = collect(
             $this->record->notification_emails ?? []

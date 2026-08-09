@@ -16,7 +16,6 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -25,42 +24,139 @@ use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Model;
 
 class RiskAssessmentResource extends BaseResource
 {
     protected static ?string $model = RiskAssessment::class;
 
-    protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedClipboard;
-    protected static ?string $navigationLabel = 'Procjene rizika';
-    protected static ?string $modelLabel = 'Procjena rizika';
-    protected static ?string $pluralModelLabel = 'Procjene rizika';
-    protected static \UnitEnum|string|null $navigationGroup = 'Upravljanje';
+    protected static bool $hasOwnership = true;
+
+    protected static \BackedEnum|string|null $navigationIcon =
+        Heroicon::OutlinedClipboard;
+
+    protected static ?string $navigationLabel =
+        'Procjene rizika';
+
+    protected static ?string $modelLabel =
+        'Procjena rizika';
+
+    protected static ?string $pluralModelLabel =
+        'Procjene rizika';
+
+    protected static \UnitEnum|string|null $navigationGroup =
+        'Upravljanje';
+
     protected static ?int $navigationSort = 1;
-    protected static ?string $recordTitleAttribute = 'tvrtka';
+
+    protected static ?string $recordTitleAttribute =
+        'tvrtka';
 
     protected static function getModuleKey(): ?string
     {
         return 'risk_assessments';
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE
+    |--------------------------------------------------------------------------
+    |
+    | Procjena rizika je poslovni zapis organizacije.
+    |
+    | Superadmin može pregledavati postojeće zapise,
+    | ali ne kreira procjene u ime organizacije.
+    |
+    */
+
+    public static function canCreate(): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        return parent::canCreate();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | EDIT
+    |--------------------------------------------------------------------------
+    |
+    | Superadmin ne uređuje poslovne zapise organizacija.
+    |
+    | Glavni korisnik i podkorisnici mogu uređivati samo
+    | zapise vlastite organizacije.
+    |
+    */
+
+    public static function canEdit(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        $ownerId = static::ownerId();
+
+        if (! $ownerId) {
+            return false;
+        }
+
+        return (int) $record->user_id === (int) $ownerId;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE
+    |--------------------------------------------------------------------------
+    |
+    | Superadmin ne briše poslovne zapise organizacija.
+    |
+    */
+
+    public static function canDelete(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        $ownerId = static::ownerId();
+
+        if (! $ownerId) {
+            return false;
+        }
+
+        return (int) $record->user_id === (int) $ownerId;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | BULK DELETE
+    |--------------------------------------------------------------------------
+    |
+    | Dodatna zaštita bulk brisanja.
+    |
+    */
+
+    public static function canDeleteAny(): bool
+    {
+        if (static::isSuperAdmin()) {
+            return false;
+        }
+
+        return static::ownerId() !== null;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            Select::make('user_id')
-            ->label('Korisnik')
-            ->relationship('user', 'name')
-            ->searchable()
-            ->preload()
-            ->required()
-            ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
-            ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
-
-        Hidden::make('user_id')
-            ->default(fn () => static::ownerId())
-            ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
-            ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
+            Hidden::make('user_id')
+                ->default(fn () => static::ownerId())
+                ->dehydrated()
+                ->visible(
+                    fn (string $operation): bool =>
+                        $operation === 'create'
+                ),
 
             Section::make('Podaci o procjeni rizika')
                 ->columns(3)
@@ -76,8 +172,11 @@ class RiskAssessmentResource extends BaseResource
                         ->maxLength(11)
                         ->rule('digits:11')
                         ->validationMessages([
-                            'required' => 'OIB tvrtke je obavezan.',
-                            'digits' => 'OIB mora imati točno 11 znamenki.',
+                            'required' =>
+                                'OIB tvrtke je obavezan.',
+
+                            'digits' =>
+                                'OIB mora imati točno 11 znamenki.',
                         ]),
 
                     TextInput::make('adresa_tvrtke')
@@ -141,249 +240,384 @@ class RiskAssessmentResource extends BaseResource
                 ]),
 
             Section::make('Prilozi')
-    ->collapsible()
-    ->schema([
-        Repeater::make('attachments')
-            ->relationship('attachments')
-            ->label('Prilozi')
-            ->columns(2)
-            ->schema([
-                TextInput::make('naziv')
-                    ->label('Naziv dokumenta')
-                    ->required(),
+                ->collapsible()
+                ->schema([
+                    Repeater::make('attachments')
+                        ->relationship('attachments')
+                        ->label('Prilozi')
+                        ->columns(2)
+                        ->schema([
+                            TextInput::make('naziv')
+                                ->label('Naziv dokumenta')
+                                ->required(),
 
-                FileUpload::make('file_path')
-                    ->label('Dokument')
-                    ->disk('public')
-                    ->directory('risk-assessments/attachments')
-                    ->visibility('public')
-                    ->preserveFilenames()
-                    ->openable()
-                    ->downloadable()
-                    ->maxSize(30720)
-                    ->required()
+                            FileUpload::make('file_path')
+                                ->label('Dokument')
+                                ->disk('public')
+                                ->directory(
+                                    'risk-assessments/attachments'
+                                )
+                                ->visibility('public')
+                                ->preserveFilenames()
+                                ->openable()
+                                ->downloadable()
+                                ->maxSize(30720)
+                                ->required()
+                                ->helperText(
+                                    function (
+                                        ?RiskAssessment $record
+                                    ) {
+                                        $user = auth()->user();
 
-                    ->helperText(function () {
-                        $ownerId = auth()->user()?->ownerId();
+                                        if (! $user) {
+                                            return null;
+                                        }
 
-                        if (! $ownerId) {
-                            return null;
-                        }
+                                        /*
+                                         * Kod normalnog korisnika
+                                         * koristimo njegov ownerId().
+                                         *
+                                         * Superadmin ne uređuje zapis,
+                                         * ali kod prikaza postojećeg
+                                         * zapisa ownership možemo
+                                         * odrediti iz samog recorda.
+                                         */
+                                        $ownerId =
+                                            $user->isSuperAdmin()
+                                                ? $record?->user_id
+                                                : $user->ownerId();
 
-                        return 'Iskorištenost prostora organizacije: '
-                            . app(StorageQuotaService::class)->usageText($ownerId);
-                    })
+                                        if (! $ownerId) {
+                                            return null;
+                                        }
 
-                    ->rules([
-                        function () {
-                            return function (string $attribute, mixed $value, \Closure $fail) {
-                                $ownerId = auth()->user()?->ownerId();
+                                        return
+                                            'Iskorištenost prostora organizacije: '
+                                            . app(
+                                                StorageQuotaService::class
+                                            )->usageText(
+                                                (int) $ownerId
+                                            );
+                                    }
+                                )
+                                ->rules([
+                                    function (
+                                        ?RiskAssessment $record
+                                    ) {
+                                        return function (
+                                            string $attribute,
+                                            mixed $value,
+                                            \Closure $fail
+                                        ) use ($record): void {
+                                            $user =
+                                                auth()->user();
 
-                                if (! $ownerId) {
-                                    return;
-                                }
+                                            if (! $user) {
+                                                return;
+                                            }
 
-                                if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
-                                    $fail(
-                                        'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
-                                        . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
-                                    );
-                                }
-                            };
-                        },
-                    ]),
-            ])
-            ->collapsible(),
-    ]),
+                                            $ownerId =
+                                                $user->isSuperAdmin()
+                                                    ? $record?->user_id
+                                                    : $user->ownerId();
+
+                                            if (! $ownerId) {
+                                                return;
+                                            }
+
+                                            if (
+                                                ! app(
+                                                    StorageQuotaService::class
+                                                )->canUpload(
+                                                    $value,
+                                                    (int) $ownerId
+                                                )
+                                            ) {
+                                                $fail(
+                                                    'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                                    . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                                );
+                                            }
+                                        };
+                                    },
+                                ]),
+                        ])
+                        ->collapsible(),
+                ]),
         ]);
     }
 
-    public static function infolist(Schema $schema): Schema
-    {
-        return RiskAssessmentInfolist::configure($schema);
+    public static function infolist(
+        Schema $schema
+    ): Schema {
+        return RiskAssessmentInfolist::configure(
+            $schema
+        );
     }
 
-    public static function table(Table $table): Table
-{
-    return $table
-    ->modifyQueryUsing(fn ($query) => $query->with('attachments'))
-    ->defaultSort('datum_izrade', 'desc')
-    ->columns([
-    TextColumn::make('tvrtka')
-        ->label('Tvrtka')
-        ->searchable()
-        ->sortable()
-        ->weight('bold')
-        ->wrap()
-        ->toggleable(),
+    public static function table(
+        Table $table
+    ): Table {
+        return $table
+            ->modifyQueryUsing(
+                fn ($query) =>
+                    $query->with('attachments')
+            )
+            ->defaultSort(
+                'datum_izrade',
+                'desc'
+            )
+            ->columns([
+                TextColumn::make('tvrtka')
+                    ->label('Tvrtka')
+                    ->searchable()
+                    ->sortable()
+                    ->weight('bold')
+                    ->wrap()
+                    ->toggleable(),
 
-    static::userTableColumn()
-        ->toggleable(),
+                static::userTableColumn()
+                    ->toggleable(),
 
-    TextColumn::make('broj_procjene')
-        ->label('Broj procjene')
-        ->alignment(Alignment::Center)
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make('broj_procjene')
+                    ->label('Broj procjene')
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('datum_izrade')
-        ->label('Datum izrade')
-        ->date('d.m.Y.')
-        ->alignment(Alignment::Center)
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make('datum_izrade')
+                    ->label('Datum izrade')
+                    ->date('d.m.Y.')
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('vrsta_procjene')
-        ->label('Vrsta procjene')
-        ->alignment(Alignment::Center)
-        ->searchable()
-        ->toggleable(),
+                TextColumn::make('vrsta_procjene')
+                    ->label('Vrsta procjene')
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->searchable()
+                    ->toggleable(),
 
-    TextColumn::make('attachments')
-        ->label('Prilozi')
-        ->alignment(Alignment::Center)
-        ->html()
-        ->state(function ($record): string {
-            $attachments = $record->attachments;
+                TextColumn::make('attachments')
+                    ->label('Prilozi')
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->html()
+                    ->state(
+                        function ($record): string {
+                            $attachments =
+                                $record->attachments;
 
-            if ($attachments->isEmpty()) {
-                return '<span style="color:#6b7280;">0</span>';
-            }
+                            if (
+                                $attachments->isEmpty()
+                            ) {
+                                return
+                                    '<span style="color:#6b7280;">0</span>';
+                            }
 
-            return $attachments
-                ->map(function ($attachment, $index) {
-                    if (blank($attachment->file_path)) {
-                        return null;
-                    }
+                            return $attachments
+                                ->map(
+                                    function (
+                                        $attachment,
+                                        $index
+                                    ) {
+                                        if (
+                                            blank(
+                                                $attachment
+                                                    ->file_path
+                                            )
+                                        ) {
+                                            return null;
+                                        }
 
-                    $url = route('file.preview', [
-                        'file' => ltrim($attachment->file_path, '/'),
-                    ]);
+                                        $url = route(
+                                            'file.preview',
+                                            [
+                                                'file' => ltrim(
+                                                    $attachment
+                                                        ->file_path,
+                                                    '/'
+                                                ),
+                                            ]
+                                        );
 
-                    $name = e(basename($attachment->file_path));
-                    $number = $index + 1;
+                                        $name = e(
+                                            basename(
+                                                $attachment
+                                                    ->file_path
+                                            )
+                                        );
 
-                    return '<a href="' . e($url) . '"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="' . $name . '"
-                        onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
-                        style="
-                            display:inline-flex;
-                            align-items:center;
-                            justify-content:center;
-                            min-width:28px;
-                            height:24px;
-                            padding:0 8px;
-                            margin:1px 2px;
-                            border-radius:7px;
-                            background:rgba(59,130,246,.15);
-                            border:1px solid rgba(59,130,246,.35);
-                            color:#93c5fd;
-                            font-size:12px;
-                            font-weight:700;
-                            text-decoration:none;
-                            cursor:pointer;
-                        "
-                    >📎 ' . $number . '</a>';
-                })
-                ->filter()
-                ->implode('');
-        })
-        ->tooltip(function ($record): string {
-            $attachments = $record->attachments;
+                                        $number =
+                                            $index + 1;
 
-            if ($attachments->isEmpty()) {
-                return 'Nema priloga';
-            }
+                                        return
+                                            '<a href="'
+                                            . e($url)
+                                            . '"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="'
+                                            . $name
+                                            . '"
+                                            onclick="
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                event.stopImmediatePropagation();
+                                                window.open(this.href, \'_blank\');
+                                                return false;
+                                            "
+                                            style="
+                                                display:inline-flex;
+                                                align-items:center;
+                                                justify-content:center;
+                                                min-width:28px;
+                                                height:24px;
+                                                padding:0 8px;
+                                                margin:1px 2px;
+                                                border-radius:7px;
+                                                background:rgba(59,130,246,.15);
+                                                border:1px solid rgba(59,130,246,.35);
+                                                color:#93c5fd;
+                                                font-size:12px;
+                                                font-weight:700;
+                                                text-decoration:none;
+                                                cursor:pointer;
+                                            "
+                                            >📎 '
+                                            . $number
+                                            . '</a>';
+                                    }
+                                )
+                                ->filter()
+                                ->implode('');
+                        }
+                    )
+                    ->tooltip(
+                        function ($record): string {
+                            $attachments =
+                                $record->attachments;
 
-            return $attachments
-                ->map(fn ($attachment, $index) => ($index + 1) . '. ' . basename($attachment->file_path))
-                ->implode("\n");
-        })
-        ->toggleable(),
+                            if (
+                                $attachments->isEmpty()
+                            ) {
+                                return 'Nema priloga';
+                            }
 
-    TextColumn::make('revisions_count')
-        ->label('Broj revizija')
-        ->alignment(Alignment::Center)
-        ->counts('revisions')
-        ->toggleable(isToggledHiddenByDefault: true),
-])
-            ->paginated([10, 25, 50, 'all'])
+                            return $attachments
+                                ->map(
+                                    fn (
+                                        $attachment,
+                                        $index
+                                    ) =>
+                                        ($index + 1)
+                                        . '. '
+                                        . basename(
+                                            $attachment
+                                                ->file_path
+                                        )
+                                )
+                                ->implode("\n");
+                        }
+                    )
+                    ->toggleable(),
+
+                TextColumn::make(
+                    'revisions_count'
+                )
+                    ->label('Broj revizija')
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->counts('revisions')
+                    ->toggleable(
+                        isToggledHiddenByDefault:
+                            true
+                    ),
+            ])
+            ->paginated([
+                10,
+                25,
+                50,
+                'all',
+            ])
             ->actions([
                 ActionGroup::make([
-                    ViewAction::make()->label('Prikaži'),
-                    EditAction::make()->label('Uredi'),
+                    ViewAction::make()
+                        ->label('Prikaži'),
+
+                    EditAction::make()
+                        ->label('Uredi'),
+
                     DeleteAction::make()
                         ->label('Obriši')
                         ->requiresConfirmation()
-                        ->modalHeading('Obriši procjenu rizika')
-                        ->modalDescription('Jeste li sigurni da želite obrisati ovu procjenu rizika?')
-                        ->modalSubmitActionLabel('Obriši')
-                        ->modalCancelActionLabel('Odustani'),
+                        ->modalHeading(
+                            'Obriši procjenu rizika'
+                        )
+                        ->modalDescription(
+                            'Jeste li sigurni da želite obrisati ovu procjenu rizika?'
+                        )
+                        ->modalSubmitActionLabel(
+                            'Obriši'
+                        )
+                        ->modalCancelActionLabel(
+                            'Odustani'
+                        ),
                 ])
-                    ->icon(Heroicon::EllipsisVertical)
+                    ->icon(
+                        Heroicon::EllipsisVertical
+                    )
                     ->label(''),
             ])
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Obriši označeno')
                     ->requiresConfirmation()
-                    ->modalHeading('Obriši odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
-                    ->modalSubmitActionLabel('Obriši')
-                    ->modalCancelActionLabel('Odustani'),
+                    ->modalHeading(
+                        'Obriši odabrano'
+                    )
+                    ->modalDescription(
+                        'Jeste li sigurni da želite obrisati odabrane procjene rizika?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Obriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    ),
             ]);
-    }
-
-    public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery()
-            ->with(['participants', 'revisions', 'attachments']);
-
-        if (Auth::user()?->isSuperAdmin()) {
-            return $query;
-        }
-
-        return $query->where('user_id', Auth::user()?->ownerId());
-    }
-
-    public static function getNavigationBadge(): ?string
-    {
-        $query = static::getModel()::query();
-
-        if (! Auth::user()?->isSuperAdmin()) {
-            $query->where('user_id', Auth::user()?->ownerId());
-        }
-
-        return (string) $query->count();
-    }
-
-    public static function mutateFormDataBeforeCreate(array $data): array
-    {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId();
-        }
-
-        return $data;
-    }
-
-    public static function mutateFormDataBeforeSave(array $data): array
-    {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId();
-        }
-
-        return $data;
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListRiskAssessments::route('/'),
-            'create' => Pages\CreateRiskAssessment::route('/create'),
-            'edit' => Pages\EditRiskAssessment::route('/{record}/edit'),
-            'view' => Pages\ViewRiskAssessment::route('/{record}'),
+            'index' =>
+                Pages\ListRiskAssessments::route(
+                    '/'
+                ),
+
+            'create' =>
+                Pages\CreateRiskAssessment::route(
+                    '/create'
+                ),
+
+            'edit' =>
+                Pages\EditRiskAssessment::route(
+                    '/{record}/edit'
+                ),
+
+            'view' =>
+                Pages\ViewRiskAssessment::route(
+                    '/{record}'
+                ),
         ];
     }
 }

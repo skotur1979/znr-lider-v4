@@ -18,15 +18,26 @@ class ListInspections extends ListRecords
         return [
             CreateAction::make()
                 ->label('Novi nadzor')
-                ->icon('heroicon-o-plus'),
+                ->icon('heroicon-o-plus')
+                ->visible(
+                    fn (): bool =>
+                        InspectionResource::canCreate()
+                ),
 
             Action::make('create_five_s')
                 ->label('Novi 5S nadzor')
                 ->icon('heroicon-o-squares-2x2')
                 ->color('success')
-                ->url(fn () => static::getResource()::getUrl('create', [
-                    'inspection_type' => 'five_s',
-                ])),
+                ->visible(
+                    fn (): bool =>
+                        InspectionResource::canCreate()
+                )
+                ->url(fn () => static::getResource()::getUrl(
+                    'create',
+                    [
+                        'inspection_type' => 'five_s',
+                    ]
+                )),
 
             Action::make('exportExcel')
                 ->label('Izvoz u Excel')

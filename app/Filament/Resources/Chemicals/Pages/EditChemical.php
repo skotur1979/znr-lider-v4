@@ -9,9 +9,17 @@ class EditChemical extends EditRecord
 {
     protected static string $resource = ChemicalResource::class;
 
-   protected function getRedirectUrl(): string
+    protected function mutateFormDataBeforeSave(array $data): array
     {
-        return $this->previousUrl ?? static::getResource()::getUrl('index');
+        $data['user_id'] = $this->record->user_id;
+
+        return $data;
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl
+            ?? static::getResource()::getUrl('index');
     }
 
     public function getMaxContentWidth(): ?string

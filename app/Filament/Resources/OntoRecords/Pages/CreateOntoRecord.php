@@ -12,9 +12,13 @@ class CreateOntoRecord extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        if (! Auth::user()?->isAdmin()) {
-            $data['user_id'] = Auth::id();
+        $user = Auth::user();
+
+        if (! $user || $user->isSuperAdmin()) {
+            abort(403);
         }
+
+        $data['user_id'] = $user->ownerId();
 
         return $data;
     }

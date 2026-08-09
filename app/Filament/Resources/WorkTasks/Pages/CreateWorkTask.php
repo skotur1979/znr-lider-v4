@@ -12,10 +12,26 @@ class CreateWorkTask extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['user_id'] = Auth::id();
+        $user = Auth::user();
+
+        abort_unless($user, 403);
+
+        /*
+         * Radni zadatak pripada organizaciji.
+         * Glavni korisnik i podkorisnici zato uvijek
+         * spremaju ownerId().
+         */
+        abort_if($user->isSuperAdmin(), 403);
+
+        $data['user_id'] = $user->ownerId();
         $data['is_done'] = false;
         $data['completed_at'] = null;
 
         return $data;
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
     }
 }

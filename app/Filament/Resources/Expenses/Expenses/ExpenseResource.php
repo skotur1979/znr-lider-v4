@@ -7,6 +7,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Expenses\Expenses\Pages;
 use App\Filament\Resources\Expenses\Expenses\Schemas\ExpenseForm;
 use App\Models\Budget;
+use App\Models\Category;
 use App\Models\Expense;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -14,6 +15,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\MaxWidth;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -23,7 +25,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
-use Filament\Support\Enums\MaxWidth;
 
 class ExpenseResource extends BaseResource
 {
@@ -44,17 +45,101 @@ class ExpenseResource extends BaseResource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->schema(ExpenseForm::schema());
+        return $schema->schema(
+            ExpenseForm::schema()
+        );
     }
+
     public static function getMaxContentWidth(): MaxWidth|string|null
-{
-    return MaxWidth::Full;
+    {
+        return MaxWidth::Full;
+    }
+
+    /**
+     * Centralna provjera ownershipa troška.
+     *
+     * Novi zapis:
+     * - organizacija -> ownerId()
+     * - superadmin -> owner od odabranog Budgeta
+     *
+     * Edit:
+     * - postojeći owner se ne smije promijeniti.
+     *
+     * Budget i Category moraju pripadati istom owneru.
+     */
+    public static function prepareOwnershipData(
+    array $data,
+    ?Expense $record = null
+): array {
+    $user = Auth::user();
+
+    if (! $user) {
+        abort(403);
+    }
+
+    $budget = Budget::query()
+        ->findOrFail($data['budget_id']);
+
+    $category = Category::query()
+        ->findOrFail($data['category_id']);
+
+    /*
+     * CREATE:
+     * superadmin ne kreira troškove.
+     *
+     * EDIT:
+     * ownership postojećeg zapisa ostaje nepromijenjen.
+     */
+    if ($record) {
+        $ownerId = (int) $record->user_id;
+    } else {
+        if ($user->isSuperAdmin()) {
+            abort(403);
+        }
+
+        $ownerId = (int) $user->ownerId();
+    }
+
+    if ($ownerId <= 0) {
+        abort(403);
+    }
+
+    /*
+     * Organizacijski korisnik smije raditi
+     * samo unutar svoje organizacije.
+     */
+    if (
+        ! $user->isSuperAdmin()
+        && $ownerId !== (int) $user->ownerId()
+    ) {
+        abort(403);
+    }
+
+    /*
+     * Budžet mora pripadati istoj organizaciji.
+     */
+    abort_unless(
+        (int) $budget->user_id === $ownerId,
+        403
+    );
+
+    /*
+     * Kategorija mora pripadati istoj organizaciji.
+     */
+    abort_unless(
+        (int) $category->user_id === $ownerId,
+        403
+    );
+
+    $data['user_id'] = $ownerId;
+
+    return $data;
 }
 
     public static function table(Table $table): Table
     {
         return $table
-        ->paginated([10, 25, 50,'all'])
+            ->paginated([10, 25, 50, 'all'])
             ->modifyQueryUsing(function (Builder $query): Builder {
                 return $query->orderByRaw("
                     FIELD(
@@ -65,54 +150,57 @@ class ExpenseResource extends BaseResource
                 ");
             })
             ->columns([
-    TextColumn::make('budget.godina')
-        ->label('Godina')
-        ->sortable()
-        ->searchable()
-        ->toggleable(),
+                TextColumn::make('budget.godina')
+                    ->label('Godina')
+                    ->sortable()
+                    ->searchable()
+                    ->toggleable(),
 
-    static::userTableColumn()
-        ->toggleable(),
+                static::userTableColumn()
+                    ->toggleable(),
 
-    TextColumn::make('category.name')
-        ->label('Kategorija')
-        ->sortable()
-        ->searchable()
-        ->wrap()
-        ->toggleable(),
+                TextColumn::make('category.name')
+                    ->label('Kategorija')
+                    ->sortable()
+                    ->searchable()
+                    ->wrap()
+                    ->toggleable(),
 
-    TextColumn::make('mjesec')
-        ->label('Mjesec')
-        ->sortable()
-        ->toggleable(),
+                TextColumn::make('mjesec')
+                    ->label('Mjesec')
+                    ->sortable()
+                    ->toggleable(),
 
-    TextColumn::make('naziv_troska')
-        ->label('Naziv troška')
-        ->searchable()
-        ->wrap()
-        ->weight('bold')
-        ->toggleable(),
+                TextColumn::make('naziv_troska')
+                    ->label('Naziv troška')
+                    ->searchable()
+                    ->wrap()
+                    ->weight('bold')
+                    ->toggleable(),
 
-    TextColumn::make('iznos')
-        ->label('Iznos (€)')
-        ->formatStateUsing(fn ($state) => number_format((float) $state, 2, ',', '.') . ' €')
-        ->sortable()
-        ->alignEnd()
-        ->toggleable(),
+                TextColumn::make('iznos')
+                    ->label('Iznos (€)')
+                    ->formatStateUsing(
+                        fn ($state) =>
+                            number_format((float) $state, 2, ',', '.') . ' €'
+                    )
+                    ->sortable()
+                    ->alignEnd()
+                    ->toggleable(),
 
-    TextColumn::make('dobavljac')
-        ->label('Dobavljač')
-        ->searchable()
-        ->wrap()
-        ->toggleable(),
+                TextColumn::make('dobavljac')
+                    ->label('Dobavljač')
+                    ->searchable()
+                    ->wrap()
+                    ->toggleable(),
 
-    IconColumn::make('realizirano')
-        ->label('Realizirano')
-        ->boolean()
-        ->trueIcon('heroicon-o-check-circle')
-        ->falseIcon('heroicon-o-x-circle')
-        ->toggleable(),
-])
+                IconColumn::make('realizirano')
+                    ->label('Realizirano')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->toggleable(),
+            ])
             ->filters([
                 SelectFilter::make('mjesec')
                     ->label('Mjesec')
@@ -121,20 +209,52 @@ class ExpenseResource extends BaseResource
 
                 SelectFilter::make('category_id')
                     ->label('Kategorija')
-                    ->relationship('category', 'name')
-                    ->preload()
-                    ->searchable(),
+                    ->options(function (): array {
+                        $query = Category::query()
+                            ->orderBy('name');
+
+                        $user = Auth::user();
+
+                        if (! $user) {
+                            return [];
+                        }
+
+                        if (! $user->isSuperAdmin()) {
+                            $query->where(
+                                'user_id',
+                                $user->ownerId()
+                            );
+                        }
+
+                        return $query
+                            ->pluck('name', 'id')
+                            ->toArray();
+                    })
+                    ->searchable()
+                    ->preload(),
 
                 SelectFilter::make('godina')
                     ->label('Godina')
                     ->options(function (): array {
-                        $query = Budget::query()->orderByDesc('godina');
+                        $query = Budget::query()
+                            ->orderByDesc('godina');
 
-                        if (! Auth::user()?->isSuperAdmin()) {
-                            $query->where('user_id', Auth::user()?->ownerId());
+                        $user = Auth::user();
+
+                        if (! $user) {
+                            return [];
                         }
 
-                        return $query->pluck('godina', 'godina')->toArray();
+                        if (! $user->isSuperAdmin()) {
+                            $query->where(
+                                'user_id',
+                                $user->ownerId()
+                            );
+                        }
+
+                        return $query
+                            ->pluck('godina', 'godina')
+                            ->toArray();
                     })
                     ->placeholder('Sve')
                     ->query(function (Builder $query, array $data): Builder {
@@ -146,7 +266,8 @@ class ExpenseResource extends BaseResource
 
                         return $query->whereHas(
                             'budget',
-                            fn (Builder $budgetQuery) => $budgetQuery->where('godina', $year)
+                            fn (Builder $budgetQuery) =>
+                                $budgetQuery->where('godina', $year)
                         );
                     }),
 
@@ -164,12 +285,16 @@ class ExpenseResource extends BaseResource
                             return $query;
                         }
 
-                        return $query->where('realizirano', (bool) (int) $value);
+                        return $query->where(
+                            'realizirano',
+                            (bool) (int) $value
+                        );
                     }),
             ])
             ->actions([
                 ActionGroup::make([
-                    EditAction::make()->label('Uredi'),
+                    EditAction::make()
+                        ->label('Uredi'),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -178,69 +303,79 @@ class ExpenseResource extends BaseResource
                 CreateAction::make()
                     ->label('Novi trošak')
                     ->modalHeading('Novi trošak')
+                    ->visible(fn (): bool => static::canCreate())
                     ->form(ExpenseForm::schema())
-                    ->mutateFormDataUsing(function (array $data): array {
-                        if (! Auth::user()?->isSuperAdmin()) {
-                            $data['user_id'] = Auth::user()?->ownerId();
-                        }
-
-                        return $data;
-                    }),
+                    ->mutateFormDataUsing(
+                        fn (array $data): array =>
+                            static::prepareOwnershipData($data)
+                    ),
 
                 Action::make('export_excel')
-    ->label('Izvoz u Excel')
-    ->icon('heroicon-o-document-text')
-    ->color('success')
-    ->action(function ($livewire) {
-        $year = data_get($livewire->tableFilters, 'godina.value');
+                    ->label('Izvoz u Excel')
+                    ->icon('heroicon-o-document-text')
+                    ->color('success')
+                    ->action(function ($livewire) {
+                        $year = data_get(
+                            $livewire->tableFilters,
+                            'godina.value'
+                        );
 
-        if (! filled($year)) {
-            $year = (string) Carbon::now('Europe/Zagreb')->year;
-        }
+                        if (! filled($year)) {
+                            $year = (string) Carbon::now(
+                                'Europe/Zagreb'
+                            )->year;
+                        }
 
-        return Excel::download(
-            new ExpensesExport((string) $year),
-            'Troskovi_' . $year . '.xlsx'
-        );
-    }),
+                        return Excel::download(
+                            new ExpensesExport((string) $year),
+                            'Troskovi_' . $year . '.xlsx'
+                        );
+                    }),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()->label('Obriši označeno'),
+                DeleteBulkAction::make()
+                    ->label('Obriši označeno'),
             ]);
     }
 
     public static function getEloquentQuery(): Builder
-{
-    return parent::getEloquentQuery();
-}
+    {
+        $query = parent::getEloquentQuery();
+
+        $user = Auth::user();
+
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where(
+            'user_id',
+            $user->ownerId()
+        );
+    }
 
     public static function getNavigationBadge(): ?string
     {
-        $query = static::getModel()::query();
+        $query = Expense::query();
 
-        if (! Auth::user()?->isSuperAdmin()) {
-            $query->where('user_id', Auth::user()?->ownerId());
+        $user = Auth::user();
+
+        if (! $user) {
+            return null;
+        }
+
+        if (! $user->isSuperAdmin()) {
+            $query->where(
+                'user_id',
+                $user->ownerId()
+            );
         }
 
         return (string) $query->count();
-    }
-
-    public static function mutateFormDataBeforeCreate(array $data): array
-    {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId();
-        }
-
-        return $data;
-    }
-
-    public static function mutateFormDataBeforeSave(array $data): array
-    {
-        if (! Auth::user()?->isSuperAdmin()) {
-            $data['user_id'] = Auth::user()?->ownerId();
-        }
-
-        return $data;
     }
 
     public static function getPages(): array

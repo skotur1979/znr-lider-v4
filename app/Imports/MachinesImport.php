@@ -3,13 +3,13 @@
 namespace App\Imports;
 
 use App\Models\Machine;
+use App\Services\ActivityLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
-use App\Services\ActivityLogger;
 
 class MachinesImport implements ToCollection
 {
@@ -17,6 +17,23 @@ class MachinesImport implements ToCollection
     public int $updated = 0;
     public int $unchanged = 0;
     public int $skipped = 0;
+
+    protected int $ownerId;
+
+    public function __construct()
+    {
+        $user = Auth::user();
+
+        if (! $user || $user->isSuperAdmin()) {
+            abort(403);
+        }
+
+        $this->ownerId = (int) $user->ownerId();
+
+        if ($this->ownerId <= 0) {
+            abort(403);
+        }
+    }
 
     public function collection(Collection $rows): void
     {
@@ -27,6 +44,8 @@ class MachinesImport implements ToCollection
 
         if (! $headers) {
             $this->skipped++;
+            $this->logImport();
+
             return;
         }
 
@@ -47,38 +66,75 @@ class MachinesImport implements ToCollection
                 continue;
             }
 
-            $name = $this->clean($this->value($row, $map, 'naziv'));
+            $name = $this->clean(
+                $this->value($row, $map, 'naziv')
+            );
 
             if (! $name) {
                 $this->skipped++;
                 continue;
             }
 
-            $manufacturer = $this->clean($this->value($row, $map, 'proizvodac'));
-            $factoryNumber = $this->clean($this->value($row, $map, 'tvornicki_broj'));
-            $inventoryNumber = $this->clean($this->value($row, $map, 'inventarni_broj'));
-            $validFrom = $this->parseDate($this->value($row, $map, 'vrijedi_od'));
-            $validUntil = $this->parseDate($this->value($row, $map, 'vrijedi_do'));
-            $examinedBy = $this->clean($this->value($row, $map, 'ispitao'));
-            $reportNo = $this->clean($this->value($row, $map, 'broj_izvjestaja'));
-            $location = $this->clean($this->value($row, $map, 'lokacija'));
-            $remark = $this->clean($this->value($row, $map, 'napomena'));
+            $manufacturer = $this->clean(
+                $this->value($row, $map, 'proizvodac')
+            );
 
-            if (! $validFrom || ! $validUntil || ! $location) {
+            $factoryNumber = $this->clean(
+                $this->value($row, $map, 'tvornicki_broj')
+            );
+
+            $inventoryNumber = $this->clean(
+                $this->value($row, $map, 'inventarni_broj')
+            );
+
+            $validFrom = $this->parseDate(
+                $this->value($row, $map, 'vrijedi_od')
+            );
+
+            $validUntil = $this->parseDate(
+                $this->value($row, $map, 'vrijedi_do')
+            );
+
+            $examinedBy = $this->clean(
+                $this->value($row, $map, 'ispitao')
+            );
+
+            $reportNo = $this->clean(
+                $this->value($row, $map, 'broj_izvjestaja')
+            );
+
+            $location = $this->clean(
+                $this->value($row, $map, 'lokacija')
+            );
+
+            $remark = $this->clean(
+                $this->value($row, $map, 'napomena')
+            );
+
+            if (
+                ! $validFrom
+                || ! $validUntil
+                || ! $location
+            ) {
                 $this->skipped++;
                 continue;
             }
 
-            $userId = Auth::user()?->ownerId() ?? Auth::id();
+            $userId = $this->ownerId;
 
             $machine = Machine::query()
                 ->where('user_id', $userId)
                 ->where('name', $name)
-                ->where(function ($query) use ($factoryNumber) {
+                ->where(function ($query) use ($factoryNumber): void {
                     if ($factoryNumber) {
-                        $query->where('factory_number', $factoryNumber);
+                        $query->where(
+                            'factory_number',
+                            $factoryNumber
+                        );
                     } else {
-                        $query->whereNull('factory_number');
+                        $query->whereNull(
+                            'factory_number'
+                        );
                     }
                 })
                 ->first();
@@ -100,13 +156,24 @@ class MachinesImport implements ToCollection
             if (! $machine) {
                 Machine::create($data);
                 $this->created++;
+
                 continue;
             }
 
             $changed = [];
 
             foreach ($data as $field => $value) {
-                if (in_array($field, ['user_id', 'name', 'factory_number'], true)) {
+                if (
+                    in_array(
+                        $field,
+                        [
+                            'user_id',
+                            'name',
+                            'factory_number',
+                        ],
+                        true
+                    )
+                ) {
                     continue;
                 }
 
@@ -134,6 +201,11 @@ class MachinesImport implements ToCollection
             $this->updated++;
         }
 
+        $this->logImport();
+    }
+
+    private function logImport(): void
+    {
         ActivityLogger::import(
             module: 'Radna oprema',
             created: $this->created,
@@ -143,9 +215,14 @@ class MachinesImport implements ToCollection
         );
     }
 
-    private function value($row, array $map, string $key)
-    {
-        return array_key_exists($key, $map) ? ($row[$map[$key]] ?? null) : null;
+    private function value(
+        $row,
+        array $map,
+        string $key
+    ) {
+        return array_key_exists($key, $map)
+            ? ($row[$map[$key]] ?? null)
+            : null;
     }
 
     private function isEmptyRow($row): bool
@@ -167,7 +244,9 @@ class MachinesImport implements ToCollection
 
         $value = trim((string) $value);
 
-        return $value === '' ? null : $value;
+        return $value === ''
+            ? null
+            : $value;
     }
 
     private function parseDate($value): ?string
@@ -176,29 +255,54 @@ class MachinesImport implements ToCollection
             return null;
         }
 
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)
+                ->format('Y-m-d');
+        }
+
         if (is_numeric($value)) {
             try {
-                return Carbon::instance(Date::excelToDateTimeObject((float) $value))->format('Y-m-d');
+                return Carbon::instance(
+                    Date::excelToDateTimeObject((float) $value)
+                )->format('Y-m-d');
             } catch (\Throwable) {
                 return null;
             }
         }
 
-        $value = rtrim(trim((string) $value), '.');
+        $value = rtrim(
+            trim((string) $value),
+            '.'
+        );
 
-        foreach (['d.m.Y', 'd/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.y', 'd/m/y', 'd-m-y'] as $format) {
+        foreach (
+            [
+                'd.m.Y',
+                'd/m/Y',
+                'd-m-Y',
+                'Y-m-d',
+                'd.m.y',
+                'd/m/y',
+                'd-m-y',
+            ] as $format
+        ) {
             try {
-                $date = Carbon::createFromFormat($format, $value);
+                $date = Carbon::createFromFormat(
+                    $format,
+                    $value
+                );
 
                 if ($date !== false) {
                     return $date->format('Y-m-d');
                 }
             } catch (\Throwable) {
+                //
             }
         }
 
         try {
-            return Carbon::parse($value)->format('Y-m-d');
+            return Carbon::parse($value)
+                ->format('Y-m-d');
         } catch (\Throwable) {
             return null;
         }
@@ -206,30 +310,66 @@ class MachinesImport implements ToCollection
 
     private function normalizeKey($key): ?string
     {
-        if ($key === null || trim((string) $key) === '') {
+        if (
+            $key === null
+            || trim((string) $key) === ''
+        ) {
             return null;
         }
 
         $key = Str::of((string) $key)
             ->lower()
-            ->replace(['š', 'đ', 'č', 'ć', 'ž'], ['s', 'd', 'c', 'c', 'z'])
-            ->replace(['/', '-', '.', '(', ')'], ' ')
+            ->replace(
+                ['š', 'đ', 'č', 'ć', 'ž'],
+                ['s', 'd', 'c', 'c', 'z']
+            )
+            ->replace(
+                ['/', '-', '.', '(', ')'],
+                ' '
+            )
+            ->replace("\u{00A0}", ' ')
             ->replaceMatches('/\s+/', ' ')
             ->trim()
             ->replace(' ', '_')
             ->toString();
 
         return match ($key) {
-            'naziv' => 'naziv',
-            'proizvodac' => 'proizvodac',
-            'tvornicki_broj', 'tvorn_broj', 'tvornicki_br', 'tvor_broj' => 'tvornicki_broj',
-            'inventarni_broj', 'inventarni_br' => 'inventarni_broj',
-            'vrijedi_od' => 'vrijedi_od',
-            'vrijedi_do' => 'vrijedi_do',
-            'ispitao' => 'ispitao',
-            'broj_izvjestaja', 'broj_izvestaja', 'izvjestaj_broj' => 'broj_izvjestaja',
-            'lokacija' => 'lokacija',
-            'napomena' => 'napomena',
+            'naziv'
+                => 'naziv',
+
+            'proizvodac'
+                => 'proizvodac',
+
+            'tvornicki_broj',
+            'tvorn_broj',
+            'tvornicki_br',
+            'tvor_broj'
+                => 'tvornicki_broj',
+
+            'inventarni_broj',
+            'inventarni_br'
+                => 'inventarni_broj',
+
+            'vrijedi_od'
+                => 'vrijedi_od',
+
+            'vrijedi_do'
+                => 'vrijedi_do',
+
+            'ispitao'
+                => 'ispitao',
+
+            'broj_izvjestaja',
+            'broj_izvestaja',
+            'izvjestaj_broj'
+                => 'broj_izvjestaja',
+
+            'lokacija'
+                => 'lokacija',
+
+            'napomena'
+                => 'napomena',
+
             default => $key,
         };
     }

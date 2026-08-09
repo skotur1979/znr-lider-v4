@@ -13,15 +13,23 @@ class BulkKpiEntry extends Page
 {
     protected static string $resource = KpiResource::class;
 
-    protected string $view = 'filament.resources.kpis.pages.bulk-kpi-entry';
+    protected string $view =
+        'filament.resources.kpis.pages.bulk-kpi-entry';
 
     public int $month;
+
     public int $year;
 
     public array $rows = [];
 
     public function mount(): void
     {
+        $user = auth()->user();
+
+        if (! $user || $user->isSuperAdmin()) {
+            abort(403);
+        }
+
         $this->month = now()->month;
         $this->year = now()->year;
 
@@ -41,7 +49,20 @@ class BulkKpiEntry extends Page
     public function loadRows(): void
     {
         $user = auth()->user();
-        $ownerId = $user?->ownerId();
+
+        if (! $user || $user->isSuperAdmin()) {
+            $this->rows = [];
+
+            return;
+        }
+
+        $ownerId = $user->ownerId();
+
+        if (! $ownerId) {
+            $this->rows = [];
+
+            return;
+        }
 
         $query = Kpi::query()
             ->where('is_active', true)
@@ -50,73 +71,139 @@ class BulkKpiEntry extends Page
             ->orderBy('sort_order')
             ->orderBy('name');
 
-        if (! $user?->isSuperAdmin()) {
-            if (! $ownerId) {
-                $this->rows = [];
-
-                return;
-            }
-
-            $query->where(function (Builder $q) use ($ownerId) {
-                $q->where('user_id', $ownerId)
-                    ->orWhere(function (Builder $global) use ($ownerId) {
-                        $global->whereNull('user_id')
-                            ->whereNotExists(function ($sub) use ($ownerId) {
+        /*
+         * Organizacija vidi:
+         *
+         * - svoje ručne KPI-e
+         * - globalne ručne KPI-e
+         *
+         * Ako postoji organizacijska kopija globalnog KPI-ja,
+         * globalni se više ne prikazuje.
+         */
+        $query->where(function (Builder $q) use ($ownerId): void {
+            $q->where('user_id', $ownerId)
+                ->orWhere(function (Builder $global) use ($ownerId): void {
+                    $global
+                        ->whereNull('user_id')
+                        ->whereNotExists(
+                            function ($sub) use ($ownerId): void {
                                 $sub->selectRaw('1')
                                     ->from('kpis as org_kpis')
-                                    ->where('org_kpis.user_id', $ownerId)
-                                    ->whereNull('org_kpis.deleted_at')
-                                    ->where(function ($match) {
-                                        $match->where(function ($bySource) {
-                                            $bySource->whereNotNull('kpis.source_key')
-                                                ->whereColumn('org_kpis.source_key', 'kpis.source_key');
-                                        })
-                                        ->orWhere(function ($byName) {
-                                            $byName->whereNull('kpis.source_key')
-                                                ->whereColumn('org_kpis.name', 'kpis.name');
-                                        });
-                                    });
-                            });
-                    });
-            });
-        }
+                                    ->where(
+                                        'org_kpis.user_id',
+                                        $ownerId
+                                    )
+                                    ->whereNull(
+                                        'org_kpis.deleted_at'
+                                    )
+                                    ->where(
+                                        function ($match): void {
+                                            $match
+                                                ->where(
+                                                    function ($bySource): void {
+                                                        $bySource
+                                                            ->whereNotNull(
+                                                                'kpis.source_key'
+                                                            )
+                                                            ->whereColumn(
+                                                                'org_kpis.source_key',
+                                                                'kpis.source_key'
+                                                            );
+                                                    }
+                                                )
+                                                ->orWhere(
+                                                    function ($byName): void {
+                                                        $byName
+                                                            ->whereNull(
+                                                                'kpis.source_key'
+                                                            )
+                                                            ->whereColumn(
+                                                                'org_kpis.name',
+                                                                'kpis.name'
+                                                            );
+                                                    }
+                                                );
+                                        }
+                                    );
+                            }
+                        );
+                });
+        });
 
-        $this->rows = $query->get()->map(function (Kpi $kpi) {
-            $existing = $kpi->valueFor($this->month, $this->year);
+        $this->rows = $query
+            ->get()
+            ->map(function (Kpi $kpi): array {
+                $existing = $kpi->valueFor(
+                    $this->month,
+                    $this->year
+                );
 
-            return [
-                'kpi_id' => $kpi->id,
-                'name' => $kpi->name,
-                'category' => $kpi->category,
-                'unit' => $kpi->unit,
-                'value' => $existing?->value,
-                'source_label' => 'Ručno',
-                'note' => $existing?->note,
-            ];
-        })->values()->all();
+                return [
+                    'kpi_id' => $kpi->id,
+                    'name' => $kpi->name,
+                    'category' => $kpi->category,
+                    'unit' => $kpi->unit,
+                    'value' => $existing?->value,
+                    'source_label' => 'Ručno',
+                    'note' => $existing?->note,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     public function save(): void
     {
         $user = auth()->user();
-        $ownerId = $user?->ownerId();
+
+        if (! $user || $user->isSuperAdmin()) {
+            abort(403);
+        }
+
+        $ownerId = $user->ownerId();
+
+        if (! $ownerId) {
+            abort(403);
+        }
 
         foreach ($this->rows as $row) {
-            $kpi = Kpi::find($row['kpi_id']);
+            $kpiId = (int) ($row['kpi_id'] ?? 0);
+
+            if ($kpiId <= 0) {
+                continue;
+            }
+
+            /*
+             * Serverski ponovno provjeravamo da je KPI
+             * aktivan i ručni.
+             */
+            $kpi = Kpi::query()
+                ->whereKey($kpiId)
+                ->where('is_active', true)
+                ->where('calculation_type', 'manual')
+                ->first();
 
             if (! $kpi) {
                 continue;
             }
 
-            if (! $user?->isSuperAdmin()) {
-                $canUseKpi = blank($kpi->user_id) || (int) $kpi->user_id === (int) $ownerId;
+            /*
+             * Dozvoljeni su:
+             *
+             * - globalni KPI
+             * - KPI iste organizacije.
+             */
+            $canUseKpi =
+                blank($kpi->user_id)
+                || (int) $kpi->user_id === (int) $ownerId;
 
-                if (! $canUseKpi) {
-                    continue;
-                }
+            if (! $canUseKpi) {
+                continue;
             }
 
-            if ($row['value'] === null || $row['value'] === '') {
+            $value = $row['value'] ?? null;
+
+            if ($value === null || $value === '') {
                 continue;
             }
 
@@ -127,7 +214,7 @@ class BulkKpiEntry extends Page
                     'user_id' => $ownerId,
                 ],
                 [
-                    'value' => (float) $row['value'],
+                    'value' => (float) $value,
                     'auto_generated' => false,
                     'source_label' => 'Ručno',
                     'note' => $row['note'] ?? null,
@@ -136,7 +223,9 @@ class BulkKpiEntry extends Page
         }
 
         Notification::make()
-            ->title('Bulk unos ručnih KPI-eva je spremljen.')
+            ->title(
+                'Bulk unos ručnih KPI-eva je spremljen.'
+            )
             ->success()
             ->send();
 

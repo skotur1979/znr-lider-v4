@@ -31,9 +31,6 @@ class MiscellaneousForm
                 Textarea::make('pdf')
                     ->default(null)
                     ->columnSpanFull(),
-                TextInput::make('user_id')
-                    ->numeric()
-                    ->default(null),
             ]);
     }
 }

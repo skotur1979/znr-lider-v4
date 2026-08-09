@@ -90,6 +90,10 @@ class KpiReports extends Page
             ->label('Bulk unos')
             ->icon('heroicon-o-table-cells')
             ->color('success')
+            ->visible(
+                fn (): bool =>
+                    auth()->user()?->isSuperAdmin() !== true
+            )
             ->url(KpiResource::getUrl('bulk-entry')),
     ];
 }

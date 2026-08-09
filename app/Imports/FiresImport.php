@@ -18,6 +18,23 @@ class FiresImport implements ToCollection
     public int $unchanged = 0;
     public int $skipped = 0;
 
+    protected int $ownerId;
+
+    public function __construct()
+    {
+        $user = Auth::user();
+
+        if (! $user || $user->isSuperAdmin()) {
+            abort(403);
+        }
+
+        $this->ownerId = (int) $user->ownerId();
+
+        if ($this->ownerId <= 0) {
+            abort(403);
+        }
+    }
+
     public function collection(Collection $rows): void
     {
         $headerRowIndex = 3;
@@ -27,14 +44,7 @@ class FiresImport implements ToCollection
 
         if (! $headers) {
             $this->skipped++;
-
-            ActivityLogger::import(
-                module: 'Vatrogasni aparati',
-                created: $this->created,
-                updated: $this->updated,
-                unchanged: $this->unchanged,
-                skipped: $this->skipped,
-            );
+            $this->logImport();
 
             return;
         }
@@ -56,27 +66,62 @@ class FiresImport implements ToCollection
                 continue;
             }
 
-            $place = $this->clean($this->value($row, $map, 'mjesto'));
+            $place = $this->clean(
+                $this->value($row, $map, 'mjesto')
+            );
 
             if (! $place) {
                 $this->skipped++;
                 continue;
             }
 
-            $type = $this->clean($this->value($row, $map, 'tip'));
-            $factory = $this->clean($this->value($row, $map, 'tvor_broj'));
-            $serial = $this->clean($this->value($row, $map, 'serijski_broj'));
+            $type = $this->clean(
+                $this->value($row, $map, 'tip')
+            );
 
-            $serviceFrom = $this->parseDate($this->value($row, $map, 'datum_periodickog_servisa'));
-            $validUntil = $this->parseDate($this->value($row, $map, 'vrijedi_do'));
-            $regularFrom = $this->parseDate($this->value($row, $map, 'datum_redovnog_pregleda'));
+            $factory = $this->clean(
+                $this->value($row, $map, 'tvor_broj')
+            );
 
-            $service = $this->clean($this->value($row, $map, 'serviser'));
-            $visible = $this->clean($this->value($row, $map, 'uocljivost'));
+            $serial = $this->clean(
+                $this->value($row, $map, 'serijski_broj')
+            );
 
-            $combined = $this->clean($this->value($row, $map, 'uoceni_nedostaci_postupci_otklanjanja'));
-            $remark = $this->clean($this->value($row, $map, 'uoceni_nedostaci'));
-            $action = $this->clean($this->value($row, $map, 'postupci_otklanjanja'));
+            $serviceFrom = $this->parseDate(
+                $this->value($row, $map, 'datum_periodickog_servisa')
+            );
+
+            $validUntil = $this->parseDate(
+                $this->value($row, $map, 'vrijedi_do')
+            );
+
+            $regularFrom = $this->parseDate(
+                $this->value($row, $map, 'datum_redovnog_pregleda')
+            );
+
+            $service = $this->clean(
+                $this->value($row, $map, 'serviser')
+            );
+
+            $visible = $this->clean(
+                $this->value($row, $map, 'uocljivost')
+            );
+
+            $combined = $this->clean(
+                $this->value(
+                    $row,
+                    $map,
+                    'uoceni_nedostaci_postupci_otklanjanja'
+                )
+            );
+
+            $remark = $this->clean(
+                $this->value($row, $map, 'uoceni_nedostaci')
+            );
+
+            $action = $this->clean(
+                $this->value($row, $map, 'postupci_otklanjanja')
+            );
 
             if (! $remark && $combined) {
                 $remark = $combined;
@@ -87,24 +132,21 @@ class FiresImport implements ToCollection
                 continue;
             }
 
-            $user = Auth::user();
-
-                if (! $user) {
-                    $this->skipped++;
-
-                    continue;
-                }
-
-                $userId = $user->ownerId();
+            $userId = $this->ownerId;
 
             $fire = Fire::query()
                 ->where('user_id', $userId)
                 ->where('place', $place)
-                ->where(function ($query) use ($serial) {
+                ->where(function ($query) use ($serial): void {
                     if ($serial) {
-                        $query->where('serial_label_number', $serial);
+                        $query->where(
+                            'serial_label_number',
+                            $serial
+                        );
                     } else {
-                        $query->whereNull('serial_label_number');
+                        $query->whereNull(
+                            'serial_label_number'
+                        );
                     }
                 })
                 ->first();
@@ -127,13 +169,24 @@ class FiresImport implements ToCollection
             if (! $fire) {
                 Fire::create($data);
                 $this->created++;
+
                 continue;
             }
 
             $changed = [];
 
             foreach ($data as $field => $value) {
-                if (in_array($field, ['user_id', 'place'], true)) {
+                if (
+                    in_array(
+                        $field,
+                        [
+                            'user_id',
+                            'place',
+                            'serial_label_number',
+                        ],
+                        true
+                    )
+                ) {
                     continue;
                 }
 
@@ -161,6 +214,11 @@ class FiresImport implements ToCollection
             $this->updated++;
         }
 
+        $this->logImport();
+    }
+
+    private function logImport(): void
+    {
         ActivityLogger::import(
             module: 'Vatrogasni aparati',
             created: $this->created,
@@ -170,9 +228,14 @@ class FiresImport implements ToCollection
         );
     }
 
-    private function value($row, array $map, string $key)
-    {
-        return array_key_exists($key, $map) ? ($row[$map[$key]] ?? null) : null;
+    private function value(
+        $row,
+        array $map,
+        string $key
+    ) {
+        return array_key_exists($key, $map)
+            ? ($row[$map[$key]] ?? null)
+            : null;
     }
 
     private function isEmptyRow($row): bool
@@ -194,7 +257,9 @@ class FiresImport implements ToCollection
 
         $value = trim((string) $value);
 
-        return $value === '' ? null : $value;
+        return $value === ''
+            ? null
+            : $value;
     }
 
     private function parseDate($value): ?string
@@ -204,32 +269,53 @@ class FiresImport implements ToCollection
         }
 
         if ($value instanceof \DateTimeInterface) {
-            return Carbon::instance($value)->format('Y-m-d');
+            return Carbon::instance($value)
+                ->format('Y-m-d');
         }
 
         if (is_numeric($value)) {
             try {
-                return Carbon::instance(Date::excelToDateTimeObject((float) $value))->format('Y-m-d');
+                return Carbon::instance(
+                    Date::excelToDateTimeObject((float) $value)
+                )->format('Y-m-d');
             } catch (\Throwable) {
                 return null;
             }
         }
 
-        $value = rtrim(trim((string) $value), '.');
+        $value = rtrim(
+            trim((string) $value),
+            '.'
+        );
 
-        foreach (['d.m.Y', 'd/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.y', 'd/m/y', 'd-m-y'] as $format) {
+        foreach (
+            [
+                'd.m.Y',
+                'd/m/Y',
+                'd-m-Y',
+                'Y-m-d',
+                'd.m.y',
+                'd/m/y',
+                'd-m-y',
+            ] as $format
+        ) {
             try {
-                $date = Carbon::createFromFormat($format, $value);
+                $date = Carbon::createFromFormat(
+                    $format,
+                    $value
+                );
 
                 if ($date !== false) {
                     return $date->format('Y-m-d');
                 }
             } catch (\Throwable) {
+                //
             }
         }
 
         try {
-            return Carbon::parse($value)->format('Y-m-d');
+            return Carbon::parse($value)
+                ->format('Y-m-d');
         } catch (\Throwable) {
             return null;
         }
@@ -237,14 +323,23 @@ class FiresImport implements ToCollection
 
     private function normalizeKey($key): ?string
     {
-        if ($key === null || trim((string) $key) === '') {
+        if (
+            $key === null
+            || trim((string) $key) === ''
+        ) {
             return null;
         }
 
         $key = Str::of((string) $key)
             ->lower()
-            ->replace(['š', 'đ', 'č', 'ć', 'ž'], ['s', 'd', 'c', 'c', 'z'])
-            ->replace(['/', '-', '.', '(', ')'], ' ')
+            ->replace(
+                ['š', 'đ', 'č', 'ć', 'ž'],
+                ['s', 'd', 'c', 'c', 'z']
+            )
+            ->replace(
+                ['/', '-', '.', '(', ')'],
+                ' '
+            )
             ->replace("\u{00A0}", ' ')
             ->replaceMatches('/\s+/', ' ')
             ->trim()
@@ -260,30 +355,46 @@ class FiresImport implements ToCollection
             'tvornicki_broj',
             'tvornicki_broj_godina_proizvodnje',
             'tvor_broj_god_proizv',
-            'tvor_broj_godina_proizvodnje' => 'tvor_broj',
+            'tvor_broj_godina_proizvodnje'
+                => 'tvor_broj',
 
             'serijski_broj',
             'ser_broj',
             'serijski_broj_eviden_naljepnice',
             'serijski_broj_evidencijske_naljepnice',
             'serijski_broj_evidenc_naljepnice',
-            'serijski_broj_evid_naljepnice' => 'serijski_broj',
+            'serijski_broj_evid_naljepnice'
+                => 'serijski_broj',
 
-            'datum_periodickog_servisa' => 'datum_periodickog_servisa',
-            'vrijedi_do' => 'vrijedi_do',
-            'datum_redovnog_pregleda' => 'datum_redovnog_pregleda',
-            'redovni_pregled_vrijedi_do' => 'redovni_pregled_vrijedi_do',
-            'serviser' => 'serviser',
-            'uocljivost' => 'uocljivost',
+            'datum_periodickog_servisa'
+                => 'datum_periodickog_servisa',
+
+            'vrijedi_do'
+                => 'vrijedi_do',
+
+            'datum_redovnog_pregleda'
+                => 'datum_redovnog_pregleda',
+
+            'redovni_pregled_vrijedi_do'
+                => 'redovni_pregled_vrijedi_do',
+
+            'serviser'
+                => 'serviser',
+
+            'uocljivost'
+                => 'uocljivost',
 
             'uoceni_nedostaci_postupci_otklanjanja',
-            'uoceni_nedostatci_postupci_otklanjanja' => 'uoceni_nedostaci_postupci_otklanjanja',
+            'uoceni_nedostatci_postupci_otklanjanja'
+                => 'uoceni_nedostaci_postupci_otklanjanja',
 
             'uoceni_nedostaci',
-            'uoceni_nedostatci' => 'uoceni_nedostaci',
+            'uoceni_nedostatci'
+                => 'uoceni_nedostaci',
 
             'postupci_otklanjanja',
-            'postupak_otklanjanja' => 'postupci_otklanjanja',
+            'postupak_otklanjanja'
+                => 'postupci_otklanjanja',
 
             default => $key,
         };

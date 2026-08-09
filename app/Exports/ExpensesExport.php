@@ -16,7 +16,13 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithColumnFormatting, ShouldAutoSize, WithEvents
+class ExpensesExport implements
+    FromCollection,
+    WithHeadings,
+    WithMapping,
+    WithColumnFormatting,
+    ShouldAutoSize,
+    WithEvents
 {
     protected $expenses;
 
@@ -34,13 +40,31 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
 
         $user = auth()->user();
 
-        $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+        if (! $user) {
+            abort(403);
+        }
 
+        $this->showUserColumn =
+            $user->isSuperAdmin()
+            || $user->canCreateSubusers();
+
+        /*
+         * VAŽNO:
+         * Koristimo ExpenseResource::getEloquentQuery()
+         * kako bi Excel koristio potpuno isti tenant scope
+         * kao i tablica Troškovi.
+         */
         $this->expenses = ExpenseResource::getEloquentQuery()
-            ->with(['user', 'budget', 'category'])
-            ->whereHas('budget', fn (Builder $query) => $query->where('godina', $this->year))
+            ->with([
+                'user',
+                'budget',
+                'category',
+            ])
+            ->whereHas(
+                'budget',
+                fn (Builder $query) =>
+                    $query->where('godina', $this->year)
+            )
             ->orderByRaw("
                 FIELD(
                     mjesec,
@@ -53,15 +77,25 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
 
         $this->totalExpenses = (float) $this->expenses->sum('iznos');
 
-        $this->totalBudget = (float) Budget::query()
-            ->when(
-                ! auth()->user()?->isSuperAdmin(),
-                fn (Builder $query) => $query->where('user_id', auth()->user()?->ownerId())
-            )
-            ->where('godina', $this->year)
+        /*
+         * Budžet također ograničavamo na organizaciju
+         * za sve korisnike osim superadmina.
+         */
+        $budgetQuery = Budget::query()
+            ->where('godina', $this->year);
+
+        if (! $user->isSuperAdmin()) {
+            $budgetQuery->where(
+                'user_id',
+                $user->ownerId()
+            );
+        }
+
+        $this->totalBudget = (float) $budgetQuery
             ->sum('ukupni_budget');
 
-        $this->balance = $this->totalBudget - $this->totalExpenses;
+        $this->balance =
+            $this->totalBudget - $this->totalExpenses;
     }
 
     public function collection()
@@ -229,22 +263,36 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
                 }
 
                 foreach ($widths as $column => $width) {
-                    $sheet->getColumnDimension($column)->setWidth($width);
+                    $sheet->getColumnDimension($column)
+                        ->setWidth($width);
                 }
 
-                $sheet->getRowDimension(1)->setRowHeight(28);
+                $sheet->getRowDimension(1)
+                    ->setRowHeight(28);
 
                 for ($row = 2; $row <= $lastDataRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(32);
+                    $sheet->getRowDimension($row)
+                        ->setRowHeight(32);
                 }
 
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:{$lastCol}{$lastDataRow}");
 
-                $sheet->setCellValue("A{$summaryStartRow}", "SAŽETAK TROŠKOVA ZA {$this->year}. GODINU");
-                $sheet->mergeCells("A{$summaryStartRow}:{$lastCol}{$summaryStartRow}");
+                $sheet->setAutoFilter(
+                    "A1:{$lastCol}{$lastDataRow}"
+                );
 
-                $sheet->getStyle("A{$summaryStartRow}:{$lastCol}{$summaryStartRow}")->applyFromArray([
+                $sheet->setCellValue(
+                    "A{$summaryStartRow}",
+                    "SAŽETAK TROŠKOVA ZA {$this->year}. GODINU"
+                );
+
+                $sheet->mergeCells(
+                    "A{$summaryStartRow}:{$lastCol}{$summaryStartRow}"
+                );
+
+                $sheet->getStyle(
+                    "A{$summaryStartRow}:{$lastCol}{$summaryStartRow}"
+                )->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'color' => ['rgb' => 'FFFFFF'],
@@ -261,20 +309,42 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
                     ],
                 ]);
 
-                $sheet->getRowDimension($summaryStartRow)->setRowHeight(26);
+                $sheet->getRowDimension($summaryStartRow)
+                    ->setRowHeight(26);
 
                 $r1 = $summaryStartRow + 1;
                 $r2 = $summaryStartRow + 2;
                 $r3 = $summaryStartRow + 3;
 
-                $sheet->setCellValue("A{$r1}", 'Ukupno troškova (€)');
-                $sheet->setCellValue("B{$r1}", $this->totalExpenses);
+                $sheet->setCellValue(
+                    "A{$r1}",
+                    'Ukupno troškova (€)'
+                );
 
-                $sheet->setCellValue("A{$r2}", 'Ukupni budžet (€)');
-                $sheet->setCellValue("B{$r2}", $this->totalBudget);
+                $sheet->setCellValue(
+                    "B{$r1}",
+                    $this->totalExpenses
+                );
 
-                $sheet->setCellValue("A{$r3}", 'Stanje (budžet - troškovi) (€)');
-                $sheet->setCellValue("B{$r3}", $this->balance);
+                $sheet->setCellValue(
+                    "A{$r2}",
+                    'Ukupni budžet (€)'
+                );
+
+                $sheet->setCellValue(
+                    "B{$r2}",
+                    $this->totalBudget
+                );
+
+                $sheet->setCellValue(
+                    "A{$r3}",
+                    'Stanje (budžet - troškovi) (€)'
+                );
+
+                $sheet->setCellValue(
+                    "B{$r3}",
+                    $this->balance
+                );
 
                 $sheet->getStyle("A{$r1}:A{$r3}")
                     ->getFont()
@@ -290,26 +360,55 @@ class ExpensesExport implements FromCollection, WithHeadings, WithMapping, WithC
 
                 $sheet->getStyle("A{$r1}:B{$r3}")
                     ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER);
+                    ->setVertical(
+                        Alignment::VERTICAL_CENTER
+                    );
 
                 $sheet->getStyle("B{$r1}:B{$r3}")
                     ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    ->setHorizontal(
+                        Alignment::HORIZONTAL_RIGHT
+                    );
 
                 if ($this->balance < 0) {
-                    $this->fillCell($sheet, "B{$r3}", 'FFFF0000');
+                    $this->fillCell(
+                        $sheet,
+                        "B{$r3}",
+                        'FFFF0000'
+                    );
                 } else {
-                    $this->fillCell($sheet, "B{$r3}", 'FF00B050');
+                    $this->fillCell(
+                        $sheet,
+                        "B{$r3}",
+                        'FF00B050'
+                    );
                 }
             },
         ];
     }
 
-    private function fillCell($sheet, string $cell, string $argb): void
-    {
-        $sheet->getStyle($cell)->getFill()->setFillType(Fill::FILL_SOLID);
-        $sheet->getStyle($cell)->getFill()->getStartColor()->setARGB($argb);
-        $sheet->getStyle($cell)->getFont()->setBold(true);
-        $sheet->getStyle($cell)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    private function fillCell(
+        $sheet,
+        string $cell,
+        string $argb
+    ): void {
+        $sheet->getStyle($cell)
+            ->getFill()
+            ->setFillType(Fill::FILL_SOLID);
+
+        $sheet->getStyle($cell)
+            ->getFill()
+            ->getStartColor()
+            ->setARGB($argb);
+
+        $sheet->getStyle($cell)
+            ->getFont()
+            ->setBold(true);
+
+        $sheet->getStyle($cell)
+            ->getAlignment()
+            ->setHorizontal(
+                Alignment::HORIZONTAL_CENTER
+            );
     }
 }

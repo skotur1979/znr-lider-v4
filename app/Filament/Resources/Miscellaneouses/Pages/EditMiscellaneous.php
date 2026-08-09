@@ -4,7 +4,9 @@ namespace App\Filament\Resources\Miscellaneouses\Pages;
 
 use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Miscellaneouses\MiscellaneousResource;
+use App\Models\Category;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Validation\ValidationException;
 
 class EditMiscellaneous extends EditRecord
 {
@@ -15,9 +17,6 @@ class EditMiscellaneous extends EditRecord
 
     public function mount(int|string $record): void
     {
-        /*
-         * Filament prvo mora učitati stvarni model.
-         */
         parent::mount($record);
 
         $this->redirectIfMissingModulePermission(
@@ -36,11 +35,32 @@ class EditMiscellaneous extends EditRecord
         array $data
     ): array {
         /*
-         * Podkorisnik ne smije promijeniti vlasnika zapisa.
-         * Postojeći user_id ostaje nepromijenjen.
+         * Ownership zapisa nikada se ne mijenja
+         * kroz edit formu.
          */
-        if (! auth()->user()?->isSuperAdmin()) {
-            unset($data['user_id']);
+        unset($data['user_id']);
+
+        /*
+         * Kategorija mora pripadati istom owneru
+         * kao postojeći zapis.
+         *
+         * Ovo vrijedi i kada zapis administrira
+         * superadmin.
+         */
+        $ownerId = (int) $this->record->user_id;
+
+        $categoryId = $data['category_id'] ?? null;
+
+        $validCategory = Category::query()
+            ->whereKey($categoryId)
+            ->where('user_id', $ownerId)
+            ->exists();
+
+        if (! $validCategory) {
+            throw ValidationException::withMessages([
+                'category_id' =>
+                    'Odabrana kategorija ne pripada organizaciji ovog zapisa.',
+            ]);
         }
 
         return $data;

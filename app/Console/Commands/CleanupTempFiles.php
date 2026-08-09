@@ -37,11 +37,28 @@ class CleanupTempFiles extends Command
 
                 $checkedFolders++;
 
-                foreach (File::files($folder) as $file) {
+                foreach (File::allFiles($folder) as $file) {
                     if ($file->getMTime() < now()->subDays(7)->timestamp) {
                         if (File::delete($file->getPathname())) {
                             $deleted++;
                         }
+                    }
+                }
+
+                /*
+                 * Nakon brisanja starih datoteka pokušaj ukloniti
+                 * prazne poddirektorije, ali ne i glavni temp folder.
+                 */
+                $directories = collect(File::directories($folder))
+                    ->sortByDesc(fn (string $directory) => substr_count($directory, DIRECTORY_SEPARATOR));
+
+                foreach ($directories as $directory) {
+                    if (
+                        File::exists($directory)
+                        && empty(File::allFiles($directory))
+                        && empty(File::directories($directory))
+                    ) {
+                        File::deleteDirectory($directory);
                     }
                 }
             }
@@ -70,6 +87,7 @@ class CleanupTempFiles extends Command
             );
 
             report($exception);
+
             $this->error($exception->getMessage());
 
             return self::FAILURE;

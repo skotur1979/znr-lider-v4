@@ -9,32 +9,79 @@ use Filament\Resources\Pages\ListRecords;
 
 class ListRiskAssessments extends ListRecords
 {
-    protected static string $resource = RiskAssessmentResource::class;
+    protected static string $resource =
+        RiskAssessmentResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make()->label('Nova Procjena Rizika')
-            ->icon('heroicon-o-plus'),
+            Actions\CreateAction::make()
+                ->label('Nova Procjena Rizika')
+                ->icon('heroicon-o-plus'),
 
             Actions\Action::make('export_pdf')
                 ->label('Izvoz u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
+                ->icon(
+                    'heroicon-o-arrow-down-tray'
+                )
                 ->color('warning')
                 ->action(function () {
-                    $riskAssessments = RiskAssessmentResource::getEloquentQuery()
-                        ->with(['participants', 'revisions', 'attachments'])
-                        ->orderBy('tvrtka')
-                        ->orderBy('broj_procjene')
+                    /*
+                     * Koristimo query same tablice.
+                     *
+                     * Time PDF poštuje:
+                     * - tenant scope
+                     * - aktivne filtre
+                     * - pretragu
+                     * - sortiranje
+                     */
+                    $riskAssessments = $this
+                        ->getFilteredSortedTableQuery()
+                        ->with([
+                            'participants',
+                            'revisions',
+                            'attachments',
+                        ])
                         ->get();
 
-                    $pdf = Pdf::loadView('pdf.risk-assessments', compact('riskAssessments'))
-                        ->setPaper('a4', 'landscape'); // ✅ kao kod first aid footer širine
+                    $pdf = Pdf::loadView(
+                        'pdf.risk-assessments',
+                        compact(
+                            'riskAssessments'
+                        )
+                    )
+                        ->setPaper(
+                            'a4',
+                            'landscape'
+                        )
+                        ->setOptions([
+                            'isHtml5ParserEnabled' =>
+                                true,
 
-                    return response()->streamDownload(
-                        fn () => print($pdf->output()),
-                        'procjene-rizika-' . now()->format('Y-m-d') . '.pdf'
-                    );
+                            'isRemoteEnabled' =>
+                                true,
+
+                            'isPhpEnabled' =>
+                                true,
+
+                            'dpi' =>
+                                96,
+
+                            'defaultFont' =>
+                                'DejaVu Sans',
+                        ]);
+
+                    return response()
+                        ->streamDownload(
+                            fn () => print(
+                                $pdf->output()
+                            ),
+                            'procjene-rizika-'
+                            . now()->format(
+                                'Y-m-d'
+                            )
+                            . '.pdf'
+                        );
                 }),
         ];
     }

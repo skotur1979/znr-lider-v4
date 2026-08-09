@@ -41,6 +41,12 @@ class KpiResource extends BaseResource
 
     protected static bool $usesSoftDeletes = true;
 
+    /**
+     * KPI je iznimka:
+     * superadmin smije kreirati globalne KPI definicije.
+     */
+    protected static bool $superAdminCanCreate = true;
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar-square';
     protected static string|UnitEnum|null $navigationGroup = 'Upravljanje';
     protected static ?string $navigationLabel = 'KPI';
@@ -484,16 +490,21 @@ class KpiResource extends BaseResource
         return $query->whereRaw('1 = 0');
     }
 
-    return $query->where(function (Builder $q) use ($ownerId) {
-    $q->where('user_id', $ownerId)
-        ->orWhere(function (Builder $global) {
-            $global->whereNull('user_id')
-                ->whereNotIn(
-                'source_key',
-                static::protectedAutomaticSourceKeys()
-            );
-        });
-});
+    return $query->where(function (Builder $q) use ($ownerId): void {
+        $q->where('user_id', $ownerId)
+            ->orWhere(function (Builder $global): void {
+                $global
+                    ->whereNull('user_id')
+                    ->where(function (Builder $source): void {
+                        $source
+                            ->whereNull('source_key')
+                            ->orWhereNotIn(
+                                'source_key',
+                                static::protectedAutomaticSourceKeys()
+                            );
+                    });
+            });
+    });
 }
 protected static function latestVisibleKpiValue(Kpi $record): ?KpiValue
 {
@@ -534,14 +545,19 @@ protected static function latestVisibleKpiValue(Kpi $record): ?KpiValue
             return '0';
         }
 
-        $query->where(function (Builder $q) use ($ownerId) {
+        $query->where(function (Builder $q) use ($ownerId): void {
             $q->where('user_id', $ownerId)
-                ->orWhere(function (Builder $global) {
-                    $global->whereNull('user_id')
-                        ->whereNotIn(
-                        'source_key',
-                        static::protectedAutomaticSourceKeys()
-                    );
+                ->orWhere(function (Builder $global): void {
+                    $global
+                        ->whereNull('user_id')
+                        ->where(function (Builder $source): void {
+                            $source
+                                ->whereNull('source_key')
+                                ->orWhereNotIn(
+                                    'source_key',
+                                    static::protectedAutomaticSourceKeys()
+                                );
+                        });
                 });
         });
     }

@@ -18,25 +18,49 @@ class ActivityLogResource extends BaseResource
 {
     protected static ?string $model = ActivityLog::class;
 
+    /**
+     * Activity log nema standardni poslovni ownership preko user_id.
+     *
+     * Koristi:
+     * user_id  = korisnik koji je napravio aktivnost
+     * owner_id = organizacija kojoj aktivnost pripada
+     *
+     * Zato ima vlastiti tenant query.
+     */
     protected static bool $hasOwnership = false;
 
-    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-bell-alert';
+    protected static BackedEnum|string|null $navigationIcon =
+        'heroicon-o-bell-alert';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Upravljanje';
+    protected static string|UnitEnum|null $navigationGroup =
+        'Upravljanje';
 
-    protected static ?string $navigationLabel = 'Zadnje aktivnosti';
+    protected static ?string $navigationLabel =
+        'Zadnje aktivnosti';
 
-    protected static ?string $modelLabel = 'Aktivnost';
+    protected static ?string $modelLabel =
+        'Aktivnost';
 
-    protected static ?string $pluralModelLabel = 'Zadnje aktivnosti';
+    protected static ?string $pluralModelLabel =
+        'Zadnje aktivnosti';
 
     protected static ?int $navigationSort = 99;
 
+    /**
+     * Activity log nije jedan od šest kontroliranih
+     * poslovnih modula.
+     */
     protected static function getModuleKey(): ?string
     {
         return null;
     }
 
+    /**
+     * Svaki prijavljeni korisnik može otvoriti
+     * modul aktivnosti.
+     *
+     * Query ispod određuje koje zapise smije vidjeti.
+     */
     public static function shouldRegisterNavigation(): bool
     {
         return auth()->check();
@@ -47,25 +71,59 @@ class ActivityLogResource extends BaseResource
         return auth()->check();
     }
 
+    /**
+     * Activity log se nikada ne kreira ručno.
+     */
     public static function canCreate(): bool
     {
         return false;
     }
 
+    /**
+     * Activity log se nikada ne uređuje ručno.
+     */
     public static function canEdit($record): bool
     {
         return false;
     }
 
+    /**
+     * Samo superadmin smije pojedinačno brisati
+     * zapise aktivnosti.
+     */
     public static function canDelete($record): bool
     {
         return auth()->user()?->isSuperAdmin() === true;
     }
 
+    /**
+     * Dodatna zaštita bulk brisanja.
+     */
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()?->isSuperAdmin() === true;
+    }
+
+    /**
+     * POSEBNA MULTI-TENANT LOGIKA ACTIVITY LOGA.
+     *
+     * Superadmin:
+     * - vidi sve aktivnosti.
+     *
+     * Glavni korisnik:
+     * - vidi sve aktivnosti svoje organizacije,
+     *   bez obzira smije li dodavati podkorisnike.
+     *
+     * Podkorisnik:
+     * - vidi samo vlastite aktivnosti.
+     */
     public static function getEloquentQuery(): Builder
     {
         $query = ActivityLog::query()
-            ->with(['user', 'owner'])
+            ->with([
+                'user',
+                'owner',
+            ])
             ->latest();
 
         $user = auth()->user();
@@ -74,18 +132,37 @@ class ActivityLogResource extends BaseResource
             return $query->whereRaw('1 = 0');
         }
 
-        // Superadmin vidi sve aktivnosti.
         if ($user->isSuperAdmin()) {
             return $query;
         }
 
-        // Glavni korisnik vidi sve aktivnosti svoje organizacije.
-        if ($user->canCreateSubusers()) {
-            return $query->where('owner_id', $user->ownerId());
+        if ($user->isOrgAdmin()) {
+            return $query->where(
+                'owner_id',
+                $user->ownerId()
+            );
         }
 
-        // Podkorisnik vidi samo svoje aktivnosti.
-        return $query->where('user_id', $user->id);
+        if ($user->isOrgUser()) {
+            return $query->where(
+                'user_id',
+                $user->id
+            );
+        }
+
+        /**
+         * Fail closed za nepoznatu ulogu.
+         */
+        return $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * Direktni pristup zapisima mora koristiti
+     * isti tenant-safe query.
+     */
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return static::getEloquentQuery();
     }
 
     public static function getNavigationBadge(): ?string
@@ -96,7 +173,8 @@ class ActivityLogResource extends BaseResource
             return null;
         }
 
-        $cacheKey = 'activity_log_badge_'
+        $cacheKey =
+            'activity_log_badge_'
             . $user->id
             . '_'
             . now()->format('Y-m-d-H');
@@ -111,15 +189,25 @@ class ActivityLogResource extends BaseResource
                     return (string) $query->count();
                 }
 
-                if ($user->canCreateSubusers()) {
+                if ($user->isOrgAdmin()) {
                     return (string) $query
-                        ->where('owner_id', $user->ownerId())
+                        ->where(
+                            'owner_id',
+                            $user->ownerId()
+                        )
                         ->count();
                 }
 
-                return (string) $query
-                    ->where('user_id', $user->id)
-                    ->count();
+                if ($user->isOrgUser()) {
+                    return (string) $query
+                        ->where(
+                            'user_id',
+                            $user->id
+                        )
+                        ->count();
+                }
+
+                return '0';
             }
         );
     }
@@ -132,8 +220,16 @@ class ActivityLogResource extends BaseResource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('created_at', 'desc')
-            ->paginated([10, 25, 50, 100])
+            ->defaultSort(
+                'created_at',
+                'desc'
+            )
+            ->paginated([
+                10,
+                25,
+                50,
+                100,
+            ])
             ->columns([
                 TextColumn::make('created_at')
                     ->label('Vrijeme')
@@ -159,32 +255,80 @@ class ActivityLogResource extends BaseResource
                 TextColumn::make('action')
                     ->label('Radnja')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'created' => 'Kreirano',
-                        'updated' => 'Uređeno',
-                        'deleted' => 'Obrisano',
-                        'import' => 'Import',
-                        'export' => 'Export',
-                        'status' => 'Status',
-                        'sent' => 'Poslano',
-                        'login' => 'Prijava',
-                        'logout' => 'Odjava',
-                        'failed_login' => 'Neuspješna prijava',
-                        default => $state ?? '-',
-                    })
-                    ->color(fn (?string $state): string => match ($state) {
-                        'created' => 'success',
-                        'updated' => 'warning',
-                        'deleted' => 'danger',
-                        'import' => 'info',
-                        'export' => 'gray',
-                        'status' => 'primary',
-                        'sent' => 'info',
-                        'login' => 'success',
-                        'logout' => 'gray',
-                        'failed_login' => 'danger',
-                        default => 'gray',
-                    })
+                    ->formatStateUsing(
+                        fn (?string $state): string =>
+                            match ($state) {
+                                'created' =>
+                                    'Kreirano',
+
+                                'updated' =>
+                                    'Uređeno',
+
+                                'deleted' =>
+                                    'Obrisano',
+
+                                'import' =>
+                                    'Import',
+
+                                'export' =>
+                                    'Export',
+
+                                'status' =>
+                                    'Status',
+
+                                'sent' =>
+                                    'Poslano',
+
+                                'login' =>
+                                    'Prijava',
+
+                                'logout' =>
+                                    'Odjava',
+
+                                'failed_login' =>
+                                    'Neuspješna prijava',
+
+                                default =>
+                                    $state ?? '-',
+                            }
+                    )
+                    ->color(
+                        fn (?string $state): string =>
+                            match ($state) {
+                                'created' =>
+                                    'success',
+
+                                'updated' =>
+                                    'warning',
+
+                                'deleted' =>
+                                    'danger',
+
+                                'import' =>
+                                    'info',
+
+                                'export' =>
+                                    'gray',
+
+                                'status' =>
+                                    'primary',
+
+                                'sent' =>
+                                    'info',
+
+                                'login' =>
+                                    'success',
+
+                                'logout' =>
+                                    'gray',
+
+                                'failed_login' =>
+                                    'danger',
+
+                                default =>
+                                    'gray',
+                            }
+                    )
                     ->toggleable(),
 
                 TextColumn::make('title')
@@ -199,78 +343,122 @@ class ActivityLogResource extends BaseResource
                     ->searchable()
                     ->wrap()
                     ->placeholder('-')
-                    ->formatStateUsing(function (?string $state, ActivityLog $record): string {
-                        $user = auth()->user();
+                    ->formatStateUsing(
+                        function (
+                            ?string $state,
+                            ActivityLog $record
+                        ): string {
+                            $user = auth()->user();
 
-                        if (! $user) {
+                            if (! $user) {
+                                return '-';
+                            }
+
+                            /**
+                             * Superadmin vidi sve detalje.
+                             */
+                            if ($user->isSuperAdmin()) {
+                                return filled($state)
+                                    ? $state
+                                    : '-';
+                            }
+
+                            /**
+                             * Glavni korisnik vidi detalje
+                             * aktivnosti svoje organizacije.
+                             */
+                            if (
+                                $user->isOrgAdmin()
+                                && (int) $record->owner_id
+                                    === (int) $user->ownerId()
+                            ) {
+                                return filled($state)
+                                    ? $state
+                                    : '-';
+                            }
+
+                            /**
+                             * Podkorisnik vidi detalje
+                             * samo svojih aktivnosti.
+                             *
+                             * To uključuje i primatelje
+                             * njegovih poslanih podsjetnika.
+                             */
+                            if (
+                                $user->isOrgUser()
+                                && (int) $record->user_id
+                                    === (int) $user->id
+                            ) {
+                                return filled($state)
+                                    ? $state
+                                    : '-';
+                            }
+
                             return '-';
                         }
+                    )
+                    ->tooltip(
+                        function (
+                            ActivityLog $record
+                        ): ?string {
+                            $user = auth()->user();
 
-                        /*
-                        * Superadmin vidi sve detalje.
-                        */
-                        if ($user->isSuperAdmin()) {
-                            return filled($state) ? $state : '-';
+                            if (! $user) {
+                                return null;
+                            }
+
+                            $canSeeDetails =
+                                $user->isSuperAdmin()
+                                || (
+                                    $user->isOrgAdmin()
+                                    && (int) $record->owner_id
+                                        === (int) $user->ownerId()
+                                )
+                                || (
+                                    $user->isOrgUser()
+                                    && (int) $record->user_id
+                                        === (int) $user->id
+                                );
+
+                            return $canSeeDetails
+                                && filled(
+                                    $record->description
+                                )
+                                    ? $record->description
+                                    : null;
                         }
-
-                        /*
-                        * Glavni korisnik vidi detalje aktivnosti svoje organizacije.
-                        */
-                        if (
-                            $user->canCreateSubusers()
-                            && (int) $record->owner_id === (int) $user->ownerId()
-                        ) {
-                            return filled($state) ? $state : '-';
-                        }
-
-                        /*
-                        * Podkorisnik vidi detalje samo svojih aktivnosti,
-                        * uključujući e-mail adrese na koje je poslao podsjetnik.
-                        */
-                        if ((int) $record->user_id === (int) $user->id) {
-                            return filled($state) ? $state : '-';
-                        }
-
-                        return '-';
-                    })
-                    ->tooltip(function (ActivityLog $record): ?string {
-                        $user = auth()->user();
-
-                        if (! $user) {
-                            return null;
-                        }
-
-                        $canSeeDetails =
-                            $user->isSuperAdmin()
-                            || (
-                                $user->canCreateSubusers()
-                                && (int) $record->owner_id === (int) $user->ownerId()
-                            )
-                            || (int) $record->user_id === (int) $user->id;
-
-                        return $canSeeDetails && filled($record->description)
-                            ? $record->description
-                            : null;
-                    })
+                    )
                     ->toggleable(),
 
                 TextColumn::make('ip_address')
                     ->label('IP')
                     ->placeholder('-')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(
+                        isToggledHiddenByDefault: true
+                    ),
             ])
             ->filters([
                 SelectFilter::make('module')
                     ->label('Modul')
                     ->placeholder('Svi moduli')
-                    ->options(fn (): array => ActivityLog::query()
-                        ->whereNotNull('module')
-                        ->where('module', '<>', '')
-                        ->distinct()
-                        ->orderBy('module')
-                        ->limit(100)
-                        ->pluck('module', 'module')
-                        ->toArray()),
+                    ->options(
+                        fn (): array =>
+                            static::getEloquentQuery()
+                                ->whereNotNull('module')
+                                ->where(
+                                    'module',
+                                    '<>',
+                                    ''
+                                )
+                                ->distinct()
+                                ->orderBy('module')
+                                ->limit(100)
+                                ->pluck(
+                                    'module',
+                                    'module'
+                                )
+                                ->toArray()
+                    ),
 
                 SelectFilter::make('action')
                     ->label('Radnja')
@@ -285,7 +473,8 @@ class ActivityLogResource extends BaseResource
                         'sent' => 'Poslano',
                         'login' => 'Prijava',
                         'logout' => 'Odjava',
-                        'failed_login' => 'Neuspješna prijava',
+                        'failed_login' =>
+                            'Neuspješna prijava',
                     ]),
             ])
             ->actions([
@@ -294,7 +483,9 @@ class ActivityLogResource extends BaseResource
                     ->requiresConfirmation()
                     ->visible(
                         fn (): bool =>
-                        auth()->user()?->isSuperAdmin() === true
+                            auth()->user()
+                                ?->isSuperAdmin()
+                            === true
                     ),
             ])
             ->bulkActions([
@@ -303,7 +494,9 @@ class ActivityLogResource extends BaseResource
                     ->requiresConfirmation()
                     ->visible(
                         fn (): bool =>
-                        auth()->user()?->isSuperAdmin() === true
+                            auth()->user()
+                                ?->isSuperAdmin()
+                            === true
                     ),
             ]);
     }
@@ -311,7 +504,8 @@ class ActivityLogResource extends BaseResource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListActivityLogs::route('/'),
+            'index' =>
+                Pages\ListActivityLogs::route('/'),
         ];
     }
 }
