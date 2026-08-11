@@ -20,10 +20,33 @@ class EditMedicalReferral extends EditRecord
          */
         $ownerId = (int) $this->record->user_id;
 
+        if ($ownerId <= 0) {
+            abort(403);
+        }
+
         $data['user_id'] = $ownerId;
 
         /*
-         * Odabrani zaposlenik mora pripadati
+         * Verzija obrasca također ostaje vezana
+         * uz postojeću RA-1 uputnicu.
+         *
+         * Stara uputnica ne smije tijekom uređivanja
+         * prijeći na novu verziju obrasca.
+         */
+        $data['form_version'] = $this->record->form_version;
+
+        /*
+         * Kod ručnog unosa zaposlenik nije povezan
+         * s Employee zapisom.
+         *
+         * Time uklanjamo eventualni stari employee_id.
+         */
+        if (! empty($data['manual_entry'])) {
+            $data['employee_id'] = null;
+        }
+
+        /*
+         * Ako je odabran zaposlenik, mora pripadati
          * istoj organizaciji kao RA-1 uputnica.
          */
         if (! empty($data['employee_id'])) {
@@ -41,7 +64,8 @@ class EditMedicalReferral extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\ViewAction::make(),
+            Actions\ViewAction::make()
+                ->label('Pregled'),
 
             Actions\Action::make('export_pdf')
                 ->label('Izvoz u PDF')
@@ -69,7 +93,8 @@ class EditMedicalReferral extends EditRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl('index');
     }
 
     public function getMaxContentWidth(): ?string

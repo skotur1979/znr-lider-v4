@@ -81,7 +81,10 @@ class ImportWasteCatalogFromDocx extends Command
         }
 
         $document = new SimpleXMLElement($xml);
-        $document->registerXPathNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+        $document->registerXPathNamespace(
+            'w',
+            'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+        );
 
         $paragraphs = [];
 

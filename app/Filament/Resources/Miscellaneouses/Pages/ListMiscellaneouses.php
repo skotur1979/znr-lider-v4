@@ -167,35 +167,43 @@ class ListMiscellaneouses extends BaseListRecords
 
                     $import = new MiscellaneousImport();
 
-                    Excel::import(
-                        $import,
-                        $fullPath
-                    );
+                    try {
+                        Excel::import(
+                            $import,
+                            $fullPath
+                        );
 
-                    $total =
-                        $import->created
-                        + $import->updated
-                        + $import->unchanged
-                        + $import->skipped;
+                        $total =
+                            $import->created
+                            + $import->updated
+                            + $import->unchanged
+                            + $import->skipped;
 
-                    Notification::make()
-                        ->title(
-                            'Uvoz ostalih ispitivanja je završen'
-                        )
-                        ->body(
-                            "Ukupno obrađeno: {$total}\n"
-                            . "Novi zapisi: {$import->created}\n"
-                            . "Ažurirani zapisi: {$import->updated}\n"
-                            . "Bez promjene: {$import->unchanged}\n"
-                            . "Preskočeni redovi: {$import->skipped}"
-                        )
-                        ->success()
-                        ->send();
+                        Notification::make()
+                            ->title(
+                                'Uvoz ostalih ispitivanja je završen'
+                            )
+                            ->body(
+                                "Ukupno obrađeno: {$total}\n"
+                                . "Novi zapisi: {$import->created}\n"
+                                . "Ažurirani zapisi: {$import->updated}\n"
+                                . "Bez promjene: {$import->unchanged}\n"
+                                . "Preskočeni redovi: {$import->skipped}"
+                            )
+                            ->success()
+                            ->send();
 
-                    $this->resetTable();
-                }),
-        ];
-    }
+                        $this->resetTable();
+                    } finally {
+                        if (
+                            Storage::disk('local')->exists($path)
+                        ) {
+                            Storage::disk('local')->delete($path);
+                        }
+                    }
+                                    }),
+                            ];
+                        }
 
     protected function getTableQuery(): Builder
     {

@@ -39,6 +39,13 @@ class EditCategory extends EditRecord
             'update'
         );
     }
+    protected function mutateFormDataBeforeSave(
+        array $data
+    ): array {
+        unset($data['user_id']);
+
+        return $data;
+    }
 
     protected function getRedirectUrl(): string
     {

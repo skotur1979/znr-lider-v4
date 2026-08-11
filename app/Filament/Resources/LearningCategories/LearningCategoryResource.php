@@ -130,6 +130,8 @@ class LearningCategoryResource extends BaseResource
                     ->searchable()
                     ->sortable(),
 
+                    static::userTableColumn()
+                    ->toggleable(),
                 TextColumn::make('materials_count')
                     ->label('Materijala')
                     ->counts('materials')

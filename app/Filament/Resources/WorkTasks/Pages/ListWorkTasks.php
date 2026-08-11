@@ -47,16 +47,21 @@ class ListWorkTasks extends ListRecords
                         && ! Auth::user()->isSuperAdmin()
                 ),
 
-            Action::make('exportExcel')
-                ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(function () {
-                    return Excel::download(
-                        new WorkTasksExport(),
-                        'radni-zadaci-' . now()->format('Y-m-d') . '.xlsx'
-                    );
-                }),
+           Action::make('exportExcel')
+            ->label('Izvoz u Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(function () {
+                $taskIds = $this
+                    ->getFilteredSortedTableQuery()
+                    ->pluck('work_tasks.id')
+                    ->toArray();
+
+                return Excel::download(
+                    new WorkTasksExport($taskIds),
+                    'radni-zadaci-' . now()->format('Y-m-d') . '.xlsx'
+                );
+            }),
         ];
     }
 }

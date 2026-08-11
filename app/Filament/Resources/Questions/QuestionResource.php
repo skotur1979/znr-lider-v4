@@ -155,8 +155,7 @@ class QuestionResource extends BaseResource
                     ->searchable()
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('tekst')
                     ->label('Pitanje')

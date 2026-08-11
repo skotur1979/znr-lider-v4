@@ -216,8 +216,7 @@ class KpiResource extends BaseResource
             })
             ->toggleable(),
 
-        static::userTableColumn()
-            ->toggleable(),
+       static::userTableColumn(),
 
     TextColumn::make('category')
         ->label('Kategorija')

@@ -4,7 +4,6 @@ namespace App\Filament\Resources\LegalAcceptances;
 
 use App\Filament\Resources\LegalAcceptances\Pages\ListLegalAcceptances;
 use App\Filament\Resources\LegalAcceptances\Pages\ViewLegalAcceptance;
-use App\Filament\Resources\LegalAcceptances\Schemas\LegalAcceptanceForm;
 use App\Filament\Resources\LegalAcceptances\Schemas\LegalAcceptanceInfolist;
 use App\Filament\Resources\LegalAcceptances\Tables\LegalAcceptancesTable;
 use App\Models\LegalAcceptance;
@@ -111,10 +110,6 @@ class LegalAcceptanceResource extends Resource
             ->latest('accepted_at');
     }
 
-    public static function form(Schema $schema): Schema
-    {
-        return LegalAcceptanceForm::configure($schema);
-    }
 
     public static function infolist(Schema $schema): Schema
     {

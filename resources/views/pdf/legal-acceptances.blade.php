@@ -97,17 +97,40 @@
                             $documents = $record->accepted_documents;
 
                             if (is_string($documents)) {
-                                $decoded = json_decode($documents, true);
-                                $documents = is_array($decoded) ? $decoded : [];
+                                $decoded = json_decode(
+                                    $documents,
+                                    true
+                                );
+
+                                $documents =
+                                    is_array($decoded)
+                                        ? $decoded
+                                        : [];
                             }
 
-                            $documents = is_array($documents) ? $documents : [];
+                            $documents =
+                                is_array($documents)
+                                    ? collect($documents)
+                                        ->flatten()
+                                        ->filter(
+                                            fn ($value) =>
+                                                is_scalar($value)
+                                                && filled($value)
+                                        )
+                                        ->map(
+                                            fn ($value) =>
+                                                trim((string) $value)
+                                        )
+                                        ->unique()
+                                        ->values()
+                                        ->all()
+                                    : [];
                         @endphp
 
-                        @if(!empty($documents))
+                        @if (! empty($documents))
                             <br>
                             Paket dokumenata:
-                            {{ implode(', ', array_values($documents)) }}
+                            {{ implode(', ', $documents) }}
                         @endif
                     </td>
                 </tr>

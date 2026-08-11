@@ -81,15 +81,39 @@ class ListPPEEquipment extends ListRecords
 
                     $import = new PPEEquipmentImport();
 
-                    Excel::import($import, Storage::disk('local')->path($path));
+                    try {
+                        Excel::import(
+                            $import,
+                            Storage::disk('local')->path($path)
+                        );
 
-                    Notification::make()
-                        ->title('Import uspješno završen')
-                        ->body("Dodano: {$import->created}, ažurirano: {$import->updated}, preskočeno: {$import->skipped}.")
-                        ->success()
-                        ->send();
+                        $total =
+                            $import->created
+                            + $import->updated
+                            + $import->unchanged
+                            + $import->skipped;
 
-                    $this->resetTable();
+                        Notification::make()
+                            ->title('Uvoz Registra OZO je završen')
+                            ->body(
+                                "Ukupno obrađeno: {$total}\n"
+                                . "Novi zapisi: {$import->created}\n"
+                                . "Ažurirani zapisi: {$import->updated}\n"
+                                . "Bez promjene: {$import->unchanged}\n"
+                                . "Preskočeni redovi: {$import->skipped}"
+                            )
+                            ->success()
+                            ->send();
+
+                        $this->resetTable();
+                    } finally {
+                        if (
+                            filled($path)
+                            && Storage::disk('local')->exists($path)
+                        ) {
+                            Storage::disk('local')->delete($path);
+                        }
+                    }
                 }),
         ];
     }

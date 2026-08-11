@@ -8,6 +8,7 @@ use App\Models\LearningCategory;
 use App\Models\LearningMaterial;
 use App\Services\StorageQuotaService;
 use Filament\Actions\Action;
+use App\Support\SecureFilePreview;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -441,6 +442,8 @@ class LearningMaterialResource extends BaseResource
                                 : null
                     ),
 
+                    static::userTableColumn()
+                    ->toggleable(),
                 TextColumn::make('category.name')
                     ->label('Kategorija')
                     ->badge()
@@ -885,13 +888,12 @@ class LearningMaterialResource extends BaseResource
     }
 
     protected static function firstFileUrl(
-        LearningMaterial $record
+    LearningMaterial $record
     ): ?string {
         if (! blank($record->file_path)) {
-            return Storage::disk('public')
-                ->url(
-                    $record->file_path
-                );
+            return SecureFilePreview::url(
+                $record->file_path
+            );
         }
 
         $first = collect(
@@ -901,8 +903,7 @@ class LearningMaterialResource extends BaseResource
             ->first();
 
         return $first
-            ? Storage::disk('public')
-                ->url($first)
+            ? SecureFilePreview::url($first)
             : null;
     }
 

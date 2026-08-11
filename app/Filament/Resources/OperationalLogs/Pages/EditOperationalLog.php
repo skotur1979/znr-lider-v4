@@ -73,13 +73,32 @@ class EditOperationalLog extends EditRecord
     }
 
     protected function mutateFormDataBeforeSave(
-        array $data
+    array $data
     ): array {
         /*
-         * Vlasnik osobnog dnevnika nikada se
-         * ne može promijeniti kroz uređivanje.
-         */
+        * Vlasnik osobnog dnevnika nikada se
+        * ne može promijeniti kroz uređivanje.
+        */
         $data['user_id'] = $this->record->user_id;
+
+        /*
+        * task_id ne smijemo vjerovati izravno
+        * Livewire formi.
+        *
+        * Pri uređivanju prihvaćamo samo task_id
+        * koji je već bio spremljen u ovom dnevniku.
+        */
+        $existingTaskIds = collect(
+            $this->record->items ?? []
+        )
+            ->pluck('task_id')
+            ->filter()
+            ->map(
+                fn ($id): int =>
+                    (int) $id
+            )
+            ->unique()
+            ->values();
 
         $data['items'] = collect(
             $data['items'] ?? []
@@ -89,7 +108,32 @@ class EditOperationalLog extends EditRecord
                     filled($item['note'] ?? null)
             )
             ->map(
-                function (array $item): array {
+                function (array $item) use (
+                    $existingTaskIds
+                ): array {
+                    $taskId =
+                        isset($item['task_id'])
+                        && $existingTaskIds->contains(
+                            (int) $item['task_id']
+                        )
+                            ? (int) $item['task_id']
+                            : null;
+
+                    /*
+                    * Ako je iz bilješke već nastao
+                    * WorkTask, ta poveznica ostaje.
+                    *
+                    * Ne dopuštamo da se kasnijim
+                    * uklanjanjem kvačice izgubi podatak
+                    * da je zadatak već kreiran.
+                    */
+                    $createTask =
+                        $taskId !== null
+                        || (bool) (
+                            $item['create_task']
+                            ?? false
+                        );
+
                     return [
                         'note' => trim(
                             (string) (
@@ -98,14 +142,9 @@ class EditOperationalLog extends EditRecord
                             )
                         ),
 
-                        'create_task' => (bool) (
-                            $item['create_task']
-                            ?? false
-                        ),
+                        'create_task' => $createTask,
 
-                        'task_id' =>
-                            $item['task_id']
-                            ?? null,
+                        'task_id' => $taskId,
                     ];
                 }
             )

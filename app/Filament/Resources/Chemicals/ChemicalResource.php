@@ -90,8 +90,7 @@ class ChemicalResource extends BaseResource
                     )
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('cas_number')
                     ->label('CAS')

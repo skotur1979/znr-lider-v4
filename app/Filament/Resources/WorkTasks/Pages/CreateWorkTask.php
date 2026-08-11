@@ -17,13 +17,25 @@ class CreateWorkTask extends CreateRecord
         abort_unless($user, 403);
 
         /*
-         * Radni zadatak pripada organizaciji.
-         * Glavni korisnik i podkorisnici zato uvijek
-         * spremaju ownerId().
-         */
+        * Radni zadatak je poslovni zapis organizacije.
+        *
+        * Superadmin može pregledavati zadatke organizacija,
+        * ali ih ne kreira u njihovo ime.
+        */
         abort_if($user->isSuperAdmin(), 403);
 
-        $data['user_id'] = $user->ownerId();
+        $ownerId = $user->ownerId();
+
+        abort_unless($ownerId, 403);
+
+        /*
+        * Ownership uvijek određujemo serverski.
+        */
+        $data['user_id'] = $ownerId;
+
+        /*
+        * Novi zadatak uvijek počinje kao otvoren.
+        */
         $data['is_done'] = false;
         $data['completed_at'] = null;
 

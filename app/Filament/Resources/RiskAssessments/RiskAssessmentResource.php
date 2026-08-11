@@ -439,7 +439,7 @@ class RiskAssessmentResource extends BaseResource
                                         }
 
                                         $url = SecureFilePreview::url(
-                                            $file
+                                            $attachment->file_path
                                         );
 
                                         $name = e(

@@ -6,8 +6,8 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Categories\CategoryResource;
 use App\Filament\Resources\Miscellaneouses\Pages;
 use App\Models\Category;
-use App\Support\SecureFilePreview;
 use App\Models\Miscellaneous;
+use App\Support\SecureFilePreview;
 use App\Services\StorageQuotaService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -82,6 +82,28 @@ class MiscellaneousResource extends BaseResource
         return MaxWidth::Full;
     }
 
+    protected static function formOwnerId(
+        ?Miscellaneous $record = null
+    ): ?int {
+        $user = Auth::user();
+
+        if (! $user) {
+            return null;
+        }
+
+        /*
+         * Kod superadmin uređivanja koristimo ownera
+         * postojećeg poslovnog zapisa.
+         */
+        if ($user->isSuperAdmin()) {
+            return filled($record?->user_id)
+                ? (int) $record->user_id
+                : null;
+        }
+
+        return (int) $user->ownerId();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -116,18 +138,46 @@ class MiscellaneousResource extends BaseResource
                                     ->searchable()
                                     ->preload()
                                     ->options(
-                                        fn () =>
-                                            static::getCategoryOptions()
+                                        fn ($record): array =>
+                                            static::getCategoryOptions(
+                                                $record
+                                            )
                                     )
                                     ->getSearchResultsUsing(
-                                        fn (string $search) =>
+                                        fn (
+                                            string $search,
+                                            $record
+                                        ): array =>
                                             static::getCategorySearchResults(
-                                                $search
+                                                $search,
+                                                $record
                                             )
                                     )
                                     ->getOptionLabelUsing(
-                                        fn ($value) =>
-                                            Category::find($value)?->name
+                                        function (
+                                            $value,
+                                            $record
+                                        ): ?string {
+                                            $ownerId =
+                                                static::formOwnerId(
+                                                    $record
+                                                );
+
+                                            if (
+                                                ! $value
+                                                || ! $ownerId
+                                            ) {
+                                                return null;
+                                            }
+
+                                            return Category::query()
+                                                ->whereKey($value)
+                                                ->where(
+                                                    'user_id',
+                                                    $ownerId
+                                                )
+                                                ->value('name');
+                                        }
                                     )
                                     ->createOptionForm([
                                         TextInput::make('name')
@@ -200,30 +250,26 @@ class MiscellaneousResource extends BaseResource
                                     ->maxLength(255)
                                     ->nullable()
                                     ->rule(
-                                        function ($record) {
-                                            $ownerId =
-                                                Auth::user()?->ownerId();
+                                    function ($record) {
+                                        $ownerId =
+                                            static::formOwnerId($record);
 
-                                            return Rule::unique(
-                                                'miscellaneouses',
-                                                'report_number'
+                                        return Rule::unique(
+                                            'miscellaneouses',
+                                            'report_number'
+                                        )
+                                            ->where(
+                                                function ($query) use ($ownerId) {
+                                                    $query
+                                                        ->where(
+                                                            'user_id',
+                                                            $ownerId
+                                                        )
+                                                        ->whereNull(
+                                                            'deleted_at'
+                                                        );
+                                                }
                                             )
-                                                ->where(
-                                                    function (
-                                                        $query
-                                                    ) use (
-                                                        $ownerId
-                                                    ) {
-                                                        $query
-                                                            ->where(
-                                                                'user_id',
-                                                                $ownerId
-                                                            )
-                                                            ->whereNull(
-                                                                'deleted_at'
-                                                            );
-                                                    }
-                                                )
                                                 ->ignore(
                                                     $record?->id
                                                 );
@@ -306,62 +352,54 @@ class MiscellaneousResource extends BaseResource
                                             ->downloadable()
 
                                             ->helperText(
-                                                function () {
-                                                    $ownerId =
-                                                        auth()
-                                                            ->user()
-                                                            ?->ownerId();
+                                            function ($record) {
+                                                $ownerId =
+                                                    static::formOwnerId($record);
 
-                                                    if (
-                                                        ! $ownerId
-                                                    ) {
-                                                        return null;
-                                                    }
+                                                if (! $ownerId) {
+                                                    return null;
+                                                }
 
-                                                    return
-                                                        'Iskorištenost prostora organizacije: '
-                                                        . app(
-                                                            StorageQuotaService::class
-                                                        )->usageText(
-                                                            $ownerId
+                                                return
+                                                    'Iskorištenost prostora organizacije: '
+                                                    . app(
+                                                        StorageQuotaService::class
+                                                    )->usageText(
+                                                        $ownerId
                                                         );
                                                 }
                                             )
 
-                                            ->rules([
-                                                function () {
-                                                    return function (
-                                                        string $attribute,
-                                                        mixed $value,
-                                                        \Closure $fail
+                                           ->rules([
+                                            function ($record) {
+                                                return function (
+                                                    string $attribute,
+                                                    mixed $value,
+                                                    \Closure $fail
+                                                ) use ($record) {
+                                                    $ownerId =
+                                                        static::formOwnerId($record);
+
+                                                    if (! $ownerId) {
+                                                        return;
+                                                    }
+
+                                                    if (
+                                                        ! app(
+                                                            StorageQuotaService::class
+                                                        )->canUpload(
+                                                            $value,
+                                                            $ownerId
+                                                        )
                                                     ) {
-                                                        $ownerId =
-                                                            auth()
-                                                                ->user()
-                                                                ?->ownerId();
-
-                                                        if (
-                                                            ! $ownerId
-                                                        ) {
-                                                            return;
-                                                        }
-
-                                                        if (
-                                                            ! app(
-                                                                StorageQuotaService::class
-                                                            )->canUpload(
-                                                                $value,
-                                                                $ownerId
-                                                            )
-                                                        ) {
-                                                            $fail(
-                                                                'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
-                                                                . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
-                                                            );
-                                                        }
-                                                    };
-                                                },
-                                            ])
+                                                        $fail(
+                                                            'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                                            . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                                        );
+                                                    }
+                                                };
+                                            },
+                                        ])
 
                                             ->acceptedFileTypes([
                                                 'application/pdf',
@@ -405,8 +443,7 @@ class MiscellaneousResource extends BaseResource
                  * Standardni prikaz korisnika iz
                  * BaseResource / HasUserTableColumn.
                  */
-                static::userTableColumn()
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('category.name')
                     ->label('Kategorija')
@@ -629,8 +666,8 @@ class MiscellaneousResource extends BaseResource
                 )
                     ->label('Kategorije')
                     ->options(
-                        fn () =>
-                            static::getCategoryOptions()
+                        fn (): array =>
+                            static::getCategoryFilterOptions()
                     )
                     ->searchable(),
 
@@ -898,65 +935,84 @@ class MiscellaneousResource extends BaseResource
     }
 
     /**
-     * Kategorije koje pripadaju istoj organizaciji.
+     * Kategorije dostupne u formi.
      *
-     * Superadmin vidi sve kategorije.
+     * Organizacijski korisnik vidi kategorije svoje organizacije.
+     * Superadmin kod uređivanja vidi samo kategorije ownera
+     * postojećeg zapisa.
      */
-    private static function getCategoryOptions(): array
-    {
-        $query = Category::query();
+    private static function getCategoryOptions(
+        ?Miscellaneous $record = null
+    ): array {
+        $ownerId = static::formOwnerId($record);
 
-        if (! Auth::user()?->isSuperAdmin()) {
-            $ownerId =
-                Auth::user()?->ownerId();
-
-            if (! $ownerId) {
-                return [];
-            }
-
-            $query->where(
-                'user_id',
-                $ownerId
-            );
+        if (! $ownerId) {
+            return [];
         }
 
-        return $query
+        return Category::query()
+            ->where('user_id', $ownerId)
             ->orderBy('name')
             ->pluck('name', 'id')
             ->toArray();
     }
 
     /**
-     * Pretraga kategorija ograničena na
-     * organizaciju trenutnog korisnika.
+     * Pretraga kategorija u formi ograničena je
+     * na ownera organizacije zapisa.
      */
     private static function getCategorySearchResults(
-        string $search
+        string $search,
+        ?Miscellaneous $record = null
     ): array {
-        $query = Category::query()
+        $ownerId = static::formOwnerId($record);
+
+        if (! $ownerId) {
+            return [];
+        }
+
+        return Category::query()
+            ->where('user_id', $ownerId)
             ->where(
                 'name',
                 'like',
                 "%{$search}%"
             )
             ->orderBy('name')
-            ->limit(50);
+            ->limit(50)
+            ->pluck('name', 'id')
+            ->toArray();
+    }
 
-        if (! Auth::user()?->isSuperAdmin()) {
-            $ownerId =
-                Auth::user()?->ownerId();
+    /**
+     * Opcije filtera tablice.
+     *
+     * Superadmin na listi smije vidjeti sve kategorije jer
+     * istodobno vidi zapise svih organizacija.
+     * Organizacijski korisnik vidi samo svoje kategorije.
+     */
+    private static function getCategoryFilterOptions(): array
+    {
+        $user = Auth::user();
 
-            if (! $ownerId) {
+        if (! $user) {
+            return [];
+        }
+
+        $query = Category::query();
+
+        if (! $user->isSuperAdmin()) {
+            $ownerId = (int) $user->ownerId();
+
+            if ($ownerId <= 0) {
                 return [];
             }
 
-            $query->where(
-                'user_id',
-                $ownerId
-            );
+            $query->where('user_id', $ownerId);
         }
 
         return $query
+            ->orderBy('name')
             ->pluck('name', 'id')
             ->toArray();
     }

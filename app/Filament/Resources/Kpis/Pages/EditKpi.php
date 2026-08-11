@@ -27,15 +27,10 @@ class EditKpi extends EditRecord
         }
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
-        /*
-         * Ownership KPI-ja nikada se ne mijenja Editom.
-         *
-         * Globalni KPI ostaje NULL.
-         * Organizacijski KPI ostaje na svojoj organizaciji.
-         */
-        $data['user_id'] = $this->record->user_id;
+    protected function mutateFormDataBeforeSave(
+    array $data
+    ): array {
+        unset($data['user_id']);
 
         return $data;
     }

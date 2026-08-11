@@ -26,6 +26,17 @@ class GenerateKpiValues extends Command
         try {
             $month = (int) ($this->argument('month') ?: now()->month);
             $year = (int) ($this->argument('year') ?: now()->year);
+            if ($month < 1 || $month > 12) {
+                throw new \InvalidArgumentException(
+                    'Mjesec mora biti između 1 i 12.'
+                );
+            }
+
+            if ($year < 2000 || $year > 2100) {
+                throw new \InvalidArgumentException(
+                    'Godina mora biti između 2000 i 2100.'
+                );
+            }
 
             $totals = [
                 'organizations' => 0,

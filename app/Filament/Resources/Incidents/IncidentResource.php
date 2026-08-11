@@ -748,9 +748,7 @@ class IncidentResource extends BaseResource
                     ->wrap()
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
-
+                static::userTableColumn(),
                 TextColumn::make(
                     'type_of_incident'
                 )

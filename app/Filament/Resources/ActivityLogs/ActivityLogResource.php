@@ -6,8 +6,6 @@ use App\Filament\Resources\ActivityLogs\Pages;
 use App\Filament\Resources\BaseResource;
 use App\Models\ActivityLog;
 use BackedEnum;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -91,19 +89,22 @@ class ActivityLogResource extends BaseResource
      * Samo superadmin smije pojedinačno brisati
      * zapise aktivnosti.
      */
+    /**
+     * Activity log je audit zapis i ne briše se
+     * ručno kroz administraciju.
+     */
     public static function canDelete($record): bool
     {
-        return auth()->user()?->isSuperAdmin() === true;
+        return false;
     }
 
     /**
-     * Dodatna zaštita bulk brisanja.
+     * Bulk brisanje audit zapisa također nije dopušteno.
      */
     public static function canDeleteAny(): bool
     {
-        return auth()->user()?->isSuperAdmin() === true;
+        return false;
     }
-
     /**
      * POSEBNA MULTI-TENANT LOGIKA ACTIVITY LOGA.
      *
@@ -477,28 +478,8 @@ class ActivityLogResource extends BaseResource
                             'Neuspješna prijava',
                     ]),
             ])
-            ->actions([
-                DeleteAction::make()
-                    ->label('Izbriši')
-                    ->requiresConfirmation()
-                    ->visible(
-                        fn (): bool =>
-                            auth()->user()
-                                ?->isSuperAdmin()
-                            === true
-                    ),
-            ])
-            ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Izbriši označeno')
-                    ->requiresConfirmation()
-                    ->visible(
-                        fn (): bool =>
-                            auth()->user()
-                                ?->isSuperAdmin()
-                            === true
-                    ),
-            ]);
+            ->actions([])
+            ->bulkActions([]);
     }
 
     public static function getPages(): array

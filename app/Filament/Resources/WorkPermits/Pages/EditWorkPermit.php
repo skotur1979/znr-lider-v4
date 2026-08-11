@@ -14,10 +14,10 @@ class EditWorkPermit extends EditRecord
     protected function mutateFormDataBeforeSave(array $data): array
     {
         /*
-         * Ownership postojećeg zapisa ne smije se
-         * mijenjati prilikom uređivanja.
-         */
-        unset($data['user_id']);
+        * Ownership postojećeg zapisa ne smije se
+        * mijenjati prilikom uređivanja.
+        */
+        $data['user_id'] = $this->record->user_id;
 
         return $data;
     }

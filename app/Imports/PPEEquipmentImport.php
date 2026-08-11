@@ -21,47 +21,29 @@ class PPEEquipmentImport implements ToCollection
 
         if (! $user) {
             $this->skipped++;
-
-            ActivityLogger::import(
-                module: 'Registar OZO',
-                created: $this->created,
-                updated: $this->updated,
-                unchanged: $this->unchanged,
-                skipped: $this->skipped,
-            );
+            $this->logImport();
 
             return;
         }
 
         /*
-         * Registar OZO koristi posebnu logiku:
+         * Registar OZO:
          *
          * Superadmin:
          * user_id = NULL
-         * => globalni OZO zapis koji vide sve organizacije.
+         * => globalni zapis.
          *
-         * Glavni korisnik / podkorisnik:
+         * Organizacijski korisnik:
          * user_id = ownerId()
-         * => zapis pripada cijeloj organizaciji.
+         * => zapis cijele organizacije.
          */
         $ownerId = $user->isSuperAdmin()
             ? null
             : $user->ownerId();
 
-        /*
-         * Organizacijski korisnik bez ownerId-a
-         * ne smije napraviti import.
-         */
         if (! $user->isSuperAdmin() && ! $ownerId) {
             $this->skipped++;
-
-            ActivityLogger::import(
-                module: 'Registar OZO',
-                created: $this->created,
-                updated: $this->updated,
-                unchanged: $this->unchanged,
-                skipped: $this->skipped,
-            );
+            $this->logImport();
 
             return;
         }
@@ -70,14 +52,7 @@ class PPEEquipmentImport implements ToCollection
 
         if (! $header) {
             $this->skipped++;
-
-            ActivityLogger::import(
-                module: 'Registar OZO',
-                created: $this->created,
-                updated: $this->updated,
-                unchanged: $this->unchanged,
-                skipped: $this->skipped,
-            );
+            $this->logImport();
 
             return;
         }
@@ -93,8 +68,16 @@ class PPEEquipmentImport implements ToCollection
         }
 
         foreach ($rows->skip(1) as $row) {
-            $name = trim(
-                (string) $this->value(
+            /*
+             * Prazan red ignoriramo i ne brojimo
+             * ga kao preskočeni zapis.
+             */
+            if ($this->isEmptyRow($row)) {
+                continue;
+            }
+
+            $name = $this->clean(
+                $this->value(
                     $row,
                     $map,
                     [
@@ -105,14 +88,17 @@ class PPEEquipmentImport implements ToCollection
                 )
             );
 
-            if ($name === '') {
+            /*
+             * Naziv je obavezan kao i kod ručnog unosa.
+             */
+            if (! $name) {
                 $this->skipped++;
 
                 continue;
             }
 
-            $standard = trim(
-                (string) $this->value(
+            $standard = $this->clean(
+                $this->value(
                     $row,
                     $map,
                     [
@@ -124,7 +110,7 @@ class PPEEquipmentImport implements ToCollection
                 )
             );
 
-            $duration = $this->value(
+            $durationRaw = $this->value(
                 $row,
                 $map,
                 [
@@ -136,36 +122,61 @@ class PPEEquipmentImport implements ToCollection
             );
 
             /*
-             * Tražimo zapis samo unutar istog scopea.
+             * Rok uporabe nije obavezan.
              *
-             * Globalni import:
-             * user_id IS NULL
-             *
-             * Organizacijski import:
-             * user_id = ownerId()
+             * Ako je upisan, mora odgovarati
+             * pravilima ručnog unosa:
+             * 0 - 240 mjeseci.
              */
-            $record = PPEEquipment::query()
-                ->where('user_id', $ownerId)
-                ->where('name', $name)
-                ->first();
+            $duration = null;
 
-            $data = [
-                'standard' => $standard !== ''
-                    ? $standard
-                    : null,
+            if (
+                $durationRaw !== null
+                && trim((string) $durationRaw) !== ''
+            ) {
+                if (! is_numeric($durationRaw)) {
+                    $this->skipped++;
 
-                'duration_months' => is_numeric($duration)
-                    ? (int) $duration
-                    : null,
+                    continue;
+                }
 
-                'is_active' => true,
-            ];
+                $duration = (int) $durationRaw;
 
+                if ($duration < 0 || $duration > 240) {
+                    $this->skipped++;
+
+                    continue;
+                }
+            }
+
+            /*
+             * Zapis tražimo isključivo
+             * unutar odgovarajućeg scopea.
+             */
+            $recordQuery = PPEEquipment::query()
+                ->where('name', $name);
+
+            if ($ownerId === null) {
+                $recordQuery->whereNull('user_id');
+            } else {
+                $recordQuery->where(
+                    'user_id',
+                    $ownerId
+                );
+            }
+
+            $record = $recordQuery->first();
+
+            /*
+             * Novi zapis.
+             */
             if (! $record) {
                 PPEEquipment::create([
                     'user_id' => $ownerId,
                     'name' => $name,
-                    ...$data,
+                    'standard' => $standard,
+                    'duration_months' => $duration,
+                    'is_active' => true,
                 ]);
 
                 $this->created++;
@@ -173,37 +184,40 @@ class PPEEquipmentImport implements ToCollection
                 continue;
             }
 
+            /*
+             * Postojeći zapis.
+             *
+             * Prazna vrijednost u Excelu ne briše
+             * postojeću vrijednost iz baze.
+             */
             $changed = [];
 
-            foreach ($data as $field => $value) {
-                $current = $record->{$field};
-
-                /*
-                 * Boolean vrijednosti normaliziramo
-                 * prije usporedbe.
-                 */
-                if ($field === 'is_active') {
-                    $current = (bool) $current;
-                    $value = (bool) $value;
-                }
-
-                /*
-                 * Integer vrijednosti također normaliziramo.
-                 */
-                if ($field === 'duration_months') {
-                    $current = $current !== null
-                        ? (int) $current
-                        : null;
-
-                    $value = $value !== null
-                        ? (int) $value
-                        : null;
-                }
-
-                if ($current !== $value) {
-                    $changed[$field] = $value;
-                }
+            if (
+                $standard !== null
+                && (string) ($record->standard ?? '')
+                    !== (string) $standard
+            ) {
+                $changed['standard'] = $standard;
             }
+
+            if (
+                $duration !== null
+                && (
+                    $record->duration_months === null
+                    || (int) $record->duration_months
+                        !== $duration
+                )
+            ) {
+                $changed['duration_months'] =
+                    $duration;
+            }
+
+            /*
+             * is_active se namjerno ne mijenja importom.
+             *
+             * Ako je OZO ručno deaktiviran,
+             * import ga neće ponovno aktivirati.
+             */
 
             if (empty($changed)) {
                 $this->unchanged++;
@@ -216,6 +230,11 @@ class PPEEquipmentImport implements ToCollection
             $this->updated++;
         }
 
+        $this->logImport();
+    }
+
+    protected function logImport(): void
+    {
         ActivityLogger::import(
             module: 'Registar OZO',
             created: $this->created,
@@ -240,8 +259,35 @@ class PPEEquipmentImport implements ToCollection
         return null;
     }
 
-    protected function normalize($value): string
-    {
+    protected function clean(
+        mixed $value
+    ): ?string {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === ''
+            ? null
+            : $value;
+    }
+
+    protected function isEmptyRow(
+        $row
+    ): bool {
+        foreach ($row as $value) {
+            if ($this->clean($value) !== null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected function normalize(
+        $value
+    ): string {
         return Str::of((string) $value)
             ->lower()
             ->ascii()

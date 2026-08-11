@@ -73,15 +73,13 @@ class EditEmployee extends EditRecord
     }
 
     protected function mutateFormDataBeforeSave(
-        array $data
+    array $data
     ): array {
         /*
-         * Podkorisnik i glavni korisnik ne smiju
-         * promijeniti vlasnika postojećeg zapisa.
-         */
-        if (! auth()->user()?->isSuperAdmin()) {
-            unset($data['user_id']);
-        }
+        * Ownership zaposlenika nikada se ne mijenja
+        * kroz edit formu, uključujući superadmina.
+        */
+        unset($data['user_id']);
 
         return $data;
     }

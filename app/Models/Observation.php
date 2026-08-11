@@ -34,6 +34,7 @@ class Observation extends Model
         'status',
         'comments',
         'voice_note',
+        'completed_at',
     ];
 
     protected $casts = [
@@ -49,18 +50,11 @@ class Observation extends Model
         return $this->belongsTo(User::class);
     }
     protected static function booted(): void
-{
-    static::saving(function (Observation $observation): void {
-        if (
-            $observation->status === 'Complete'
-            && blank($observation->completed_at)
-        ) {
-            $observation->completed_at = now();
-        }
-
+    {
+        static::saving(function (Observation $observation): void {
         if ($observation->status !== 'Complete') {
             $observation->completed_at = null;
         }
     });
-}
+    }
 }

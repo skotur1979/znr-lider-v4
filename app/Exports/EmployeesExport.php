@@ -39,8 +39,7 @@ class EmployeesExport extends DefaultValueBinder implements
         $user = auth()->user();
 
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+            (bool) $user?->isSuperAdmin();
 
         $query =
             EmployeeResource::getEloquentQuery()

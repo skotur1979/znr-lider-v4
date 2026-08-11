@@ -24,8 +24,7 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
         $user = auth()->user();
 
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+            (bool) $user?->isSuperAdmin();
 
         $this->kpis = KpiResource::getEloquentQuery()
             ->with('user')
@@ -215,22 +214,33 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
         ];
     }
 
-    private function latestVisibleValue(Kpi $kpi, ?int $ownerId): ?float
-    {
-        $query = KpiValue::query()
-            ->where('kpi_id', $kpi->id)
-            ->orderByDesc('year')
-            ->orderByDesc('month');
-
-        if (! auth()->user()?->isSuperAdmin()) {
-            if (! $ownerId) {
-                return null;
-            }
-
-            $query->where('user_id', $ownerId);
+    private function latestVisibleValue(
+        Kpi $kpi,
+        ?int $ownerId
+    ): ?float {
+        /*
+        * Superadmin nema vlastite organizacijske
+        * KPI vrijednosti.
+        *
+        * Zato kod administrativnog izvoza KPI
+        * definicija ne prikazujemo vrijednost neke
+        * proizvoljne organizacije.
+        */
+        if (auth()->user()?->isSuperAdmin()) {
+            return null;
         }
 
-        return $query->first()?->value;
+        if (! $ownerId) {
+            return null;
+        }
+
+        return KpiValue::query()
+            ->where('kpi_id', $kpi->id)
+            ->where('user_id', $ownerId)
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->first()
+            ?->value;
     }
 
     private function directionLabel(?string $value): string

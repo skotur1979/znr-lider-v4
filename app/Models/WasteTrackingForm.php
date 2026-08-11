@@ -128,17 +128,23 @@ class WasteTrackingForm extends Model
 
     protected static function booted(): void
     {
-        static::creating(function (self $record) {
+        static::creating(function (self $record): void {
             if (blank($record->user_id)) {
-                $record->user_id = Auth::id();
+                $user = Auth::user();
+
+                if ($user && ! $user->isSuperAdmin()) {
+                    $record->user_id = $user->ownerId();
+                }
             }
 
             if (blank($record->status)) {
                 $record->status = 'draft';
             }
+
             if (blank($record->form_version)) {
-            $record->form_version = FormVersionService::currentPlo();
-        }
+                $record->form_version =
+                    FormVersionService::currentPlo();
+            }
         });
     }
 
@@ -154,7 +160,10 @@ class WasteTrackingForm extends Model
 
     public function outputEntry(): HasOne
     {
-        return $this->hasOne(OntoEntry::class, 'waste_tracking_form_id');
+        return $this->hasOne(
+            OntoEntry::class,
+            'waste_tracking_form_id'
+        )->where('entry_type', 'output');
     }
 
     public function isLocked(): bool

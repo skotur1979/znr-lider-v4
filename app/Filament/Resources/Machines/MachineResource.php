@@ -776,6 +776,17 @@ class MachineResource extends BaseResource
                             /** @var Machine $record */
                             $record =
                                 $records->first();
+                                if ($record->trashed()) {
+                            Notification::make()
+                                ->title('Zapis je deaktiviran')
+                                ->body(
+                                    'Deaktiviranu radnu opremu nije moguće kopirati. Prvo vratite zapis.'
+                                )
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
 
                             $newRecord =
                                 $record->replicate([

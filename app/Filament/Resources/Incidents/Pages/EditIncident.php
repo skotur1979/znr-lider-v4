@@ -10,9 +10,10 @@ class EditIncident extends EditRecord
 {
     protected static string $resource = IncidentResource::class;
 
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
-        $data['user_id'] = $this->record->user_id;
+    protected function mutateFormDataBeforeSave(
+    array $data
+    ): array {
+        unset($data['user_id']);
 
         return $data;
     }

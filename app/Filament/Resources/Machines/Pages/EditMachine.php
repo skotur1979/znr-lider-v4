@@ -144,7 +144,7 @@ class EditMachine extends EditRecord
         Notification::make()
             ->title('OCR analiza završena')
             ->body(
-                'Prikazana su samo polja koja su nova, različita ili neprepoznata.'
+                'Prikazana su samo polja koja su nova ili različita od postojećih.'
             )
             ->success()
             ->send();

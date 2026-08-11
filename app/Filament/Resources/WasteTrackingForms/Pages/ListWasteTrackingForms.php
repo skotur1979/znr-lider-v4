@@ -41,8 +41,13 @@ class ListWasteTrackingForms extends ListRecords
                         return null;
                     }
 
+                    $ids = $this
+                        ->getFilteredSortedTableQuery()
+                        ->pluck('waste_tracking_forms.id')
+                        ->toArray();
+
                     return Excel::download(
-                        new WasteTrackingFormsExport(),
+                        new WasteTrackingFormsExport($ids),
                         'prateci-listovi-'
                             . now()->format('Y-m-d')
                             . '.xlsx'

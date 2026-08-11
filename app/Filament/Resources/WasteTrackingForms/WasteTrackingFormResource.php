@@ -142,6 +142,13 @@ class WasteTrackingFormResource extends BaseResource
     public static function canEdit(
         Model $record
     ): bool {
+        if (
+            $record instanceof WasteTrackingForm
+            && $record->isLocked()
+        ) {
+            return false;
+        }
+
         return parent::canEdit($record)
             && static::canManageRecord($record);
     }

@@ -225,9 +225,10 @@ class ListEmployees extends BaseListRecords
                                 $path
                             );
 
-                        $import =
-                            new EmployeesImport();
+                       $import =
+                        new EmployeesImport();
 
+                    try {
                         Excel::import(
                             $import,
                             $fullPath
@@ -257,6 +258,13 @@ class ListEmployees extends BaseListRecords
                             ->send();
 
                         $this->resetTable();
+                    } finally {
+                        if (
+                            Storage::disk('local')->exists($path)
+                        ) {
+                            Storage::disk('local')->delete($path);
+                        }
+                    }
                     }
                 ),
         ];

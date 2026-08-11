@@ -67,6 +67,37 @@ class FireResource extends BaseResource
         return 'fires';
     }
 
+    /**
+     * Vlasnik organizacije za trenutačni Fire zapis.
+     *
+     * Organizacijski korisnik:
+     * ownerId()
+     *
+     * Superadmin kod uređivanja:
+     * user_id postojećeg vatrogasnog aparata.
+     */
+    protected static function formOwnerId(
+        ?Fire $record = null
+    ): ?int {
+        $user = auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return filled($record?->user_id)
+                ? (int) $record->user_id
+                : null;
+        }
+
+        $ownerId = static::ownerId();
+
+        return $ownerId
+            ? (int) $ownerId
+            : null;
+    }
+
     public static function getMaxContentWidth(): MaxWidth|string|null
     {
         return MaxWidth::Full;
@@ -108,19 +139,22 @@ class FireResource extends BaseResource
                                                 'factory_number_year_of_production'
                                             )
                                                 ->where(
-                                                    function ($query) {
+                                                    function ($query) use (
+                                                        $record
+                                                    ) {
                                                         $ownerId =
-                                                            static::ownerId();
+                                                            static::formOwnerId(
+                                                                $record
+                                                            );
 
                                                         /*
-                                                         * Standardni poslovni
-                                                         * zapis mora pripadati
-                                                         * organizaciji.
+                                                         * Unique provjera uvijek
+                                                         * ostaje unutar organizacije
+                                                         * vlasnika zapisa.
                                                          *
-                                                         * Ako ownerId iz nekog
-                                                         * razloga nije dostupan,
-                                                         * ne širimo unique query
-                                                         * na sve organizacije.
+                                                         * Kod superadmin uređivanja
+                                                         * koristi se user_id samog
+                                                         * Fire zapisa.
                                                          */
                                                         if (! $ownerId) {
                                                             $query->whereRaw(
@@ -130,14 +164,14 @@ class FireResource extends BaseResource
                                                             return;
                                                         }
 
-                                                        $query->where(
-                                                            'user_id',
-                                                            $ownerId
-                                                        );
-
-                                                        $query->whereNull(
-                                                            'deleted_at'
-                                                        );
+                                                        $query
+                                                            ->where(
+                                                                'user_id',
+                                                                $ownerId
+                                                            )
+                                                            ->whereNull(
+                                                                'deleted_at'
+                                                            );
                                                     }
                                                 )
                                                 ->ignore(
@@ -241,11 +275,11 @@ class FireResource extends BaseResource
                                     ->openable()
                                     ->downloadable()
                                     ->helperText(
-                                        function () {
+                                        function (?Fire $record) {
                                             $ownerId =
-                                                auth()
-                                                    ->user()
-                                                    ?->ownerId();
+                                                static::formOwnerId(
+                                                    $record
+                                                );
 
                                             if (! $ownerId) {
                                                 return null;
@@ -261,16 +295,16 @@ class FireResource extends BaseResource
                                         }
                                     )
                                     ->rules([
-                                        function () {
+                                        function (?Fire $record) {
                                             return function (
                                                 string $attribute,
                                                 mixed $value,
                                                 \Closure $fail
-                                            ): void {
+                                            ) use ($record): void {
                                                 $ownerId =
-                                                    auth()
-                                                        ->user()
-                                                        ?->ownerId();
+                                                    static::formOwnerId(
+                                                        $record
+                                                    );
 
                                                 if (! $ownerId) {
                                                     return;
@@ -410,8 +444,7 @@ class FireResource extends BaseResource
                     ->weight('bold')
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('type')
                     ->label('Tip aparata')
@@ -710,6 +743,14 @@ class FireResource extends BaseResource
                             EloquentCollection $records,
                             array $data
                         ): void {
+                            if (
+                                ! static::allowsModulePermission(
+                                    'update'
+                                )
+                            ) {
+                                return;
+                            }
+
                             foreach (
                                 $records
                                 as $record
@@ -784,6 +825,14 @@ class FireResource extends BaseResource
                             EloquentCollection $records,
                             array $data
                         ): void {
+                            if (
+                                ! static::allowsModulePermission(
+                                    'update'
+                                )
+                            ) {
+                                return;
+                            }
+
                             $from =
                                 Carbon::parse(
                                     $data[
@@ -905,6 +954,24 @@ class FireResource extends BaseResource
                         function (
                             EloquentCollection $records
                         ) {
+                            if (! static::canCreate()) {
+                                if (static::isSuperAdmin()) {
+                                    Notification::make()
+                                        ->title(
+                                            'Superadmin ne kreira poslovne zapise'
+                                        )
+                                        ->body(
+                                            'Vatrogasni aparat može kopirati i kreirati samo korisnik organizacije.'
+                                        )
+                                        ->warning()
+                                        ->send();
+                                } else {
+                                    static::notifyMissingModulePermission();
+                                }
+
+                                return;
+                            }
+
                             if (
                                 $records->count()
                                 !== 1
@@ -941,9 +1008,7 @@ class FireResource extends BaseResource
                              * organizacije.
                              */
                             $newRecord->user_id =
-                                static::isSuperAdmin()
-                                    ? $record->user_id
-                                    : static::ownerId();
+                                static::ownerId();
 
                             $newRecord->save();
 

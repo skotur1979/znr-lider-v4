@@ -34,11 +34,32 @@ class CreateMedicalReferral extends CreateRecord
             abort(403);
         }
 
+        /*
+         * Ownership uvijek pripada glavnom korisniku
+         * organizacije.
+         */
         $data['user_id'] = $ownerId;
 
+        /*
+         * Verzija RA-1 obrasca.
+         *
+         * Ako nije već definirana u formi,
+         * koristi se trenutno važeća verzija.
+         */
         $data['form_version'] =
             $data['form_version']
             ?? FormVersionService::currentRa1();
+
+        /*
+         * Kod ručnog unosa zaposlenik nije povezan
+         * s Employee zapisom.
+         *
+         * Time sprječavamo da u formi slučajno ostane
+         * prethodno odabrani employee_id.
+         */
+        if (! empty($data['manual_entry'])) {
+            $data['employee_id'] = null;
+        }
 
         /*
          * Ako je odabran zaposlenik, mora pripadati
@@ -58,7 +79,7 @@ class CreateMedicalReferral extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return static::getResource()::getUrl('index');
     }
 
     public function getMaxContentWidth(): ?string

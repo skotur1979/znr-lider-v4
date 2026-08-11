@@ -11,7 +11,7 @@ class EditFirstAidKit extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $data['user_id'] = $this->record->user_id;
+        unset($data['user_id']);
 
         return $data;
     }

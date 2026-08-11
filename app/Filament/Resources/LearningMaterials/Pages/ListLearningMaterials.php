@@ -5,12 +5,12 @@ namespace App\Filament\Resources\LearningMaterials\Pages;
 use App\Filament\Resources\LearningMaterials\LearningMaterialResource;
 use App\Models\LearningCategory;
 use App\Models\LearningMaterial;
+use App\Support\SecureFilePreview;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\Page;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Livewire\WithPagination;
 
 class ListLearningMaterials extends Page
@@ -322,7 +322,7 @@ class ListLearningMaterials extends Page
     }
 
     public function materialFiles(
-        LearningMaterial $record
+    LearningMaterial $record
     ): array {
         $files = [];
 
@@ -334,10 +334,9 @@ class ListLearningMaterials extends Page
                     ),
 
                 'url' =>
-                    Storage::disk('public')
-                        ->url(
-                            $record->file_path
-                        ),
+                    SecureFilePreview::url(
+                        $record->file_path
+                    ),
             ];
         }
 
@@ -351,9 +350,9 @@ class ListLearningMaterials extends Page
                         basename($file),
 
                     'url' =>
-                        Storage::disk(
-                            'public'
-                        )->url($file),
+                        SecureFilePreview::url(
+                            $file
+                        ),
                 ];
             }
         }

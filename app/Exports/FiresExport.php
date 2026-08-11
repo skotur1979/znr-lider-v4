@@ -26,9 +26,8 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
     {
         $user = auth()->user();
 
-        $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+       $this->showUserColumn =
+            (bool) $user?->isSuperAdmin();
 
         $query = FireResource::getEloquentQuery()
             ->with('user')

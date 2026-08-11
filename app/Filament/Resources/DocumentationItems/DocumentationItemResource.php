@@ -258,8 +258,7 @@ class DocumentationItemResource extends BaseResource
                     ->wrap()
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('tvrtka')
                     ->label('Tvrtka')

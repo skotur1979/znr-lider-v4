@@ -68,14 +68,14 @@ class ExpenseResource extends BaseResource
      * Budget i Category moraju pripadati istom owneru.
      */
     public static function prepareOwnershipData(
-    array $data,
-    ?Expense $record = null
-): array {
-    $user = Auth::user();
+        array $data,
+        ?Expense $record = null
+    ): array {
+        $user = Auth::user();
 
-    if (! $user) {
-        abort(403);
-    }
+        if (! $user) {
+            abort(403);
+        }
 
     $budget = Budget::query()
         ->findOrFail($data['budget_id']);
@@ -156,8 +156,7 @@ class ExpenseResource extends BaseResource
                     ->searchable()
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('category.name')
                     ->label('Kategorija')
@@ -336,46 +335,6 @@ class ExpenseResource extends BaseResource
                 DeleteBulkAction::make()
                     ->label('Obriši označeno'),
             ]);
-    }
-
-    public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery();
-
-        $user = Auth::user();
-
-        if (! $user) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        if ($user->isSuperAdmin()) {
-            return $query;
-        }
-
-        return $query->where(
-            'user_id',
-            $user->ownerId()
-        );
-    }
-
-    public static function getNavigationBadge(): ?string
-    {
-        $query = Expense::query();
-
-        $user = Auth::user();
-
-        if (! $user) {
-            return null;
-        }
-
-        if (! $user->isSuperAdmin()) {
-            $query->where(
-                'user_id',
-                $user->ownerId()
-            );
-        }
-
-        return (string) $query->count();
     }
 
     public static function getPages(): array

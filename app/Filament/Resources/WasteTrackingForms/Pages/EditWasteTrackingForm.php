@@ -4,6 +4,7 @@ namespace App\Filament\Resources\WasteTrackingForms\Pages;
 
 use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\WasteTrackingForms\WasteTrackingFormResource;
+use App\Models\OntoRecord;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
@@ -19,9 +20,27 @@ class EditWasteTrackingForm extends EditRecord
     public function mount(int|string $record): void
     {
         /*
-         * Filament prvo mora učitati stvarni model.
+         * Filament prvo učitava stvarni model kroz
+         * tenant-scoped Resource query.
          */
         parent::mount($record);
+
+        /*
+         * Zaključani PL-O više se ne smije uređivati.
+         */
+        if ($this->record->isLocked()) {
+            $this->redirect(
+                WasteTrackingFormResource::getUrl(
+                    'view',
+                    [
+                        'record' => $this->record,
+                    ]
+                ),
+                navigate: true
+            );
+
+            return;
+        }
 
         $this->redirectIfMissingModulePermission(
             'update'
@@ -34,6 +53,13 @@ class EditWasteTrackingForm extends EditRecord
             DeleteAction::make()
                 ->label('Deaktiviraj')
                 ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        ! $this->record->trashed()
+                        && WasteTrackingFormResource::canDelete(
+                            $this->record
+                        )
+                )
                 ->before(
                     WasteTrackingFormResource::beforeModulePermission(
                         'delete'
@@ -43,6 +69,13 @@ class EditWasteTrackingForm extends EditRecord
             RestoreAction::make()
                 ->label('Vrati')
                 ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        $this->record->trashed()
+                        && WasteTrackingFormResource::canRestore(
+                            $this->record
+                        )
+                )
                 ->before(
                     WasteTrackingFormResource::beforeModulePermission(
                         'delete'
@@ -52,6 +85,13 @@ class EditWasteTrackingForm extends EditRecord
             ForceDeleteAction::make()
                 ->label('Trajno izbriši')
                 ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        $this->record->trashed()
+                        && WasteTrackingFormResource::canForceDelete(
+                            $this->record
+                        )
+                )
                 ->before(
                     WasteTrackingFormResource::beforeModulePermission(
                         'delete'
@@ -65,18 +105,71 @@ class EditWasteTrackingForm extends EditRecord
         $this->haltIfMissingModulePermission(
             'update'
         );
+
+        /*
+         * Zaključani zapis ne smije biti spremljen
+         * ni ako je forma već bila otvorena prije
+         * zaključavanja.
+         */
+        if ($this->record->isLocked()) {
+            $this->halt();
+        }
     }
 
     protected function mutateFormDataBeforeSave(
         array $data
     ): array {
-        /*
-         * Organizacijski korisnik ne smije promijeniti
-         * vlasnika postojećeg zapisa.
-         */
-        if (! auth()->user()?->isSuperAdmin()) {
-            unset($data['user_id']);
+        $user = auth()->user();
+
+        if (
+            ! $user
+            || $user->isSuperAdmin()
+        ) {
+            abort(403);
         }
+
+        $ownerId = (int) $this->record->user_id;
+
+        if (
+            $ownerId <= 0
+            || (int) $user->ownerId() !== $ownerId
+        ) {
+            abort(403);
+        }
+
+        /*
+         * Ownership postojećeg PL-O zapisa
+         * nikada se ne mijenja.
+         */
+        $data['user_id'] = $ownerId;
+
+        /*
+         * Ako se mijenja ONTO obrazac,
+         * on mora pripadati istoj organizaciji.
+         */
+        $ontoRecordId =
+            (int) ($data['onto_record_id'] ?? 0);
+
+        if ($ontoRecordId <= 0) {
+            abort(
+                403,
+                'ONTO obrazac nije ispravno odabran.'
+            );
+        }
+
+        $validOntoRecord = OntoRecord::query()
+            ->whereKey($ontoRecordId)
+            ->where(
+                'user_id',
+                $ownerId
+            )
+            ->exists();
+
+        abort_unless(
+            $validOntoRecord,
+            403,
+            'Odabrani ONTO obrazac ne pripada vašoj organizaciji.'
+        );
 
         return $data;
     }

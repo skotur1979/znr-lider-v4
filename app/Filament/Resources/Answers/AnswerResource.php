@@ -174,8 +174,7 @@ class AnswerResource extends BaseResource
                     ->sortable()
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('tekst')
                     ->label('Odgovor')

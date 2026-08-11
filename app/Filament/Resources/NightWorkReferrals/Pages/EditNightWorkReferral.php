@@ -10,21 +10,30 @@ use Filament\Resources\Pages\EditRecord;
 
 class EditNightWorkReferral extends EditRecord
 {
-    protected static string $resource = NightWorkReferralResource::class;
+    protected static string $resource =
+        NightWorkReferralResource::class;
 
     public function mount(int|string $record): void
     {
+        /*
+         * Prvo se mora učitati stvarni NR-1 zapis.
+         */
         parent::mount($record);
 
         /*
          * Superadmin smije pregledavati NR-1 zapise,
-         * ali ne smije uređivati poslovne zapise organizacija.
+         * ali ne smije uređivati poslovne zapise
+         * organizacija.
          */
         if (auth()->user()?->isSuperAdmin()) {
             $this->redirect(
-                NightWorkReferralResource::getUrl('view', [
-                    'record' => $this->getRecord(),
-                ]),
+                NightWorkReferralResource::getUrl(
+                    'view',
+                    [
+                        'record' =>
+                            $this->getRecord(),
+                    ]
+                ),
                 navigate: true
             );
 
@@ -39,40 +48,72 @@ class EditNightWorkReferral extends EditRecord
         }
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
+    protected function mutateFormDataBeforeSave(
+        array $data
+    ): array {
         $user = auth()->user();
 
-        if (! $user || $user->isSuperAdmin()) {
+        if (
+            ! $user
+            || $user->isSuperAdmin()
+        ) {
             abort(403);
         }
 
         /*
          * Ownership postojećeg NR-1 zapisa
-         * ne može se mijenjati.
+         * nikada se ne mijenja.
          */
-        $ownerId = (int) $this->record->user_id;
+        $ownerId =
+            (int) $this->record->user_id;
 
         if (
             $ownerId <= 0
-            || (int) $user->ownerId() !== $ownerId
+            || (int) $user->ownerId()
+                !== $ownerId
         ) {
             abort(403);
         }
 
-        $data['user_id'] = $ownerId;
+        $data['user_id'] =
+            $ownerId;
 
         /*
-         * Povezani zaposlenik mora pripadati
-         * istoj organizaciji kao NR-1 zapis.
+         * Verzija obrasca također ostaje
+         * vezana uz postojeću NR-1 uputnicu.
+         *
+         * Uređivanje starog zapisa ne smije
+         * ga prebaciti na novu verziju obrasca.
+         */
+        $data['form_version'] =
+            $this->record->form_version;
+
+        /*
+         * Kod ručnog unosa zaposlenik nije
+         * povezan s Employee zapisom.
+         */
+        if (! empty($data['manual_entry'])) {
+            $data['employee_id'] = null;
+        }
+
+        /*
+         * Ako je zaposlenik povezan,
+         * mora pripadati istoj organizaciji
+         * kao NR-1 zapis.
          */
         if (! empty($data['employee_id'])) {
             $employeeExists = Employee::query()
                 ->whereKey($data['employee_id'])
-                ->where('user_id', $ownerId)
+                ->where(
+                    'user_id',
+                    $ownerId
+                )
                 ->exists();
 
-            abort_unless($employeeExists, 403);
+            abort_unless(
+                $employeeExists,
+                403
+            );
         }
 
         return $data;
@@ -81,33 +122,46 @@ class EditNightWorkReferral extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\ViewAction::make(),
+            Actions\ViewAction::make()
+                ->label('Pregled'),
 
             Actions\Action::make('export_pdf')
                 ->label('Izvoz u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
+                ->icon(
+                    'heroicon-o-arrow-down-tray'
+                )
                 ->color('danger')
                 ->action(function () {
-                    $record = $this->getRecord();
+                    $record =
+                        $this->getRecord();
 
-                    $path = Nr1PdfGenerator::generate($record);
+                    $path =
+                        Nr1PdfGenerator::generate(
+                            $record
+                        );
 
                     return response()
                         ->download(
                             $path,
-                            Nr1PdfGenerator::buildFileName(
-                                $record,
-                                'd.m.Y.'
-                            )
+                            Nr1PdfGenerator::
+                                buildFileName(
+                                    $record,
+                                    'd.m.Y.'
+                                )
                         )
-                        ->deleteFileAfterSend(true);
+                        ->deleteFileAfterSend(
+                            true
+                        );
                 }),
         ];
     }
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl(
+                'index'
+            );
     }
 
     public function getMaxContentWidth(): ?string

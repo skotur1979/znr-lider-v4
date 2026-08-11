@@ -157,8 +157,7 @@ class InspectionResource extends BaseResource
                     ->weight('bold')
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
+               static::userTableColumn(),
 
                 TextColumn::make(
                     'inspection_type'
@@ -301,19 +300,16 @@ class InspectionResource extends BaseResource
     {
         return [
             'index' =>
-                Pages\ListInspections::route(
-                    '/'
-                ),
+                Pages\ListInspections::route('/'),
 
             'create' =>
-                Pages\CreateInspection::route(
-                    '/create'
-                ),
+                Pages\CreateInspection::route('/create'),
+
+            'view' =>
+                Pages\ViewInspection::route('/{record}'),
 
             'edit' =>
-                Pages\EditInspection::route(
-                    '/{record}/edit'
-                ),
+                Pages\EditInspection::route('/{record}/edit'),
         ];
     }
 }

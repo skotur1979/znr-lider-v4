@@ -54,13 +54,7 @@ class EmployeesTable
                     ->weight('bold')
                     ->toggleable(),
 
-                TextColumn::make('user.name')
-                    ->label('Korisnik')
-                    ->badge()
-                    ->visible(
-                        fn (): bool => auth()->user()?->isSuperAdmin() === true
-                    )
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('workplace')
                     ->label('Radno mjesto')

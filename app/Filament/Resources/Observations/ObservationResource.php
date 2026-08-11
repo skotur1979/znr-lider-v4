@@ -342,7 +342,7 @@ protected static function priorityIcon(?string $state): ?string
                                                     'before_or_equal:today',
                                                 ])
                                                 ->helperText(
-                                                    'Upiši stvarni datum kada je radnja završena. Ako datum ne upišeš, sustav će pri spremanju koristiti današnji datum.'
+                                                    'Upiši stvarni datum kada je radnja završena.'
                                                 ),
 
                                             TextInput::make('closing_days')

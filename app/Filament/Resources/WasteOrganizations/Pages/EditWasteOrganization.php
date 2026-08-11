@@ -16,7 +16,8 @@ class EditWasteOrganization extends EditRecord
     protected function mutateFormDataBeforeSave(array $data): array
     {
         /*
-         * Vlasništvo zapisa ne mijenjamo prilikom uređivanja.
+         * Ownership postojećeg zapisa
+         * nikada se ne mijenja uređivanjem.
          */
         $data['user_id'] = $this->record->user_id;
 
@@ -26,16 +27,41 @@ class EditWasteOrganization extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            ViewAction::make(),
+            ViewAction::make()
+                ->label('Prikaži'),
 
             DeleteAction::make()
-                ->requiresConfirmation(),
-
-            ForceDeleteAction::make()
-                ->requiresConfirmation(),
+                ->label('Deaktiviraj')
+                ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        ! $this->record->trashed()
+                        && WasteOrganizationResource::canDelete(
+                            $this->record
+                        )
+                ),
 
             RestoreAction::make()
-                ->requiresConfirmation(),
+                ->label('Vrati')
+                ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        $this->record->trashed()
+                        && WasteOrganizationResource::canRestore(
+                            $this->record
+                        )
+                ),
+
+            ForceDeleteAction::make()
+                ->label('Trajno izbriši')
+                ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        $this->record->trashed()
+                        && WasteOrganizationResource::canForceDelete(
+                            $this->record
+                        )
+                ),
         ];
     }
 

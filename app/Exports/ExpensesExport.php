@@ -45,8 +45,7 @@ class ExpensesExport implements
         }
 
         $this->showUserColumn =
-            $user->isSuperAdmin()
-            || $user->canCreateSubusers();
+        $user->isSuperAdmin();
 
         /*
          * VAŽNO:

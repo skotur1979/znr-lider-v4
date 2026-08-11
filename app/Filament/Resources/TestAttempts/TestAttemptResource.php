@@ -77,25 +77,32 @@ class TestAttemptResource extends BaseResource
      *   svoje organizacije
      */
     public static function canDelete(Model $record): bool
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
 
-        if (! $user) {
-            return false;
-        }
-
-        /*
-         * Superadmin ima pregled svih rezultata,
-         * ali ih ne mijenja niti briše.
-         */
-        if ($user->isSuperAdmin()) {
-            return false;
-        }
-
-        return (int) $record->user_id ===
-            (int) $user->ownerId();
+    if (! $user) {
+        return false;
     }
 
+    /*
+     * Superadmin može administrativno obrisati
+     * bilo koji rezultat testiranja.
+     */
+    if ($user->isSuperAdmin()) {
+        return true;
+    }
+
+    /*
+     * Brisanje rezultata dopušteno je samo
+     * glavnom korisniku organizacije.
+     */
+    if (! $user->isOrgAdmin()) {
+        return false;
+    }
+
+    return (int) $record->user_id ===
+        (int) $user->ownerId();
+}
     /*
      * Masovno brisanje rezultata ne dopuštamo.
      *
@@ -140,11 +147,7 @@ class TestAttemptResource extends BaseResource
             )
 
             ->columns([
-                static::userTableColumn()
-                    ->toggleable(
-                        isToggledHiddenByDefault:
-                            ! Auth::user()?->isSuperAdmin()
-                    ),
+                static::userTableColumn(),
 
                 TextColumn::make('test.naziv')
                     ->label('Naziv testa')

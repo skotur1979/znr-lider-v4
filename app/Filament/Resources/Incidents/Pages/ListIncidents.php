@@ -90,30 +90,4 @@ public function getSelectedYearLabel(): string
     return $this->getSelectedYearRaw() ?? 'SVE';
 }
 
-    private function applyTableFiltersToQuery(Builder $query): Builder
-    {
-        $filters = $this->getTableFiltersForm()->getState();
-
-        $status = data_get($filters, 'status.value');
-
-        $query = match ($status) {
-            'trashed' => $query->onlyTrashed(),
-            'all' => $query->withTrashed(),
-            default => $query->withoutTrashed(),
-        };
-
-        $type = data_get($filters, 'type_of_incident.value');
-
-        if (filled($type)) {
-            $query->where('type_of_incident', $type);
-        }
-
-        $year = data_get($filters, 'godina_filter.value');
-
-        if (filled($year)) {
-            $query->whereYear('date_occurred', $year);
-        }
-
-        return $query;
-    }
 }

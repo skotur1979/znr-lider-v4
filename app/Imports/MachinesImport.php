@@ -138,6 +138,32 @@ class MachinesImport implements ToCollection
                     }
                 })
                 ->first();
+                /*
+                * Broj izvještaja mora biti jedinstven
+                * unutar iste organizacije među aktivnim zapisima.
+                *
+                * Ako isti broj izvještaja već pripada DRUGOJ
+                * radnoj opremi, red iz Excela se preskače.
+                *
+                * Ako pripada upravo zapisu koji trenutno
+                * ažuriramo, to je dopušteno.
+                */
+                if ($reportNo) {
+                    $duplicateReport = Machine::query()
+                        ->where('user_id', $userId)
+                        ->where('report_number', $reportNo)
+                        ->whereNull('deleted_at');
+
+                    if ($machine) {
+                        $duplicateReport->whereKeyNot($machine->getKey());
+                    }
+
+                    if ($duplicateReport->exists()) {
+                        $this->skipped++;
+
+                        continue;
+                    }
+                }
 
             $data = [
                 'user_id' => $userId,

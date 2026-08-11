@@ -10,10 +10,12 @@ use Illuminate\Support\Facades\Auth;
 
 class CreateNightWorkReferral extends CreateRecord
 {
-    protected static string $resource = NightWorkReferralResource::class;
+    protected static string $resource =
+        NightWorkReferralResource::class;
 
-    protected function mutateFormDataBeforeCreate(array $data): array
-    {
+    protected function mutateFormDataBeforeCreate(
+        array $data
+    ): array {
         $user = Auth::user();
 
         if (! $user) {
@@ -28,21 +30,41 @@ class CreateNightWorkReferral extends CreateRecord
             abort(403);
         }
 
-        $ownerId = $user->ownerId();
+        $ownerId = (int) $user->ownerId();
 
-        if (! $ownerId) {
+        if ($ownerId <= 0) {
             abort(403);
         }
 
+        /*
+         * Ownership uvijek pripada glavnom
+         * korisniku organizacije.
+         */
         $data['user_id'] = $ownerId;
 
+        /*
+         * Ako verzija NR-1 obrasca nije već
+         * određena kroz formu, koristi se
+         * trenutno važeća verzija.
+         */
         $data['form_version'] =
             $data['form_version']
             ?? FormVersionService::currentNr1();
 
         /*
-         * Ako je povezan zaposlenik, mora pripadati
-         * istoj organizaciji.
+         * Kod ručnog unosa zaposlenik nije
+         * povezan s Employee zapisom.
+         *
+         * Time sprječavamo da slučajno ostane
+         * employee_id iz prethodnog odabira.
+         */
+        if (! empty($data['manual_entry'])) {
+            $data['employee_id'] = null;
+        }
+
+        /*
+         * Ako je povezan zaposlenik,
+         * mora pripadati istoj organizaciji.
          */
         if (! empty($data['employee_id'])) {
             $employeeExists = Employee::query()
@@ -50,7 +72,10 @@ class CreateNightWorkReferral extends CreateRecord
                 ->where('user_id', $ownerId)
                 ->exists();
 
-            abort_unless($employeeExists, 403);
+            abort_unless(
+                $employeeExists,
+                403
+            );
         }
 
         return $data;
@@ -58,7 +83,9 @@ class CreateNightWorkReferral extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return static::getResource()::getUrl(
+            'index'
+        );
     }
 
     public function getMaxContentWidth(): ?string

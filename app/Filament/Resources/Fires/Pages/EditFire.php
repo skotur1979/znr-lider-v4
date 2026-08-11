@@ -30,14 +30,18 @@ class EditFire extends EditRecord
         ];
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
-        if (! auth()->user()?->isSuperAdmin()) {
-            unset($data['user_id']);
-        }
+    protected function mutateFormDataBeforeSave(
+    array $data
+    ): array {
+    /*
+     * Ownership vatrogasnog aparata nikada se
+     * ne mijenja kroz edit formu, uključujući
+     * administraciju od strane superadmina.
+     */
+    unset($data['user_id']);
 
-        return $data;
-    }
+    return $data;
+}
 
     protected function getRedirectUrl(): string
     {

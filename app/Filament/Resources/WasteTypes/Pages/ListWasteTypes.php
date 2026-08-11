@@ -30,11 +30,16 @@ class ListWasteTypes extends ListRecords
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->action(function () {
-                    $filters = $this->getTableFiltersForm()->getState();
+                    $ids = $this
+                        ->getFilteredSortedTableQuery()
+                        ->pluck('waste_types.id')
+                        ->toArray();
 
                     return Excel::download(
-                        new WasteTypesExport($filters),
-                        'vrste-otpada-' . now()->format('Y-m-d') . '.xlsx'
+                        new WasteTypesExport($ids),
+                        'vrste-otpada-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
                     );
                 }),
         ];

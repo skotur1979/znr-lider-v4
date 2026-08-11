@@ -91,7 +91,7 @@ class TestResource extends BaseResource
         }
 
         if ($user->isSuperAdmin()) {
-            return $query->whereNull('user_id');
+            return $query;
         }
 
         return $query->whereIn(
@@ -113,7 +113,7 @@ class TestResource extends BaseResource
 
         // Superadmin upravlja samo globalnim testovima.
         if ($user->isSuperAdmin()) {
-            return $record->user_id === null;
+            return true;
         }
 
         // Organizacija ne smije mijenjati globalne testove.

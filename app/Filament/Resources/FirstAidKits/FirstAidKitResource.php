@@ -233,8 +233,7 @@ class FirstAidKitResource extends BaseResource
                     ->searchable()
                     ->toggleable(),
 
-                static::userTableColumn()
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make(
                     'inspected_at'
@@ -361,9 +360,14 @@ class FirstAidKitResource extends BaseResource
                         function (
                             EloquentCollection $records
                         ) {
+                            if (! static::canCreate()) {
+                                static::notifyMissingModulePermission();
+
+                                return;
+                            }
+
                             if (
-                                $records->count()
-                                !== 1
+                                $records->count() !== 1
                             ) {
                                 Notification::make()
                                     ->title(

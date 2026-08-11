@@ -26,8 +26,7 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
         $user = auth()->user();
 
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+        (bool) $user?->isSuperAdmin();
 
         $query = MiscellaneousResource::getEloquentQuery()
             ->with(['user', 'category'])

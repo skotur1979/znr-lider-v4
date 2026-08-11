@@ -83,12 +83,21 @@ class CreateLearningMaterial extends CreateRecord
                         function ($query) use ($ownerId): void {
                             $query
                                 ->where(
-                                    'is_global',
-                                    true
+                                    function ($global): void {
+                                        $global
+                                            ->where('is_global', true)
+                                            ->whereNull('user_id');
+                                    }
                                 )
                                 ->orWhere(
-                                    'user_id',
-                                    $ownerId
+                                    function ($organization) use ($ownerId): void {
+                                        $organization
+                                            ->where('is_global', false)
+                                            ->where(
+                                                'user_id',
+                                                $ownerId
+                                            );
+                                    }
                                 );
                         }
                     )
