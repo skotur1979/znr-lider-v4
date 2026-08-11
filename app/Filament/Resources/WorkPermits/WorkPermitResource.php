@@ -71,70 +71,97 @@ class WorkPermitResource extends BaseResource
     }
 
     /*
-     |--------------------------------------------------------------------------
-     | AUTORIZACIJA POSLOVNIH ZAPISA
-     |--------------------------------------------------------------------------
-     |
-     | Dozvole za rad pripadaju organizaciji.
-     |
-     | Superadmin:
-     | - može ih pregledavati
-     | - ne može kreirati organizacijske dozvole
-     | - ne može uređivati
-     | - ne može deaktivirati
-     | - ne može vraćati
-     | - ne može trajno brisati
-     |
-     | Glavni korisnik i podkorisnici:
-     | - rade samo nad zapisima svoje organizacije
-     |
-     */
+    |--------------------------------------------------------------------------
+    | AUTORIZACIJA POSLOVNIH ZAPISA
+    |--------------------------------------------------------------------------
+    |
+    | Dozvole za rad pripadaju organizaciji.
+    |
+    | Superadmin:
+    | - može pregledavati sve postojeće zapise
+    | - može uređivati postojeće zapise
+    | - može deaktivirati, vratiti i trajno brisati
+    | - ne može kreirati novu dozvolu u ime organizacije
+    |
+    | Organizacijski korisnici:
+    | - rade samo nad zapisima svoje organizacije
+    |
+    */
 
     public static function canCreate(): bool
     {
-        $user = Auth::user();
-
-        if (! $user) {
-            return false;
-        }
-
-        return ! $user->isSuperAdmin();
+        /*
+        * Centralna logika BaseResourcea:
+        *
+        * - superadmin standardno ne može kreirati
+        *   poslovne zapise
+        *
+        * - organizacijskim korisnicima ostaju
+        *   postojeće module permissions provjere
+        */
+        return parent::canCreate();
     }
+
 
     public static function canEdit(Model $record): bool
     {
-        return static::canManageRecord($record);
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return static::canManageOrganizationRecord($record)
+            && parent::canEdit($record);
     }
+
 
     public static function canDelete(Model $record): bool
     {
-        return static::canManageRecord($record);
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return static::canManageOrganizationRecord($record)
+            && parent::canDelete($record);
     }
+
 
     public static function canRestore(Model $record): bool
     {
-        return static::canManageRecord($record);
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return static::canManageOrganizationRecord($record)
+            && parent::canRestore($record);
     }
+
 
     public static function canForceDelete(Model $record): bool
     {
-        return static::canManageRecord($record);
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return static::canManageOrganizationRecord($record)
+            && parent::canForceDelete($record);
     }
 
-    protected static function canManageRecord(Model $record): bool
-    {
+
+    /**
+     * Dodatna record-level tenant zaštita
+     * za organizacijske korisnike.
+     */
+    protected static function canManageOrganizationRecord(
+        Model $record
+    ): bool {
         $user = Auth::user();
 
         if (! $user) {
             return false;
         }
 
-        /*
-         * Superadmin poslovne zapise organizacije
-         * samo pregledava.
-         */
         if ($user->isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         $ownerId = $user->ownerId();
@@ -143,12 +170,6 @@ class WorkPermitResource extends BaseResource
             return false;
         }
 
-        /*
-         * Dodatna record-level tenant zaštita.
-         *
-         * Čak i kada bi se pokušao ručno koristiti
-         * ID tuđeg zapisa, ownership mora odgovarati.
-         */
         return (int) $record->user_id === (int) $ownerId;
     }
 
@@ -893,8 +914,7 @@ class WorkPermitResource extends BaseResource
                         fn (
                             HasTable $livewire
                         ): bool =>
-                            ! static::isSuperAdmin()
-                            && ! static::isOnlyTrashed(
+                            ! static::isOnlyTrashed(
                                 $livewire
                             )
                     ),
@@ -908,8 +928,7 @@ class WorkPermitResource extends BaseResource
                         fn (
                             HasTable $livewire
                         ): bool =>
-                            ! static::isSuperAdmin()
-                            && static::isOnlyTrashed(
+                            static::isOnlyTrashed(
                                 $livewire
                             )
                     ),
@@ -1056,8 +1075,7 @@ class WorkPermitResource extends BaseResource
                         fn (
                             HasTable $livewire
                         ): bool =>
-                            ! static::isSuperAdmin()
-                            && static::isOnlyTrashed(
+                            static::isOnlyTrashed(
                                 $livewire
                             )
                     ),
