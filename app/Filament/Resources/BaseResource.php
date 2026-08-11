@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\Concerns\HasUserTableColumn;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -201,13 +202,112 @@ abstract class BaseResource extends Resource
     }
 
     /**
-     * Kreiranje zapisa.
+     * Pregled pojedinačnog zapisa.
      *
-     * Standardno superadmin ne kreira poslovne zapise.
-     *
-     * Iznimke:
-     * protected static bool $superAdminCanCreate = true;
+     * Superadmin smije pregledavati sve postojeće zapise.
      */
+    public static function canView(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canView($record);
+    }
+
+
+    /**
+     * Uređivanje postojećeg zapisa.
+     *
+     * Superadmin smije administrirati postojeće zapise,
+     * ali ownership se time ne mijenja.
+     */
+    public static function canEdit(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canEdit($record);
+    }
+
+
+    /**
+     * Brisanje / deaktiviranje postojećeg zapisa.
+     */
+    public static function canDelete(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canDelete($record);
+    }
+
+
+    /**
+     * Bulk brisanje.
+     */
+    public static function canDeleteAny(): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canDeleteAny();
+    }
+
+
+    /**
+     * Vraćanje soft-deleted zapisa.
+     */
+    public static function canRestore(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canRestore($record);
+    }
+
+
+    /**
+     * Bulk vraćanje.
+     */
+    public static function canRestoreAny(): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canRestoreAny();
+    }
+
+
+    /**
+     * Trajno brisanje soft-deleted zapisa.
+     */
+    public static function canForceDelete(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canForceDelete($record);
+    }
+
+
+    /**
+     * Bulk trajno brisanje.
+     */
+    public static function canForceDeleteAny(): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canForceDeleteAny();
+    }
     public static function canCreate(): bool
     {
         $user = static::user();
