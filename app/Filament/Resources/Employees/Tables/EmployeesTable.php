@@ -707,11 +707,13 @@ class EmployeesTable
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()
-                        ->label('Prikaži'),
+                        ->label('Prikaži')
+                        ->color('warning'),
 
                     Action::make('editEmployee')
                         ->label('Uredi')
                         ->icon('heroicon-o-pencil-square')
+                        ->color('warning')
                         ->visible(
                             fn (Employee $record): bool =>
                                 ! (

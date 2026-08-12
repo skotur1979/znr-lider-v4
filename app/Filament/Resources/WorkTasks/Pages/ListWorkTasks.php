@@ -7,7 +7,6 @@ use App\Filament\Resources\WorkTasks\WorkTaskResource;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
-use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ListWorkTasks extends ListRecords
@@ -43,8 +42,7 @@ class ListWorkTasks extends ListRecords
                 ->icon('heroicon-o-plus')
                 ->visible(
                     fn (): bool =>
-                        Auth::user() !== null
-                        && ! Auth::user()->isSuperAdmin()
+                        WorkTaskResource::canCreate()
                 ),
 
            Action::make('exportExcel')

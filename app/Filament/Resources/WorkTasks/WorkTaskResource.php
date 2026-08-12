@@ -78,8 +78,14 @@ class WorkTaskResource extends BaseResource
             return false;
         }
 
+        /*
+        * Superadmin smije administrirati
+        * sve postojeće radne zadatke.
+        *
+        * Ownership se time ne mijenja.
+        */
         if ($user->isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         $ownerId = $user->ownerId();
@@ -97,10 +103,7 @@ class WorkTaskResource extends BaseResource
      */
     public static function canCreate(): bool
     {
-        $user = static::user();
-
-        return $user !== null
-            && ! $user->isSuperAdmin();
+        return parent::canCreate();
     }
 
     /**
@@ -109,8 +112,13 @@ class WorkTaskResource extends BaseResource
     public static function canEdit(
         Model $record
     ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
         return $record instanceof WorkTask
-            && static::canManageTask($record);
+            && static::canManageTask($record)
+            && parent::canEdit($record);
     }
 
     /**
@@ -119,8 +127,13 @@ class WorkTaskResource extends BaseResource
     public static function canDelete(
         Model $record
     ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
         return $record instanceof WorkTask
-            && static::canManageTask($record);
+            && static::canManageTask($record)
+            && parent::canDelete($record);
     }
 
     /**
@@ -129,10 +142,11 @@ class WorkTaskResource extends BaseResource
      */
     public static function canDeleteAny(): bool
     {
-        $user = Auth::user();
+        if (static::isSuperAdmin()) {
+            return true;
+        }
 
-        return $user !== null
-            && ! $user->isSuperAdmin();
+        return parent::canDeleteAny();
     }
 
     public static function form(Schema $schema): Schema
@@ -431,9 +445,7 @@ class WorkTaskResource extends BaseResource
                     ->label('Obriši označeno')
                     ->visible(
                         fn (): bool =>
-                            Auth::user() !== null
-                            && ! Auth::user()
-                                ->isSuperAdmin()
+                            static::canDeleteAny()
                     )
                     ->requiresConfirmation()
                     ->deselectRecordsAfterCompletion(),
@@ -449,12 +461,6 @@ class WorkTaskResource extends BaseResource
                         function (
                             EloquentCollection $records
                         ): bool {
-                            if (
-                                Auth::user()?->isSuperAdmin()
-                            ) {
-                                return false;
-                            }
-
                             return $records->contains(
                                 fn (
                                     WorkTask $record
@@ -486,12 +492,6 @@ class WorkTaskResource extends BaseResource
                                             $record
                                         )
                                 );
-
-                            if (
-                                Auth::user()?->isSuperAdmin()
-                            ) {
-                                abort(403);
-                            }
 
                             $count = 0;
 
@@ -553,11 +553,6 @@ class WorkTaskResource extends BaseResource
                         function (
                             EloquentCollection $records
                         ): bool {
-                            if (
-                                Auth::user()?->isSuperAdmin()
-                            ) {
-                                return false;
-                            }
 
                             return $records->contains(
                                 fn (
@@ -574,11 +569,6 @@ class WorkTaskResource extends BaseResource
                         function (
                             EloquentCollection $records
                         ): void {
-                            if (
-                                Auth::user()?->isSuperAdmin()
-                            ) {
-                                abort(403);
-                            }
 
                             $allowedRecords =
                                 $records->filter(

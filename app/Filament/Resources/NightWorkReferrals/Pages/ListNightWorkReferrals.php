@@ -17,9 +17,9 @@ class ListNightWorkReferrals extends ListRecords
                 ->label('Nova NR-1 Uputnica')
                 ->icon('heroicon-o-plus')
                 ->visible(
-                    fn (): bool =>
-                        auth()->user()?->isSuperAdmin() !== true
-                ),
+                fn (): bool =>
+                    NightWorkReferralResource::canCreate()
+            )
         ];
     }
 }

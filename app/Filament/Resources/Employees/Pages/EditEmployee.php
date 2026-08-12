@@ -34,7 +34,8 @@ class EditEmployee extends EditRecord
     {
         return [
             ViewAction::make()
-                ->label('Prikaži'),
+                ->label('Prikaži')
+                ->color('gray'),
 
             DeleteAction::make()
                 ->label('Deaktiviraj')

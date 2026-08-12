@@ -133,8 +133,6 @@ class ListChemicals extends ListRecords
 
                     $import = new ChemicalsImport();
 
-                    $import = new ChemicalsImport();
-
                     try {
                         Excel::import(
                             $import,

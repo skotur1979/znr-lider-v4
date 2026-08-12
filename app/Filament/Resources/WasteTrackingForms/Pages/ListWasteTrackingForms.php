@@ -20,6 +20,10 @@ class ListWasteTrackingForms extends ListRecords
             CreateAction::make()
                 ->label('Novi prateći list')
                 ->icon('heroicon-o-plus')
+                ->visible(
+                    fn (): bool =>
+                        WasteTrackingFormResource::canCreate()
+                )
                 ->before(
                     WasteTrackingFormResource::beforeModulePermission(
                         'create'

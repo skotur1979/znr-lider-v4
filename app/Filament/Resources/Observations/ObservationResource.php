@@ -69,25 +69,34 @@ class ObservationResource extends BaseResource
         return 'observations';
     }
 
-    /**
-     * Zapažanja su poslovni zapisi organizacije.
-     *
-     * Superadmin ih može pregledavati, ali ne smije
-     * kreirati niti mijenjati zapise organizacija.
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | AUTORIZACIJA POSLOVNIH ZAPISA
+    |--------------------------------------------------------------------------
+    |
+    | Zapažanja pripadaju organizaciji.
+    |
+    | Superadmin:
+    | - može pregledavati sve postojeće zapise
+    | - može uređivati postojeće zapise
+    | - može deaktivirati, vratiti i trajno brisati
+    | - ne može kreirati novo zapažanje u ime organizacije
+    |
+    | Organizacijski korisnici:
+    | - rade samo nad zapisima svoje organizacije
+    | - poštuju granularne module permissions
+    |
+    */
+
     public static function canCreate(): bool
     {
-        if (static::isSuperAdmin()) {
-            return false;
-        }
-
         return parent::canCreate();
     }
 
     public static function canEdit(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canEdit($record);
@@ -96,7 +105,7 @@ class ObservationResource extends BaseResource
     public static function canDelete(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canDelete($record);
@@ -105,7 +114,7 @@ class ObservationResource extends BaseResource
     public static function canRestore(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canRestore($record);
@@ -114,7 +123,7 @@ class ObservationResource extends BaseResource
     public static function canForceDelete(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canForceDelete($record);
@@ -781,13 +790,16 @@ protected static function priorityIcon(?string $state): ?string
                     Action::make('editObservation')
                         ->label('Uredi')
                         ->icon(Heroicon::PencilSquare)
-                        ->visible(fn (Observation $record) =>
-                            ! static::isSuperAdmin()
-                            && ! $record->trashed()
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                ! $record->trashed()
+                                && static::canEdit($record)
                         )
                         ->action(function (Observation $record) {
-
-                            if (! static::allowsModulePermission('update')) {
+                            if (
+                                ! static::isSuperAdmin()
+                                && ! static::allowsModulePermission('update')
+                            ) {
                                 return;
                             }
 
@@ -808,9 +820,10 @@ protected static function priorityIcon(?string $state): ?string
                         )
                         ->modalSubmitActionLabel('Pošalji e-mail')
                         ->modalCancelActionLabel('Odustani')
-                        ->visible(fn (Observation $record): bool =>
-                            ! static::isSuperAdmin()
-                            && ! $record->trashed()
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                ! $record->trashed()
+                                && static::canEdit($record)
                         )
                         ->form([
                             TagsInput::make('emails')
@@ -825,13 +838,13 @@ protected static function priorityIcon(?string $state): ?string
                                 ->required(),
                         ])
                         ->action(function (Observation $record, array $data): void {
-                            if (static::isSuperAdmin()) {
+
+                            if (
+                                ! static::isSuperAdmin()
+                                && ! static::allowsModulePermission('update')
+                            ) {
                                 return;
                             }
-
-                            if (! static::allowsModulePermission('update')) {
-                        return;
-                    }
                             $emails = collect($data['emails'] ?? [])
                                 ->map(fn ($email): string => trim((string) $email))
                                 ->filter(fn ($email): bool =>
@@ -912,9 +925,10 @@ protected static function priorityIcon(?string $state): ?string
                         ->before(
                             static::beforeModulePermission('delete')
                         )
-                        ->visible(fn (Observation $record) =>
-                            ! static::isSuperAdmin()
-                            && ! $record->trashed()
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                ! $record->trashed()
+                                && static::canDelete($record)
                         ),
 
                     RestoreAction::make()
@@ -923,20 +937,21 @@ protected static function priorityIcon(?string $state): ?string
                         ->before(
                             static::beforeModulePermission('delete')
                         )
-                        ->visible(fn (Observation $record) =>
-                            ! static::isSuperAdmin()
-                            && $record->trashed()
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                $record->trashed()
+                                && static::canRestore($record)
                         ),
-
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
                         ->before(
                             static::beforeModulePermission('delete')
                         )
-                        ->visible(fn (Observation $record) =>
-                            ! static::isSuperAdmin()
-                            && $record->trashed()
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                $record->trashed()
+                                && static::canForceDelete($record)
                         ),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
@@ -953,9 +968,10 @@ protected static function priorityIcon(?string $state): ?string
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Deaktiviraj')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) =>
-                        ! static::isSuperAdmin()
-                        && ! self::isOnlyTrashed($livewire)
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            ! self::isOnlyTrashed($livewire)
+                            && static::canDeleteAny()
                     ),
 
                 RestoreBulkAction::make()
@@ -968,9 +984,10 @@ protected static function priorityIcon(?string $state): ?string
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Vrati')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) =>
-                        ! static::isSuperAdmin()
-                        && self::isOnlyTrashed($livewire)
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            self::isOnlyTrashed($livewire)
+                            && static::canRestoreAny()
                     ),
 
                 ForceDeleteBulkAction::make()
@@ -980,10 +997,16 @@ protected static function priorityIcon(?string $state): ?string
                         static::beforeModulePermission('delete')
                     )
                     ->modalHeading('Trajno obriši odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                    )
                     ->modalSubmitActionLabel('Trajno obriši')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (): bool => ! static::isSuperAdmin()),
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            self::isOnlyTrashed($livewire)
+                            && static::canForceDeleteAny()
+                    ),
             ])
             ->defaultSort('incident_date', 'desc');
     }

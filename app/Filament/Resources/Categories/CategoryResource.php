@@ -77,7 +77,8 @@ class CategoryResource extends BaseResource
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()
-                        ->label('Prikaži'),
+                        ->label('Prikaži')
+                        ->color('gray'),
 
                     /*
                      * Obični Action ostaje vidljiv i kada korisnik
@@ -87,6 +88,7 @@ class CategoryResource extends BaseResource
                     Action::make('editCategory')
                         ->label('Uredi')
                         ->icon(Heroicon::PencilSquare)
+                        ->color('warning')
                         ->action(function (Category $record) {
                             if (
                                 ! static::allowsModulePermission(
@@ -105,6 +107,7 @@ class CategoryResource extends BaseResource
 
                     DeleteAction::make()
                         ->label('Obriši')
+                        ->color('danger')
                         ->requiresConfirmation()
                         ->before(
                             static::beforeModulePermission(

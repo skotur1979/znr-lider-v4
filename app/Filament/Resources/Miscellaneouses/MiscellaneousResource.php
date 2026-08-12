@@ -726,7 +726,8 @@ class MiscellaneousResource extends BaseResource
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()
-                        ->label('Prikaži'),
+                        ->label('Prikaži')
+                        ->color('gray'),
 
                     /*
                      * Gumb ostaje vidljiv korisniku.
@@ -740,6 +741,7 @@ class MiscellaneousResource extends BaseResource
                         ->icon(
                             'heroicon-o-pencil-square'
                         )
+                        ->color('warning')
                         ->visible(
                             fn (
                                 Miscellaneous $record
@@ -772,6 +774,7 @@ class MiscellaneousResource extends BaseResource
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
+                        ->color('danger')
                         ->requiresConfirmation()
                         ->before(
                             static::beforeModulePermission(
@@ -804,6 +807,7 @@ class MiscellaneousResource extends BaseResource
                         ->label(
                             'Trajno obriši'
                         )
+                        ->color('danger')
                         ->requiresConfirmation()
                         ->before(
                             static::beforeModulePermission(

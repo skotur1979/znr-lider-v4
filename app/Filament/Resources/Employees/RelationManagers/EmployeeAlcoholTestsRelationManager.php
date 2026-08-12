@@ -132,16 +132,19 @@ class EmployeeAlcoholTestsRelationManager extends RelationManager
                     )
                     ->badge()
                     ->color(
-                        fn ($state) =>
-                            filled($state)
-                            && trim(
+                        function ($state): string {
+                            $value = (float) str_replace(
+                                ',',
+                                '.',
                                 (string) $state
-                            ) !== '0,0'
-                            && trim(
-                                (string) $state
-                            ) !== '0.0'
-                                ? 'danger'
-                                : 'success'
+                            );
+
+                            return filled($state)
+                                && $value > 0.5
+                                    ? 'danger'
+                                    : 'success'
+                            ;
+                        }
                     )
                     ->alignment(
                         Alignment::Center

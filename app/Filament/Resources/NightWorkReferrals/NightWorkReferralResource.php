@@ -91,46 +91,43 @@ class NightWorkReferralResource extends BaseResource
      */
     public static function canCreate(): bool
     {
-        $user = Auth::user();
-
-        if (! $user || $user->isSuperAdmin()) {
-            return false;
-        }
-
         return parent::canCreate();
     }
 
     public static function canEdit(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canEdit($record);
     }
 
+
     public static function canDelete(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canDelete($record);
     }
 
+
     public static function canRestore(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canRestore($record);
     }
 
+
     public static function canForceDelete(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canForceDelete($record);
@@ -146,13 +143,22 @@ class NightWorkReferralResource extends BaseResource
     ): array {
         $user = Auth::user();
 
-        if (! $user || $user->isSuperAdmin()) {
+        if (! $user) {
             return [];
         }
 
-        $ownerId = $user->ownerId();
+        /*
+        * Kod superadmin uređivanja zaposlenike
+        * ograničavamo na organizaciju postojećeg
+        * NR-1 zapisa.
+        */
+        if ($user->isSuperAdmin()) {
+            $ownerId = (int) ($record?->user_id ?? 0);
+        } else {
+            $ownerId = (int) $user->ownerId();
+        }
 
-        if (! $ownerId) {
+        if ($ownerId <= 0) {
             return [];
         }
 
@@ -176,13 +182,22 @@ class NightWorkReferralResource extends BaseResource
 
         $user = Auth::user();
 
-        if (! $user || $user->isSuperAdmin()) {
+        if (! $user) {
             return null;
         }
 
-        $ownerId = $user->ownerId();
+        /*
+        * Superadmin kod uređivanja smije birati
+        * samo zaposlenike organizacije kojoj
+        * postojeća NR-1 uputnica pripada.
+        */
+        if ($user->isSuperAdmin()) {
+            $ownerId = (int) ($record?->user_id ?? 0);
+        } else {
+            $ownerId = (int) $user->ownerId();
+        }
 
-        if (! $ownerId) {
+        if ($ownerId <= 0) {
             return null;
         }
 
@@ -1194,19 +1209,12 @@ class NightWorkReferralResource extends BaseResource
                     EditAction::make()
                         ->label('Uredi')
                         ->visible(
-                            fn (
-                                NightWorkReferral $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && ! (
-                                    method_exists(
-                                        $record,
-                                        'trashed'
-                                    )
-                                    && $record
-                                        ->trashed()
-                                )
-                        ),
+                        fn (
+                            NightWorkReferral $record
+                        ): bool =>
+                            static::canEdit($record)
+                            && ! $record->trashed()
+                    ),
 
                     DeleteAction::make()
                         ->label(
@@ -1214,34 +1222,22 @@ class NightWorkReferralResource extends BaseResource
                         )
                         ->requiresConfirmation()
                         ->visible(
-                            fn (
-                                NightWorkReferral $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && ! (
-                                    method_exists(
-                                        $record,
-                                        'trashed'
-                                    )
-                                    && $record
-                                        ->trashed()
-                                )
+                        fn (
+                            NightWorkReferral $record
+                        ): bool =>
+                            static::canDelete($record)
+                            && ! $record->trashed()
                         ),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
                         ->visible(
-                            fn (
-                                NightWorkReferral $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && method_exists(
-                                    $record,
-                                    'trashed'
-                                )
-                                && $record
-                                    ->trashed()
+                        fn (
+                            NightWorkReferral $record
+                        ): bool =>
+                            static::canRestore($record)
+                            && $record->trashed()
                         ),
 
                     ForceDeleteAction::make()
@@ -1250,16 +1246,11 @@ class NightWorkReferralResource extends BaseResource
                         )
                         ->requiresConfirmation()
                         ->visible(
-                            fn (
-                                NightWorkReferral $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && method_exists(
-                                    $record,
-                                    'trashed'
-                                )
-                                && $record
-                                    ->trashed()
+                        fn (
+                            NightWorkReferral $record
+                        ): bool =>
+                            static::canForceDelete($record)
+                            && $record->trashed()
                         ),
                 ])
                     ->icon(
@@ -1286,12 +1277,12 @@ class NightWorkReferralResource extends BaseResource
                         'Odustani'
                     )
                     ->visible(
-                        fn (
-                            HasTable $livewire
-                        ): bool =>
-                            ! static::isSuperAdmin()
-                            && ! static::isOnlyTrashed(
-                                $livewire
+                    fn (
+                        HasTable $livewire
+                    ): bool =>
+                        static::canDeleteAny()
+                        && ! static::isOnlyTrashed(
+                            $livewire
                             )
                     ),
 
@@ -1313,12 +1304,12 @@ class NightWorkReferralResource extends BaseResource
                         'Odustani'
                     )
                     ->visible(
-                        fn (
-                            HasTable $livewire
-                        ): bool =>
-                            ! static::isSuperAdmin()
-                            && static::isOnlyTrashed(
-                                $livewire
+                    fn (
+                        HasTable $livewire
+                    ): bool =>
+                        static::canRestoreAny()
+                        && static::isOnlyTrashed(
+                            $livewire
                             )
                     ),
 
@@ -1353,7 +1344,7 @@ class NightWorkReferralResource extends BaseResource
                     )
                     ->visible(
                         fn (): bool =>
-                            ! static::isSuperAdmin()
+                            static::canForceDeleteAny()
                     )
                     ->action(
                         function (

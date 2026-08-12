@@ -121,32 +121,41 @@ class EditWasteTrackingForm extends EditRecord
     ): array {
         $user = auth()->user();
 
-        if (
-            ! $user
-            || $user->isSuperAdmin()
-        ) {
-            abort(403);
-        }
-
-        $ownerId = (int) $this->record->user_id;
-
-        if (
-            $ownerId <= 0
-            || (int) $user->ownerId() !== $ownerId
-        ) {
+        if (! $user) {
             abort(403);
         }
 
         /*
-         * Ownership postojećeg PL-O zapisa
-         * nikada se ne mijenja.
-         */
+        * Ownership postojećeg PL-O zapisa
+        * uvijek ostaje nepromijenjen.
+        */
+        $ownerId = (int) $this->record->user_id;
+
+        if ($ownerId <= 0) {
+            abort(403);
+        }
+
+        /*
+        * Organizacijski korisnik smije uređivati
+        * samo zapis svoje organizacije.
+        *
+        * Superadmin preskače ovu tenant provjeru jer
+        * smije administrirati postojeće zapise.
+        */
+        if (
+            ! $user->isSuperAdmin()
+            && (int) $user->ownerId() !== $ownerId
+        ) {
+            abort(403);
+        }
+
         $data['user_id'] = $ownerId;
 
         /*
-         * Ako se mijenja ONTO obrazac,
-         * on mora pripadati istoj organizaciji.
-         */
+        * Ako se mijenja ONTO obrazac,
+        * on mora pripadati ISTOJ organizaciji
+        * kao postojeći PL-O.
+        */
         $ontoRecordId =
             (int) ($data['onto_record_id'] ?? 0);
 
@@ -168,7 +177,7 @@ class EditWasteTrackingForm extends EditRecord
         abort_unless(
             $validOntoRecord,
             403,
-            'Odabrani ONTO obrazac ne pripada vašoj organizaciji.'
+            'Odabrani ONTO obrazac ne pripada organizaciji ovog pratećeg lista.'
         );
 
         return $data;

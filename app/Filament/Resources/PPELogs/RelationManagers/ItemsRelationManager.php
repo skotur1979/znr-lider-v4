@@ -1,12 +1,14 @@
 <?php
 
+
 namespace App\Filament\Resources\PPELogs\RelationManagers;
+
 
 use App\Models\PPEEquipment;
 use App\Support\ExpiryBadge;
+use App\Support\SecureFilePreview;
 use App\Support\SignatureStorage;
 use Filament\Actions\Action;
-use App\Support\SecureFilePreview;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -17,7 +19,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ViewField;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\Alignment;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
@@ -25,61 +26,100 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
+
 class ItemsRelationManager extends RelationManager
 {
     protected static string $relationship =
         'items';
 
+
     protected static ?string $title =
         'Popis osobne zaštitne opreme';
 
+
     /**
-     * Superadmin ima samo pravo pregleda
-     * stavki Upisnika OZO.
+     * RelationManager je read-only samo kada
+     * trenutni korisnik nema pravo upravljanja
+     * stavkama konkretnog Upisnika OZO.
      */
     public function isReadOnly(): bool
     {
-        return Auth::user()?->isSuperAdmin()
-            === true;
+        return ! $this->canManageItems();
     }
 
+
     /**
-     * Stavke smije mijenjati samo korisnik
-     * organizacije kojoj pripada Upisnik OZO.
+     * Stavke Upisnika OZO:
+     *
+     * SUPERADMIN:
+     * - može administrirati stavke postojećeg
+     *   organizacijskog Upisnika OZO
+     *
+     * ORGANIZACIJSKI KORISNIK:
+     * - može administrirati samo stavke Upisnika
+     *   svoje organizacije.
+     *
+     * Ownership samog Upisnika pritom se ne mijenja.
      */
     protected function canManageItems(): bool
     {
         $user = Auth::user();
 
+
         if (! $user) {
             return false;
         }
 
+
+        $recordOwnerId =
+            (int) $this->getOwnerRecord()->user_id;
+
+
+        if ($recordOwnerId <= 0) {
+            return false;
+        }
+
+
+        /*
+         * Superadmin administrira postojeći
+         * organizacijski Upisnik OZO.
+         */
         if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+
+        $ownerId =
+            (int) $user->ownerId();
+
+
+        if ($ownerId <= 0) {
             return false;
         }
 
-        $ownerId = $user->ownerId();
 
-        if (! $ownerId) {
-            return false;
-        }
-
-        return
-            (int) $this->getOwnerRecord()->user_id
-            === (int) $ownerId;
+        return $recordOwnerId === $ownerId;
     }
 
+
     /**
-     * Registar OZO dostupan trenutnom korisniku.
+     * Registar OZO dostupan prilikom rada
+     * s konkretnim Upisnikom OZO.
      *
-     * Superadmin vidi sve.
-     *
-     * Organizacija vidi:
+     * Organizacijski korisnik vidi:
      * - globalne OZO zapise
-     * - vlastite organizacijske OZO zapise
+     * - OZO zapise svoje organizacije
+     *
+     * Superadmin kod uređivanja postojećeg
+     * Upisnika vidi:
+     * - globalne OZO zapise
+     * - OZO zapise organizacije kojoj pripada
+     *   taj konkretni Upisnik
+     *
+     * Time ne može slučajno koristiti privatni
+     * OZO zapis neke druge organizacije.
      */
-    protected static function equipmentQuery(): Builder
+    protected function equipmentQuery(): Builder
     {
         $query = PPEEquipment::query()
             ->where(
@@ -87,7 +127,9 @@ class ItemsRelationManager extends RelationManager
                 true
             );
 
+
         $user = Auth::user();
+
 
         if (! $user) {
             return $query->whereRaw(
@@ -95,17 +137,26 @@ class ItemsRelationManager extends RelationManager
             );
         }
 
+
+        /*
+         * Kod superadmina vlasnika određuje
+         * postojeći Upisnik OZO.
+         */
         if ($user->isSuperAdmin()) {
-            return $query;
+            $ownerId =
+                (int) $this->getOwnerRecord()->user_id;
+        } else {
+            $ownerId =
+                (int) $user->ownerId();
         }
 
-        $ownerId = $user->ownerId();
 
-        if (! $ownerId) {
+        if ($ownerId <= 0) {
             return $query->whereRaw(
                 '1 = 0'
             );
         }
+
 
         return $query->where(
             function (
@@ -122,6 +173,7 @@ class ItemsRelationManager extends RelationManager
             }
         );
     }
+
 
     public function form(Schema $schema): Schema
     {
@@ -143,7 +195,8 @@ class ItemsRelationManager extends RelationManager
                         function (
                             string $search
                         ): array {
-                            return static::equipmentQuery()
+                            return $this
+                                ->equipmentQuery()
                                 ->where(
                                     function (
                                         Builder $query
@@ -195,12 +248,15 @@ class ItemsRelationManager extends RelationManager
                                 return null;
                             }
 
+
                             $equipment =
-                                static::equipmentQuery()
+                                $this
+                                    ->equipmentQuery()
                                     ->whereKey(
                                         $value
                                     )
                                     ->first();
+
 
                             return $equipment
                                 ? trim(
@@ -225,26 +281,32 @@ class ItemsRelationManager extends RelationManager
                                 return;
                             }
 
+
                             $equipment =
-                                static::equipmentQuery()
+                                $this
+                                    ->equipmentQuery()
                                     ->whereKey(
                                         $state
                                     )
                                     ->first();
 
+
                             if (! $equipment) {
                                 return;
                             }
+
 
                             $set(
                                 'equipment_name',
                                 $equipment->name
                             );
 
+
                             $set(
                                 'standard',
                                 $equipment->standard
                             );
+
 
                             $set(
                                 'duration_months',
@@ -252,12 +314,14 @@ class ItemsRelationManager extends RelationManager
                                     ->duration_months
                             );
 
+
                             static::recalcEndDate(
                                 $set,
                                 $get
                             );
                         }
                     ),
+
 
                 TextInput::make(
                     'equipment_name'
@@ -269,6 +333,7 @@ class ItemsRelationManager extends RelationManager
                         'Možeš promijeniti naziv ili ručno upisati OZO ako nije u registru.'
                     ),
 
+
                 TextInput::make('standard')
                     ->label('HRN EN')
                     ->maxLength(64)
@@ -276,9 +341,11 @@ class ItemsRelationManager extends RelationManager
                         'Automatski se povlači iz registra, ali ga možeš ručno promijeniti.'
                     ),
 
+
                 TextInput::make('size')
                     ->label('Veličina')
                     ->maxLength(20),
+
 
                 TextInput::make(
                     'duration_months'
@@ -304,6 +371,7 @@ class ItemsRelationManager extends RelationManager
                                 $get
                             )
                     ),
+
 
                 DatePicker::make(
                     'issue_date'
@@ -331,6 +399,7 @@ class ItemsRelationManager extends RelationManager
                             )
                     ),
 
+
                 DatePicker::make(
                     'end_date'
                 )
@@ -345,6 +414,7 @@ class ItemsRelationManager extends RelationManager
                         'Automatski izračun iz “Izdano” + “Rok (mjeseci)”.'
                     ),
 
+
                 ViewField::make('signature')
                     ->label(
                         'Potpis – preuzeo OZO'
@@ -353,6 +423,7 @@ class ItemsRelationManager extends RelationManager
                         'filament.components.ozo-signature'
                     )
                     ->columnSpanFull(),
+
 
                 DatePicker::make(
                     'return_date'
@@ -382,6 +453,7 @@ class ItemsRelationManager extends RelationManager
             ->columns(4);
     }
 
+
     protected static function recalcEndDate(
         callable $set,
         callable $get
@@ -389,17 +461,21 @@ class ItemsRelationManager extends RelationManager
         $returnDate =
             $get('return_date');
 
+
         if (! blank($returnDate)) {
             $set(
                 'end_date',
                 null
             );
 
+
             return;
         }
 
+
         $issue =
             $get('issue_date');
+
 
         $months =
             (int) (
@@ -407,6 +483,7 @@ class ItemsRelationManager extends RelationManager
                     'duration_months'
                 ) ?? 0
             );
+
 
         if (
             blank($issue)
@@ -417,8 +494,10 @@ class ItemsRelationManager extends RelationManager
                 null
             );
 
+
             return;
         }
+
 
         try {
             $set(
@@ -435,12 +514,14 @@ class ItemsRelationManager extends RelationManager
         }
     }
 
+
     protected static function prepareFormData(
         array $data
     ): array {
         unset(
             $data['equipment_lookup']
         );
+
 
         if (
             ! empty(
@@ -457,6 +538,7 @@ class ItemsRelationManager extends RelationManager
                 );
         }
 
+
         if (
             ! empty(
                 $data['return_date']
@@ -464,12 +546,15 @@ class ItemsRelationManager extends RelationManager
         ) {
             $data['end_date'] = null;
 
+
             return $data;
         }
+
 
         $issue =
             $data['issue_date']
             ?? null;
+
 
         $months =
             (int) (
@@ -477,6 +562,7 @@ class ItemsRelationManager extends RelationManager
                     'duration_months'
                 ] ?? 0
             );
+
 
         if (
             ! empty($issue)
@@ -500,8 +586,10 @@ class ItemsRelationManager extends RelationManager
                 null;
         }
 
+
         return $data;
     }
+
 
     public function table(Table $table): Table
     {
@@ -537,6 +625,7 @@ class ItemsRelationManager extends RelationManager
                         'semibold'
                     ),
 
+
                 TextColumn::make(
                     'standard'
                 )
@@ -544,9 +633,11 @@ class ItemsRelationManager extends RelationManager
                     ->toggleable()
                     ->wrap(),
 
+
                 TextColumn::make('size')
                     ->label('Veličina')
                     ->alignCenter(),
+
 
                 TextColumn::make(
                     'duration_months'
@@ -556,12 +647,14 @@ class ItemsRelationManager extends RelationManager
                     )
                     ->alignCenter(),
 
+
                 TextColumn::make(
                     'issue_date'
                 )
                     ->label('Izdano')
                     ->date('d.m.Y.')
                     ->alignCenter(),
+
 
                 TextColumn::make(
                     'end_date'
@@ -607,6 +700,7 @@ class ItemsRelationManager extends RelationManager
                     )
                     ->sortable(),
 
+
                 TextColumn::make(
                     'return_date'
                 )
@@ -619,6 +713,7 @@ class ItemsRelationManager extends RelationManager
                         isToggledHiddenByDefault:
                             true
                     ),
+
 
                 TextColumn::make(
                     'signature'
@@ -638,15 +733,17 @@ class ItemsRelationManager extends RelationManager
                                 return '<span style="color:#6b7280;">—</span>';
                             }
 
+
                             $url =
-                            str_starts_with(
-                                $record->signature,
-                                'data:image'
-                            )
-                                ? $record->signature
-                                : SecureFilePreview::url(
-                                    $record->signature
-                                );
+                                str_starts_with(
+                                    $record->signature,
+                                    'data:image'
+                                )
+                                    ? $record->signature
+                                    : SecureFilePreview::url(
+                                        $record->signature
+                                    );
+
 
                             return
                                 '<img src="'
@@ -684,6 +781,7 @@ class ItemsRelationManager extends RelationManager
                                     today()
                                 )
                     ),
+
 
                 Filter::make('uskoro')
                     ->label(
@@ -748,6 +846,7 @@ class ItemsRelationManager extends RelationManager
                             )
                     ),
 
+
                 Action::make('extend3')
                     ->label(
                         'Produži +3 mj'
@@ -775,6 +874,7 @@ class ItemsRelationManager extends RelationManager
                                 abort(403);
                             }
 
+
                             $record
                                 ->duration_months =
                                 max(
@@ -782,6 +882,7 @@ class ItemsRelationManager extends RelationManager
                                     (int) $record
                                         ->duration_months
                                 ) + 3;
+
 
                             if (
                                 $record
@@ -805,9 +906,11 @@ class ItemsRelationManager extends RelationManager
                                     null;
                             }
 
+
                             $record->save();
                         }
                     ),
+
 
                 Action::make(
                     'returnedToday'
@@ -862,6 +965,7 @@ class ItemsRelationManager extends RelationManager
                                 abort(403);
                             }
 
+
                             $record->update([
                                 'return_date' =>
                                     $data[
@@ -873,6 +977,7 @@ class ItemsRelationManager extends RelationManager
                             ]);
                         }
                     ),
+
 
                 DeleteAction::make()
                     ->label('Deaktiviraj')

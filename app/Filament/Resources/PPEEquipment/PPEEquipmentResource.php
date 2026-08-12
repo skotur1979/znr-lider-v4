@@ -43,6 +43,8 @@ class PPEEquipmentResource extends BaseResource
      */
     protected static bool $hasOwnership = false;
 
+    protected static bool $superAdminCanCreate = true;
+
     protected static BackedEnum|string|null $navigationIcon =
         'heroicon-o-shield-check';
 
@@ -541,15 +543,33 @@ class PPEEquipmentResource extends BaseResource
     public static function canModifyRecord(
         PPEEquipment $record
     ): bool {
+        /*
+        * Superadmin može administrirati svaki postojeći
+        * zapis Registra OZO:
+        *
+        * - globalni zapis
+        * - organizacijski zapis
+        *
+        * Ownership se pritom ne mijenja.
+        */
         if (static::isCurrentUserSuperAdmin()) {
-            return $record->user_id === null;
+            return true;
         }
 
+
+        /*
+        * Organizacijski korisnik može mijenjati
+        * samo vlastite organizacijske zapise.
+        *
+        * Globalne zapise ne može mijenjati.
+        */
         $ownerId = static::ownerId();
+
 
         if (! $ownerId) {
             return false;
         }
+
 
         return
             $record->user_id !== null

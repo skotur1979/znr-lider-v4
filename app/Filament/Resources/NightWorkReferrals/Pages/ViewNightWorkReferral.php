@@ -15,9 +15,12 @@ class ViewNightWorkReferral extends ViewRecord
     {
         return [
             Actions\EditAction::make()
+                ->label('Uredi')
                 ->visible(
                     fn (): bool =>
-                        auth()->user()?->isSuperAdmin() !== true
+                        NightWorkReferralResource::canEdit(
+                            $this->getRecord()
+                        )
                 ),
 
             Actions\Action::make('export_pdf')

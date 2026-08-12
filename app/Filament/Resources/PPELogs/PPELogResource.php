@@ -596,11 +596,11 @@ class PPELogResource extends BaseResource
                     EditAction::make()
                         ->label('Uredi')
                         ->visible(
-                            fn (
-                                $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && ! $record->trashed()
+                        fn (
+                            PPELog $record
+                        ): bool =>
+                            static::canEdit($record)
+                            && ! $record->trashed()
                         ),
 
                     DeleteAction::make()
@@ -611,11 +611,9 @@ class PPELogResource extends BaseResource
                         )
                         ->color('danger')
                         ->visible(
-                            fn (
-                                $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && ! $record->trashed()
+                        fn ($record): bool =>
+                            static::canDelete($record)
+                            && ! $record->trashed()
                         ),
 
                     RestoreAction::make()
@@ -624,12 +622,10 @@ class PPELogResource extends BaseResource
                             'heroicon-o-arrow-path'
                         )
                         ->color('success')
-                        ->visible(
-                            fn (
-                                $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && $record->trashed()
+                       ->visible(
+                        fn ($record): bool =>
+                            static::canRestore($record)
+                            && $record->trashed()
                         ),
 
                     ForceDeleteAction::make()
@@ -642,11 +638,9 @@ class PPELogResource extends BaseResource
                         )
                         ->color('danger')
                         ->visible(
-                            fn (
-                                $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && $record->trashed()
+                        fn ($record): bool =>
+                            static::canForceDelete($record)
+                            && $record->trashed()
                         ),
                 ]),
             ])
@@ -657,8 +651,9 @@ class PPELogResource extends BaseResource
                     )
                     ->visible(
                         fn (): bool =>
-                            ! static::isSuperAdmin()
+                            static::canDeleteAny()
                     ),
+
 
                 RestoreBulkAction::make()
                     ->label(
@@ -666,8 +661,9 @@ class PPELogResource extends BaseResource
                     )
                     ->visible(
                         fn (): bool =>
-                            ! static::isSuperAdmin()
+                            static::canRestoreAny()
                     ),
+
 
                 ForceDeleteBulkAction::make()
                     ->label(
@@ -675,7 +671,7 @@ class PPELogResource extends BaseResource
                     )
                     ->visible(
                         fn (): bool =>
-                            ! static::isSuperAdmin()
+                            static::canForceDeleteAny()
                     ),
             ]);
     }
@@ -690,38 +686,45 @@ class PPELogResource extends BaseResource
         Model $record
     ): bool {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
+
 
         return parent::canEdit($record);
     }
+
 
     public static function canDelete(
         Model $record
     ): bool {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
+
 
         return parent::canDelete($record);
     }
+
 
     public static function canRestore(
         Model $record
     ): bool {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
+
 
         return parent::canRestore($record);
     }
+
 
     public static function canForceDelete(
         Model $record
     ): bool {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
+
 
         return parent::canForceDelete($record);
     }

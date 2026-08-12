@@ -423,10 +423,9 @@ class WasteOrganizationResource extends BaseResource
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
                     ->visible(
-                        fn (HasTable $livewire): bool =>
-                            ! static::isSuperAdmin()
-                            && ! static::isOnlyTrashed(
-                                $livewire
+                    fn (HasTable $livewire): bool =>
+                        ! static::isOnlyTrashed(
+                            $livewire
                             )
                     )
                     ->modalHeading(
@@ -443,10 +442,9 @@ class WasteOrganizationResource extends BaseResource
                     ->label('Vrati označeno')
                     ->requiresConfirmation()
                     ->visible(
-                        fn (HasTable $livewire): bool =>
-                            ! static::isSuperAdmin()
-                            && static::isOnlyTrashed(
-                                $livewire
+                    fn (HasTable $livewire): bool =>
+                        static::isOnlyTrashed(
+                            $livewire
                             )
                     ),
 
@@ -456,10 +454,9 @@ class WasteOrganizationResource extends BaseResource
                     )
                     ->requiresConfirmation()
                     ->visible(
-                        fn (HasTable $livewire): bool =>
-                            ! static::isSuperAdmin()
-                            && static::isOnlyTrashed(
-                                $livewire
+                    fn (HasTable $livewire): bool =>
+                        static::isOnlyTrashed(
+                            $livewire
                             )
                     )
                     ->modalHeading(
@@ -485,10 +482,7 @@ class WasteOrganizationResource extends BaseResource
 
     public static function canCreate(): bool
     {
-        $user = static::user();
-
-        return $user !== null
-            && ! $user->isSuperAdmin();
+        return parent::canCreate();
     }
 
     /*
@@ -496,30 +490,27 @@ class WasteOrganizationResource extends BaseResource
     | Uređivanje
     |--------------------------------------------------------------------------
     |
-    | Superadmin može pregledavati zapis, ali ga ne uređuje.
-    |
-    | Organizacijski korisnik može uređivati samo zapis
-    | koji pripada njegovom ownerId().
-    |
-    | Ova provjera štiti i direktni /edit URL.
-    |
+    /*
+    * Superadmin može administrirati postojeći zapis.
+    * Organizacijski korisnik samo zapis svoje organizacije.
     */
 
     public static function canEdit(
         Model $record
     ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
         $user = static::user();
 
         if (! $user) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return false;
-        }
-
         return (int) $record->user_id
-            === (int) $user->ownerId();
+                === (int) $user->ownerId()
+            && parent::canEdit($record);
     }
 
     /*
@@ -531,18 +522,19 @@ class WasteOrganizationResource extends BaseResource
     public static function canDelete(
         Model $record
     ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
         $user = static::user();
 
         if (! $user) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return false;
-        }
-
         return (int) $record->user_id
-            === (int) $user->ownerId();
+                === (int) $user->ownerId()
+            && parent::canDelete($record);
     }
 
     /*
@@ -554,20 +546,20 @@ class WasteOrganizationResource extends BaseResource
     public static function canRestore(
         Model $record
     ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
         $user = static::user();
 
         if (! $user) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return false;
-        }
-
         return (int) $record->user_id
-            === (int) $user->ownerId();
+                === (int) $user->ownerId()
+            && parent::canRestore($record);
     }
-
     /*
     |--------------------------------------------------------------------------
     | Trajno brisanje
@@ -577,18 +569,19 @@ class WasteOrganizationResource extends BaseResource
     public static function canForceDelete(
         Model $record
     ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
         $user = static::user();
 
         if (! $user) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return false;
-        }
-
         return (int) $record->user_id
-            === (int) $user->ownerId();
+                === (int) $user->ownerId()
+            && parent::canForceDelete($record);
     }
 
     /*
@@ -596,33 +589,36 @@ class WasteOrganizationResource extends BaseResource
     | Bulk dozvole
     |--------------------------------------------------------------------------
     |
-    | Superadmin nema write akcije nad poslovnim zapisima
-    | organizacije ni kroz bulk akcije.
-    |
+    |/*
+    * Superadmin može administrirati postojeći zapis.
+    * Organizacijski korisnik samo zapis svoje organizacije.
     */
 
     public static function canDeleteAny(): bool
     {
-        $user = static::user();
+        if (static::isSuperAdmin()) {
+            return true;
+        }
 
-        return $user !== null
-            && ! $user->isSuperAdmin();
+        return parent::canDeleteAny();
     }
 
     public static function canRestoreAny(): bool
     {
-        $user = static::user();
+        if (static::isSuperAdmin()) {
+            return true;
+        }
 
-        return $user !== null
-            && ! $user->isSuperAdmin();
+        return parent::canRestoreAny();
     }
 
     public static function canForceDeleteAny(): bool
     {
-        $user = static::user();
+        if (static::isSuperAdmin()) {
+            return true;
+        }
 
-        return $user !== null
-            && ! $user->isSuperAdmin();
+        return parent::canForceDeleteAny();
     }
 
     /*

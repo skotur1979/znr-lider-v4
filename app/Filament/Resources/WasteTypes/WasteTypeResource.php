@@ -112,20 +112,26 @@ class WasteTypeResource extends BaseResource
     | Organizacijski korisnik smije mijenjati samo zapis čiji
     | user_id odgovara ownerId() njegove organizacije.
     |
-    | Superadmin ne uređuje niti briše poslovne zapise organizacija.
+    | Superadmin može administrirati postojeće zapise,
+    | ali ne kreira nove vrste otpada u ime organizacije.
     |
     */
 
-    protected static function canManageRecord(Model $record): bool
-    {
+    protected static function canManageRecord(
+        Model $record
+    ): bool {
         $user = static::user();
 
         if (! $user) {
             return false;
         }
 
+        /*
+        * Superadmin može administrirati
+        * svaki postojeći zapis.
+        */
         if ($user->isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         $ownerId = $user->ownerId();
@@ -134,7 +140,12 @@ class WasteTypeResource extends BaseResource
             return false;
         }
 
-        return (int) $record->user_id === (int) $ownerId;
+        /*
+        * Organizacijski korisnik smije
+        * upravljati samo zapisom svoje organizacije.
+        */
+        return (int) $record->user_id
+            === (int) $ownerId;
     }
 
     public static function canEdit(Model $record): bool
@@ -719,8 +730,7 @@ class WasteTypeResource extends BaseResource
                         fn (
                             HasTable $livewire
                         ): bool =>
-                            ! static::isSuperAdmin()
-                            && ! static::isOnlyTrashed(
+                            static::isOnlyTrashed(
                                 $livewire
                             )
                     ),
@@ -734,8 +744,7 @@ class WasteTypeResource extends BaseResource
                         fn (
                             HasTable $livewire
                         ): bool =>
-                            ! static::isSuperAdmin()
-                            && static::isOnlyTrashed(
+                            static::isOnlyTrashed(
                                 $livewire
                             )
                     ),
@@ -753,8 +762,12 @@ class WasteTypeResource extends BaseResource
                         . 'Ova radnja je nepovratna.'
                     )
                     ->visible(
-                        fn (): bool =>
-                            ! static::isSuperAdmin()
+                        fn (
+                            HasTable $livewire
+                        ): bool =>
+                            static::isOnlyTrashed(
+                                $livewire
+                            )
                     ),
             ]);
     }

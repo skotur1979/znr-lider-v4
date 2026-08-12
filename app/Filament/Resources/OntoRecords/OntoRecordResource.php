@@ -570,12 +570,10 @@ class OntoRecordResource extends BaseResource
                     EditAction::make()
                         ->label('Uredi')
                         ->visible(
-                            fn (
-                                OntoRecord $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && ! $record->is_closed
+                            fn (OntoRecord $record): bool =>
+                                ! $record->is_closed
                                 && ! $record->trashed()
+                                && static::canEdit($record)
                         ),
 
                     Action::make('add_input')
@@ -1106,64 +1104,31 @@ class OntoRecordResource extends BaseResource
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->visible(
-                            fn (
-                                OntoRecord $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && ! $record->trashed()
-                                && $record
-                                    ->entries()
-                                    ->count() === 0
+                            fn (OntoRecord $record): bool =>
+                                ! $record->trashed()
+                                && $record->entries()->count() === 0
+                                && static::canDelete($record)
                         )
-                        ->modalHeading(
-                            'Deaktiviraj ONTO obrazac'
-                        )
-                        ->modalDescription(
-                            'Jesi li siguran/a da želiš deaktivirati ovaj ONTO obrazac?'
-                        )
-                        ->before(function (): void {
-                            if (static::isSuperAdmin()) {
-                                abort(403);
-                            }
-                        }),
+                        ->requiresConfirmation(),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->visible(
-                            fn (): bool =>
-                                ! static::isSuperAdmin()
+                            fn (OntoRecord $record): bool =>
+                                $record->trashed()
+                                && static::canRestore($record)
                         )
-                        ->before(function (): void {
-                            if (static::isSuperAdmin()) {
-                                abort(403);
-                            }
-                        }),
+                        ->requiresConfirmation(),
 
                     ForceDeleteAction::make()
-                        ->label(
-                            'Trajno izbriši'
-                        )
+                        ->label('Trajno izbriši')
                         ->visible(
-                            fn (
-                                OntoRecord $record
-                            ): bool =>
-                                ! static::isSuperAdmin()
-                                && $record->trashed()
-                                && $record
-                                    ->entries()
-                                    ->count() === 0
+                            fn (OntoRecord $record): bool =>
+                                $record->trashed()
+                                && $record->entries()->count() === 0
+                                && static::canForceDelete($record)
                         )
-                        ->modalHeading(
-                            'Trajno izbriši ONTO obrazac'
-                        )
-                        ->modalDescription(
-                            'Jesi li siguran/a? Ova radnja je nepovratna.'
-                        )
-                        ->before(function (): void {
-                            if (static::isSuperAdmin()) {
-                                abort(403);
-                            }
-                        }),
+                        ->requiresConfirmation(),
                 ]),
             ])
             ->bulkActions([
@@ -1304,12 +1269,16 @@ class OntoRecordResource extends BaseResource
     }
 
     /**
-     * Superadmin ima read-only pristup poslovnim ONTO zapisima.
+     * Administracija postojećih ONTO zapisa.
+     *
+     * Superadmin može administrirati postojeće zapise,
+     * ali ne kreira nove ONTO obrasce niti nove
+     * poslovne transakcije organizacije.
      */
     public static function canEdit(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canEdit($record);
@@ -1318,7 +1287,7 @@ class OntoRecordResource extends BaseResource
     public static function canDelete(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canDelete($record);
@@ -1327,7 +1296,7 @@ class OntoRecordResource extends BaseResource
     public static function canRestore(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canRestore($record);
@@ -1336,7 +1305,7 @@ class OntoRecordResource extends BaseResource
     public static function canForceDelete(Model $record): bool
     {
         if (static::isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         return parent::canForceDelete($record);

@@ -125,8 +125,16 @@ class WasteTrackingFormResource extends BaseResource
             return false;
         }
 
+        /*
+        * Superadmin može administrirati postojeći
+        * poslovni zapis.
+        *
+        * Ovo ne znači da može kreirati novi PL-O
+        * niti izvršavati poslovne transakcije
+        * poput zaključavanja.
+        */
         if ($user->isSuperAdmin()) {
-            return false;
+            return true;
         }
 
         $ownerId = $user->ownerId();
@@ -1432,13 +1440,12 @@ class WasteTrackingFormResource extends BaseResource
                             fn (
                                 WasteTrackingForm $record
                             ): bool =>
-                                static::canManageRecord(
+                                ! static::isSuperAdmin()
+                                && static::canManageRecord(
                                     $record
                                 )
-                                && ! $record
-                                    ->isLocked()
-                                && ! $record
-                                    ->trashed()
+                                && ! $record->isLocked()
+                                && ! $record->trashed()
                         )
                         ->action(
                             function (
@@ -1687,8 +1694,7 @@ class WasteTrackingFormResource extends BaseResource
                         fn (
                             HasTable $livewire
                         ): bool =>
-                            ! static::isSuperAdmin()
-                            && ! static::isOnlyTrashed(
+                            ! static::isOnlyTrashed(
                                 $livewire
                             )
                     )
@@ -1889,8 +1895,7 @@ class WasteTrackingFormResource extends BaseResource
                         fn (
                             HasTable $livewire
                         ): bool =>
-                            ! static::isSuperAdmin()
-                            && static::isOnlyTrashed(
+                            static::isOnlyTrashed(
                                 $livewire
                             )
                     ),
@@ -1905,10 +1910,6 @@ class WasteTrackingFormResource extends BaseResource
                             'delete'
                         )
                     )
-                    ->visible(
-                        fn (): bool =>
-                            ! static::isSuperAdmin()
-                    )
                     ->modalHeading(
                         'Trajno izbriši odabrano'
                     )
@@ -1918,44 +1919,41 @@ class WasteTrackingFormResource extends BaseResource
             ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | ONTO OPTIONS
-    |--------------------------------------------------------------------------
-    |
-    | Organizacija vidi isključivo ONTO zapise svog ownerId().
-    |
-    | Superadmin ne izrađuje poslovne PL-O obrasce i zato mu
-    | ovaj select ne vraća ONTO zapise drugih organizacija.
-    |
-    */
 
-    protected static function getOntoRecordOptions(): array
+   protected static function getOntoRecordOptions(): array
     {
         $user = auth()->user();
 
-        if (
-            ! $user
-            || $user->isSuperAdmin()
-        ) {
+        if (! $user) {
             return [];
         }
 
-        $ownerId = $user->ownerId();
-
-        if (! $ownerId) {
-            return [];
-        }
-
-        return OntoRecord::query()
+        $query = OntoRecord::query()
             ->with([
                 'organizationLocation',
                 'wasteType',
-            ])
-            ->where(
+            ]);
+
+        /*
+        * Organizacijski korisnik vidi samo
+        * ONTO zapise svoje organizacije.
+        *
+        * Superadmin vidi sve ONTO zapise.
+        */
+        if (! $user->isSuperAdmin()) {
+            $ownerId = $user->ownerId();
+
+            if (! $ownerId) {
+                return [];
+            }
+
+            $query->where(
                 'user_id',
                 $ownerId
-            )
+            );
+        }
+
+        return $query
             ->get()
             ->mapWithKeys(
                 function (

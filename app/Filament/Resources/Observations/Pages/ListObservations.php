@@ -32,7 +32,7 @@ class ListObservations extends BaseListRecords
                 ->icon('heroicon-o-plus')
                 ->visible(
                     fn (): bool =>
-                        auth()->user()?->isSuperAdmin() !== true
+                        ObservationResource::canCreate()
                 )
                 ->before(
                     ObservationResource::beforeModulePermission(

@@ -30,8 +30,10 @@ class ViewOntoRecord extends ViewRecord
                 ->label('Uredi')
                 ->visible(
                     fn (): bool =>
-                        ! auth()->user()?->isSuperAdmin()
-                        && ! $this->record->trashed()
+                        ! $this->record->trashed()
+                        && OntoRecordResource::canEdit(
+                            $this->record
+                        )
                 ),
 
             Action::make('add_input')

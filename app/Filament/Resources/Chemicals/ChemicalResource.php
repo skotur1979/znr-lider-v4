@@ -17,6 +17,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ViewAction;
 use Filament\Schemas\Schema;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
@@ -351,10 +352,12 @@ class ChemicalResource extends BaseResource
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()
-                        ->label('Prikaži'),
+                        ->label('Prikaži')
+                        ->color('gray'),
 
                     EditAction::make()
                         ->label('Uredi')
+                        ->color('warning')
                         ->visible(
                             fn (
                                 Chemical $record
@@ -400,49 +403,75 @@ class ChemicalResource extends BaseResource
                 ]),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label(
-                        'Deaktiviraj označeno'
-                    )
-                    ->requiresConfirmation()
-                    ->modalHeading(
-                        'Deaktiviraj odabrano'
-                    )
-                    ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
-                    )
-                    ->modalSubmitActionLabel(
-                        'Deaktiviraj'
-                    )
-                    ->modalCancelActionLabel(
-                        'Odustani'
-                    )
-                    ->visible(
-                        fn (
-                            HasTable $livewire
-                        ) =>
-                            ! static::isOnlyTrashed(
-                                $livewire
+               DeleteBulkAction::make()
+        ->label('Deaktiviraj označeno')
+        ->requiresConfirmation()
+        ->modalHeading(
+            'Deaktiviraj odabrano'
+        )
+        ->modalDescription(
+            'Jesi li siguran/a da želiš to učiniti?'
+        )
+        ->modalSubmitActionLabel(
+            'Deaktiviraj'
+        )
+        ->modalCancelActionLabel(
+            'Odustani'
+        )
+        ->visible(
+            fn (
+                HasTable $livewire
+            ): bool =>
+                ! static::isOnlyTrashed(
+                    $livewire
                             )
                     ),
 
+                    RestoreBulkAction::make()
+        ->label('Vrati označeno')
+        ->requiresConfirmation()
+        ->modalHeading(
+            'Vrati odabrane kemikalije'
+        )
+        ->modalDescription(
+            'Jesi li siguran/a da želiš vratiti odabrane zapise?'
+        )
+        ->modalSubmitActionLabel('Vrati')
+        ->modalCancelActionLabel('Odustani')
+        ->visible(
+            fn (
+                HasTable $livewire
+            ): bool =>
+                static::isOnlyTrashed(
+                    $livewire
+                )
+        ),
+
                 ForceDeleteBulkAction::make()
-                    ->label(
-                        'Trajno obriši označeno'
+        ->label(
+            'Trajno obriši označeno'
+        )
+        ->requiresConfirmation()
+        ->modalHeading(
+            'Trajno obriši odabrano'
+        )
+        ->modalDescription(
+            'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+        )
+        ->modalSubmitActionLabel(
+            'Trajno obriši'
+        )
+        ->modalCancelActionLabel(
+            'Odustani'
+        )
+        ->visible(
+            fn (
+                HasTable $livewire
+            ): bool =>
+                static::isOnlyTrashed(
+                    $livewire
                     )
-                    ->requiresConfirmation()
-                    ->modalHeading(
-                        'Trajno obriši odabrano'
-                    )
-                    ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
-                    )
-                    ->modalSubmitActionLabel(
-                        'Trajno obriši'
-                    )
-                    ->modalCancelActionLabel(
-                        'Odustani'
-                    ),
+        ),
             ]);
     }
 

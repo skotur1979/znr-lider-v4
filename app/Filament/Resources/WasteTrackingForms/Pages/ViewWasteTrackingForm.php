@@ -93,7 +93,9 @@ class ViewWasteTrackingForm extends ViewRecord
                 ->color('warning')
                 ->visible(
                     fn (): bool =>
-                        ! $this->getRecord()->isLocked()
+                        WasteTrackingFormResource::canEdit(
+                            $this->getRecord()
+                        )
                 )
                 ->action(function () {
                     if (
