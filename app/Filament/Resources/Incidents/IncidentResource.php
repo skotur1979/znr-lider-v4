@@ -1217,7 +1217,7 @@ class IncidentResource extends BaseResource
         return $years;
     }
 
-    public static function getPages(): array
+   public static function getPages(): array
     {
         return [
             'index' =>
@@ -1228,6 +1228,11 @@ class IncidentResource extends BaseResource
             'create' =>
                 Pages\CreateIncident::route(
                     '/create'
+                ),
+
+            'reports' =>
+                Pages\IncidentReports::route(
+                    '/reports'
                 ),
 
             'edit' =>

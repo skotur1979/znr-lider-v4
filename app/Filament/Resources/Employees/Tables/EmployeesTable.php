@@ -708,7 +708,7 @@ class EmployeesTable
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Prikaži')
-                        ->color('warning'),
+                        ->color('gray'),
 
                     Action::make('editEmployee')
                         ->label('Uredi')
