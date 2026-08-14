@@ -199,14 +199,23 @@
         @media (max-width: 900px) {
         .wp-page {
             max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 8px;
+        }
+
+        .wp-sheet {
+            min-width: 760px;
+            width: 760px;
         }
 
         .wp-title {
-            font-size: 18px;
+            font-size: 20px;
         }
 
         .wp-subtitle {
-            font-size: 15px;
+            font-size: 16px;
         }
 
         .wp-table td,
@@ -222,100 +231,9 @@
             white-space: normal;
         }
 
-        /*
-        * Gornji osnovni podaci:
-        * Broj / Datum / Vrijedi od / Vrijedi do
-        * Na mobitelu svaki podatak ide u svoj red:
-        * naziv | vrijednost
-        */
-        .wp-main-info-row {
-            display: grid;
-            grid-template-columns: 38% 62%;
-            width: 100%;
-        }
-
-        .wp-main-info-row td {
-            width: auto !important;
-            min-width: 0;
-            padding: 7px 8px;
-            text-align: left;
-            overflow-wrap: anywhere;
-        }
-
-        /*
-        * Donji blokovi se na mobitelu više
-        * ne pokušavaju ugurati u 3-4 uska stupca.
-        */
-        .wp-approval-table tr,
-        .wp-extension-table tr,
-        .wp-verification-table tr {
-            display: grid;
-            width: 100%;
-        }
-
-        /*
-        * Odobrenje:
-        * naziv osobe + ime + potpis
-        */
-        .wp-approval-table tr {
-            grid-template-columns: 42% 29% 29%;
-        }
-
-        .wp-approval-table td {
-            width: auto !important;
-            min-width: 0;
-            padding: 7px 6px;
-            overflow-wrap: anywhere;
-        }
-
-        /*
-        * Produženje:
-        * četiri ćelije pretvaramo u dvije kolone,
-        * pa se drugi par automatski spušta ispod.
-        */
-        .wp-extension-table tr {
-            grid-template-columns: 38% 62%;
-        }
-
-        .wp-extension-table td {
-            width: auto !important;
-            min-width: 0;
-            padding: 7px 8px;
-            overflow-wrap: anywhere;
-        }
-
-        .wp-extension-table td:empty {
-            min-height: 34px;
-        }
-
-        /*
-        * Provjera radova:
-        * također dva stupca umjesto četiri uska.
-        */
-        .wp-verification-table tr {
-            grid-template-columns: 42% 58%;
-        }
-
-        .wp-verification-table td {
-            width: auto !important;
-            min-width: 0;
-            padding: 7px 8px;
-            overflow-wrap: anywhere;
-        }
-
-        /*
-        * Zadnja zelena zaglavlja:
-        * Ime / Potpis / Datum / Vrijeme
-        * ostaju kao uredna 2 x 2 mreža.
-        */
-        .wp-verification-table tr.wp-green {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
         .wp-foot-note {
-            font-size: 12px;
+            font-size: 11px;
             line-height: 1.35;
-            padding: 12px 10px;
         }
     }
     </style>

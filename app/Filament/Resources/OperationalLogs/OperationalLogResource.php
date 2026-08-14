@@ -91,7 +91,7 @@ class OperationalLogResource extends BaseResource
                     'Jedan dnevni unos s više natuknica. '
                     . 'Označene natuknice automatski se spremaju kao radni zadaci.'
                 )
-                ->columns(12)
+                ->columns(1)
                 ->schema([
                     DatePicker::make('log_date')
                         ->label('Datum')
@@ -100,11 +100,7 @@ class OperationalLogResource extends BaseResource
                         ->native(false)
                         ->displayFormat('d.m.Y.')
                         ->format('Y-m-d')
-                        ->columnSpan([
-                            'default' => 12,
-                            'md' => 4,
-                            'xl' => 3,
-                        ]),
+                        ->columnSpanFull(),
 
                     Repeater::make('items')
                         ->label('Bilješke / natuknice')
