@@ -5,12 +5,13 @@ namespace App\Providers;
 use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
 use App\Models\ActivityLog;
+use App\Filament\Pages\Auth\Login;
+use App\Filament\Widgets\QuickActionsWidget;
 use App\Models\LearningCategory;
 use App\Models\LearningMaterial;
 use App\Models\OperationalLog;
 use App\Services\ActivityLogger;
 use Illuminate\Auth\Events\Failed;
-use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Filament\Forms\Components\DatePicker;
 use Illuminate\Auth\Notifications\ResetPassword;
@@ -72,6 +73,16 @@ class AppServiceProvider extends ServiceProvider
         Livewire::component(
             'app.filament.widgets.dashboard-calendar-widget',
             DashboardCalendarWidget::class
+        );
+
+        Livewire::component(
+            'app.filament.pages.auth.login',
+            Login::class
+        );
+
+        Livewire::component(
+            'app.filament.widgets.quick-actions-widget',
+            QuickActionsWidget::class
         );
 
         Event::listen(Login::class, function (Login $event): void {
