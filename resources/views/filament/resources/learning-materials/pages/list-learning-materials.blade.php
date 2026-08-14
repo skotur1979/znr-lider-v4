@@ -378,34 +378,72 @@
         }
 
         @media (max-width: 900px) {
-            .edu-grid,
-            .edu-filter-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .edu-card {
-                height: auto;
-                min-height: 330px;
-            }
-
-            .edu-card-head {
-                grid-template-columns: 44px minmax(0, 1fr);
-            }
-
-            .edu-edit-top {
-                grid-column: 2;
-                width: fit-content;
-            }
-
-            .edu-action-group {
-                grid-template-columns: 1fr;
-            }
-
-            .edu-action-list,
-            .edu-badge-panel {
-                max-height: none;
-            }
+        .edu-grid,
+        .edu-filter-grid {
+            grid-template-columns: 1fr;
         }
+
+        .edu-card {
+            height: auto;
+            min-height: 330px;
+            grid-template-rows: auto auto 1fr;
+        }
+
+        .edu-card-head {
+            grid-template-columns: 44px minmax(0, 1fr);
+            overflow: visible;
+            padding-bottom: 14px;
+        }
+
+        .edu-title {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: unset;
+            line-height: 1.25;
+        }
+
+        .edu-badge-panel {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            max-height: none;
+            overflow: visible;
+            margin-top: 6px;
+        }
+
+        .edu-badge {
+            min-height: 26px;
+            height: auto;
+            padding: 5px 8px;
+            white-space: normal;
+            text-align: center;
+            line-height: 1.15;
+        }
+
+        .edu-edit-top {
+            grid-column: 2;
+            width: fit-content;
+            margin-top: 8px;
+            display: inline-flex;
+            position: relative;
+            z-index: 3;
+        }
+
+        .edu-body {
+            padding-top: 10px;
+            overflow: visible;
+        }
+
+        .edu-action-group {
+            grid-template-columns: 1fr;
+        }
+
+        .edu-action-list {
+            max-height: none;
+        }
+
+        .edu-actions {
+            overflow: visible;
+        }
+    }
     </style>
 
     <div class="edu-wrap">

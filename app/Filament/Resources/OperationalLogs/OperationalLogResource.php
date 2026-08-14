@@ -111,32 +111,24 @@ class OperationalLogResource extends BaseResource
                         ->schema([
                             Textarea::make('note')
                                 ->label('Bilješka')
-                                ->rows(2)
+                                ->rows(3)
                                 ->required()
                                 ->placeholder(
                                     'Npr. vagan otpad, obaviješten radnik za rukavice, nazvati dr. medicine rada...'
                                 )
-                                ->columnSpan([
-                                    'default' => 12,
-                                    'md' => 9,
-                                ]),
+                                ->columnSpanFull(),
 
                             Checkbox::make('create_task')
                                 ->label('Radni zadatak')
                                 ->helperText(
                                     'Označi ako ova bilješka treba ići u Radne zadatke.'
                                 )
-                                ->columnSpan([
-                                    'default' => 12,
-                                    'md' => 3,
-                                ]),
+                                ->columnSpanFull(),
                         ])
-                        ->columns(12)
+                        ->columns(1)
                         ->defaultItems(3)
                         ->minItems(1)
-                        ->addActionLabel(
-                            'Dodaj još bilješku'
-                        )
+                        ->addActionLabel('Dodaj još bilješku')
                         ->reorderable(false)
                         ->columnSpanFull(),
                 ])
