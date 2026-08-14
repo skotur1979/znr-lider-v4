@@ -34,6 +34,7 @@ class Observation extends Model
         'status',
         'comments',
         'voice_note',
+        'completed_at',
     ];
 
     protected $casts = [
@@ -41,10 +42,19 @@ class Observation extends Model
         'target_date' => 'date',
         'notification_emails' => 'array',
         'sent_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+    protected static function booted(): void
+    {
+        static::saving(function (Observation $observation): void {
+        if ($observation->status !== 'Complete') {
+            $observation->completed_at = null;
+        }
+    });
     }
 }

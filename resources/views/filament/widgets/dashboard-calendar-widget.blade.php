@@ -894,41 +894,84 @@
         }
 
         @media (max-width: 768px){
-            .znr-cal-title{
-                font-size:18px;
-            }
-
-            .znr-cal-weekday{
-                font-size:12px;
-            }
-
-            .znr-cal-cell{
-                min-height:70px;
-                padding:3px;
-            }
-
-            .znr-cal-day{
-                font-size:13px;
-            }
-
-            .znr-cal-legend{
-                gap:8px 10px;
-            }
-
-            .znr-legend-item{
-                font-size:11px;
-            }
-
-            .znr-legend-icon{
-                width:13px;
-                height:13px;
-            }
-
-            .znr-hover-pop{
-                width:180px;
-                max-width:180px;
-            }
+        .znr-cal-title{
+            font-size:18px;
         }
+
+        .znr-cal-weekday{
+            font-size:12px;
+        }
+
+        .znr-cal-cell{
+            min-height:70px;
+            padding:3px;
+        }
+
+        .znr-cal-day{
+            font-size:13px;
+        }
+
+        .znr-cal-legend{
+            gap:8px 10px;
+        }
+
+        .znr-legend-item{
+            font-size:11px;
+        }
+
+        .znr-legend-icon{
+            width:13px;
+            height:13px;
+        }
+
+        /*
+        * MOBITEL:
+        * popup "+ više" više nije vezan uz rub ćelije kalendara.
+        * Uvijek ostaje unutar vidljivog dijela ekrana.
+        */
+        .znr-hover-pop,
+        .znr-hover-pop-left,
+        .znr-hover-pop-right,
+        .znr-hover-pop-up{
+            position:fixed;
+            left:16px;
+            right:16px;
+            top:50%;
+            bottom:auto;
+            width:auto;
+            max-width:none;
+            transform:translateY(-50%);
+            z-index:9999;
+        }
+
+        .znr-hover-pop-list{
+            max-height:min(55vh, 420px);
+            overflow-y:auto;
+            overflow-x:hidden;
+            -webkit-overflow-scrolling:touch;
+        }
+
+        .znr-hover-pop-head{
+            position:sticky;
+            top:0;
+            z-index:2;
+            background:rgba(7,16,36,.985);
+        }
+
+        .znr-hover-item.znr-event,
+        .znr-hover-item.znr-task-row{
+            font-size:12px;
+            padding:9px 10px;
+        }
+
+        .znr-hover-pop-title-main{
+            font-size:.95rem;
+        }
+
+        .znr-hover-pop-title-date{
+            font-size:.82rem;
+        }
+    }
     </style>
 
     <div id="dashboard-calendar-block" class="znr-cal-wrap">

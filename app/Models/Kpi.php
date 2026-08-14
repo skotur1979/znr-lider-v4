@@ -72,13 +72,53 @@ class Kpi extends Model
             ->orderByDesc('id');
     }
 
-    public function latestValue(): ?KpiValue
-    {
-        return $this->hasMany(KpiValue::class)
+    public function latestValue(?int $userId = null): ?KpiValue
+{
+    $user = Auth::user();
+
+    /*
+     * Ako je eksplicitno proslijeđen owner ID,
+     * koristimo njega.
+     */
+    if ($userId) {
+        return $this->values()
+            ->where('user_id', $userId)
             ->orderByDesc('year')
             ->orderByDesc('month')
             ->first();
     }
+
+    /*
+     * Bez prijavljenog korisnika ne vraćamo
+     * organizacijske KPI vrijednosti.
+     */
+    if (! $user) {
+        return null;
+    }
+
+    /*
+     * Superadmin nema vlastitu organizacijsku
+     * KPI vrijednost.
+     *
+     * Administrativni pregled svih vrijednosti
+     * već postoji kroz relation manager.
+     */
+    if ($user->isSuperAdmin()) {
+        return null;
+    }
+
+    $ownerId = $user->ownerId();
+
+    if (! $ownerId) {
+        return null;
+    }
+
+    return $this->values()
+        ->where('user_id', $ownerId)
+        ->orderByDesc('year')
+        ->orderByDesc('month')
+        ->first();
+}
 
     protected function currentOwnerId(): ?int
     {
@@ -88,21 +128,30 @@ class Kpi extends Model
             return null;
         }
 
-        if (method_exists($user, 'ownerId')) {
-            return $user->ownerId() ?: $user->id;
+        /*
+        * Superadmin nema vlastite organizacijske KPI vrijednosti.
+        */
+        if ($user->isSuperAdmin()) {
+            return null;
         }
 
-        return $user->parent_user_id ?: $user->id;
+        return $user->ownerId();
     }
+   public function valueFor(
+        int $month,
+        int $year,
+        ?int $userId = null
+    ): ?KpiValue {
+        $ownerId = $userId ?? $this->currentOwnerId();
 
-    public function valueFor(int $month, int $year): ?KpiValue
-    {
-        $ownerId = $this->currentOwnerId();
+        if (! $ownerId) {
+            return null;
+        }
 
         return $this->values()
             ->where('month', $month)
             ->where('year', $year)
-            ->when($ownerId, fn ($query) => $query->where('user_id', $ownerId))
+            ->where('user_id', $ownerId)
             ->first();
     }
 
@@ -225,27 +274,48 @@ class Kpi extends Model
         };
     }
 
-    public function monthlyTrendForYear(?int $year = null, ?int $userId = null): Collection
-    {
+    public function monthlyTrendForYear(
+        ?int $year = null,
+        ?int $userId = null
+    ): Collection {
         $year ??= now()->year;
         $userId ??= $this->currentOwnerId();
 
-        return collect(range(1, 12))->map(function (int $month) use ($year, $userId) {
-            $record = $this->valueFor($month, $year);
-            $target = $this->effectiveTargetValueForPeriod($month, $year, $userId);
+        return collect(range(1, 12))
+            ->map(function (int $month) use ($year, $userId) {
+                $record = $userId
+                    ? $this->valueFor(
+                        $month,
+                        $year,
+                        $userId
+                    )
+                    : null;
 
-            return [
-                'month' => $month,
-                'label' => str_pad((string) $month, 2, '0', STR_PAD_LEFT),
-                'value' => $record?->value,
-                'formatted' => $this->formatNumberOnly($record?->value),
-                'has_value' => $record?->value !== null,
-                'target_value' => $target,
-                'formatted_target' => $this->formatNumberOnly($target),
-            ];
-        });
+                $target = $this->effectiveTargetValueForPeriod(
+                    $month,
+                    $year,
+                    $userId
+                );
+
+                return [
+                    'month' => $month,
+                    'label' => str_pad(
+                        (string) $month,
+                        2,
+                        '0',
+                        STR_PAD_LEFT
+                    ),
+                    'value' => $record?->value,
+                    'formatted' => $this->formatNumberOnly(
+                        $record?->value
+                    ),
+                    'has_value' => $record?->value !== null,
+                    'target_value' => $target,
+                    'formatted_target' =>
+                        $this->formatNumberOnly($target),
+                ];
+            });
     }
-
     protected function evaluateLowerBetter(float $value, float $target, float $warningOffset): string
     {
         if ($value <= $target) {

@@ -11,27 +11,40 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class WasteTypesExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithEvents
+class WasteTypesExport implements
+    FromCollection,
+    WithHeadings,
+    WithMapping,
+    ShouldAutoSize,
+    WithEvents
 {
-    protected array $filters;
-    protected int $rowNumber = 0;
     protected $rows;
 
-    public function __construct(array $filters = [])
+    protected int $rowNumber = 0;
+
+    protected bool $showUserColumn = false;
+
+    public function __construct(array $ids)
     {
-        $this->filters = $filters;
+        $user = auth()->user();
 
-        $query = WasteType::query();
+        $this->showUserColumn =
+            (bool) $user?->isSuperAdmin()
+            || (bool) $user?->canCreateSubusers();
 
-        $status = data_get($this->filters, 'status.value');
-
-        $query = match ($status) {
-            'trashed' => $query->onlyTrashed(),
-            'all' => $query->withTrashed(),
-            default => $query->withoutTrashed(),
-        };
-
-        $this->rows = $query
+        /*
+         * ID-evi dolaze iz filtrirane Filament tablice.
+         *
+         * Zato export poštuje:
+         * - tenant scope
+         * - aktivne filtere
+         * - pretragu
+         * - status aktivan/deaktiviran
+         */
+        $this->rows = WasteType::query()
+            ->withTrashed()
+            ->with('user')
+            ->whereIn('id', $ids)
             ->orderBy('waste_code')
             ->orderBy('name')
             ->get();
@@ -44,84 +57,265 @@ class WasteTypesExport implements FromCollection, WithHeadings, WithMapping, Sho
 
     public function headings(): array
     {
-        return [
+        $headings = [
             'Redni broj',
             'Ključni broj otpada',
             'Naziv otpada',
-            'Opasan otpad',
-            'Datum unosa',
         ];
+
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
+        }
+
+        return array_merge($headings, [
+            'Opasan otpad',
+            'Status',
+            'Datum unosa',
+        ]);
     }
 
     public function map($row): array
     {
-        return [
+        /** @var WasteType $row */
+
+        $data = [
             ++$this->rowNumber,
-            $row->waste_code,
+            $this->formatWasteCode($row->waste_code),
             $row->name,
-            $row->is_hazardous ? 'DA' : 'NE',
-            $row->created_at ? $row->created_at->format('d.m.Y. H:i') : '',
         ];
+
+        if ($this->showUserColumn) {
+            $data[] = $row->user?->name ?? '';
+        }
+
+        return array_merge($data, [
+            $row->is_hazardous
+                ? 'DA'
+                : 'NE',
+
+            $row->trashed()
+                ? 'Deaktiviran'
+                : 'Aktivan',
+
+            $row->created_at
+                ? $row->created_at->format('d.m.Y. H:i')
+                : '',
+        ]);
     }
 
     public function registerEvents(): array
     {
         return [
-            AfterSheet::class => function (AfterSheet $event) {
-                $sheet = $event->sheet->getDelegate();
-                $lastRow = $this->rows->count() + 1;
+            AfterSheet::class => function (
+                AfterSheet $event
+            ): void {
+                $sheet =
+                    $event->sheet->getDelegate();
 
-                $sheet->getStyle("A1:E{$lastRow}")
+                $lastRow =
+                    $this->rows->count() + 1;
+
+                $lastCol =
+                    $this->showUserColumn
+                        ? 'G'
+                        : 'F';
+
+                $sheet
+                    ->getStyle(
+                        "A1:{$lastCol}{$lastRow}"
+                    )
                     ->getFont()
                     ->setName('DejaVu Sans')
                     ->setSize(10);
 
-                $sheet->getStyle('A1:E1')->applyFromArray([
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['rgb' => 'FFFFFF'],
-                        'name' => 'DejaVu Sans',
-                        'size' => 10,
-                    ],
-                    'fill' => [
-                        'fillType' => 'solid',
-                        'startColor' => ['rgb' => '1F2937'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => Alignment::HORIZONTAL_CENTER,
-                        'vertical' => Alignment::VERTICAL_CENTER,
-                        'wrapText' => true,
-                    ],
-                ]);
+                $sheet
+                    ->getStyle(
+                        "A1:{$lastCol}1"
+                    )
+                    ->applyFromArray([
+                        'font' => [
+                            'bold' => true,
+                            'color' => [
+                                'rgb' => 'FFFFFF',
+                            ],
+                            'name' => 'DejaVu Sans',
+                            'size' => 10,
+                        ],
 
-                $sheet->getStyle("A2:E{$lastRow}")
-                    ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER)
-                    ->setWrapText(true);
+                        'fill' => [
+                            'fillType' => 'solid',
+                            'startColor' => [
+                                'rgb' => '1F2937',
+                            ],
+                        ],
 
-                $sheet->getStyle("A2:B{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        'alignment' => [
+                            'horizontal' =>
+                                Alignment::HORIZONTAL_CENTER,
 
-                $sheet->getStyle("D2:E{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                            'vertical' =>
+                                Alignment::VERTICAL_CENTER,
 
-                $sheet->getColumnDimension('A')->setWidth(12);
-                $sheet->getColumnDimension('B')->setWidth(20);
-                $sheet->getColumnDimension('C')->setWidth(48);
-                $sheet->getColumnDimension('D')->setWidth(16);
-                $sheet->getColumnDimension('E')->setWidth(20);
+                            'wrapText' => true,
+                        ],
+                    ]);
 
-                $sheet->getRowDimension(1)->setRowHeight(28);
+                if ($lastRow >= 2) {
+                    $sheet
+                        ->getStyle(
+                            "A2:{$lastCol}{$lastRow}"
+                        )
+                        ->getAlignment()
+                        ->setVertical(
+                            Alignment::VERTICAL_CENTER
+                        )
+                        ->setWrapText(true);
 
-                for ($row = 2; $row <= $lastRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(28);
+                    if ($this->showUserColumn) {
+                        foreach (
+                            [
+                                'A',
+                                'B',
+                                'D',
+                                'E',
+                                'F',
+                                'G',
+                            ] as $column
+                        ) {
+                            $sheet
+                                ->getStyle(
+                                    "{$column}2:"
+                                    . "{$column}{$lastRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::HORIZONTAL_CENTER
+                                );
+                        }
+
+                        $widths = [
+                            'A' => 12,
+                            'B' => 20,
+                            'C' => 48,
+                            'D' => 24,
+                            'E' => 16,
+                            'F' => 18,
+                            'G' => 20,
+                        ];
+                    } else {
+                        foreach (
+                            [
+                                'A',
+                                'B',
+                                'D',
+                                'E',
+                                'F',
+                            ] as $column
+                        ) {
+                            $sheet
+                                ->getStyle(
+                                    "{$column}2:"
+                                    . "{$column}{$lastRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::HORIZONTAL_CENTER
+                                );
+                        }
+
+                        $widths = [
+                            'A' => 12,
+                            'B' => 20,
+                            'C' => 48,
+                            'D' => 16,
+                            'E' => 18,
+                            'F' => 20,
+                        ];
+                    }
+
+                    for (
+                        $row = 2;
+                        $row <= $lastRow;
+                        $row++
+                    ) {
+                        $sheet
+                            ->getRowDimension($row)
+                            ->setRowHeight(28);
+                    }
+                } else {
+                    $widths =
+                        $this->showUserColumn
+                            ? [
+                                'A' => 12,
+                                'B' => 20,
+                                'C' => 48,
+                                'D' => 24,
+                                'E' => 16,
+                                'F' => 18,
+                                'G' => 20,
+                            ]
+                            : [
+                                'A' => 12,
+                                'B' => 20,
+                                'C' => 48,
+                                'D' => 16,
+                                'E' => 18,
+                                'F' => 20,
+                            ];
                 }
 
+                foreach (
+                    $widths as $column => $width
+                ) {
+                    $sheet
+                        ->getColumnDimension($column)
+                        ->setWidth($width);
+                }
+
+                $sheet
+                    ->getRowDimension(1)
+                    ->setRowHeight(28);
+
                 $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:E{$lastRow}");
+
+                $sheet->setAutoFilter(
+                    "A1:{$lastCol}{$lastRow}"
+                );
             },
         ];
+    }
+
+    private function formatWasteCode(
+        ?string $code
+    ): string {
+        if (! $code) {
+            return '-';
+        }
+
+        $hasStar = str_contains(
+            $code,
+            '*'
+        );
+
+        $digits = preg_replace(
+            '/\D+/',
+            '',
+            str_replace('*', '', $code)
+        );
+
+        if (strlen($digits) === 6) {
+            $formatted =
+                substr($digits, 0, 2)
+                . ' '
+                . substr($digits, 2, 2)
+                . ' '
+                . substr($digits, 4, 2);
+        } else {
+            $formatted = $code;
+        }
+
+        return $hasStar
+            ? $formatted . '*'
+            : $formatted;
     }
 }

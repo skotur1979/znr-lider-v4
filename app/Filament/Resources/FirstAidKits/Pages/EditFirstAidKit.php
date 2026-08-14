@@ -9,6 +9,13 @@ class EditFirstAidKit extends EditRecord
 {
     protected static string $resource = FirstAidKitResource::class;
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        unset($data['user_id']);
+
+        return $data;
+    }
+
     public function getTitle(): string
     {
         return 'Uredi Prva pomoć';
@@ -16,6 +23,7 @@ class EditFirstAidKit extends EditRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->previousUrl ?? static::getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl('index');
     }
 }

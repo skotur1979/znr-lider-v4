@@ -27,8 +27,7 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
         $user = auth()->user();
 
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+            (bool) $user?->isSuperAdmin();
 
         $inspections = InspectionResource::getEloquentQuery()
             ->with(['user', 'findings'])

@@ -23,8 +23,7 @@ class CategoriesExport implements FromCollection, WithHeadings, WithMapping, Sho
         $user = auth()->user();
 
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+        (bool) $user?->isSuperAdmin();
 
         $this->categories = CategoryResource::getEloquentQuery()
             ->with('user')

@@ -13,25 +13,31 @@ class EditKpi extends EditRecord
     {
         parent::mount($record);
 
-        if (blank($this->record->user_id) && ! auth()->user()?->isSuperAdmin()) {
-            abort(403, 'Nemate pravo uređivati globalni KPI.');
+        /*
+         * Organizacija ne smije mijenjati globalni KPI.
+         */
+        if (
+            blank($this->record->user_id)
+            && ! auth()->user()?->isSuperAdmin()
+        ) {
+            abort(
+                403,
+                'Nemate pravo uređivati globalni KPI.'
+            );
         }
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
-        if (blank($this->record->user_id) && ! auth()->user()?->isSuperAdmin()) {
-            abort(403, 'Nemate pravo uređivati globalni KPI.');
-        }
-
-        if (! auth()->user()?->isSuperAdmin()) {
-            $data['user_id'] = KpiResource::defaultUserId();
-        }
+    protected function mutateFormDataBeforeSave(
+    array $data
+    ): array {
+        unset($data['user_id']);
 
         return $data;
     }
+
     protected function getRedirectUrl(): string
     {
-        return $this->previousUrl ?? static::getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl('index');
     }
 }

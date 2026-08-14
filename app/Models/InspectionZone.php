@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\LogsActivity;
 use App\Services\InspectionZoneTemplateService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InspectionZone extends Model
@@ -14,8 +15,20 @@ class InspectionZone extends Model
     protected static string $activityModule = 'Zone nadzora';
 
     protected $fillable = [
+        'inspection_id',
         'name',
+        'sort_order',
+        'total_points',
+        'max_points',
+        'percentage',
         'note',
+    ];
+
+    protected $casts = [
+        'sort_order' => 'integer',
+        'total_points' => 'float',
+        'max_points' => 'float',
+        'percentage' => 'float',
     ];
 
     protected $appends = [
@@ -26,23 +39,39 @@ class InspectionZone extends Model
 
     protected static function booted(): void
     {
-        static::created(function (InspectionZone $zone) {
-            app(InspectionZoneTemplateService::class)->syncQuestionsAndAnswers($zone);
+        /*
+         * Pitanja i odgovore sinkroniziramo kada se
+         * kreira nova zona.
+         *
+         * Namjerno NE koristimo retrieved(),
+         * jer samo otvaranje/pregled zapisa ne smije
+         * uzrokovati upise u bazu.
+         */
+        static::created(function (InspectionZone $zone): void {
+            app(InspectionZoneTemplateService::class)
+                ->syncQuestionsAndAnswers($zone);
         });
+    }
 
-        static::retrieved(function (InspectionZone $zone) {
-            app(InspectionZoneTemplateService::class)->syncQuestionsAndAnswers($zone);
-        });
+    public function inspection(): BelongsTo
+    {
+        return $this->belongsTo(Inspection::class);
     }
 
     public function questions(): HasMany
     {
-        return $this->hasMany(InspectionQuestion::class, 'inspection_zone_id');
+        return $this->hasMany(
+            InspectionQuestion::class,
+            'inspection_zone_id'
+        );
     }
 
     public function answers(): HasMany
     {
-        return $this->hasMany(InspectionZoneAnswer::class, 'inspection_zone_id');
+        return $this->hasMany(
+            InspectionZoneAnswer::class,
+            'inspection_zone_id'
+        );
     }
 
     public function getTotalPointsAttribute(): int
@@ -63,6 +92,9 @@ class InspectionZone extends Model
             return 0;
         }
 
-        return round(($this->total_points / $max) * 100, 2);
+        return round(
+            ($this->total_points / $max) * 100,
+            2
+        );
     }
 }

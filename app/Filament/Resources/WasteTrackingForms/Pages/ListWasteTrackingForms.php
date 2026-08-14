@@ -11,23 +11,50 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ListWasteTrackingForms extends ListRecords
 {
-    protected static string $resource = WasteTrackingFormResource::class;
+    protected static string $resource =
+        WasteTrackingFormResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
             CreateAction::make()
                 ->label('Novi prateći list')
-                ->icon('heroicon-o-plus'),
+                ->icon('heroicon-o-plus')
+                ->visible(
+                    fn (): bool =>
+                        WasteTrackingFormResource::canCreate()
+                )
+                ->before(
+                    WasteTrackingFormResource::beforeModulePermission(
+                        'create'
+                    )
+                ),
 
             Action::make('exportExcel')
                 ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
+                ->icon(
+                    'heroicon-o-document-arrow-down'
+                )
                 ->color('success')
                 ->action(function () {
+                    if (
+                        ! WasteTrackingFormResource::allowsModulePermission(
+                            'view'
+                        )
+                    ) {
+                        return null;
+                    }
+
+                    $ids = $this
+                        ->getFilteredSortedTableQuery()
+                        ->pluck('waste_tracking_forms.id')
+                        ->toArray();
+
                     return Excel::download(
-                        new WasteTrackingFormsExport(),
-                        'prateci-listovi-' . now()->format('Y-m-d') . '.xlsx'
+                        new WasteTrackingFormsExport($ids),
+                        'prateci-listovi-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
                     );
                 }),
         ];

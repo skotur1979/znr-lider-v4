@@ -8,12 +8,22 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Auth;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class CreateMachine extends CreateRecord
 {
     protected static string $resource = MachineResource::class;
+
+    public function mount(): void
+    {
+        if (! MachineResource::ensureModulePermission('create')) {
+            $this->redirect(MachineResource::getUrl('index'));
+
+            return;
+        }
+
+        parent::mount();
+    }
 
     protected function getHeaderActions(): array
     {
@@ -31,6 +41,10 @@ class CreateMachine extends CreateRecord
 
     public function runOcr(): void
     {
+        if (! MachineResource::ensureModulePermission('create')) {
+            return;
+        }
+
         $state = method_exists($this->form, 'getRawState')
             ? $this->form->getRawState()
             : $this->form->getState();
@@ -43,8 +57,14 @@ class CreateMachine extends CreateRecord
 
         $storedPath = null;
 
-        if ($file instanceof TemporaryUploadedFile || $file instanceof UploadedFile) {
-            $storedPath = $file->store('tmp/machine-ocr', 'local');
+        if (
+            $file instanceof TemporaryUploadedFile
+            || $file instanceof UploadedFile
+        ) {
+            $storedPath = $file->store(
+                'tmp/machine-ocr',
+                'local'
+            );
         } elseif (is_string($file)) {
             $storedPath = $file;
         }
@@ -52,7 +72,9 @@ class CreateMachine extends CreateRecord
         if (blank($storedPath)) {
             Notification::make()
                 ->title('OCR greška')
-                ->body('Dokument nije moguće spremiti za OCR.')
+                ->body(
+                    'Dokument nije moguće spremiti za OCR.'
+                )
                 ->danger()
                 ->send();
 
@@ -61,12 +83,19 @@ class CreateMachine extends CreateRecord
 
         /** @var MachineReportOcrService $service */
         $service = app(MachineReportOcrService::class);
-        $result = $service->extractFromStoredFile($storedPath, 'local');
+
+        $result = $service->extractFromStoredFile(
+            $storedPath,
+            'local'
+        );
 
         if (! ($result['success'] ?? false)) {
             Notification::make()
                 ->title('OCR greška')
-                ->body($result['message'] ?? 'Provjeri dokument ili OCR instalaciju.')
+                ->body(
+                    $result['message']
+                        ?? 'Provjeri dokument ili OCR instalaciju.'
+                )
                 ->danger()
                 ->send();
 
@@ -78,7 +107,9 @@ class CreateMachine extends CreateRecord
         if (blank($ocrData)) {
             Notification::make()
                 ->title('OCR nije pronašao podatke')
-                ->body('Dokument je učitan, ali nisu pronađena prepoznatljiva polja.')
+                ->body(
+                    'Dokument je učitan, ali nisu pronađena prepoznatljiva polja.'
+                )
                 ->warning()
                 ->send();
 
@@ -101,10 +132,18 @@ class CreateMachine extends CreateRecord
 
         foreach ($fields as $field) {
             $newValue = $ocrData[$field] ?? null;
-            $oldValue = data_get($this->data, $field);
+            $oldValue = data_get(
+                $this->data,
+                $field
+            );
 
             if (filled($newValue) && blank($oldValue)) {
-                data_set($this->data, $field, $newValue);
+                data_set(
+                    $this->data,
+                    $field,
+                    $newValue
+                );
+
                 $filled++;
             }
         }
@@ -113,23 +152,27 @@ class CreateMachine extends CreateRecord
 
         Notification::make()
             ->title('OCR analiza završena')
-            ->body("Automatski je popunjeno {$filled} polja.")
+            ->body(
+                "Automatski je popunjeno {$filled} polja."
+            )
             ->success()
             ->send();
     }
 
-    protected function mutateFormDataBeforeCreate(array $data): array
+    protected function beforeCreate(): void
     {
+        if (! MachineResource::ensureModulePermission('create')) {
+            $this->halt();
+        }
+    }
+
+    protected function mutateFormDataBeforeCreate(
+        array $data
+    ): array {
         unset($data['ocr_source']);
         unset($data['ocr_original_name']);
 
-        if (! Auth::user()?->isAdmin()) {
-            $data['user_id'] = Auth::id();
-        } else {
-            $data['user_id'] = $data['user_id'] ?? Auth::id();
-        }
-
-        return $data;
+        return MachineResource::fillOwnershipData($data);
     }
 
     protected function getRedirectUrl(): string

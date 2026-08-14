@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Budgets\Pages;
 
 use App\Filament\Resources\Budgets\BudgetResource;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Facades\Auth;
 
 class CreateBudget extends CreateRecord
 {
@@ -12,16 +11,19 @@ class CreateBudget extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        if (! Auth::user()?->isAdmin()) {
-            $data['user_id'] = Auth::id();
-        }
-
-        return $data;
+        /*
+         * Standardna BaseResource ownership logika:
+         *
+         * glavni korisnik -> njegov ownerId()
+         * podkorisnik     -> ownerId() glavnog korisnika
+         * superadmin      -> standardno nema pravo createa
+         */
+        return BudgetResource::fillOwnershipData($data);
     }
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return static::getResource()::getUrl('index');
     }
 
     public function getMaxContentWidth(): ?string

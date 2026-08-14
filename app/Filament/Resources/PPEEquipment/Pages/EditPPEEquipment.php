@@ -10,15 +10,29 @@ class EditPPEEquipment extends EditRecord
 {
     protected static string $resource = PPEEquipmentResource::class;
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        /*
+         * Globalni zapis mora ostati globalni,
+         * a organizacijski zapis mora zadržati svog vlasnika.
+         */
+        $data['user_id'] = $this->record->user_id;
+
+        return $data;
+    }
+
     protected function getHeaderActions(): array
     {
         return [
             DeleteAction::make()
-                ->label('Izbriši'),
+                ->label('Izbriši')
+                ->requiresConfirmation(),
         ];
     }
+
     protected function getRedirectUrl(): string
     {
-        return $this->previousUrl ?? static::getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl('index');
     }
 }

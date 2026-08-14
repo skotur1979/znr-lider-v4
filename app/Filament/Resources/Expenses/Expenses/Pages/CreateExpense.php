@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Expenses\Expenses\Pages;
 
 use App\Filament\Resources\Expenses\Expenses\ExpenseResource;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Facades\Auth;
 
 class CreateExpense extends CreateRecord
 {
@@ -12,11 +11,7 @@ class CreateExpense extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        if (! Auth::user()?->isAdmin()) {
-            $data['user_id'] = Auth::id();
-        }
-
-        return $data;
+        return ExpenseResource::prepareOwnershipData($data);
     }
 
     protected function getRedirectUrl(): string

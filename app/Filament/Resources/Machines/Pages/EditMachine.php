@@ -17,7 +17,27 @@ class EditMachine extends EditRecord
     protected string $view = 'filament.resources.machines.pages.edit-machine';
 
     public array $ocrDiffs = [];
+
     public bool $showOcrDiffs = false;
+
+    public function mount(int|string $record): void
+{
+    /*
+     * Filament prvo mora pronaći zapis i pretvoriti
+     * vrijednost iz URL-a u Machine model.
+     */
+    parent::mount($record);
+
+    /*
+     * Tek nakon toga provjeravamo dozvolu.
+     */
+    if (! MachineResource::ensureModulePermission('update')) {
+        $this->redirect(
+            MachineResource::getUrl('index'),
+            navigate: true
+        );
+    }
+}
 
     protected function getHeaderActions(): array
     {
@@ -44,7 +64,11 @@ class EditMachine extends EditRecord
                 ->extraAttributes([
                     'type' => 'button',
                 ])
-                ->visible(fn () => $this->showOcrDiffs && count($this->ocrDiffs) > 0)
+                ->visible(
+                    fn (): bool =>
+                        $this->showOcrDiffs
+                        && count($this->ocrDiffs) > 0
+                )
                 ->action('applyOcrDiffs'),
         ];
     }
@@ -62,6 +86,10 @@ class EditMachine extends EditRecord
 
     public function runOcrPreview(): void
     {
+        if (! MachineResource::ensureModulePermission('update')) {
+            return;
+        }
+
         $ocrData = $this->runOcrAndGetData();
 
         if (blank($ocrData)) {
@@ -77,7 +105,11 @@ class EditMachine extends EditRecord
             $oldString = $this->stringifyValue($oldValue);
             $newString = $this->stringifyValue($newValue);
 
-            $isSame = $this->valuesAreEqual($oldValue, $newValue);
+            $isSame = $this->valuesAreEqual(
+                $oldValue,
+                $newValue
+            );
+
             $hasNew = filled($newString);
             $hasOld = filled($oldString);
 
@@ -100,7 +132,9 @@ class EditMachine extends EditRecord
         if (count($this->ocrDiffs) === 0) {
             Notification::make()
                 ->title('OCR analiza završena')
-                ->body('Nema razlika — sva prepoznata polja već su ista kao postojeća.')
+                ->body(
+                    'Nema razlika — sva prepoznata polja već su ista kao postojeća.'
+                )
                 ->success()
                 ->send();
 
@@ -109,13 +143,19 @@ class EditMachine extends EditRecord
 
         Notification::make()
             ->title('OCR analiza završena')
-            ->body('Prikazana su samo polja koja su nova, različita ili neprepoznata.')
+            ->body(
+                'Prikazana su samo polja koja su nova ili različita od postojećih.'
+            )
             ->success()
             ->send();
     }
 
     public function applyOcrDiffs(): void
     {
+        if (! MachineResource::ensureModulePermission('update')) {
+            return;
+        }
+
         if (! $this->showOcrDiffs || empty($this->ocrDiffs)) {
             Notification::make()
                 ->title('Nema OCR razlika')
@@ -135,10 +175,16 @@ class EditMachine extends EditRecord
 
             if (blank($newValue) || ! $replace) {
                 $skipped++;
+
                 continue;
             }
 
-            data_set($this->data, $field, $newValue);
+            data_set(
+                $this->data,
+                $field,
+                $newValue
+            );
+
             $replaced++;
         }
 
@@ -147,9 +193,17 @@ class EditMachine extends EditRecord
         $data = $this->form->getState();
         $data = $this->mutateFormDataBeforeSave($data);
 
-        $this->record = $this->handleRecordUpdate($this->getRecord(), $data);
+        $this->record = $this->handleRecordUpdate(
+            $this->getRecord(),
+            $data
+        );
 
-        data_set($this->data, 'ocr_source', null);
+        data_set(
+            $this->data,
+            'ocr_source',
+            null
+        );
+
         $this->form->fill($this->data);
 
         $this->ocrDiffs = [];
@@ -157,9 +211,18 @@ class EditMachine extends EditRecord
 
         Notification::make()
             ->title('OCR razlike primijenjene i spremljene')
-            ->body("Spremljeno zamjena: {$replaced}, preskočeno: {$skipped}.")
+            ->body(
+                "Spremljeno zamjena: {$replaced}, preskočeno: {$skipped}."
+            )
             ->success()
             ->send();
+    }
+
+    protected function beforeSave(): void
+    {
+        if (! MachineResource::ensureModulePermission('update')) {
+            $this->halt();
+        }
     }
 
     protected function runOcrAndGetData(): array
@@ -176,8 +239,14 @@ class EditMachine extends EditRecord
 
         $storedPath = null;
 
-        if ($file instanceof TemporaryUploadedFile || $file instanceof UploadedFile) {
-            $storedPath = $file->store('tmp/machine-ocr', 'local');
+        if (
+            $file instanceof TemporaryUploadedFile
+            || $file instanceof UploadedFile
+        ) {
+            $storedPath = $file->store(
+                'tmp/machine-ocr',
+                'local'
+            );
         } elseif (is_string($file)) {
             $storedPath = $file;
         }
@@ -185,7 +254,9 @@ class EditMachine extends EditRecord
         if (blank($storedPath)) {
             Notification::make()
                 ->title('OCR greška')
-                ->body('Dokument nije moguće spremiti za OCR.')
+                ->body(
+                    'Dokument nije moguće spremiti za OCR.'
+                )
                 ->danger()
                 ->send();
 
@@ -194,12 +265,19 @@ class EditMachine extends EditRecord
 
         /** @var MachineReportOcrService $service */
         $service = app(MachineReportOcrService::class);
-        $result = $service->extractFromStoredFile($storedPath, 'local');
+
+        $result = $service->extractFromStoredFile(
+            $storedPath,
+            'local'
+        );
 
         if (! ($result['success'] ?? false)) {
             Notification::make()
                 ->title('OCR greška')
-                ->body($result['message'] ?? 'Provjeri dokument ili OCR instalaciju.')
+                ->body(
+                    $result['message']
+                        ?? 'Provjeri dokument ili OCR instalaciju.'
+                )
                 ->danger()
                 ->send();
 
@@ -211,7 +289,9 @@ class EditMachine extends EditRecord
         if (blank($ocrData)) {
             Notification::make()
                 ->title('OCR nije pronašao podatke')
-                ->body('Dokument je učitan, ali nisu pronađena prepoznatljiva polja.')
+                ->body(
+                    'Dokument je učitan, ali nisu pronađena prepoznatljiva polja.'
+                )
                 ->warning()
                 ->send();
 
@@ -236,8 +316,10 @@ class EditMachine extends EditRecord
         ];
     }
 
-    protected function valuesAreEqual(mixed $oldValue, mixed $newValue): bool
-    {
+    protected function valuesAreEqual(
+        mixed $oldValue,
+        mixed $newValue
+    ): bool {
         if ($oldValue === null && $newValue === null) {
             return true;
         }
@@ -265,13 +347,22 @@ class EditMachine extends EditRecord
         return trim((string) $value);
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
-        unset($data['ocr_source']);
-        unset($data['ocr_original_name']);
+    protected function mutateFormDataBeforeSave(
+    array $data
+): array {
+    unset($data['ocr_source']);
+    unset($data['ocr_original_name']);
 
-        return $data;
-    }
+    /*
+     * Ownership postojećeg zapisa nikada se
+     * ne mijenja uređivanjem.
+     *
+     * Ovo vrijedi i kada zapis uređuje superadmin.
+     */
+    $data['user_id'] = $this->record->user_id;
+
+    return $data;
+}
 
     protected function getRedirectUrl(): string
     {

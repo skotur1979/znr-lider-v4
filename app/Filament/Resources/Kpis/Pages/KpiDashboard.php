@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Kpis\Pages;
 
 use App\Filament\Resources\Kpis\KpiResource;
 use App\Models\Kpi;
+use Illuminate\Database\Eloquent\Builder;
 use App\Models\KpiTargetOverride;
 use App\Services\KpiCalculationService;
 use Filament\Actions\Action;
@@ -230,32 +231,70 @@ class KpiDashboard extends Page
     }
 
     public function resetTargetOverride(): void
-    {
-        $this->validate([
-            'targetKpiId' => ['required', 'integer', 'exists:kpis,id'],
-            'targetMonth' => ['required', 'integer', 'min:1', 'max:12'],
-            'targetYear' => ['required', 'integer', 'min:2000', 'max:2100'],
-        ]);
+{
+    $this->validate([
+        'targetKpiId' => [
+            'required',
+            'integer',
+            'exists:kpis,id',
+        ],
+        'targetMonth' => [
+            'required',
+            'integer',
+            'min:1',
+            'max:12',
+        ],
+        'targetYear' => [
+            'required',
+            'integer',
+            'min:2000',
+            'max:2100',
+        ],
+    ]);
 
-        if (auth()->user()?->isSuperAdmin()) {
-            abort(403);
-        }
+    $user = auth()->user();
 
-        KpiTargetOverride::query()
-            ->where('kpi_id', $this->targetKpiId)
-            ->where('user_id', KpiResource::resolveOwnerId())
-            ->where('month', $this->targetMonth)
-            ->where('year', $this->targetYear)
-            ->delete();
-
-        Notification::make()
-            ->title('Cilj za odabrani period je uklonjen.')
-            ->success()
-            ->send();
-
-        $this->closeTargetModal();
-        $this->loadData();
+    if (! $user || $user->isSuperAdmin()) {
+        abort(403);
     }
+
+    $ownerId = KpiResource::resolveOwnerId();
+
+    if (! $ownerId) {
+        abort(403);
+    }
+
+    /*
+     * KPI mora biti:
+     * - globalni
+     * - ili KPI iste organizacije.
+     */
+    $kpi = Kpi::query()
+        ->whereKey($this->targetKpiId)
+        ->where(function (Builder $query) use ($ownerId): void {
+            $query
+                ->whereNull('user_id')
+                ->orWhere('user_id', $ownerId);
+        })
+        ->firstOrFail();
+
+    KpiTargetOverride::query()
+        ->where('kpi_id', $kpi->id)
+        ->where('user_id', $ownerId)
+        ->where('month', $this->targetMonth)
+        ->where('year', $this->targetYear)
+        ->delete();
+
+    Notification::make()
+        ->title(
+            'Cilj za odabrani period je uklonjen.'
+        )
+        ->success()
+        ->send();
+
+    $this->closeTargetModal();
+    $this->loadData();
+}
 
     protected function loadData(): void
     {
@@ -345,6 +384,10 @@ class KpiDashboard extends Page
                 ->label('Bulk unos')
                 ->icon('heroicon-o-table-cells')
                 ->color('success')
+                ->visible(
+                    fn (): bool =>
+                        auth()->user()?->isSuperAdmin() !== true
+                )
                 ->url(KpiResource::getUrl('bulk-entry')),
         ];
     }

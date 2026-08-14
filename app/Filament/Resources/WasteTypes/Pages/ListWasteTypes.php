@@ -6,6 +6,7 @@ use App\Exports\WasteTypesExport;
 use App\Filament\Resources\WasteTypes\WasteTypeResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ListWasteTypes extends ListRecords
@@ -17,18 +18,28 @@ class ListWasteTypes extends ListRecords
         return [
             Actions\CreateAction::make()
                 ->label('Nova vrsta otpada')
-                ->icon('heroicon-o-plus'),
+                ->icon('heroicon-o-plus')
+                ->visible(
+                    fn (): bool =>
+                        Auth::user() !== null
+                        && ! Auth::user()->isSuperAdmin()
+                ),
 
             Actions\Action::make('export_excel')
                 ->label('Izvoz u Excel')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->action(function () {
-                    $filters = $this->getTableFiltersForm()->getState();
+                    $ids = $this
+                        ->getFilteredSortedTableQuery()
+                        ->pluck('waste_types.id')
+                        ->toArray();
 
                     return Excel::download(
-                        new WasteTypesExport($filters),
-                        'vrste-otpada-' . now()->format('Y-m-d') . '.xlsx'
+                        new WasteTypesExport($ids),
+                        'vrste-otpada-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
                     );
                 }),
         ];

@@ -18,7 +18,7 @@ class WorkTasksExport implements FromCollection, WithHeadings, WithMapping, Shou
 
     protected bool $showUserColumn = false;
 
-    public function __construct()
+    public function __construct(?array $ids = null)
     {
         $user = auth()->user();
 
@@ -26,11 +26,20 @@ class WorkTasksExport implements FromCollection, WithHeadings, WithMapping, Shou
             (bool) $user?->isSuperAdmin()
             || (bool) $user?->canCreateSubusers();
 
-        $this->tasks = WorkTaskResource::getEloquentQuery()
+        $query = WorkTaskResource::getEloquentQuery()
             ->with('user')
             ->orderBy('due_date')
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
+
+        if ($ids !== null) {
+            if (empty($ids)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('work_tasks.id', $ids);
+            }
+        }
+
+        $this->tasks = $query->get();
     }
 
     public function collection()

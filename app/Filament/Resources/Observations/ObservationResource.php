@@ -5,6 +5,8 @@ namespace App\Filament\Resources\Observations;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Observations\Pages;
 use App\Mail\ObservationNotificationMail;
+use App\Models\ActivityLog;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Employee;
 use App\Models\Observation;
 use App\Services\StorageQuotaService;
@@ -36,9 +38,11 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use App\Support\ExpiryBadge;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
@@ -63,6 +67,66 @@ class ObservationResource extends BaseResource
     protected static function getModuleKey(): ?string
     {
         return 'observations';
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUTORIZACIJA POSLOVNIH ZAPISA
+    |--------------------------------------------------------------------------
+    |
+    | Zapažanja pripadaju organizaciji.
+    |
+    | Superadmin:
+    | - može pregledavati sve postojeće zapise
+    | - može uređivati postojeće zapise
+    | - može deaktivirati, vratiti i trajno brisati
+    | - ne može kreirati novo zapažanje u ime organizacije
+    |
+    | Organizacijski korisnici:
+    | - rade samo nad zapisima svoje organizacije
+    | - poštuju granularne module permissions
+    |
+    */
+
+    public static function canCreate(): bool
+    {
+        return parent::canCreate();
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canEdit($record);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canDelete($record);
+    }
+
+    public static function canRestore(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canRestore($record);
+    }
+
+    public static function canForceDelete(Model $record): bool
+    {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        return parent::canForceDelete($record);
     }
 
     public static function getMaxContentWidth(): MaxWidth|string|null
@@ -265,7 +329,61 @@ protected static function priorityIcon(?string $state): ?string
                                                 ->options(static::statusOptions())
                                                 ->default('Not started')
                                                 ->required()
+                                                ->live()
                                                 ->columnSpanFull(),
+
+                                            DatePicker::make('completed_at')
+                                                ->label('Datum zatvaranja')
+                                                ->displayFormat('d.m.Y.')
+                                                ->weekStartsOnMonday()
+                                                ->timezone('Europe/Zagreb')
+                                                ->native(false)
+                                                ->required(fn (callable $get): bool =>
+                                                    $get('status') === 'Complete'
+                                                )
+                                                ->visible(fn (callable $get): bool =>
+                                                    $get('status') === 'Complete'
+                                                )
+                                                ->rules([
+                                                    'nullable',
+                                                    'date',
+                                                    'after_or_equal:incident_date',
+                                                    'before_or_equal:today',
+                                                ])
+                                                ->helperText(
+                                                    'Upiši stvarni datum kada je radnja završena.'
+                                                ),
+
+                                            TextInput::make('closing_days')
+                                                ->label('Broj dana do zatvaranja')
+                                                ->disabled()
+                                                ->dehydrated(false)
+                                                ->visible(fn (callable $get): bool =>
+                                                    $get('status') === 'Complete'
+                                                )
+                                                ->formatStateUsing(function ($state, ?Observation $record): string {
+                                                    if (! $record?->incident_date || ! $record?->completed_at) {
+                                                        return '-';
+                                                    }
+
+                                                    $days = $record->incident_date
+                                                        ->copy()
+                                                        ->startOfDay()
+                                                        ->diffInDays(
+                                                            $record->completed_at
+                                                                ->copy()
+                                                                ->startOfDay()
+                                                        );
+
+                                                    return match ($days) {
+                                                        0 => '0 dana',
+                                                        1 => '1 dan',
+                                                        default => $days . ' dana',
+                                                    };
+                                                })
+                                                ->helperText(
+                                                    'Broj kalendarskih dana od datuma zapažanja do datuma zatvaranja.'
+                                                ),
 
                                             TagsInput::make('notification_emails')
                                                 ->label('E-mail primatelji')
@@ -430,15 +548,42 @@ protected static function priorityIcon(?string $state): ?string
     ImageColumn::make('picture_path')
         ->label('Slika')
         ->disk('public')
-        ->alignment(Alignment::Center)
         ->visibility('public')
-        ->height(50)
-        ->width(80)
-        ->extraImgAttributes(['style' => 'object-fit: cover; border-radius: 6px;'])
-        ->getStateUsing(fn (Observation $record) => $record->picture_path ?: null)
-        ->url(fn (Observation $record) => $record->picture_path
-            ? Storage::disk('public')->url($record->picture_path)
-            : null)
+        ->alignment(Alignment::Center)
+        ->height(60)
+        ->width(90)
+        ->extraImgAttributes([
+            'style' => '
+                width: 90px;
+                height: 60px;
+                object-fit: cover;
+                border-radius: 8px;
+            ',
+        ])
+        ->getStateUsing(function (Observation $record): ?string {
+            if (blank($record->picture_path)) {
+                return null;
+            }
+
+            return Str::of($record->picture_path)
+                ->replaceFirst('/storage/', '')
+                ->replaceFirst('storage/', '')
+                ->ltrim('/')
+                ->toString();
+        })
+        ->url(function (Observation $record): ?string {
+            if (blank($record->picture_path)) {
+                return null;
+            }
+
+            $path = Str::of($record->picture_path)
+                ->replaceFirst('/storage/', '')
+                ->replaceFirst('storage/', '')
+                ->ltrim('/')
+                ->toString();
+
+            return Storage::disk('public')->url($path);
+        })
         ->openUrlInNewTab()
         ->toggleable(),
 
@@ -527,15 +672,83 @@ protected static function priorityIcon(?string $state): ?string
                         };
                     }),
 
+                    SelectFilter::make('responsible')
+                    ->label('Odgovorna osoba')
+                    ->placeholder('Sve odgovorne osobe')
+                    ->options(function (): array {
+                        return static::getEloquentQuery()
+                            ->whereNotNull('responsible')
+                            ->where('responsible', '<>', '')
+                            ->distinct()
+                            ->orderBy('responsible')
+                            ->pluck('responsible', 'responsible')
+                            ->toArray();
+                    })
+                    ->searchable()
+                    ->query(function (Builder $query, array $data): Builder {
+                        $responsible = $data['value'] ?? null;
+
+                        if (filled($responsible)) {
+                            $query->where('responsible', $responsible);
+                        }
+
+                        return $query;
+                    }),
+
                 SelectFilter::make('status_action')
                     ->label('Zahtijeva radnju')
                     ->placeholder('Sve')
                     ->options([
-                        'open_action' => 'Nije započeto i U tijeku',
+                        'Not started' => 'Nije započeto',
+                        'In progress' => 'U tijeku',
+                        'Complete' => 'Završeno',
                     ])
-                    ->query(function (Builder $query, array $data) {
-                        return match ($data['value'] ?? null) {
-                            'open_action' => $query->whereIn('status', ['Not started', 'In progress']),
+                    ->query(function (Builder $query, array $data): Builder {
+                        $status = $data['value'] ?? null;
+
+                        if (filled($status)) {
+                            $query->where('status', $status);
+                        }
+
+                        return $query;
+                    }),
+
+                    SelectFilter::make('action_deadline')
+                    ->label('Rok radnje')
+                    ->placeholder('Svi rokovi')
+                    ->options([
+                        'expired' => 'Isteklo',
+                        'expiring' => 'Ističe u sljedećih 30 dana',
+                        'today' => 'Ističe danas',
+                        'without_deadline' => 'Bez upisanog roka',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        return match ($value) {
+                            'expired' => $query
+                                ->whereIn('status', ['Not started', 'In progress'])
+                                ->whereNotNull('target_date')
+                                ->whereDate('target_date', '<', Carbon::today()),
+
+                            'expiring' => $query
+                                ->whereIn('status', ['Not started', 'In progress'])
+                                ->whereNotNull('target_date')
+                                ->whereDate('target_date', '>=', Carbon::today())
+                                ->whereDate(
+                                    'target_date',
+                                    '<=',
+                                    Carbon::today()->addDays(30)
+                                ),
+
+                            'today' => $query
+                                ->whereIn('status', ['Not started', 'In progress'])
+                                ->whereDate('target_date', Carbon::today()),
+
+                            'without_deadline' => $query
+                                ->whereIn('status', ['Not started', 'In progress'])
+                                ->whereNull('target_date'),
+
                             default => $query,
                         };
                     }),
@@ -574,54 +787,172 @@ protected static function priorityIcon(?string $state): ?string
                 ActionGroup::make([
                     ViewAction::make()->label('Prikaži'),
 
-                    EditAction::make()
+                    Action::make('editObservation')
                         ->label('Uredi')
-                        ->visible(fn (Observation $record) => ! $record->trashed()),
+                        ->icon(Heroicon::PencilSquare)
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                ! $record->trashed()
+                                && static::canEdit($record)
+                        )
+                        ->action(function (Observation $record) {
+                            if (
+                                ! static::isSuperAdmin()
+                                && ! static::allowsModulePermission('update')
+                            ) {
+                                return;
+                            }
+
+                            return redirect(
+                                static::getUrl('edit', [
+                                    'record' => $record,
+                                ])
+                            );
+                        }),
 
                     Action::make('send_observation')
-                        ->label('Pošalji zapažanje')
+                        ->label('Pošalji zapažanje / podsjetnik')
                         ->icon('heroicon-o-paper-airplane')
                         ->color('info')
-                        ->visible(fn (Observation $record) => ! $record->trashed())
+                        ->modalHeading('Pošalji obavijest odgovornoj osobi')
+                        ->modalDescription(
+                            'Upiši e-mail odgovorne osobe ili druge osobe koju želiš obavijestiti o zapažanju, potrebnoj radnji i roku za provedbu.'
+                        )
+                        ->modalSubmitActionLabel('Pošalji e-mail')
+                        ->modalCancelActionLabel('Odustani')
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                ! $record->trashed()
+                                && static::canEdit($record)
+                        )
                         ->form([
                             TagsInput::make('emails')
                                 ->label('Primatelji')
                                 ->placeholder('Upiši e-mail i pritisni Enter')
-                                ->default(fn (Observation $record) => $record->notification_emails ?? [])
+                                ->helperText('Možeš upisati jednu ili više e-mail adresa.')
+                                ->default(fn (Observation $record): array =>
+                                    is_array($record->notification_emails)
+                                        ? $record->notification_emails
+                                        : []
+                                )
                                 ->required(),
                         ])
-                        ->action(function (Observation $record, array $data) {
+                        ->action(function (Observation $record, array $data): void {
+
+                            if (
+                                ! static::isSuperAdmin()
+                                && ! static::allowsModulePermission('update')
+                            ) {
+                                return;
+                            }
                             $emails = collect($data['emails'] ?? [])
-                                ->filter()
+                                ->map(fn ($email): string => trim((string) $email))
+                                ->filter(fn ($email): bool =>
+                                    filled($email)
+                                    && filter_var($email, FILTER_VALIDATE_EMAIL) !== false
+                                )
                                 ->unique()
                                 ->values()
                                 ->all();
 
-                            foreach ($emails as $email) {
-                                Mail::to($email)->send(new ObservationNotificationMail($record));
+                            if (empty($emails)) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Zapažanje nije poslano')
+                                    ->body('Upišite barem jednu ispravnu e-mail adresu.')
+                                    ->warning()
+                                    ->persistent()
+                                    ->send();
+
+                                return;
                             }
 
-                            $record->update([
-                                'notification_emails' => $emails,
-                                'sent_at' => now(),
-                            ]);
-                        })
-                        ->successNotificationTitle('Zapažanje je poslano'),
+                            try {
+                                foreach ($emails as $email) {
+                                    Mail::to($email)->send(
+                                        new ObservationNotificationMail($record)
+                                    );
+                                }
 
+                                $record->updateQuietly([
+                                    'notification_emails' => $emails,
+                                    'sent_at' => now(),
+                                ]);
+
+                                $user = Auth::user();
+
+                                ActivityLog::create([
+                                    'user_id' => $user?->id,
+                                    'owner_id' => $user?->ownerId(),
+                                    'module' => 'Zapažanja',
+                                    'action' => 'sent',
+                                    'record_type' => $record::class,
+                                    'record_id' => $record->getKey(),
+                                    'title' => 'Zapažanje poslano e-mailom',
+                                    'description' =>
+                                        'Zapažanje na lokaciji „'
+                                        . ($record->location ?: 'Nije navedena')
+                                        . '” poslano je na: '
+                                        . implode(', ', $emails),
+                                    'url' => ObservationResource::getUrl('view', [
+                                        'record' => $record,
+                                    ]),
+                                    'ip_address' => request()->ip(),
+                                ]);
+
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Zapažanje je poslano')
+                                    ->body(
+                                        count($emails) === 1
+                                            ? 'Poruka je poslana na jednu e-mail adresu.'
+                                            : 'Poruka je poslana na ' . count($emails) . ' e-mail adrese.'
+                                    )
+                                    ->success()
+                                    ->send();
+                            } catch (\Throwable $exception) {
+                                report($exception);
+
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Slanje nije uspjelo')
+                                    ->body('Došlo je do pogreške pri slanju e-maila. Pokušajte ponovno.')
+                                    ->danger()
+                                    ->persistent()
+                                    ->send();
+                            }
+                        }),
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (Observation $record) => ! $record->trashed()),
+                        ->before(
+                            static::beforeModulePermission('delete')
+                        )
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                ! $record->trashed()
+                                && static::canDelete($record)
+                        ),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (Observation $record) => $record->trashed()),
-
+                        ->before(
+                            static::beforeModulePermission('delete')
+                        )
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                $record->trashed()
+                                && static::canRestore($record)
+                        ),
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (Observation $record) => $record->trashed()),
+                        ->before(
+                            static::beforeModulePermission('delete')
+                        )
+                        ->visible(
+                            fn (Observation $record): bool =>
+                                $record->trashed()
+                                && static::canForceDelete($record)
+                        ),
                 ])
                     ->icon(Heroicon::EllipsisVertical)
                     ->label(''),
@@ -630,28 +961,52 @@ protected static function priorityIcon(?string $state): ?string
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        static::beforeModulePermission('delete')
+                    )
                     ->modalHeading('Deaktiviraj odabrano')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Deaktiviraj')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => ! self::isOnlyTrashed($livewire)),
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            ! self::isOnlyTrashed($livewire)
+                            && static::canDeleteAny()
+                    ),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        static::beforeModulePermission('delete')
+                    )
                     ->modalHeading('Vrati odabrano')
                     ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
                     ->modalSubmitActionLabel('Vrati')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) => self::isOnlyTrashed($livewire)),
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            self::isOnlyTrashed($livewire)
+                            && static::canRestoreAny()
+                    ),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        static::beforeModulePermission('delete')
+                    )
                     ->modalHeading('Trajno obriši odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                    )
                     ->modalSubmitActionLabel('Trajno obriši')
-                    ->modalCancelActionLabel('Odustani'),
+                    ->modalCancelActionLabel('Odustani')
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            self::isOnlyTrashed($livewire)
+                            && static::canForceDeleteAny()
+                    ),
             ])
             ->defaultSort('incident_date', 'desc');
     }
@@ -687,10 +1042,11 @@ protected static function priorityIcon(?string $state): ?string
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListObservations::route('/'),
+            'index' => Pages\ListObservations::route('/'),
             'create' => Pages\CreateObservation::route('/create'),
-            'edit'   => Pages\EditObservation::route('/{record}/edit'),
-            'view'   => Pages\ViewObservation::route('/{record}'),
+            'reports' => Pages\ObservationReports::route('/reports'),
+            'edit' => Pages\EditObservation::route('/{record}/edit'),
+            'view' => Pages\ViewObservation::route('/{record}'),
         ];
     }
 }

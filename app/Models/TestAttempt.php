@@ -4,8 +4,8 @@ namespace App\Models;
 
 use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TestAttempt extends Model
 {
@@ -44,6 +44,9 @@ class TestAttempt extends Model
 
     public function odgovori(): HasMany
     {
-        return $this->hasMany(AttemptAnswer::class, 'test_attempt_id');
+        return $this->hasMany(
+            AttemptAnswer::class,
+            'test_attempt_id'
+        );
     }
 }

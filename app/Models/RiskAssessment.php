@@ -4,9 +4,8 @@ namespace App\Models;
 
 use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RiskAssessment extends Model
 {
@@ -37,25 +36,25 @@ class RiskAssessment extends Model
 
     public function participants(): HasMany
     {
-        return $this->hasMany(RiskParticipant::class, 'risk_assessment_id');
+        return $this->hasMany(
+            RiskParticipant::class,
+            'risk_assessment_id'
+        );
     }
 
     public function revisions(): HasMany
     {
-        return $this->hasMany(RiskRevision::class, 'risk_assessment_id');
+        return $this->hasMany(
+            RiskRevision::class,
+            'risk_assessment_id'
+        );
     }
 
     public function attachments(): HasMany
     {
-        return $this->hasMany(RiskAttachment::class, 'risk_assessment_id');
-    }
-
-    protected static function booted(): void
-    {
-        static::creating(function (self $record) {
-            if (blank($record->user_id)) {
-                $record->user_id = Auth::id();
-            }
-        });
+        return $this->hasMany(
+            RiskAttachment::class,
+            'risk_assessment_id'
+        );
     }
 }

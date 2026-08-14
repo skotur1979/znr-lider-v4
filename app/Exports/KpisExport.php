@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Filament\Resources\Kpis\KpiResource;
 use App\Models\Kpi;
+use App\Models\KpiValue;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -23,8 +24,7 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
         $user = auth()->user();
 
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+            (bool) $user?->isSuperAdmin();
 
         $this->kpis = KpiResource::getEloquentQuery()
             ->with('user')
@@ -71,7 +71,9 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
         /** @var Kpi $kpi */
 
         $ownerId = KpiResource::resolveOwnerId();
-        $latestValue = $kpi->latestValue()?->value;
+
+        $latestValue = $this->latestVisibleValue($kpi, $ownerId);
+
         $status = $kpi->evaluateStatus($latestValue, $ownerId);
 
         $row = [
@@ -210,6 +212,35 @@ class KpisExport implements FromCollection, WithHeadings, WithMapping, ShouldAut
                 $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
             },
         ];
+    }
+
+    private function latestVisibleValue(
+        Kpi $kpi,
+        ?int $ownerId
+    ): ?float {
+        /*
+        * Superadmin nema vlastite organizacijske
+        * KPI vrijednosti.
+        *
+        * Zato kod administrativnog izvoza KPI
+        * definicija ne prikazujemo vrijednost neke
+        * proizvoljne organizacije.
+        */
+        if (auth()->user()?->isSuperAdmin()) {
+            return null;
+        }
+
+        if (! $ownerId) {
+            return null;
+        }
+
+        return KpiValue::query()
+            ->where('kpi_id', $kpi->id)
+            ->where('user_id', $ownerId)
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->first()
+            ?->value;
     }
 
     private function directionLabel(?string $value): string

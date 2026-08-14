@@ -21,11 +21,13 @@ class ListWorkTasks extends ListRecords
 
         if ($status === 'open') {
             $this->tableFilters['status']['value'] = 'open';
+
             return;
         }
 
         if ($status === 'closed') {
             $this->tableFilters['status']['value'] = 'closed';
+
             return;
         }
 
@@ -37,18 +39,27 @@ class ListWorkTasks extends ListRecords
         return [
             CreateAction::make()
                 ->label('Novi radni zadatak')
-                ->icon('heroicon-o-plus'),
+                ->icon('heroicon-o-plus')
+                ->visible(
+                    fn (): bool =>
+                        WorkTaskResource::canCreate()
+                ),
 
-            Action::make('exportExcel')
-                ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(function () {
-                    return Excel::download(
-                        new WorkTasksExport(),
-                        'radni-zadaci-' . now()->format('Y-m-d') . '.xlsx'
-                    );
-                }),
+           Action::make('exportExcel')
+            ->label('Izvoz u Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(function () {
+                $taskIds = $this
+                    ->getFilteredSortedTableQuery()
+                    ->pluck('work_tasks.id')
+                    ->toArray();
+
+                return Excel::download(
+                    new WorkTasksExport($taskIds),
+                    'radni-zadaci-' . now()->format('Y-m-d') . '.xlsx'
+                );
+            }),
         ];
     }
 }

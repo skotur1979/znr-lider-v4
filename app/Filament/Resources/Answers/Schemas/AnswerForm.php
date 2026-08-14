@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Answers\Schemas;
 
+use App\Filament\Resources\Questions\QuestionResource;
+use App\Models\Question;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -19,9 +21,29 @@ class AnswerForm
                 ->schema([
                     Select::make('question_id')
                         ->label('Pitanje')
-                        ->relationship('question', 'tekst')
-                        ->searchable(false)
+                        ->options(function (): array {
+                            return QuestionResource::getManageableQuery()
+                                ->get()
+                                ->mapWithKeys(
+                                    function (Question $question): array {
+                                        $testName = $question->test?->naziv;
+
+                                        $label = $testName
+                                            ? $testName . ' — ' . $question->tekst
+                                            : $question->tekst;
+
+                                        return [
+                                            $question->id => $label,
+                                        ];
+                                    }
+                                )
+                                ->toArray();
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->native(false)
                         ->required()
+                        ->placeholder('Odaberite pitanje')
                         ->columnSpanFull(),
 
                     TextInput::make('tekst')

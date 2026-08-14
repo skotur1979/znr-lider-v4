@@ -79,17 +79,23 @@ class GlobalSearchService
 
     protected function scopeUser(Builder $query): Builder
     {
-        if (! Auth::user()?->isAdmin()) {
-            $ownerId = Auth::user()?->ownerId();
+        $user = Auth::user();
 
-            if (! $ownerId) {
-                return $query->whereRaw('1 = 0');
-            }
-
-            $query->where('user_id', $ownerId);
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
         }
 
-        return $query;
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        $ownerId = $user->ownerId();
+
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('user_id', $ownerId);
     }
 
     protected function resourceRecordUrl(string $resourceClass, $record): string
@@ -721,7 +727,7 @@ class GlobalSearchService
 {
     $query = Kpi::query()->whereNull('deleted_at');
 
-    if (! Auth::user()?->isAdmin()) {
+    if (! Auth::user()?->isSuperAdmin()) {
         $ownerId = Auth::user()?->ownerId();
 
         $query->where(function (Builder $q) use ($ownerId) {
@@ -895,7 +901,7 @@ class GlobalSearchService
 {
     $query = LearningMaterial::query()->with(['category', 'user']);
 
-    if (! Auth::user()?->isAdmin()) {
+    if (! Auth::user()?->isSuperAdmin()) {
         $ownerId = Auth::user()?->ownerId();
 
         $query->where(function (Builder $q) use ($ownerId) {

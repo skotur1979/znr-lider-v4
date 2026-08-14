@@ -19,6 +19,36 @@ class MiscellaneousImport implements ToCollection
     public int $unchanged = 0;
     public int $skipped = 0;
 
+    protected int $ownerId;
+
+    protected bool $canCreateCategories = false;
+
+    public function __construct()
+    {
+        $user = Auth::user();
+
+        if (! $user || $user->isSuperAdmin()) {
+            abort(403);
+        }
+
+        $this->ownerId = (int) $user->ownerId();
+
+        if ($this->ownerId <= 0) {
+            abort(403);
+        }
+
+        /*
+         * Korisnik može kroz import automatski stvarati
+         * nove kategorije samo ako ima CREATE dozvolu
+         * za modul Kategorije ispitivanja.
+         */
+        $this->canCreateCategories =
+            $user->hasModulePermission(
+                'categories',
+                'create'
+            );
+    }
+
     public function collection(Collection $rows): void
     {
         $headerRowIndex = 3;
@@ -29,13 +59,7 @@ class MiscellaneousImport implements ToCollection
         if (! $headers) {
             $this->skipped++;
 
-            ActivityLogger::import(
-                module: 'Ostala ispitivanja',
-                created: $this->created,
-                updated: $this->updated,
-                unchanged: $this->unchanged,
-                skipped: $this->skipped,
-            );
+            $this->logImport();
 
             return;
         }
@@ -57,36 +81,118 @@ class MiscellaneousImport implements ToCollection
                 continue;
             }
 
-            $name = $this->clean($this->value($row, $map, 'naziv'));
+            $name = $this->clean(
+                $this->value(
+                    $row,
+                    $map,
+                    'naziv'
+                )
+            );
 
             if (! $name) {
                 $this->skipped++;
+
                 continue;
             }
 
-            $categoryName = $this->clean($this->value($row, $map, 'kategorija'));
-            $examiner = $this->clean($this->value($row, $map, 'ispitao'));
-            $reportNo = $this->clean($this->value($row, $map, 'broj_izvjestaja'));
-            $validFrom = $this->parseDate($this->value($row, $map, 'vrijedi_od'));
-            $validUntil = $this->parseDate($this->value($row, $map, 'vrijedi_do'));
-            $remark = $this->clean($this->value($row, $map, 'napomena'));
+            $categoryName = $this->clean(
+                $this->value(
+                    $row,
+                    $map,
+                    'kategorija'
+                )
+            );
 
-            if (! $categoryName || ! $validFrom || ! $validUntil) {
+            $examiner = $this->clean(
+                $this->value(
+                    $row,
+                    $map,
+                    'ispitao'
+                )
+            );
+
+            $reportNo = $this->clean(
+                $this->value(
+                    $row,
+                    $map,
+                    'broj_izvjestaja'
+                )
+            );
+
+            $validFrom = $this->parseDate(
+                $this->value(
+                    $row,
+                    $map,
+                    'vrijedi_od'
+                )
+            );
+
+            $validUntil = $this->parseDate(
+                $this->value(
+                    $row,
+                    $map,
+                    'vrijedi_do'
+                )
+            );
+
+            $remark = $this->clean(
+                $this->value(
+                    $row,
+                    $map,
+                    'napomena'
+                )
+            );
+
+            if (
+                ! $categoryName
+                || ! $validFrom
+                || ! $validUntil
+            ) {
                 $this->skipped++;
+
                 continue;
             }
 
-            $userId = Auth::user()?->ownerId() ?? Auth::id();
+            $userId = $this->ownerId;
 
-            $category = Category::firstOrCreate([
-                'user_id' => $userId,
-                'name' => $categoryName,
-            ]);
+            /*
+             * Kategoriju uvijek tražimo samo
+             * unutar iste organizacije.
+             */
+            $category = Category::query()
+                ->where('user_id', $userId)
+                ->where('name', $categoryName)
+                ->first();
 
+            /*
+             * Ako kategorija ne postoji, smije se
+             * automatski kreirati samo ako korisnik
+             * ima CREATE dozvolu za modul Kategorije.
+             */
+            if (! $category) {
+                if (! $this->canCreateCategories) {
+                    $this->skipped++;
+
+                    continue;
+                }
+
+                $category = Category::create([
+                    'user_id' => $userId,
+                    'name' => $categoryName,
+                ]);
+            }
+
+            /*
+             * Postojeće ispitivanje tražimo samo
+             * unutar iste organizacije.
+             */
             $record = Miscellaneous::query()
                 ->where('user_id', $userId)
                 ->where('name', $name)
-                ->where('category_id', $category->id)
+                ->where(
+                    'category_id',
+                    $category->id
+                )
                 ->first();
 
             $data = [
@@ -100,43 +206,83 @@ class MiscellaneousImport implements ToCollection
                 'remark' => $remark,
             ];
 
+            /*
+             * Novi zapis.
+             */
             if (! $record) {
                 Miscellaneous::create($data);
+
                 $this->created++;
+
                 continue;
             }
 
+            /*
+             * Postojeći zapis.
+             *
+             * Ownership, naziv i kategoriju ne mijenjamo
+             * prilikom importa postojećeg zapisa.
+             */
             $changed = [];
 
             foreach ($data as $field => $value) {
-                if (in_array($field, ['user_id', 'name', 'category_id'], true)) {
+                if (
+                    in_array(
+                        $field,
+                        [
+                            'user_id',
+                            'name',
+                            'category_id',
+                        ],
+                        true
+                    )
+                ) {
                     continue;
                 }
 
+                /*
+                 * Prazna ćelija iz Excela ne briše
+                 * postojeću vrijednost.
+                 */
                 if ($value === null) {
                     continue;
                 }
 
                 $current = $record->{$field};
 
-                if ($current instanceof \Carbon\CarbonInterface) {
-                    $current = $current->format('Y-m-d');
+                if (
+                    $current
+                    instanceof \Carbon\CarbonInterface
+                ) {
+                    $current = $current->format(
+                        'Y-m-d'
+                    );
                 }
 
-                if ((string) ($current ?? '') !== (string) $value) {
+                if (
+                    (string) ($current ?? '')
+                    !== (string) $value
+                ) {
                     $changed[$field] = $value;
                 }
             }
 
             if (empty($changed)) {
                 $this->unchanged++;
+
                 continue;
             }
 
             $record->update($changed);
+
             $this->updated++;
         }
 
+        $this->logImport();
+    }
+
+    private function logImport(): void
+    {
         ActivityLogger::import(
             module: 'Ostala ispitivanja',
             created: $this->created,
@@ -146,15 +292,27 @@ class MiscellaneousImport implements ToCollection
         );
     }
 
-    private function value($row, array $map, string $key)
-    {
-        return array_key_exists($key, $map) ? ($row[$map[$key]] ?? null) : null;
+    private function value(
+        $row,
+        array $map,
+        string $key
+    ) {
+        return array_key_exists(
+            $key,
+            $map
+        )
+            ? ($row[$map[$key]] ?? null)
+            : null;
     }
 
-    private function isEmptyRow($row): bool
-    {
+    private function isEmptyRow(
+        $row
+    ): bool {
         foreach ($row as $value) {
-            if ($this->clean($value) !== null) {
+            if (
+                $this->clean($value)
+                !== null
+            ) {
                 return false;
             }
         }
@@ -162,74 +320,173 @@ class MiscellaneousImport implements ToCollection
         return true;
     }
 
-    private function clean($value): ?string
-    {
+    private function clean(
+        $value
+    ): ?string {
         if ($value === null) {
             return null;
         }
 
-        $value = trim((string) $value);
+        $value = trim(
+            (string) $value
+        );
 
-        return $value === '' ? null : $value;
+        return $value === ''
+            ? null
+            : $value;
     }
 
-    private function parseDate($value): ?string
-    {
-        if ($value === null || $value === '') {
+    private function parseDate(
+        $value
+    ): ?string {
+        if (
+            $value === null
+            || $value === ''
+        ) {
             return null;
+        }
+
+        if (
+            $value instanceof \DateTimeInterface
+        ) {
+            return Carbon::instance(
+                $value
+            )->format('Y-m-d');
         }
 
         if (is_numeric($value)) {
             try {
-                return Carbon::instance(Date::excelToDateTimeObject((float) $value))->format('Y-m-d');
+                return Carbon::instance(
+                    Date::excelToDateTimeObject(
+                        (float) $value
+                    )
+                )->format('Y-m-d');
             } catch (\Throwable) {
                 return null;
             }
         }
 
-        $value = rtrim(trim((string) $value), '.');
+        $value = rtrim(
+            trim((string) $value),
+            '.'
+        );
 
-        foreach (['d.m.Y', 'd/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.y', 'd/m/y', 'd-m-y'] as $format) {
+        foreach (
+            [
+                'd.m.Y',
+                'd/m/Y',
+                'd-m-Y',
+                'Y-m-d',
+                'd.m.y',
+                'd/m/y',
+                'd-m-y',
+            ] as $format
+        ) {
             try {
-                $date = Carbon::createFromFormat($format, $value);
+                $date =
+                    Carbon::createFromFormat(
+                        $format,
+                        $value
+                    );
 
                 if ($date !== false) {
-                    return $date->format('Y-m-d');
+                    return $date->format(
+                        'Y-m-d'
+                    );
                 }
             } catch (\Throwable) {
+                //
             }
         }
 
         try {
-            return Carbon::parse($value)->format('Y-m-d');
+            return Carbon::parse(
+                $value
+            )->format('Y-m-d');
         } catch (\Throwable) {
             return null;
         }
     }
 
-    private function normalizeKey($key): ?string
-    {
-        if ($key === null || trim((string) $key) === '') {
+    private function normalizeKey(
+        $key
+    ): ?string {
+        if (
+            $key === null
+            || trim((string) $key) === ''
+        ) {
             return null;
         }
 
-        $key = Str::of((string) $key)
+        $key = Str::of(
+            (string) $key
+        )
             ->lower()
-            ->replace(['š', 'đ', 'č', 'ć', 'ž'], ['s', 'd', 'c', 'c', 'z'])
-            ->replace(['/', '-', '.', '(', ')'], ' ')
-            ->replaceMatches('/\s+/', ' ')
+            ->replace(
+                [
+                    'š',
+                    'đ',
+                    'č',
+                    'ć',
+                    'ž',
+                ],
+                [
+                    's',
+                    'd',
+                    'c',
+                    'c',
+                    'z',
+                ]
+            )
+            ->replace(
+                [
+                    '/',
+                    '-',
+                    '.',
+                    '(',
+                    ')',
+                ],
+                ' '
+            )
+            ->replace(
+                "\u{00A0}",
+                ' '
+            )
+            ->replaceMatches(
+                '/\s+/',
+                ' '
+            )
             ->trim()
-            ->replace(' ', '_')
+            ->replace(
+                ' ',
+                '_'
+            )
             ->toString();
 
         return match ($key) {
-            'naziv' => 'naziv',
-            'kategorija' => 'kategorija',
-            'ispitao' => 'ispitao',
-            'broj_izvjestaja', 'broj_izvestaja', 'izvjestaj_broj' => 'broj_izvjestaja',
-            'vrijedi_od' => 'vrijedi_od',
-            'vrijedi_do' => 'vrijedi_do',
-            'napomena' => 'napomena',
+            'naziv'
+                => 'naziv',
+
+            'kategorija'
+                => 'kategorija',
+
+            'ispitao'
+                => 'ispitao',
+
+            'broj_izvjestaja',
+            'broj_izvestaja',
+            'izvjestaj_broj'
+                => 'broj_izvjestaja',
+
+            'vrijedi_od'
+                => 'vrijedi_od',
+
+            'vrijedi_do'
+                => 'vrijedi_do',
+
+            'napomena'
+                => 'napomena',
+
             default => $key,
         };
     }

@@ -24,6 +24,8 @@ class KpiValue extends Model
     ];
 
     protected $casts = [
+        'month' => 'integer',
+        'year' => 'integer',
         'value' => 'float',
         'auto_generated' => 'boolean',
     ];
@@ -33,12 +35,17 @@ class KpiValue extends Model
         return $this->belongsTo(Kpi::class);
     }
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function getMonthYearLabelAttribute(): string
     {
-        return sprintf('%02d/%s', $this->month, $this->year);
+        return sprintf(
+            '%02d/%s',
+            $this->month,
+            $this->year
+        );
     }
-    public function user(): BelongsTo
-{
-    return $this->belongsTo(User::class);
-}
 }

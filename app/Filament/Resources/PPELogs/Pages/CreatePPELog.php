@@ -12,11 +12,30 @@ class CreatePPELog extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        if (! Auth::user()?->isAdmin()) {
-            $data['user_id'] = Auth::id();
+        $user = Auth::user();
+
+        if (! $user) {
+            abort(403);
         }
 
+        /*
+         * Upisnik OZO je organizacijski zapis.
+         *
+         * Glavni korisnik i svi njegovi podkorisnici
+         * spremaju isti ownerId().
+         */
+        if ($user->isSuperAdmin()) {
+            abort(403);
+        }
+
+        $data['user_id'] = $user->ownerId();
+
         return $data;
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
     }
 
     public function getMaxContentWidth(): ?string

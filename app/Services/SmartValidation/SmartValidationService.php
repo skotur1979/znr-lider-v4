@@ -66,11 +66,25 @@ class SmartValidationService
             $query->whereNull($deletedAtColumn);
         }
 
-        if (($rule['scope_to_user'] ?? false) && ! Auth::user()?->isAdmin()) {
-            $userColumn = $rule['user_column'] ?? 'user_id';
+        if (($rule['scope_to_user'] ?? false)) {
+            $user = Auth::user();
 
-            if ($this->hasColumn($modelClass, $userColumn)) {
-                $query->where($userColumn, Auth::id());
+            if (! $user) {
+                return false;
+            }
+
+            if (! $user->isSuperAdmin()) {
+                $ownerId = $user->ownerId();
+
+                if (! $ownerId) {
+                    return false;
+                }
+
+                $userColumn = $rule['user_column'] ?? 'user_id';
+
+                if ($this->hasColumn($modelClass, $userColumn)) {
+                    $query->where($userColumn, $ownerId);
+                }
             }
         }
 

@@ -4,12 +4,12 @@ namespace App\Filament\Resources\Machines\Pages;
 
 use App\Exports\MachinesExport;
 use App\Filament\Resources\Machines\MachineResource;
+use App\Filament\Resources\Pages\BaseListRecords;
 use App\Imports\MachinesImport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
-use App\Filament\Resources\Pages\BaseListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -25,109 +25,165 @@ class ListMachines extends BaseListRecords
         return [
             Actions\CreateAction::make()
                 ->label('Nova Radna Oprema')
-                ->icon('heroicon-o-plus'),
+                ->icon('heroicon-o-plus')
+                ->before(function ($action): void {
+                    if (! MachineResource::ensureModulePermission('create')) {
+                        $action->halt();
+                    }
+                }),
 
-           Actions\Action::make('export_pdf')
-    ->label('Izvoz u PDF')
-    ->icon('heroicon-o-arrow-down-tray')
-    ->color('warning')
-    ->action(function () {
-        $machines = $this->getFilteredSortedTableQuery()
-            ->get();
+            Actions\Action::make('export_pdf')
+                ->label('Izvoz u PDF')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('warning')
+                ->action(function () {
+                    if (! MachineResource::ensureModulePermission('view')) {
+                        return null;
+                    }
 
-        $pdf = Pdf::loadView('pdf.machines', compact('machines'))
-    ->setPaper('a4', 'landscape')
-    ->setOptions([
-        'isHtml5ParserEnabled' => true,
-        'isRemoteEnabled' => true,
-        'isPhpEnabled' => true,
-        'dpi' => 96,
-        'defaultFont' => 'DejaVu Sans',
-    ]);
+                    $machines = $this
+                        ->getFilteredSortedTableQuery()
+                        ->get();
 
-        return response()->streamDownload(
-            fn () => print($pdf->output()),
-            'radna-oprema-' . now()->format('Y-m-d') . '.pdf'
-        );
-    }),
+                    $pdf = Pdf::loadView(
+                        'pdf.machines',
+                        compact('machines')
+                    )
+                        ->setPaper('a4', 'landscape')
+                        ->setOptions([
+                            'isHtml5ParserEnabled' => true,
+                            'isRemoteEnabled' => true,
+                            'isPhpEnabled' => true,
+                            'dpi' => 96,
+                            'defaultFont' => 'DejaVu Sans',
+                        ]);
+
+                    return response()->streamDownload(
+                        fn () => print($pdf->output()),
+                        'radna-oprema-'
+                            . now()->format('Y-m-d')
+                            . '.pdf'
+                    );
+                }),
 
             Actions\Action::make('export_excel')
-    ->label('Izvoz u Excel')
-    ->icon('heroicon-o-document-arrow-down')
-    ->color('success')
-    ->action(function () {
+                ->label('Izvoz u Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->action(function () {
+                    if (! MachineResource::ensureModulePermission('view')) {
+                        return null;
+                    }
 
-        $machineIds = $this->getFilteredSortedTableQuery()
-            ->pluck('machines.id')
-            ->toArray();
+                    $machineIds = $this
+                        ->getFilteredSortedTableQuery()
+                        ->pluck('machines.id')
+                        ->toArray();
 
-        return Excel::download(
-            new MachinesExport($machineIds),
-            'radna-oprema-' . now()->format('Y-m-d') . '.xlsx'
-        );
-    }),
+                    return Excel::download(
+                        new MachinesExport($machineIds),
+                        'radna-oprema-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
+                    );
+                }),
 
             Actions\Action::make('import_excel')
-    ->label('Uvoz iz Excela')
-    ->icon('heroicon-o-document-arrow-up')
-    ->color('warning')
-    ->form([
-        FileUpload::make('excel_file')
-            ->label('Excel datoteka')
-            ->disk('local')
-            ->directory('imports')
-            ->preserveFilenames()
-            ->acceptedFileTypes([
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-excel',
-            ])
-            ->required(),
-    ])
-    ->action(function (array $data) {
-        $file = $data['excel_file'];
+                ->label('Uvoz iz Excela')
+                ->icon('heroicon-o-document-arrow-up')
+                ->color('warning')
+                ->visible(
+                    fn (): bool =>
+                        auth()->user()?->isSuperAdmin() !== true
+                )
+                ->form([
+                    FileUpload::make('excel_file')
+                        ->label('Excel datoteka')
+                        ->disk('local')
+                        ->directory('imports')
+                        ->preserveFilenames()
+                        ->acceptedFileTypes([
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'application/vnd.ms-excel',
+                        ])
+                        ->required(),
+                ])
+                ->action(function (array $data): void {
+                    if (! MachineResource::ensureModulePermission('create')) {
+                        return;
+                    }
 
-        if (is_array($file)) {
-            $file = collect($file)->first();
-        }
+                    $file = $data['excel_file'];
 
-        if ($file instanceof TemporaryUploadedFile) {
-            $path = $file->store('imports', 'local');
-        } else {
-            $path = (string) $file;
-        }
+                    if (is_array($file)) {
+                        $file = collect($file)->first();
+                    }
 
-        if (! Storage::disk('local')->exists($path)) {
-            Notification::make()
-                ->title('Excel datoteka nije pronađena')
-                ->body('Datoteka nije spremljena ili putanja nije ispravna.')
-                ->danger()
-                ->send();
+                    if ($file instanceof TemporaryUploadedFile) {
+                        $path = $file->store(
+                            'imports',
+                            'local'
+                        );
+                    } else {
+                        $path = (string) $file;
+                    }
 
-            return;
-        }
+                    if (
+                        blank($path)
+                        || ! Storage::disk('local')->exists($path)
+                    ) {
+                        Notification::make()
+                            ->title('Excel datoteka nije pronađena')
+                            ->body(
+                                'Datoteka nije spremljena ili putanja nije ispravna.'
+                            )
+                            ->danger()
+                            ->send();
 
-        $fullPath = Storage::disk('local')->path($path);
+                        return;
+                    }
 
-        $import = new MachinesImport();
+                    $fullPath = Storage::disk('local')
+                        ->path($path);
 
-        Excel::import($import, $fullPath);
+                    $import = new MachinesImport();
 
-        $total = $import->created + $import->updated + $import->unchanged + $import->skipped;
+                    try {
+                        Excel::import(
+                            $import,
+                            $fullPath
+                        );
 
-        Notification::make()
-            ->title('Uvoz radne opreme je završen')
-            ->body(
-                "Ukupno obrađeno: {$total}\n" .
-                "Novi zapisi: {$import->created}\n" .
-                "Ažurirani zapisi: {$import->updated}\n" .
-                "Bez promjene: {$import->unchanged}\n" .
-                "Preskočeni redovi: {$import->skipped}"
-            )
-            ->success()
-            ->send();
+                        $total =
+                            $import->created
+                            + $import->updated
+                            + $import->unchanged
+                            + $import->skipped;
 
-        $this->resetTable();
-    }),
+                        Notification::make()
+                            ->title('Uvoz radne opreme je završen')
+                            ->body(
+                                "Ukupno obrađeno: {$total}\n"
+                                . "Novi zapisi: {$import->created}\n"
+                                . "Ažurirani zapisi: {$import->updated}\n"
+                                . "Bez promjene: {$import->unchanged}\n"
+                                . "Preskočeni redovi: {$import->skipped}"
+                            )
+                            ->success()
+                            ->send();
+
+                        $this->resetTable();
+                    } finally {
+                        /*
+                         * Privremena Excel datoteka više nije potrebna
+                         * nakon završetka importa, bez obzira je li
+                         * import uspio ili je došlo do greške.
+                         */
+                        if (Storage::disk('local')->exists($path)) {
+                            Storage::disk('local')->delete($path);
+                        }
+                    }
+                }),
         ];
     }
 
@@ -137,16 +193,34 @@ class ListMachines extends BaseListRecords
 
         $pregled =
             request()->query('pregled')
-            ?? data_get(request()->query(), 'tableFilters.pregled.value')
-            ?? data_get(request()->query(), 'filters.pregled.value');
+            ?? data_get(
+                request()->query(),
+                'tableFilters.pregled.value'
+            )
+            ?? data_get(
+                request()->query(),
+                'filters.pregled.value'
+            );
 
         return match ($pregled) {
             'uskoro' => $query
-                ->whereDate('examination_valid_until', '>=', Carbon::today())
-                ->whereDate('examination_valid_until', '<=', Carbon::today()->addDays(30)),
+                ->whereDate(
+                    'examination_valid_until',
+                    '>=',
+                    Carbon::today()
+                )
+                ->whereDate(
+                    'examination_valid_until',
+                    '<=',
+                    Carbon::today()->addDays(30)
+                ),
 
             'isteklo' => $query
-                ->whereDate('examination_valid_until', '<', Carbon::today()),
+                ->whereDate(
+                    'examination_valid_until',
+                    '<',
+                    Carbon::today()
+                ),
 
             default => $query,
         };

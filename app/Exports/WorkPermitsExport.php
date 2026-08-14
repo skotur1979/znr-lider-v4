@@ -18,7 +18,7 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
 
     protected bool $showUserColumn = false;
 
-    public function __construct()
+    public function __construct(?array $ids = null)
     {
         $user = auth()->user();
 
@@ -26,12 +26,25 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
             (bool) $user?->isSuperAdmin()
             || (bool) $user?->canCreateSubusers();
 
-        $this->permits = WorkPermitResource::getEloquentQuery()
-            ->with('user')
+        $query = WorkPermitResource::getEloquentQuery()
+            ->with('user');
+
+        if ($ids !== null) {
+            if (empty($ids)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn(
+                    'work_permits.id',
+                    $ids
+                );
+            }
+        }
+
+        $this->permits = $query
             ->orderByDesc('issue_date')
+            ->orderByDesc('id')
             ->get();
     }
-
     public function collection()
     {
         return $this->permits;

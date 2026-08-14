@@ -8,9 +8,9 @@ use App\Models\LearningCategory;
 use App\Models\LearningMaterial;
 use App\Services\StorageQuotaService;
 use Filament\Actions\Action;
+use App\Support\SecureFilePreview;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\CheckboxList;
@@ -33,23 +33,52 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
 class LearningMaterialResource extends BaseResource
 {
     protected static ?string $model = LearningMaterial::class;
 
+    /**
+     * Posebna global/org logika.
+     *
+     * Globalni materijal:
+     * user_id = NULL
+     * is_global = true
+     *
+     * Organizacijski materijal:
+     * user_id = ownerId()
+     * is_global = false
+     */
     protected static bool $hasOwnership = false;
 
-    protected static \BackedEnum|string|null $navigationIcon = Heroicon::OutlinedAcademicCap;
-    protected static \UnitEnum|string|null $navigationGroup = 'Edukacija';
+    /**
+     * Superadmin smije kreirati
+     * globalne edukacijske materijale.
+     */
+    protected static bool $superAdminCanCreate = true;
 
-    protected static ?string $navigationLabel = 'Edukacijski centar';
-    protected static ?string $modelLabel = 'Edukacijski materijal';
-    protected static ?string $pluralModelLabel = 'Edukacijski centar';
+    protected static \BackedEnum|string|null $navigationIcon =
+        Heroicon::OutlinedAcademicCap;
+
+    protected static \UnitEnum|string|null $navigationGroup =
+        'Edukacija';
+
+    protected static ?string $navigationLabel =
+        'Edukacijski centar';
+
+    protected static ?string $modelLabel =
+        'Edukacijski materijal';
+
+    protected static ?string $pluralModelLabel =
+        'Edukacijski centar';
 
     protected static ?int $navigationSort = 2;
 
+    /**
+     * Ovaj modul nema granularne dozvole.
+     */
     protected static function getModuleKey(): ?string
     {
         return null;
@@ -63,32 +92,71 @@ class LearningMaterialResource extends BaseResource
     public static function contentTypeOptions(): array
     {
         return [
-            'manual' => '📘 Upute za korištenje aplikacije',
-            'excel_template' => '📊 Excel predložak za uvoz',
-            'pdf_form' => '📄 PDF obrazac',
-            'faq' => '❓ FAQ / pomoć',
-            'example' => '✅ Primjer popunjenog dokumenta',
-            'video' => '🎥 Video link',
-            'website' => '🌐 Korisni link / stručna stranica',
-            'document' => '📁 Dokument',
-            'other' => '📚 Ostalo',
+            'manual' =>
+                '📘 Upute za korištenje aplikacije',
+
+            'excel_template' =>
+                '📊 Excel predložak za uvoz',
+
+            'pdf_form' =>
+                '📄 PDF obrazac',
+
+            'faq' =>
+                '❓ FAQ / pomoć',
+
+            'example' =>
+                '✅ Primjer popunjenog dokumenta',
+
+            'video' =>
+                '🎥 Video link',
+
+            'website' =>
+                '🌐 Korisni link / stručna stranica',
+
+            'document' =>
+                '📁 Dokument',
+
+            'other' =>
+                '📚 Ostalo',
         ];
     }
 
-    public static function contentTypeLabel(?string $type): string
-    {
+    public static function contentTypeLabel(
+        ?string $type
+    ): string {
         return match ($type) {
-            'manual' => 'Upute',
-            'excel_template' => 'Excel predložak',
-            'pdf_form' => 'PDF obrazac',
-            'faq' => 'FAQ / pomoć',
-            'example' => 'Primjer',
-            'video' => 'Video link',
-            'website' => 'Korisni link',
-            'document' => 'Dokument',
-            'instruction' => 'Uputa',
-            'other' => 'Ostalo',
-            default => 'Materijal',
+            'manual' =>
+                'Upute',
+
+            'excel_template' =>
+                'Excel predložak',
+
+            'pdf_form' =>
+                'PDF obrazac',
+
+            'faq' =>
+                'FAQ / pomoć',
+
+            'example' =>
+                'Primjer',
+
+            'video' =>
+                'Video link',
+
+            'website' =>
+                'Korisni link',
+
+            'document' =>
+                'Dokument',
+
+            'instruction' =>
+                'Uputa',
+
+            'other' =>
+                'Ostalo',
+
+            default =>
+                'Materijal',
         };
     }
 
@@ -96,19 +164,14 @@ class LearningMaterialResource extends BaseResource
     {
         return $schema
             ->schema([
-                Select::make('user_id')
-                    ->label('Korisnik')
-                    ->relationship('user', 'name')
-                    ->searchable()
-                    ->preload()
-                    ->required()
-                    ->visible(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create')
-                    ->dehydrated(fn (string $operation): bool => static::isSuperAdmin() && $operation === 'create'),
-
                 Hidden::make('user_id')
-                    ->default(fn () => static::ownerId())
-                    ->visible(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create')
-                    ->dehydrated(fn (string $operation): bool => ! static::isSuperAdmin() && $operation === 'create'),
+                    ->default(
+                        fn () =>
+                            static::isSuperAdmin()
+                                ? null
+                                : static::ownerId()
+                    )
+                    ->dehydrated(),
 
                 Section::make('Edukacijski materijal')
                     ->columnSpanFull()
@@ -118,24 +181,41 @@ class LearningMaterialResource extends BaseResource
                             ->columns(2)
                             ->schema([
                                 TextInput::make('title')
-                                    ->label('Naziv materijala')
+                                    ->label(
+                                        'Naziv materijala'
+                                    )
                                     ->required()
                                     ->maxLength(255),
 
-                                Select::make('learning_category_id')
+                                Select::make(
+                                    'learning_category_id'
+                                )
                                     ->label('Kategorija')
-                                    ->options(fn () => static::categoryOptions())
+                                    ->options(
+                                        fn () =>
+                                            static::categoryOptions()
+                                    )
                                     ->searchable()
                                     ->preload()
                                     ->required(),
 
-                                CheckboxList::make('content_types')
-                                    ->label('Sadržaj uključuje')
-                                    ->options(static::contentTypeOptions())
+                                CheckboxList::make(
+                                    'content_types'
+                                )
+                                    ->label(
+                                        'Sadržaj uključuje'
+                                    )
+                                    ->options(
+                                        static::contentTypeOptions()
+                                    )
                                     ->columns(2)
                                     ->bulkToggleable()
                                     ->required()
-                                    ->helperText('Možeš označiti više opcija. Video se ne uploada u aplikaciju, već se dodaje samo kao link.')
+                                    ->helperText(
+                                        'Možeš označiti više opcija. '
+                                        . 'Video se ne uploada u aplikaciju, '
+                                        . 'već se dodaje samo kao link.'
+                                    )
                                     ->columnSpanFull(),
 
                                 Textarea::make('description')
@@ -143,57 +223,110 @@ class LearningMaterialResource extends BaseResource
                                     ->rows(3)
                                     ->columnSpanFull(),
 
-                                Section::make('Postavke prikaza')
+                                Section::make(
+                                    'Postavke prikaza'
+                                )
                                     ->columns(3)
                                     ->schema([
-                                        TextInput::make('sort_order')
-                                            ->label('Redoslijed')
+                                        TextInput::make(
+                                            'sort_order'
+                                        )
+                                            ->label(
+                                                'Redoslijed'
+                                            )
                                             ->numeric()
                                             ->default(0),
 
-                                        Toggle::make('is_global')
-                                            ->label('Globalni materijal')
-                                            ->helperText('Globalne materijale vide svi korisnici.')
-                                            ->visible(fn () => static::isSuperAdmin()),
+                                        /**
+                                         * Globalni status je samo
+                                         * informativan u formi.
+                                         *
+                                         * Create page određuje status
+                                         * serverski.
+                                         *
+                                         * Edit page čuva postojeći status.
+                                         */
+                                        Toggle::make(
+                                            'is_global'
+                                        )
+                                            ->label(
+                                                'Globalni materijal'
+                                            )
+                                            ->helperText(
+                                                'Globalne materijale vide sve organizacije.'
+                                            )
+                                            ->default(
+                                                fn (): bool =>
+                                                    static::isSuperAdmin()
+                                            )
+                                            ->disabled()
+                                            ->dehydrated(),
 
-                                        Toggle::make('is_active')
+                                        Toggle::make(
+                                            'is_active'
+                                        )
                                             ->label('Aktivno')
                                             ->default(true),
                                     ])
                                     ->columnSpanFull(),
                             ]),
 
-                        Section::make('Linkovi i dokumenti')
+                        Section::make(
+                            'Linkovi i dokumenti'
+                        )
                             ->columns(1)
                             ->schema([
                                 Placeholder::make('info')
                                     ->label('Napomena')
-                                    ->content('Možeš dodati više linkova i više dokumenata. Video sadržaj se ne uploada u aplikaciju, nego se dodaje samo kao link, npr. Napo, YouTube, EU-OSHA ili stručna stranica.'),
+                                    ->content(
+                                        'Možeš dodati više linkova i više dokumenata. '
+                                        . 'Video sadržaj se ne uploada u aplikaciju, '
+                                        . 'nego se dodaje samo kao link, npr. Napo, '
+                                        . 'YouTube, EU-OSHA ili stručna stranica.'
+                                    ),
 
                                 Repeater::make('links')
                                     ->label('Linkovi')
                                     ->schema([
-                                        TextInput::make('label')
-                                            ->label('Naziv linka')
-                                            ->placeholder('npr. Napo film, EU-OSHA, HZJZ, korisna stručna stranica...')
+                                        TextInput::make(
+                                            'label'
+                                        )
+                                            ->label(
+                                                'Naziv linka'
+                                            )
+                                            ->placeholder(
+                                                'npr. Napo film, EU-OSHA, HZJZ, korisna stručna stranica...'
+                                            )
                                             ->maxLength(255),
 
-                                        TextInput::make('url')
+                                        TextInput::make(
+                                            'url'
+                                        )
                                             ->label('Link')
                                             ->url()
-                                            ->placeholder('https://...')
+                                            ->placeholder(
+                                                'https://...'
+                                            )
                                             ->maxLength(2048),
                                     ])
                                     ->columns(2)
                                     ->defaultItems(0)
-                                    ->addActionLabel('Dodaj link')
+                                    ->addActionLabel(
+                                        'Dodaj link'
+                                    )
                                     ->collapsible()
                                     ->columnSpanFull(),
 
-                                FormFileUpload::make('files')
-                                    ->label('Dokumenti / materijali')
+                                FormFileUpload::make(
+                                    'files'
+                                )
+                                    ->label(
+                                        'Dokumenti / materijali'
+                                    )
                                     ->disk('public')
-                                    ->directory('learning-materials')
+                                    ->directory(
+                                        'learning-materials'
+                                    )
                                     ->visibility('public')
                                     ->multiple()
                                     ->maxFiles(10)
@@ -202,31 +335,63 @@ class LearningMaterialResource extends BaseResource
                                     ->openable()
                                     ->downloadable()
                                     ->previewable()
+                                    ->helperText(
+                                        function () {
+                                            $user =
+                                                auth()->user();
 
-                                    ->helperText(function () {
-                                        $ownerId = auth()->user()?->ownerId();
+                                            $ownerId =
+                                                $user?->isSuperAdmin()
+                                                    ? null
+                                                    : $user?->ownerId();
 
-                                        if (! $ownerId) {
-                                            return 'Možeš dodati najviše 10 dokumenata. Svaki dokument može biti maksimalno 30 MB. Video datoteke se ne uploadaju.';
+                                            if (! $ownerId) {
+                                                return
+                                                    'Možeš dodati najviše 10 dokumenata. '
+                                                    . 'Svaki dokument može biti maksimalno 30 MB. '
+                                                    . 'Video datoteke se ne uploadaju.';
+                                            }
+
+                                            return
+                                                'Možeš dodati najviše 10 dokumenata. '
+                                                . 'Svaki dokument može biti maksimalno 30 MB. '
+                                                . 'Video datoteke se ne uploadaju.'
+                                                . PHP_EOL
+                                                . 'Iskorištenost prostora organizacije: '
+                                                . app(
+                                                    StorageQuotaService::class
+                                                )->usageText(
+                                                    $ownerId
+                                                );
                                         }
-
-                                        return 'Možeš dodati najviše 10 dokumenata. Svaki dokument može biti maksimalno 30 MB. '
-                                            . 'Video datoteke se ne uploadaju.'
-                                            . PHP_EOL
-                                            . 'Iskorištenost prostora organizacije: '
-                                            . app(StorageQuotaService::class)->usageText($ownerId);
-                                    })
-
+                                    )
                                     ->rules([
                                         function () {
-                                            return function (string $attribute, mixed $value, \Closure $fail) {
-                                                $ownerId = auth()->user()?->ownerId();
+                                            return function (
+                                                string $attribute,
+                                                mixed $value,
+                                                \Closure $fail
+                                            ) {
+                                                $user =
+                                                    auth()->user();
+
+                                                $ownerId =
+                                                    $user?->isSuperAdmin()
+                                                        ? null
+                                                        : $user?->ownerId();
 
                                                 if (! $ownerId) {
                                                     return;
                                                 }
 
-                                                if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                                if (
+                                                    ! app(
+                                                        StorageQuotaService::class
+                                                    )->canUpload(
+                                                        $value,
+                                                        $ownerId
+                                                    )
+                                                ) {
                                                     $fail(
                                                         'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
                                                         . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
@@ -235,7 +400,6 @@ class LearningMaterialResource extends BaseResource
                                             };
                                         },
                                     ])
-
                                     ->acceptedFileTypes([
                                         'application/pdf',
                                         'application/msword',
@@ -251,7 +415,6 @@ class LearningMaterialResource extends BaseResource
                                         'application/zip',
                                         'application/x-rar-compressed',
                                     ])
-
                                     ->columnSpanFull(),
                             ]),
                     ]),
@@ -270,60 +433,127 @@ class LearningMaterialResource extends BaseResource
                     ->sortable()
                     ->weight(FontWeight::Bold)
                     ->wrap()
-                    ->description(fn (LearningMaterial $record) => $record->description ? str($record->description)->limit(90) : null),
+                    ->description(
+                        fn (LearningMaterial $record) =>
+                            $record->description
+                                ? str(
+                                    $record->description
+                                )->limit(90)
+                                : null
+                    ),
 
+                    static::userTableColumn()
+                    ->toggleable(),
                 TextColumn::make('category.name')
                     ->label('Kategorija')
                     ->badge()
                     ->sortable()
-                    ->alignment(Alignment::Center),
+                    ->alignment(
+                        Alignment::Center
+                    ),
 
                 TextColumn::make('content_types')
                     ->label('Sadržaj')
                     ->badge()
-                    ->alignment(Alignment::Center)
-                    ->formatStateUsing(function ($state, LearningMaterial $record) {
-                        $types = is_array($record->content_types) && count($record->content_types)
-                            ? $record->content_types
-                            : [$record->type ?: 'document'];
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->formatStateUsing(
+                        function (
+                            $state,
+                            LearningMaterial $record
+                        ) {
+                            $types =
+                                is_array(
+                                    $record->content_types
+                                )
+                                && count(
+                                    $record->content_types
+                                )
+                                    ? $record->content_types
+                                    : [
+                                        $record->type
+                                            ?: 'document',
+                                    ];
 
-                        return collect($types)
-                            ->map(fn ($type) => static::contentTypeLabel($type))
-                            ->implode(', ');
-                    })
+                            return collect($types)
+                                ->map(
+                                    fn ($type) =>
+                                        static::contentTypeLabel(
+                                            $type
+                                        )
+                                )
+                                ->implode(', ');
+                        }
+                    )
                     ->color('info'),
 
                 TextColumn::make('sources')
                     ->label('Materijali')
                     ->html()
-                    ->alignment(Alignment::Center)
-                    ->state(function (LearningMaterial $record): string {
-                        $linksCount = collect($record->links ?? [])
-                            ->filter(fn ($item) => ! blank($item['url'] ?? null))
-                            ->count();
+                    ->alignment(
+                        Alignment::Center
+                    )
+                    ->state(
+                        function (
+                            LearningMaterial $record
+                        ): string {
+                            $linksCount =
+                                collect(
+                                    $record->links ?? []
+                                )
+                                    ->filter(
+                                        fn ($item) =>
+                                            ! blank(
+                                                $item['url']
+                                                    ?? null
+                                            )
+                                    )
+                                    ->count();
 
-                        if (! blank($record->url)) {
-                            $linksCount++;
+                            if (
+                                ! blank(
+                                    $record->url
+                                )
+                            ) {
+                                $linksCount++;
+                            }
+
+                            $filesCount =
+                                collect(
+                                    $record->files ?? []
+                                )
+                                    ->filter()
+                                    ->count();
+
+                            if (
+                                ! blank(
+                                    $record->file_path
+                                )
+                            ) {
+                                $filesCount++;
+                            }
+
+                            $html = '';
+
+                            if ($linksCount > 0) {
+                                $html .=
+                                    '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 8px;margin:1px 2px;border-radius:7px;background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.38);color:#fbbf24;font-size:12px;font-weight:700;">🔗 '
+                                    . $linksCount
+                                    . '</span>';
+                            }
+
+                            if ($filesCount > 0) {
+                                $html .=
+                                    '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 8px;margin:1px 2px;border-radius:7px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.38);color:#6ee7b7;font-size:12px;font-weight:700;">📄 '
+                                    . $filesCount
+                                    . '</span>';
+                            }
+
+                            return $html
+                                ?: '<span style="color:#6b7280;">0</span>';
                         }
-
-                        $filesCount = collect($record->files ?? [])->filter()->count();
-
-                        if (! blank($record->file_path)) {
-                            $filesCount++;
-                        }
-
-                        $html = '';
-
-                        if ($linksCount > 0) {
-                            $html .= '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 8px;margin:1px 2px;border-radius:7px;background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.38);color:#fbbf24;font-size:12px;font-weight:700;">🔗 ' . $linksCount . '</span>';
-                        }
-
-                        if ($filesCount > 0) {
-                            $html .= '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 8px;margin:1px 2px;border-radius:7px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.38);color:#6ee7b7;font-size:12px;font-weight:700;">📄 ' . $filesCount . '</span>';
-                        }
-
-                        return $html ?: '<span style="color:#6b7280;">0</span>';
-                    }),
+                    ),
 
                 IconColumn::make('is_global')
                     ->label('Globalno')
@@ -339,77 +569,183 @@ class LearningMaterialResource extends BaseResource
                     ->label('Dodano')
                     ->date('d.m.Y.')
                     ->sortable()
-                    ->alignment(Alignment::Center),
+                    ->alignment(
+                        Alignment::Center
+                    ),
             ])
             ->filters([
-                SelectFilter::make('learning_category_id')
+                SelectFilter::make(
+                    'learning_category_id'
+                )
                     ->label('Kategorija')
-                    ->options(fn () => static::categoryOptions()),
+                    ->options(
+                        fn () =>
+                            static::categoryOptions()
+                    ),
 
-                SelectFilter::make('content_type')
+                SelectFilter::make(
+                    'content_type'
+                )
                     ->label('Vrsta')
                     ->options([
-                        'manual' => 'Upute',
-                        'excel_template' => 'Excel predložak',
-                        'pdf_form' => 'PDF obrazac',
-                        'faq' => 'FAQ / pomoć',
-                        'example' => 'Primjer',
-                        'video' => 'Video link',
-                        'website' => 'Korisni link',
-                        'document' => 'Dokument',
-                        'other' => 'Ostalo',
+                        'manual' =>
+                            'Upute',
+
+                        'excel_template' =>
+                            'Excel predložak',
+
+                        'pdf_form' =>
+                            'PDF obrazac',
+
+                        'faq' =>
+                            'FAQ / pomoć',
+
+                        'example' =>
+                            'Primjer',
+
+                        'video' =>
+                            'Video link',
+
+                        'website' =>
+                            'Korisni link',
+
+                        'document' =>
+                            'Dokument',
+
+                        'other' =>
+                            'Ostalo',
                     ])
-                    ->query(function (Builder $query, array $data) {
-                        $value = $data['value'] ?? null;
+                    ->query(
+                        function (
+                            Builder $query,
+                            array $data
+                        ) {
+                            $value =
+                                $data['value']
+                                ?? null;
 
-                        if (! $value) {
-                            return $query;
+                            if (! $value) {
+                                return $query;
+                            }
+
+                            return $query->where(
+                                function (
+                                    Builder $q
+                                ) use ($value) {
+                                    $q
+                                        ->whereJsonContains(
+                                            'content_types',
+                                            $value
+                                        )
+                                        ->orWhere(
+                                            'type',
+                                            $value
+                                        );
+                                }
+                            );
                         }
-
-                        return $query->where(function (Builder $q) use ($value) {
-                            $q->whereJsonContains('content_types', $value)
-                                ->orWhere('type', $value);
-                        });
-                    }),
+                    ),
             ])
             ->actions([
                 ActionGroup::make([
-                    Action::make('open_first_link')
-                        ->label('Otvori prvi link')
-                        ->icon(Heroicon::ArrowTopRightOnSquare)
+                    Action::make(
+                        'open_first_link'
+                    )
+                        ->label(
+                            'Otvori prvi link'
+                        )
+                        ->icon(
+                            Heroicon::ArrowTopRightOnSquare
+                        )
                         ->color('info')
-                        ->url(fn (LearningMaterial $record) => static::firstLinkUrl($record))
+                        ->url(
+                            fn (
+                                LearningMaterial $record
+                            ) =>
+                                static::firstLinkUrl(
+                                    $record
+                                )
+                        )
                         ->openUrlInNewTab()
-                        ->visible(fn (LearningMaterial $record) => filled(static::firstLinkUrl($record))),
+                        ->visible(
+                            fn (
+                                LearningMaterial $record
+                            ) =>
+                                filled(
+                                    static::firstLinkUrl(
+                                        $record
+                                    )
+                                )
+                        ),
 
-                    Action::make('open_first_file')
-                        ->label('Otvori prvi dokument')
-                        ->icon(Heroicon::DocumentArrowDown)
+                    Action::make(
+                        'open_first_file'
+                    )
+                        ->label(
+                            'Otvori prvi dokument'
+                        )
+                        ->icon(
+                            Heroicon::DocumentArrowDown
+                        )
                         ->color('success')
-                        ->url(fn (LearningMaterial $record) => static::firstFileUrl($record))
+                        ->url(
+                            fn (
+                                LearningMaterial $record
+                            ) =>
+                                static::firstFileUrl(
+                                    $record
+                                )
+                        )
                         ->openUrlInNewTab()
-                        ->visible(fn (LearningMaterial $record) => filled(static::firstFileUrl($record))),
+                        ->visible(
+                            fn (
+                                LearningMaterial $record
+                            ) =>
+                                filled(
+                                    static::firstFileUrl(
+                                        $record
+                                    )
+                                )
+                        ),
 
-                    ViewAction::make()->label('Prikaži'),
-                    EditAction::make()->label('Uredi'),
+                    ViewAction::make()
+                        ->label('Prikaži'),
+
+                    EditAction::make()
+                        ->label('Uredi'),
 
                     DeleteAction::make()
                         ->label('Obriši')
                         ->requiresConfirmation(),
                 ])
-                    ->icon(Heroicon::EllipsisVertical)
+                    ->icon(
+                        Heroicon::EllipsisVertical
+                    )
                     ->label(''),
             ])
-            ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Obriši označeno')
-                    ->requiresConfirmation(),
-            ]);
+            ->bulkActions([]);
     }
 
+    /**
+     * Vidljivost edukacijskih materijala.
+     *
+     * Superadmin:
+     * - vidi sve.
+     *
+     * Organizacija:
+     * - vidi ispravne globalne materijale:
+     *   is_global = true + user_id = NULL
+     *
+     * - vidi svoje organizacijske materijale:
+     *   is_global = false + user_id = ownerId()
+     */
     public static function getEloquentQuery(): Builder
     {
-        $query = static::getModel()::query()->with(['category', 'user']);
+        $query = static::getModel()::query()
+            ->with([
+                'category',
+                'user',
+            ]);
 
         if (static::isSuperAdmin()) {
             return $query;
@@ -417,116 +753,230 @@ class LearningMaterialResource extends BaseResource
 
         $ownerId = static::ownerId();
 
-        return $query->where(function (Builder $q) use ($ownerId) {
-            $q->where('is_global', true)
-                ->orWhere('user_id', $ownerId);
-        });
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(
+            function (Builder $q) use ($ownerId): void {
+                $q
+                    ->where(
+                        function (
+                            Builder $global
+                        ): void {
+                            $global
+                                ->where(
+                                    'is_global',
+                                    true
+                                )
+                                ->whereNull(
+                                    'user_id'
+                                );
+                        }
+                    )
+                    ->orWhere(
+                        function (
+                            Builder $organization
+                        ) use ($ownerId): void {
+                            $organization
+                                ->where(
+                                    'is_global',
+                                    false
+                                )
+                                ->where(
+                                    'user_id',
+                                    $ownerId
+                                );
+                        }
+                    );
+            }
+        );
     }
 
+    /**
+     * Kategorije dostupne kod kreiranja /
+     * uređivanja materijala.
+     *
+     * Superadmin:
+     * - samo globalne kategorije.
+     *
+     * Organizacija:
+     * - globalne kategorije
+     * - kategorije svoje organizacije.
+     */
     protected static function categoryOptions(): array
     {
+        $query = LearningCategory::query()
+            ->where('is_active', true);
+
+        if (static::isSuperAdmin()) {
+            return $query
+                ->where('is_global', true)
+                ->whereNull('user_id')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->pluck('name', 'id')
+                ->toArray();
+        }
+
         $ownerId = static::ownerId();
 
-        return LearningCategory::query()
-            ->where('is_active', true)
-            ->where(function (Builder $q) use ($ownerId) {
-                if (static::isSuperAdmin()) {
-                    return;
-                }
+        if (! $ownerId) {
+            return [];
+        }
 
-                $q->where('is_global', true)
-                    ->orWhere('user_id', $ownerId);
-            })
+        return $query
+            ->where(
+                function (
+                    Builder $q
+                ) use ($ownerId): void {
+                    $q
+                        ->where(
+                            function (
+                                Builder $global
+                            ): void {
+                                $global
+                                    ->where(
+                                        'is_global',
+                                        true
+                                    )
+                                    ->whereNull(
+                                        'user_id'
+                                    );
+                            }
+                        )
+                        ->orWhere(
+                            function (
+                                Builder $organization
+                            ) use ($ownerId): void {
+                                $organization
+                                    ->where(
+                                        'is_global',
+                                        false
+                                    )
+                                    ->where(
+                                        'user_id',
+                                        $ownerId
+                                    );
+                            }
+                        );
+                }
+            )
             ->orderBy('sort_order')
             ->orderBy('name')
             ->pluck('name', 'id')
             ->toArray();
     }
 
-    protected static function firstLinkUrl(LearningMaterial $record): ?string
-    {
+    protected static function firstLinkUrl(
+        LearningMaterial $record
+    ): ?string {
         if (! blank($record->url)) {
             return $record->url;
         }
 
-        $first = collect($record->links ?? [])->first(fn ($item) => ! blank($item['url'] ?? null));
+        $first = collect(
+            $record->links ?? []
+        )->first(
+            fn ($item) =>
+                ! blank(
+                    $item['url'] ?? null
+                )
+        );
 
         return $first['url'] ?? null;
     }
 
-    protected static function firstFileUrl(LearningMaterial $record): ?string
-    {
+    protected static function firstFileUrl(
+    LearningMaterial $record
+    ): ?string {
         if (! blank($record->file_path)) {
-            return Storage::disk('public')->url($record->file_path);
+            return SecureFilePreview::url(
+                $record->file_path
+            );
         }
 
-        $first = collect($record->files ?? [])->filter()->first();
+        $first = collect(
+            $record->files ?? []
+        )
+            ->filter()
+            ->first();
 
-        return $first ? Storage::disk('public')->url($first) : null;
+        return $first
+            ? SecureFilePreview::url($first)
+            : null;
     }
 
     public static function getNavigationBadge(): ?string
     {
-        return (string) static::getEloquentQuery()->count();
+        return (string) static::getEloquentQuery()
+            ->count();
     }
 
-    public static function mutateFormDataBeforeCreate(array $data): array
-    {
-        $data['type'] = $data['content_types'][0] ?? 'document';
-        $data['source_type'] = 'mixed';
-
-        if (! static::isSuperAdmin()) {
-            $data['user_id'] = static::ownerId();
-            $data['is_global'] = false;
+    /**
+     * Superadmin administrira sve materijale.
+     *
+     * Organizacija:
+     * - ne može uređivati globalni materijal
+     * - može uređivati samo svoj materijal.
+     */
+    public static function canEdit(
+        Model $record
+    ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
         }
 
-        return $data;
-    }
-
-    public static function mutateFormDataBeforeSave(array $data): array
-    {
-        $data['type'] = $data['content_types'][0] ?? ($data['type'] ?? 'document');
-        $data['source_type'] = 'mixed';
-
-        if (! static::isSuperAdmin()) {
-            $data['user_id'] = static::ownerId();
-            $data['is_global'] = false;
+        if ((bool) $record->is_global) {
+            return false;
         }
 
-        return $data;
-    }
-public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
-{
-    if (static::isSuperAdmin()) {
-        return true;
+        return (int) $record->user_id
+            === (int) static::ownerId();
     }
 
-    if ((bool) $record->is_global) {
-        return false;
+    /**
+     * Superadmin administrira sve materijale.
+     *
+     * Organizacija:
+     * - ne može brisati globalni materijal
+     * - može brisati samo svoj materijal.
+     */
+    public static function canDelete(
+        Model $record
+    ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        if ((bool) $record->is_global) {
+            return false;
+        }
+
+        return (int) $record->user_id
+            === (int) static::ownerId();
     }
 
-    return (int) $record->user_id === (int) static::ownerId();
-}
-
-    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
-{
-    if (static::isSuperAdmin()) {
-        return true;
-    }
-
-    if ((bool) $record->is_global) {
-        return false;
-    }
-
-    return (int) $record->user_id === (int) static::ownerId();
-}
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListLearningMaterials::route('/'),
-            'create' => Pages\CreateLearningMaterial::route('/create'),
-            'view' => Pages\ViewLearningMaterial::route('/{record}'),
-            'edit' => Pages\EditLearningMaterial::route('/{record}/edit'),
+            'index' =>
+                Pages\ListLearningMaterials::route('/'),
+
+            'create' =>
+                Pages\CreateLearningMaterial::route(
+                    '/create'
+                ),
+
+            'view' =>
+                Pages\ViewLearningMaterial::route(
+                    '/{record}'
+                ),
+
+            'edit' =>
+                Pages\EditLearningMaterial::route(
+                    '/{record}/edit'
+                ),
         ];
     }
 }

@@ -32,6 +32,7 @@ use Illuminate\Support\Collection;
 use Filament\Tables\Filters\SelectFilter;
 use App\Exports\InspectionFindingsExport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\StorageQuotaService;
 
 class FindingsRelationManager extends RelationManager
 {
@@ -40,20 +41,25 @@ class FindingsRelationManager extends RelationManager
     protected static ?string $title = 'Nalazi nadzora';
 
     protected function getEmployeeSuggestions(): array
-    {
-        return Employee::query()
-            ->when(
-                auth()->user()?->isAdmin() !== true,
-                fn ($query) => $query->where('user_id', auth()->id())
-            )
-            ->whereNotNull('name')
-            ->where('name', '<>', '')
-            ->orderBy('name')
-            ->pluck('name')
-            ->unique()
-            ->values()
-            ->all();
+{
+    $inspection = $this->getOwnerRecord();
+
+    $ownerId = $inspection?->user_id;
+
+    if (! $ownerId) {
+        return [];
     }
+
+    return Employee::query()
+        ->where('user_id', $ownerId)
+        ->whereNotNull('name')
+        ->where('name', '<>', '')
+        ->orderBy('name')
+        ->pluck('name')
+        ->unique()
+        ->values()
+        ->all();
+}
 
     protected function mutateFindingData(array $data): array
 {
@@ -107,7 +113,8 @@ class FindingsRelationManager extends RelationManager
 
         return ObservationResource::getUrl('create', [
             'inspection_finding_id' => $record->id,
-            'user_id' => $inspection->user_id ?? auth()->id(),
+            'user_id' => $inspection->user_id
+                ?? auth()->user()?->ownerId(),
             'incident_date' => optional($inspection->performed_at)?->format('Y-m-d'),
             'observation_type' => 'Negative Observation',
             'location' => $inspection->location ?? '',
@@ -313,7 +320,15 @@ class FindingsRelationManager extends RelationManager
                 ->image()
                 ->disk('public')
                 ->directory('inspection-findings')
-                ->acceptedFileTypes(['image/*'])
+                ->visibility('public')
+                ->acceptedFileTypes([
+                    'image/jpeg',
+                    'image/png',
+                    'image/gif',
+                    'image/webp',
+                ])
+                ->maxSize(30720)
+                ->preserveFilenames()
                 ->downloadable()
                 ->openable()
                 ->imageEditor()
@@ -321,9 +336,48 @@ class FindingsRelationManager extends RelationManager
                     'accept' => 'image/*',
                     'capture' => 'environment',
                 ])
-                ->helperText('Na mobitelu i tabletu možeš odmah slikati kamerom ili odabrati postojeću sliku.')
-                ->columnSpanFull(),
+                ->helperText(function () {
+                    $ownerId = $this->getOwnerRecord()?->user_id;
 
+                    if (! $ownerId) {
+                        return 'Na mobitelu i tabletu možeš odmah slikati kamerom ili odabrati postojeću sliku.';
+                    }
+
+                    return 'Na mobitelu i tabletu možeš odmah slikati kamerom ili odabrati postojeću sliku. '
+                        . 'Iskorištenost prostora organizacije: '
+                        . app(StorageQuotaService::class)
+                            ->usageText((int) $ownerId);
+                })
+                ->rules([
+                    function () {
+                        return function (
+                            string $attribute,
+                            mixed $value,
+                            \Closure $fail
+                        ): void {
+                            $ownerId =
+                                $this->getOwnerRecord()?->user_id;
+
+                            if (! $ownerId) {
+                                return;
+                            }
+
+                            if (
+                                ! app(StorageQuotaService::class)
+                                    ->canUpload(
+                                        $value,
+                                        (int) $ownerId
+                                    )
+                            ) {
+                                $fail(
+                                    'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                    . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                );
+                            }
+                        };
+                    },
+                ])
+                ->columnSpanFull(),
             Textarea::make('resolution_note')
                 ->label('Napomena / rješenje')
                 ->rows(3)
@@ -437,15 +491,17 @@ class FindingsRelationManager extends RelationManager
         ])
         ->filters([
             SelectFilter::make('category')
-            ->label('Područje')
-            ->options(fn (): array => InspectionFinding::query()
-                ->whereNotNull('category')
-                ->where('category', '<>', '')
-                ->orderBy('category')
-                ->pluck('category', 'category')
-                ->toArray()
-            )
-            ->searchable(),
+                ->label('Područje')
+                ->options(function (): array {
+                    return $this->getOwnerRecord()
+                        ->findings()
+                        ->whereNotNull('category')
+                        ->where('category', '<>', '')
+                        ->orderBy('category')
+                        ->pluck('category', 'category')
+                        ->toArray();
+                })
+                ->searchable(),
 
     SelectFilter::make('finding_status')
         ->label('Vrsta')
@@ -502,7 +558,12 @@ class FindingsRelationManager extends RelationManager
 
             CreateAction::make()
                 ->label('Dodaj nalaz')
-                ->mutateDataUsing(fn (array $data): array => $this->mutateFindingData($data)),
+                ->modalHeading('Napravi novi nalaz')
+                ->modalSubmitActionLabel('Napravi')
+                ->modalCancelActionLabel('Odustani')
+                ->mutateDataUsing(
+                    fn (array $data): array => $this->mutateFindingData($data)
+                ),
         ])
             ->actions([
                 ActionGroup::make([

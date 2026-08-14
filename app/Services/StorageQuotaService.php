@@ -48,7 +48,10 @@ class StorageQuotaService
             Chemical::class => ['attachments'],
             Observation::class => ['picture_path'],
             Incident::class => ['image_path', 'investigation_report'],
-            LearningMaterial::class => ['files'],
+            LearningMaterial::class => [
+                'file_path',
+                'files',
+            ],
             PPEEquipment::class => ['attachments'],
         ];
 

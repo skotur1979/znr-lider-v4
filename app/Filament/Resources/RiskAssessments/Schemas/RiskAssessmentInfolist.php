@@ -5,6 +5,7 @@ namespace App\Filament\Resources\RiskAssessments\Schemas;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
+use App\Support\SecureFilePreview;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -144,8 +145,18 @@ class RiskAssessmentInfolist
 
                                             TextEntry::make('file_path')
                                                 ->label('Dokument')
-                                                ->formatStateUsing(fn (?string $state) => $state ? basename($state) : '—')
-                                                ->url(fn (?string $state) => $state ? asset('storage/' . ltrim($state, '/')) : null, true)
+                                                ->formatStateUsing(
+                                                    fn (?string $state): string =>
+                                                        filled($state)
+                                                            ? basename($state)
+                                                            : '—'
+                                                )
+                                                ->url(
+                                                    fn (?string $state): ?string =>
+                                                        filled($state)
+                                                            ? SecureFilePreview::url($state)
+                                                            : null
+                                                )
                                                 ->openUrlInNewTab()
                                                 ->badge()
                                                 ->color('info'),

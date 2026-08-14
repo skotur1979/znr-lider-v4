@@ -74,16 +74,33 @@ class OperationalLogsExport implements FromCollection, WithHeadings, WithMapping
             ->implode("\n");
 
         $tasks = $items
-            ->filter(fn ($item) => ! empty($item['create_task']))
+            ->filter(
+                fn ($item) =>
+                    ! empty($item['task_id'])
+            )
             ->values()
-            ->map(function ($item, int $index) {
-                $note = trim((string) ($item['note'] ?? ''));
-                $taskId = $item['task_id'] ?? null;
+            ->map(
+                function (
+                    $item,
+                    int $index
+                ) {
+                    $note = trim(
+                        (string) (
+                            $item['note']
+                            ?? ''
+                        )
+                    );
 
-                $suffix = $taskId ? " [ID: {$taskId}]" : ' [nije kreiran]';
+                    $taskId =
+                        (int) $item['task_id'];
 
-                return ($index + 1) . '. ' . $note . $suffix;
-            })
+                    return
+                        ($index + 1)
+                        . '. '
+                        . $note
+                        . " [ID: {$taskId}]";
+                }
+            )
             ->implode("\n");
 
         $row = [
@@ -96,7 +113,9 @@ class OperationalLogsExport implements FromCollection, WithHeadings, WithMapping
 
         return array_merge($row, [
             $items->count(),
-            $items->filter(fn ($item) => ! empty($item['create_task']))->count(),
+           $items->filter(
+                fn ($item) => ! empty($item['task_id'])
+            )->count(),
             $notes,
             $tasks ?: '-',
             $log->created_at?->format('d.m.Y. H:i'),

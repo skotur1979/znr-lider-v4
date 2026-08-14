@@ -2,31 +2,28 @@
 
 namespace App\Filament\Resources\Employees\Tables;
 
+use App\Filament\Resources\Concerns\HasUserTableColumn;
 use App\Models\Employee;
-use App\Support\ExpiryBadge;
-use App\Models\EmployeeCertificate;
+use App\Filament\Resources\Employees\EmployeeResource;
+use Filament\Actions\Action;
+use App\Support\SecureFilePreview;
 use App\Models\EmployeeAlcoholTest;
-use Illuminate\Support\Facades\Schema;
+use App\Models\EmployeeCertificate;
+use App\Support\ExpiryBadge;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
+use Filament\Actions\ViewAction;
 use Filament\Support\Enums\Alignment;
-use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
-use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
-
-use Filament\Actions\ActionGroup;
-use Filament\Actions\ViewAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\RestoreAction;
-use Filament\Actions\ForceDeleteAction;
-
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
-use Filament\Actions\ForceDeleteBulkAction;
-
 use Filament\Tables\Contracts\HasTable;
-use App\Filament\Resources\Concerns\HasUserTableColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
@@ -35,21 +32,21 @@ class EmployeesTable
     use HasUserTableColumn;
 
     public static function configure(Table $table): Table
-    {
-        return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query
-            ->with('latestAlcoholTest')
-            ->orderByDesc(
-                EmployeeAlcoholTest::query()
-                    ->select('test_date')
-                    ->whereColumn('employee_alcohol_tests.employee_id', 'employees.id')
-                    ->latest('test_date')
-                    ->limit(1)
-            )
-            ->orderBy('name')
+{
+    return $table
+        ->modifyQueryUsing(
+            fn (Builder $query): Builder => $query
+                ->with('latestAlcoholTest')
         )
-            ->columns([
+        ->defaultSort('name', 'asc')
 
+            /*
+            |--------------------------------------------------------------------------
+            | STUPCI TABLICE
+            |--------------------------------------------------------------------------
+            */
+
+            ->columns([
                 TextColumn::make('name')
                     ->label('Prezime i ime')
                     ->searchable()
@@ -57,17 +54,22 @@ class EmployeesTable
                     ->weight('bold')
                     ->toggleable(),
 
-                TextColumn::make('user.name')
-                    ->label('Korisnik')
-                    ->badge()
-                    ->visible(fn () => auth()->user()?->isSuperAdmin())
-                    ->toggleable(),
+                static::userTableColumn(),
 
                 TextColumn::make('workplace')
                     ->label('Radno mjesto')
                     ->searchable()
                     ->sortable()
                     ->wrap()
+                    ->placeholder('—')
+                    ->toggleable(),
+
+                TextColumn::make('organization_unit')
+                    ->label('Organizacijska jedinica')
+                    ->searchable()
+                    ->sortable()
+                    ->wrap()
+                    ->placeholder('—')
                     ->toggleable(),
 
                 TextColumn::make('medical_examination_valid_until')
@@ -89,13 +91,19 @@ class EmployeesTable
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
+                /*
+                |--------------------------------------------------------------------------
+                | ZAŠTITA NA RADU
+                |--------------------------------------------------------------------------
+                */
+
                 TextColumn::make('occupational_safety_valid_from')
                     ->label('ZNR')
                     ->state(function (Employee $record): string {
-
                         if ($record->occupational_safety_valid_from) {
-                            return Carbon::parse($record->occupational_safety_valid_from)
-                                ->format('d.m.Y.');
+                            return Carbon::parse(
+                                $record->occupational_safety_valid_from
+                            )->format('d.m.Y.');
                         }
 
                         if ($record->znrTrainingDueDate()) {
@@ -105,40 +113,50 @@ class EmployeesTable
                         return '—';
                     })
                     ->badge()
-
-                    ->color(function (Employee $record) {
-
+                    ->color(function (Employee $record): string {
                         if ($record->occupational_safety_valid_from) {
                             return 'success';
                         }
 
-                        return ExpiryBadge::color($record->znrTrainingDueDate());
+                        return ExpiryBadge::color(
+                            $record->znrTrainingDueDate()
+                        );
                     })
-
-                    ->icon(function (Employee $record) {
-
+                    ->icon(function (Employee $record): string {
                         if ($record->occupational_safety_valid_from) {
                             return 'heroicon-m-check-circle';
                         }
 
-                        return ExpiryBadge::icon($record->znrTrainingDueDate());
+                        return ExpiryBadge::icon(
+                            $record->znrTrainingDueDate()
+                        );
                     })
-
-                    ->tooltip(function (Employee $record) {
-
+                    ->tooltip(function (Employee $record): string {
                         if ($record->occupational_safety_valid_from) {
-                            return 'Osposobljavanje evidentirano';
+                            return 'Osposobljavanje iz zaštite na radu je evidentirano';
                         }
 
-                        return ExpiryBadge::tooltip($record->znrTrainingDueDate());
+                        return ExpiryBadge::tooltip(
+                            $record->znrTrainingDueDate()
+                        );
                     })
-
-                    ->sortable(query: function (Builder $query, string $direction): Builder {
-                        return $query->orderBy('occupational_safety_valid_from', $direction);
-                    })
-
+                    ->sortable(
+                        query: fn (
+                            Builder $query,
+                            string $direction
+                        ): Builder => $query->orderBy(
+                            'occupational_safety_valid_from',
+                            $direction
+                        )
+                    )
                     ->alignment(Alignment::Center)
                     ->toggleable(),
+
+                /*
+                |--------------------------------------------------------------------------
+                | TOKSIKOLOGIJA
+                |--------------------------------------------------------------------------
+                */
 
                 TextColumn::make('toxicology_valid_until')
                     ->label('Toksikologija (do)')
@@ -151,17 +169,45 @@ class EmployeesTable
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
-                    TextColumn::make('first_aid_valid_from')
+                /*
+                |--------------------------------------------------------------------------
+                | PRVA POMOĆ – NEMA ROKA VAŽENJA
+                |--------------------------------------------------------------------------
+                */
+
+                TextColumn::make('first_aid_valid_from')
                     ->label('Prva pomoć (od)')
                     ->date('d.m.Y.')
                     ->badge()
-                    ->color(fn ($state) => $state ? 'success' : 'gray')
-                    ->icon(fn ($state) => $state ? 'heroicon-m-check-circle' : 'heroicon-m-minus-circle')
+                    ->color(
+                        fn ($state): string => filled($state)
+                            ? 'success'
+                            : 'gray'
+                    )
+                    ->icon(
+                        fn ($state): string => filled($state)
+                            ? 'heroicon-m-check-circle'
+                            : 'heroicon-m-minus-circle'
+                    )
+                    ->tooltip(
+                        fn ($state): string => filled($state)
+                            ? 'Osposobljavanje za pružanje prve pomoći je evidentirano'
+                            : 'Osposobljavanje za pružanje prve pomoći nije evidentirano'
+                    )
+                    ->placeholder('—')
                     ->sortable()
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
-                    TextColumn::make('handling_flammable_materials_valid_until')
+                /*
+                |--------------------------------------------------------------------------
+                | ZAPALJIVE TVARI
+                |--------------------------------------------------------------------------
+                */
+
+                TextColumn::make(
+                    'handling_flammable_materials_valid_until'
+                )
                     ->label('Zapaljive tvari (do)')
                     ->date('d.m.Y.')
                     ->badge()
@@ -172,7 +218,15 @@ class EmployeesTable
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
-                TextColumn::make('employers_authorization_valid_until')
+                /*
+                |--------------------------------------------------------------------------
+                | OVLAŠTENIK POSLODAVCA ZA ZNR
+                |--------------------------------------------------------------------------
+                */
+
+                TextColumn::make(
+                    'employers_authorization_valid_until'
+                )
                     ->label('Ovlaštenik ZNR (do)')
                     ->date('d.m.Y.')
                     ->badge()
@@ -183,36 +237,72 @@ class EmployeesTable
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
-                    TextColumn::make('latestAlcoholTest.test_date')
+                /*
+                |--------------------------------------------------------------------------
+                | ALKOTESTIRANJE
+                |--------------------------------------------------------------------------
+                */
+
+                TextColumn::make('latestAlcoholTest.test_date')
                     ->label('Zadnje alkotestiranje')
                     ->date('d.m.Y.')
                     ->sortable()
                     ->badge()
-                    ->color(fn ($state) => $state ? 'info' : 'gray')
+                    ->color(
+                        fn ($state): string => filled($state)
+                            ? 'info'
+                            : 'gray'
+                    )
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
                 TextColumn::make('latestAlcoholTest.result')
                     ->label('Rezultat promila')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => filled($state) ? $state . ' ‰' : '—')
-                    ->color(function ($state) {
-                        $value = (float) str_replace(',', '.', (string) $state);
+                    ->formatStateUsing(
+                        fn ($state): string => filled($state)
+                            ? $state . ' ‰'
+                            : '—'
+                    )
+                    ->color(function ($state): string {
+                        $value = (float) str_replace(
+                            ',',
+                            '.',
+                            (string) $state
+                        );
 
-                        return filled($state) && $value > 0.5 ? 'danger' : 'success';
+                        return filled($state) && $value > 0.5
+                            ? 'danger'
+                            : 'success';
                     })
                     ->placeholder('—')
                     ->alignment(Alignment::Center)
                     ->toggleable(),
 
+                /*
+                |--------------------------------------------------------------------------
+                | OSTALE EDUKACIJE
+                |--------------------------------------------------------------------------
+                */
+
                 ViewColumn::make('certificates')
                     ->label('Ostale edukacije')
-                    ->state(fn (Employee $record) => $record->certificates)
-                    ->view('filament.components.certificates-filtered')
+                    ->state(
+                        fn (Employee $record) => $record->certificates
+                    )
+                    ->view(
+                        'filament.components.certificates-filtered'
+                    )
                     ->extraAttributes([
                         'style' => 'max-width:240px; width:240px; overflow:hidden;',
                     ])
                     ->toggleable(),
+
+                /*
+                |--------------------------------------------------------------------------
+                | PRILOZI
+                |--------------------------------------------------------------------------
+                */
 
                 TextColumn::make('pdf')
                     ->label('Prilozi')
@@ -222,18 +312,24 @@ class EmployeesTable
                         'style' => 'min-width:230px; width:230px;',
                     ])
                     ->state(function (Employee $record): string {
-
-                        if (! is_array($record->pdf) || count($record->pdf) === 0) {
+                        if (
+                            ! is_array($record->pdf)
+                            || count($record->pdf) === 0
+                        ) {
                             return '<span style="color:#6b7280;">0</span>';
                         }
 
-                        $files = collect($record->pdf)->take(10)->values();
+                        $files = collect($record->pdf)
+                            ->take(10)
+                            ->values();
 
-                        $makeLink = function ($file, $index) {
-
-                            $url = route('file.preview', [
-                                'file' => ltrim($file, '/'),
-                            ]);
+                        $makeLink = function (
+                            $file,
+                            $index
+                        ): string {
+                            $url = SecureFilePreview::url(
+                            $file
+                        );
 
                             $name = e(basename($file));
                             $number = $index + 1;
@@ -263,213 +359,504 @@ class EmployeesTable
                             >📎 ' . $number . '</a>';
                         };
 
-                        $row1 = $files->slice(0, 5)
+                        $row1 = $files
+                            ->slice(0, 5)
                             ->values()
-                            ->map(fn ($file, $index) => $makeLink($file, $index))
+                            ->map(
+                                fn ($file, $index) => $makeLink(
+                                    $file,
+                                    $index
+                                )
+                            )
                             ->implode('');
 
-                        $row2 = $files->slice(5, 5)
+                        $row2 = $files
+                            ->slice(5, 5)
                             ->values()
-                            ->map(fn ($file, $index) => $makeLink($file, $index + 5))
+                            ->map(
+                                fn ($file, $index) => $makeLink(
+                                    $file,
+                                    $index + 5
+                                )
+                            )
                             ->implode('');
 
-                        return '<div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
-                            <div style="display:flex; gap:4px; justify-content:center; flex-wrap:nowrap;">' . $row1 . '</div>
-                            <div style="display:flex; gap:4px; justify-content:center; flex-wrap:nowrap;">' . $row2 . '</div>
-                        </div>';
+                        return '<div style="
+                                    display:flex;
+                                    flex-direction:column;
+                                    gap:4px;
+                                    align-items:center;
+                                ">
+                                    <div style="
+                                        display:flex;
+                                        gap:4px;
+                                        justify-content:center;
+                                        flex-wrap:nowrap;
+                                    ">'
+                                        . $row1 .
+                                    '</div>
+
+                                    <div style="
+                                        display:flex;
+                                        gap:4px;
+                                        justify-content:center;
+                                        flex-wrap:nowrap;
+                                    ">'
+                                        . $row2 .
+                                    '</div>
+                                </div>';
                     })
                     ->tooltip(function (Employee $record): string {
-
-                        if (! is_array($record->pdf) || count($record->pdf) === 0) {
+                        if (
+                            ! is_array($record->pdf)
+                            || count($record->pdf) === 0
+                        ) {
                             return 'Nema priloga';
                         }
 
                         return collect($record->pdf)
-                            ->map(fn ($file, $index) => ($index + 1) . '. ' . basename($file))
+                            ->map(
+                                fn ($file, $index): string => ($index + 1)
+                                    . '. '
+                                    . basename($file)
+                            )
                             ->implode("\n");
                     })
                     ->toggleable(),
             ])
 
+            /*
+            |--------------------------------------------------------------------------
+            | FILTERI
+            |--------------------------------------------------------------------------
+            */
+
             ->filters([
+                /*
+                |--------------------------------------------------------------------------
+                | STATUS ZAPISA
+                |--------------------------------------------------------------------------
+                */
 
                 SelectFilter::make('status')
                     ->label('Status zapisa')
-                    ->placeholder('Odaberi status')
+                    ->placeholder('Aktivni zapisi')
                     ->options([
-                        'active'  => 'Aktivni zapisi',
+                        'active' => 'Aktivni zapisi',
                         'trashed' => 'Deaktivirani zapisi',
-                        'all'     => 'Svi zapisi',
+                        'all' => 'Svi zapisi',
                     ])
-                    ->query(function (Builder $query, array $data) {
-
-                        $value = $data['value'] ?? null;
-
-                        return match ($value) {
+                    ->query(function (
+                        Builder $query,
+                        array $data
+                    ): Builder {
+                        return match ($data['value'] ?? null) {
                             'trashed' => $query->onlyTrashed(),
-                            'all'     => $query->withTrashed(),
-                            default   => $query->withoutTrashed(),
+                            'all' => $query->withTrashed(),
+                            default => $query->withoutTrashed(),
                         };
                     }),
 
-                SelectFilter::make('certificate')
-                    ->label('Certifikat / edukacija')
-                    ->placeholder('Svi certifikati')
+                /*
+                |--------------------------------------------------------------------------
+                | RADNO MJESTO
+                |--------------------------------------------------------------------------
+                */
+
+                SelectFilter::make('workplace')
+                    ->label('Radno mjesto')
+                    ->placeholder('Sva radna mjesta')
                     ->searchable()
                     ->options(function (): array {
-                        return EmployeeCertificate::query()
-                            ->whereNotNull('title')
-                            ->where('title', '!=', '')
-                            ->orderBy('title')
-                            ->pluck('title', 'title')
-                            ->unique()
+                        return self::employeeOptionsQuery()
+                            ->whereNotNull('workplace')
+                            ->where('workplace', '!=', '')
+                            ->distinct()
+                            ->orderBy('workplace')
+                            ->pluck('workplace', 'workplace')
                             ->toArray();
-                    })
-                    ->query(function (Builder $query, array $data): Builder {
+                    }),
+
+                /*
+                |--------------------------------------------------------------------------
+                | ORGANIZACIJSKA JEDINICA / LOKACIJA
+                |--------------------------------------------------------------------------
+                */
+
+                SelectFilter::make('organization_unit')
+                    ->label('Organizacijska jedinica / lokacija')
+                    ->placeholder('Sve organizacijske jedinice')
+                    ->searchable()
+                    ->options(function (): array {
+                        return self::employeeOptionsQuery()
+                            ->whereNotNull('organization_unit')
+                            ->where('organization_unit', '!=', '')
+                            ->distinct()
+                            ->orderBy('organization_unit')
+                            ->pluck(
+                                'organization_unit',
+                                'organization_unit'
+                            )
+                            ->toArray();
+                    }),
+
+                /*
+                |--------------------------------------------------------------------------
+                | ROKOVI I OSPOSOBLJAVANJA
+                |--------------------------------------------------------------------------
+                |
+                | Jedan objedinjeni izbornik, ali su opcije podijeljene
+                | prema kategorijama.
+                |
+                | Prva pomoć nema opcije "isteklo" i "uskoro istječe".
+                |--------------------------------------------------------------------------
+                */
+
+                SelectFilter::make('validity_status')
+                    ->label('Rokovi i osposobljavanja')
+                    ->placeholder('Odaberite kategoriju i status')
+                    ->searchable()
+                    ->options([
+                        'Liječnički pregled' => [
+                            'medical_expired' =>
+                                'Liječnički – isteklo',
+
+                            'medical_expiring' =>
+                                'Liječnički – uskoro istječe',
+
+                            'medical_valid' =>
+                                'Liječnički – važeće',
+
+                            'medical_missing' =>
+                                'Liječnički – nije evidentirano',
+                        ],
+
+                        'Zaštita na radu – ZNR' => [
+                            'znr_expired' =>
+                                'ZNR – prekoračen rok',
+
+                            'znr_expiring' =>
+                                'ZNR – rok uskoro istječe',
+
+                            'znr_recorded' =>
+                                'ZNR – evidentirano',
+
+                            'znr_missing' =>
+                                'ZNR – nije evidentirano',
+                        ],
+
+                        'Toksikologija' => [
+                            'toxicology_expired' =>
+                                'Toksikologija – isteklo',
+
+                            'toxicology_expiring' =>
+                                'Toksikologija – uskoro istječe',
+
+                            'toxicology_valid' =>
+                                'Toksikologija – važeće',
+
+                            'toxicology_missing' =>
+                                'Toksikologija – nije evidentirano',
+                        ],
+
+                        'Prva pomoć' => [
+                            'first_aid_recorded' =>
+                                'Prva pomoć – evidentirano',
+
+                            'first_aid_missing' =>
+                                'Prva pomoć – nije evidentirano',
+                        ],
+
+                        'Rukovanje zapaljivim tvarima' => [
+                            'flammable_expired' =>
+                                'Zapaljive tvari – isteklo',
+
+                            'flammable_expiring' =>
+                                'Zapaljive tvari – uskoro istječe',
+
+                            'flammable_valid' =>
+                                'Zapaljive tvari – važeće',
+
+                            'flammable_missing' =>
+                                'Zapaljive tvari – nije evidentirano',
+                        ],
+
+                        'Ovlaštenik poslodavca za ZNR' => [
+                            'authorization_expired' =>
+                                'Ovlaštenik ZNR – isteklo',
+
+                            'authorization_expiring' =>
+                                'Ovlaštenik ZNR – uskoro istječe',
+
+                            'authorization_valid' =>
+                                'Ovlaštenik ZNR – važeće',
+
+                            'authorization_missing' =>
+                                'Ovlaštenik ZNR – nije evidentirano',
+                        ],
+                    ])
+                    ->query(function (
+                        Builder $query,
+                        array $data
+                    ): Builder {
                         $value = $data['value'] ?? null;
 
                         if (! $value) {
                             return $query;
                         }
 
-                        return $query->whereHas('certificates', function (Builder $query) use ($value) {
-                            $query->where('title', $value);
-                        });
+                        return self::applyValidityFilter(
+                            $query,
+                            $value
+                        );
                     }),
 
-                     SelectFilter::make('alcohol_test_status')
-                        ->label('Status alkotestiranja')
-                        ->placeholder('Svi zaposlenici')
-                        ->options([
-                            'done' => 'Provedeno alkotestiranje',
-                            'missing' => 'Nije provedeno alkotestiranje',
-                        ])
-                        ->query(function (Builder $query, array $data): Builder {
-                            return match ($data['value'] ?? null) {
-                                'done' => $query->whereHas('alcoholTests'),
-                                'missing' => $query->whereDoesntHave('alcoholTests'),
-                                default => $query,
-                            };
-                        }),
+                /*
+                |--------------------------------------------------------------------------
+                | OSTALE EDUKACIJE I CERTIFIKATI
+                |--------------------------------------------------------------------------
+                */
 
-                Filter::make('medical_examination_expired')
-                ->label('Liječnički (istekao)')
-                ->query(function (Builder $query): Builder {
-                    return $query
-                        ->whereNotNull('medical_examination_valid_until')
-                        ->whereDate('medical_examination_valid_until', '<', Carbon::today());
-                }),
+                SelectFilter::make('certificate')
+                    ->label('Ostala edukacija / certifikat')
+                    ->placeholder('Svi certifikati')
+                    ->searchable()
+                    ->options(function (): array {
+                        $query = EmployeeCertificate::query()
+                            ->whereNotNull('title')
+                            ->where('title', '!=', '');
 
-            Filter::make('medical_examination_expiring')
-                ->label('Liječnički (uskoro ističe)')
-                ->query(function (Builder $query): Builder {
-                    return $query
-                        ->whereNotNull('medical_examination_valid_until')
-                        ->whereDate('medical_examination_valid_until', '>=', Carbon::today())
-                        ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30));
-                }),
+                        if (! auth()->user()?->isSuperAdmin()) {
+                            $query->whereHas(
+                                'employee',
+                                function (Builder $query): void {
+                                    $query->where(
+                                        'user_id',
+                                        auth()->user()?->ownerId()
+                                    );
+                                }
+                            );
+                        }
 
-            Filter::make('znr_expired')
-                ->label('ZNR nije položen (istekao rok)')
-                ->query(function (Builder $query): Builder {
-                    return $query
-                        ->whereNull('occupational_safety_valid_from')
-                        ->whereNotNull('employeed_at')
-                        ->whereDate('employeed_at', '<', Carbon::today()->subDays(60));
-                }),
+                        return $query
+                            ->orderBy('title')
+                            ->pluck('title', 'title')
+                            ->unique()
+                            ->toArray();
+                    })
+                    ->query(function (
+                        Builder $query,
+                        array $data
+                    ): Builder {
+                        $value = $data['value'] ?? null;
 
-            Filter::make('znr_expiring')
-                ->label('ZNR nije položen (uskoro ističe)')
-                ->query(function (Builder $query): Builder {
-                    return $query
-                        ->whereNull('occupational_safety_valid_from')
-                        ->whereNotNull('employeed_at')
-                        ->whereDate('employeed_at', '>=', Carbon::today()->subDays(60))
-                        ->whereDate('employeed_at', '<=', Carbon::today()->subDays(30));
-                }),
-    
-            Filter::make('toxicology_expired')
-                ->label('Toksikologija (istekla)')
-                ->query(function (Builder $query): Builder {
-                    return $query
-                        ->whereNotNull('toxicology_valid_until')
-                        ->whereDate('toxicology_valid_until', '<', Carbon::today());
-                }),
+                        if (! $value) {
+                            return $query;
+                        }
 
-            Filter::make('toxicology_expiring')
-                ->label('Toksikologija (uskoro ističe)')
-                ->query(function (Builder $query): Builder {
-                    return $query
-                        ->whereNotNull('toxicology_valid_until')
-                        ->whereDate('toxicology_valid_until', '>=', Carbon::today())
-                        ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30));
-                }),
+                        return $query->whereHas(
+                            'certificates',
+                            fn (Builder $certificateQuery): Builder =>
+                                $certificateQuery->where(
+                                    'title',
+                                    $value
+                                )
+                        );
+                    }),
+
+                /*
+                |--------------------------------------------------------------------------
+                | ALKOTESTIRANJE
+                |--------------------------------------------------------------------------
+                */
+
+                SelectFilter::make('alcohol_test_status')
+                    ->label('Status alkotestiranja')
+                    ->placeholder('Svi zaposlenici')
+                    ->options([
+                        'done' =>
+                            'Provedeno alkotestiranje',
+
+                        'missing' =>
+                            'Nije provedeno alkotestiranje',
+                    ])
+                    ->query(function (
+                        Builder $query,
+                        array $data
+                    ): Builder {
+                        return match ($data['value'] ?? null) {
+                            'done' => $query->whereHas(
+                                'alcoholTests'
+                            ),
+
+                            'missing' => $query->whereDoesntHave(
+                                'alcoholTests'
+                            ),
+
+                            default => $query,
+                        };
+                    }),
             ])
+
+            /*
+            |--------------------------------------------------------------------------
+            | POJEDINAČNE AKCIJE
+            |--------------------------------------------------------------------------
+            */
 
             ->actions([
                 ActionGroup::make([
+                    ViewAction::make()
+                        ->label('Prikaži')
+                        ->color('gray'),
 
-                    ViewAction::make()->label('Prikaži'),
-
-                    EditAction::make()
+                    Action::make('editEmployee')
                         ->label('Uredi')
-                        ->visible(fn (Employee $record) =>
-                            ! (method_exists($record, 'trashed') && $record->trashed())
-                        ),
+                        ->icon('heroicon-o-pencil-square')
+                        ->color('warning')
+                        ->visible(
+                            fn (Employee $record): bool =>
+                                ! (
+                                    method_exists(
+                                        $record,
+                                        'trashed'
+                                    )
+                                    && $record->trashed()
+                                )
+                        )
+                        ->action(function (
+                            Employee $record
+                        ) {
+                            if (
+                                ! EmployeeResource::allowsModulePermission(
+                                    'update'
+                                )
+                            ) {
+                                return;
+                            }
+
+                            return redirect(
+                                EmployeeResource::getUrl(
+                                    'edit',
+                                    [
+                                        'record' => $record,
+                                    ]
+                                )
+                            );
+                        }),
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->visible(fn (Employee $record) =>
-                            ! (method_exists($record, 'trashed') && $record->trashed())
+                        ->before(
+                            EmployeeResource::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (Employee $record): bool =>
+                                ! (
+                                    method_exists(
+                                        $record,
+                                        'trashed'
+                                    )
+                                    && $record->trashed()
+                                )
                         ),
 
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
-                        ->visible(fn (Employee $record) =>
-                            method_exists($record, 'trashed') && $record->trashed()
+                        ->before(
+                            EmployeeResource::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (Employee $record): bool =>
+                                method_exists(
+                                    $record,
+                                    'trashed'
+                                )
+                                && $record->trashed()
                         ),
 
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
-                        ->visible(fn (Employee $record) =>
-                            method_exists($record, 'trashed') && $record->trashed()
+                        ->before(
+                            EmployeeResource::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (Employee $record): bool =>
+                                method_exists(
+                                    $record,
+                                    'trashed'
+                                )
+                                && $record->trashed()
                         ),
-
-                ])->label('Akcije'),
+                ])
+                    ->label('Akcije'),
             ])
+            /*
+            |--------------------------------------------------------------------------
+            | GRUPNE AKCIJE
+            |--------------------------------------------------------------------------
+            */
 
             ->bulkActions([
-
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        EmployeeResource::beforeModulePermission(
+                            'delete'
+                        )
+                    )
                     ->modalHeading('Deaktiviraj odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti?'
+                    )
                     ->modalSubmitActionLabel('Deaktiviraj')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) =>
-                        ! self::isOnlyTrashed($livewire)
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            ! self::isOnlyTrashed($livewire)
                     ),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        EmployeeResource::beforeModulePermission(
+                            'delete'
+                        )
+                    )
                     ->modalHeading('Vrati odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti?'
+                    )
                     ->modalSubmitActionLabel('Vrati')
                     ->modalCancelActionLabel('Odustani')
-                    ->visible(fn (HasTable $livewire) =>
-                        self::isOnlyTrashed($livewire)
+                    ->visible(
+                        fn (HasTable $livewire): bool =>
+                            self::isOnlyTrashed($livewire)
                     ),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
                     ->requiresConfirmation()
+                    ->before(
+                        EmployeeResource::beforeModulePermission(
+                            'delete'
+                        )
+                    )
                     ->modalHeading('Trajno obriši odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                    )
                     ->modalSubmitActionLabel('Trajno obriši')
                     ->modalCancelActionLabel('Odustani'),
             ])
@@ -477,9 +864,277 @@ class EmployeesTable
             ->paginated([10, 25, 50, 100, 'all']);
     }
 
-    private static function isOnlyTrashed(HasTable $livewire): bool
+    /**
+     * Primjenjuje odabrani filter roka ili osposobljavanja.
+     */
+    private static function applyValidityFilter(
+        Builder $query,
+        string $value
+    ): Builder {
+        $today = Carbon::today();
+        $soon = Carbon::today()->addDays(30);
+
+        return match ($value) {
+            /*
+            |--------------------------------------------------------------------------
+            | LIJEČNIČKI PREGLED
+            |--------------------------------------------------------------------------
+            */
+
+            'medical_expired' => $query
+                ->whereNotNull(
+                    'medical_examination_valid_until'
+                )
+                ->whereDate(
+                    'medical_examination_valid_until',
+                    '<',
+                    $today
+                ),
+
+            'medical_expiring' => $query
+                ->whereNotNull(
+                    'medical_examination_valid_until'
+                )
+                ->whereDate(
+                    'medical_examination_valid_until',
+                    '>=',
+                    $today
+                )
+                ->whereDate(
+                    'medical_examination_valid_until',
+                    '<=',
+                    $soon
+                ),
+
+            'medical_valid' => $query
+                ->whereNotNull(
+                    'medical_examination_valid_until'
+                )
+                ->whereDate(
+                    'medical_examination_valid_until',
+                    '>',
+                    $soon
+                ),
+
+            'medical_missing' => $query
+                ->whereNull(
+                    'medical_examination_valid_until'
+                ),
+
+            /*
+            |--------------------------------------------------------------------------
+            | ZAŠTITA NA RADU – ZNR
+            |--------------------------------------------------------------------------
+            */
+
+            'znr_expired' => $query
+                ->whereNull(
+                    'occupational_safety_valid_from'
+                )
+                ->whereNotNull('employeed_at')
+                ->whereDate(
+                    'employeed_at',
+                    '<',
+                    $today->copy()->subDays(60)
+                ),
+
+            'znr_expiring' => $query
+                ->whereNull(
+                    'occupational_safety_valid_from'
+                )
+                ->whereNotNull('employeed_at')
+                ->whereDate(
+                    'employeed_at',
+                    '>=',
+                    $today->copy()->subDays(60)
+                )
+                ->whereDate(
+                    'employeed_at',
+                    '<=',
+                    $today->copy()->subDays(30)
+                ),
+
+            'znr_recorded' => $query
+                ->whereNotNull(
+                    'occupational_safety_valid_from'
+                ),
+
+            'znr_missing' => $query
+                ->whereNull(
+                    'occupational_safety_valid_from'
+                ),
+
+            /*
+            |--------------------------------------------------------------------------
+            | TOKSIKOLOGIJA
+            |--------------------------------------------------------------------------
+            */
+
+            'toxicology_expired' => $query
+                ->whereNotNull('toxicology_valid_until')
+                ->whereDate(
+                    'toxicology_valid_until',
+                    '<',
+                    $today
+                ),
+
+            'toxicology_expiring' => $query
+                ->whereNotNull('toxicology_valid_until')
+                ->whereDate(
+                    'toxicology_valid_until',
+                    '>=',
+                    $today
+                )
+                ->whereDate(
+                    'toxicology_valid_until',
+                    '<=',
+                    $soon
+                ),
+
+            'toxicology_valid' => $query
+                ->whereNotNull('toxicology_valid_until')
+                ->whereDate(
+                    'toxicology_valid_until',
+                    '>',
+                    $soon
+                ),
+
+            'toxicology_missing' => $query
+                ->whereNull('toxicology_valid_until'),
+
+            /*
+            |--------------------------------------------------------------------------
+            | PRVA POMOĆ – NEMA ROKA VAŽENJA
+            |--------------------------------------------------------------------------
+            */
+
+            'first_aid_recorded' => $query
+                ->whereNotNull('first_aid_valid_from'),
+
+            'first_aid_missing' => $query
+                ->whereNull('first_aid_valid_from'),
+
+            /*
+            |--------------------------------------------------------------------------
+            | RUKOVANJE ZAPALJIVIM TVARIMA
+            |--------------------------------------------------------------------------
+            */
+
+            'flammable_expired' => $query
+                ->whereNotNull(
+                    'handling_flammable_materials_valid_until'
+                )
+                ->whereDate(
+                    'handling_flammable_materials_valid_until',
+                    '<',
+                    $today
+                ),
+
+            'flammable_expiring' => $query
+                ->whereNotNull(
+                    'handling_flammable_materials_valid_until'
+                )
+                ->whereDate(
+                    'handling_flammable_materials_valid_until',
+                    '>=',
+                    $today
+                )
+                ->whereDate(
+                    'handling_flammable_materials_valid_until',
+                    '<=',
+                    $soon
+                ),
+
+            'flammable_valid' => $query
+                ->whereNotNull(
+                    'handling_flammable_materials_valid_until'
+                )
+                ->whereDate(
+                    'handling_flammable_materials_valid_until',
+                    '>',
+                    $soon
+                ),
+
+            'flammable_missing' => $query
+                ->whereNull(
+                    'handling_flammable_materials_valid_until'
+                ),
+
+            /*
+            |--------------------------------------------------------------------------
+            | OVLAŠTENIK POSLODAVCA ZA ZNR
+            |--------------------------------------------------------------------------
+            */
+
+            'authorization_expired' => $query
+                ->whereNotNull(
+                    'employers_authorization_valid_until'
+                )
+                ->whereDate(
+                    'employers_authorization_valid_until',
+                    '<',
+                    $today
+                ),
+
+            'authorization_expiring' => $query
+                ->whereNotNull(
+                    'employers_authorization_valid_until'
+                )
+                ->whereDate(
+                    'employers_authorization_valid_until',
+                    '>=',
+                    $today
+                )
+                ->whereDate(
+                    'employers_authorization_valid_until',
+                    '<=',
+                    $soon
+                ),
+
+            'authorization_valid' => $query
+                ->whereNotNull(
+                    'employers_authorization_valid_until'
+                )
+                ->whereDate(
+                    'employers_authorization_valid_until',
+                    '>',
+                    $soon
+                ),
+
+            'authorization_missing' => $query
+                ->whereNull(
+                    'employers_authorization_valid_until'
+                ),
+
+            default => $query,
+        };
+    }
+
+    /**
+     * Opcije radnih mjesta i organizacijskih jedinica
+     * ograničene su na trenutačnu organizaciju.
+     */
+    private static function employeeOptionsQuery(): Builder
     {
-        $state = $livewire->getTableFilterState('status');
+        $query = Employee::query()
+            ->withoutTrashed();
+
+        if (! auth()->user()?->isSuperAdmin()) {
+            $query->where(
+                'user_id',
+                auth()->user()?->ownerId()
+            );
+        }
+
+        return $query;
+    }
+
+    private static function isOnlyTrashed(
+        HasTable $livewire
+    ): bool {
+        $state = $livewire->getTableFilterState(
+            'status'
+        );
 
         $value = data_get($state, 'value');
 

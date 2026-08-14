@@ -197,31 +197,45 @@
         }
 
         @media (max-width: 900px) {
-            .wp-page {
-                max-width: 100%;
-            }
-
-            .wp-title {
-                font-size: 18px;
-            }
-
-            .wp-subtitle {
-                font-size: 15px;
-            }
-
-            .wp-table td,
-            .wp-table th,
-            .wp-two-col td,
-            .wp-three-col td,
-            .wp-four-col td {
-                font-size: 10px;
-            }
-
-            .wp-check-inline,
-            .wp-check-col {
-                white-space: normal;
-            }
+        .wp-page {
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 8px;
         }
+
+        .wp-sheet {
+            min-width: 760px;
+            width: 760px;
+        }
+
+        .wp-title {
+            font-size: 20px;
+        }
+
+        .wp-subtitle {
+            font-size: 16px;
+        }
+
+        .wp-table td,
+        .wp-table th,
+        .wp-two-col td,
+        .wp-three-col td,
+        .wp-four-col td {
+            font-size: 11px;
+        }
+
+        .wp-check-inline,
+        .wp-check-col {
+            white-space: normal;
+        }
+
+        .wp-foot-note {
+            font-size: 11px;
+            line-height: 1.35;
+        }
+    }
     </style>
 
     <div class="wp-page">

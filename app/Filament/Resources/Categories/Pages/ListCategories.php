@@ -11,7 +11,8 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ListCategories extends ListRecords
 {
-    protected static string $resource = CategoryResource::class;
+    protected static string $resource =
+        CategoryResource::class;
 
     protected function getHeaderActions(): array
     {
@@ -19,16 +20,33 @@ class ListCategories extends ListRecords
             CreateAction::make()
                 ->label('Nova kategorija')
                 ->icon('heroicon-o-plus')
-                ->color('warning'),
+                ->color('warning')
+                ->before(
+                    CategoryResource::beforeModulePermission(
+                        'create'
+                    )
+                ),
 
             Action::make('exportExcel')
                 ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
+                ->icon(
+                    'heroicon-o-document-arrow-down'
+                )
                 ->color('success')
                 ->action(function () {
+                    if (
+                        ! CategoryResource::allowsModulePermission(
+                            'view'
+                        )
+                    ) {
+                        return null;
+                    }
+
                     return Excel::download(
                         new CategoriesExport(),
-                        'kategorije-ispitivanja-' . now()->format('Y-m-d') . '.xlsx'
+                        'kategorije-ispitivanja-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
                     );
                 }),
         ];

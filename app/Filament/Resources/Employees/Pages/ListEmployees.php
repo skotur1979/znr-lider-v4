@@ -2,24 +2,24 @@
 
 namespace App\Filament\Resources\Employees\Pages;
 
+use App\Exports\EmployeesExport;
 use App\Filament\Resources\Employees\EmployeeResource;
+use App\Filament\Resources\Pages\BaseListRecords;
+use App\Imports\EmployeesImport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
-use App\Filament\Resources\Pages\BaseListRecords;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
-
-use App\Exports\EmployeesExport;
-use App\Imports\EmployeesImport;
 
 class ListEmployees extends BaseListRecords
 {
-    protected static string $resource = EmployeeResource::class;
+    protected static string $resource =
+        EmployeeResource::class;
 
     public function getMaxContentWidth(): ?string
     {
@@ -29,213 +29,508 @@ class ListEmployees extends BaseListRecords
     protected function getHeaderActions(): array
     {
         return [
-
             Actions\CreateAction::make()
                 ->label('Novi Zaposlenik')
-                ->icon('heroicon-o-plus'),
+                ->icon('heroicon-o-plus')
+                ->before(
+                    EmployeeResource::beforeModulePermission(
+                        'create'
+                    )
+                ),
 
             Actions\Action::make('export_pdf')
                 ->label('Izvoz u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
+                ->icon(
+                    'heroicon-o-arrow-down-tray'
+                )
                 ->color('warning')
                 ->action(function () {
+                    if (
+                        ! EmployeeResource::allowsModulePermission(
+                            'view'
+                        )
+                    ) {
+                        return null;
+                    }
 
-                    $employees = $this->getFilteredSortedTableQuery()
-                        ->with('certificates')
+                    $employees = $this
+                        ->getFilteredSortedTableQuery()
+                        ->with(
+                            'certificates'
+                        )
                         ->get();
 
-                    $pdf = Pdf::loadView('pdf.employees', compact('employees'))
-                        ->setPaper('a4', 'landscape')
+                    $pdf = Pdf::loadView(
+                        'pdf.employees',
+                        compact(
+                            'employees'
+                        )
+                    )
+                        ->setPaper(
+                            'a4',
+                            'landscape'
+                        )
                         ->setOptions([
-                            'isHtml5ParserEnabled' => true,
-                            'isRemoteEnabled' => true,
-                            'isPhpEnabled' => true,
+                            'isHtml5ParserEnabled' =>
+                                true,
+                            'isRemoteEnabled' =>
+                                true,
+                            'isPhpEnabled' =>
+                                true,
                             'dpi' => 96,
-                            'defaultFont' => 'DejaVu Sans',
+                            'defaultFont' =>
+                                'DejaVu Sans',
                         ]);
 
-                    return response()->streamDownload(
-                        fn () => print($pdf->output()),
-                        'zaposlenici-' . now()->format('Y-m-d') . '.pdf'
+                    return response()
+                        ->streamDownload(
+                            fn () =>
+                                print(
+                                    $pdf->output()
+                                ),
+                            'zaposlenici-'
+                                . now()->format(
+                                    'Y-m-d'
+                                )
+                                . '.pdf'
+                        );
+                }),
+
+            Actions\Action::make(
+                'export_excel'
+            )
+                ->label('Izvoz u Excel')
+                ->icon(
+                    'heroicon-o-document-arrow-down'
+                )
+                ->color('success')
+                ->action(function () {
+                    if (
+                        ! EmployeeResource::allowsModulePermission(
+                            'view'
+                        )
+                    ) {
+                        return null;
+                    }
+
+                    $employeeIds = $this
+                        ->getFilteredSortedTableQuery()
+                        ->pluck(
+                            'employees.id'
+                        )
+                        ->toArray();
+
+                    return Excel::download(
+                        new EmployeesExport(
+                            $employeeIds
+                        ),
+                        'zaposlenici-'
+                            . now()->format(
+                                'Y-m-d'
+                            )
+                            . '.xlsx'
                     );
                 }),
 
-            Actions\Action::make('export_excel')
-    ->label('Izvoz u Excel')
-    ->icon('heroicon-o-document-arrow-down')
-    ->color('success')
-    ->action(function () {
-
-        $employeeIds = $this->getFilteredSortedTableQuery()
-            ->pluck('employees.id')
-            ->toArray();
-
-        return Excel::download(
-            new EmployeesExport($employeeIds),
-            'zaposlenici-' . now()->format('Y-m-d') . '.xlsx'
-        );
-    }),
-
-            Actions\Action::make('import_excel')
+            Actions\Action::make(
+                'import_excel'
+            )
                 ->label('Uvoz iz Excela')
-                ->icon('heroicon-o-document-arrow-up')
+                ->icon(
+                    'heroicon-o-document-arrow-up'
+                )
                 ->color('warning')
-
                 ->form([
-
-                    FileUpload::make('excel_file')
-                        ->label('Excel datoteka')
+                    FileUpload::make(
+                        'excel_file'
+                    )
+                        ->label(
+                            'Excel datoteka'
+                        )
                         ->disk('local')
-                        ->directory('imports')
+                        ->directory(
+                            'imports'
+                        )
                         ->preserveFilenames()
-
                         ->acceptedFileTypes([
                             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                             'application/vnd.ms-excel',
                         ])
-
                         ->required(),
                 ])
+                ->action(
+                    function (
+                        array $data
+                    ): void {
+                        if (
+                            ! EmployeeResource::allowsModulePermission(
+                                'create'
+                            )
+                        ) {
+                            return;
+                        }
 
-                ->action(function (array $data): void {
+                        $path =
+                            $data[
+                                'excel_file'
+                            ];
 
-                    $path = $data['excel_file'];
+                        if (
+                            is_array(
+                                $path
+                            )
+                        ) {
+                            $path =
+                                collect(
+                                    $path
+                                )->first();
+                        }
 
-                    if (is_array($path)) {
-                        $path = collect($path)->first();
-                    }
+                        if (
+                            $path
+                            instanceof
+                            TemporaryUploadedFile
+                        ) {
+                            $path =
+                                $path->store(
+                                    'imports',
+                                    'local'
+                                );
+                        }
 
-                    if ($path instanceof TemporaryUploadedFile) {
-                        $path = $path->store('imports', 'local');
-                    }
+                        if (
+                            ! is_string(
+                                $path
+                            )
+                            || ! Storage::disk(
+                                'local'
+                            )->exists(
+                                $path
+                            )
+                        ) {
+                            Notification::make()
+                                ->title(
+                                    'Excel datoteka nije pronađena'
+                                )
+                                ->danger()
+                                ->send();
 
-                    if (! Storage::disk('local')->exists($path)) {
+                            return;
+                        }
+
+                        $fullPath =
+                            Storage::disk(
+                                'local'
+                            )->path(
+                                $path
+                            );
+
+                       $import =
+                        new EmployeesImport();
+
+                    try {
+                        Excel::import(
+                            $import,
+                            $fullPath
+                        );
+
+                        $total =
+                            $import->created
+                            + $import->updated
+                            + $import->unchanged
+                            + $import->skipped;
 
                         Notification::make()
-                            ->title('Excel datoteka nije pronađena')
-                            ->danger()
+                            ->title(
+                                'Uvoz zaposlenika je završen'
+                            )
+                            ->body(
+                                "Ukupno obrađeno zaposlenika: {$total}\n"
+                                . "Novi zaposlenici: {$import->created}\n"
+                                . "Ažurirani zaposlenici: {$import->updated}\n"
+                                . "Bez promjene: {$import->unchanged}\n"
+                                . "Preskočeni redovi: {$import->skipped}\n\n"
+                                . "Novi certifikati: {$import->certificatesCreated}\n"
+                                . "Ažurirani certifikati: {$import->certificatesUpdated}\n"
+                                . "Certifikati bez promjene: {$import->certificatesUnchanged}"
+                            )
+                            ->success()
                             ->send();
 
-                        return;
+                        $this->resetTable();
+                    } finally {
+                        if (
+                            Storage::disk('local')->exists($path)
+                        ) {
+                            Storage::disk('local')->delete($path);
+                        }
                     }
-
-                    $fullPath = Storage::disk('local')->path($path);
-
-                    $import = new EmployeesImport();
-
-                    Excel::import($import, $fullPath);
-
-                    $total = $import->created +
-                        $import->updated +
-                        $import->unchanged +
-                        $import->skipped;
-
-                    Notification::make()
-                        ->title('Uvoz zaposlenika je završen')
-                        ->body(
-                            "Ukupno obrađeno zaposlenika: {$total}\n" .
-                            "Novi zaposlenici: {$import->created}\n" .
-                            "Ažurirani zaposlenici: {$import->updated}\n" .
-                            "Bez promjene: {$import->unchanged}\n" .
-                            "Preskočeni redovi: {$import->skipped}\n\n" .
-                            "Novi certifikati: {$import->certificatesCreated}\n" .
-                            "Ažurirani certifikati: {$import->certificatesUpdated}\n" .
-                            "Certifikati bez promjene: {$import->certificatesUnchanged}"
-                        )
-                        ->success()
-                        ->send();
-
-                    $this->resetTable();
-                }),
+                    }
+                ),
         ];
     }
 
     protected function getTableQuery(): Builder
     {
-        $query = parent::getTableQuery();
+        $query =
+            parent::getTableQuery();
 
-        $pregled = request()->query('pregled');
+        $pregled =
+            request()->query(
+                'pregled'
+            );
 
         return match ($pregled) {
+            'medical_expiring' =>
+                $query
+                    ->whereDate(
+                        'medical_examination_valid_until',
+                        '>=',
+                        Carbon::today()
+                    )
+                    ->whereDate(
+                        'medical_examination_valid_until',
+                        '<=',
+                        Carbon::today()
+                            ->addDays(30)
+                    ),
 
-            'medical_expiring' => $query
-                ->whereDate('medical_examination_valid_until', '>=', Carbon::today())
-                ->whereDate('medical_examination_valid_until', '<=', Carbon::today()->addDays(30)),
+            'medical_expired' =>
+                $query
+                    ->whereDate(
+                        'medical_examination_valid_until',
+                        '<',
+                        Carbon::today()
+                    ),
 
-            'medical_expired' => $query
-                ->whereDate('medical_examination_valid_until', '<', Carbon::today()),
+            /*
+             * Ostali rokovi koji uskoro
+             * istječu.
+             *
+             * Prva pomoć namjerno nije ovdje
+             * jer nema rok važenja.
+             */
+            'certificates_expiring' =>
+                $query->where(
+                    function (
+                        Builder $query
+                    ): void {
+                        $query
+                            ->whereHas(
+                                'certificates',
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereDate(
+                                            'valid_until',
+                                            '>=',
+                                            Carbon::today()
+                                        )
+                                        ->whereDate(
+                                            'valid_until',
+                                            '<=',
+                                            Carbon::today()
+                                                ->addDays(
+                                                    30
+                                                )
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereNull(
+                                            'occupational_safety_valid_from'
+                                        )
+                                        ->whereNotNull(
+                                            'employeed_at'
+                                        )
+                                        ->whereDate(
+                                            'employeed_at',
+                                            '>=',
+                                            Carbon::today()
+                                                ->subDays(
+                                                    60
+                                                )
+                                        )
+                                        ->whereDate(
+                                            'employeed_at',
+                                            '<=',
+                                            Carbon::today()
+                                                ->subDays(
+                                                    30
+                                                )
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereNotNull(
+                                            'toxicology_valid_until'
+                                        )
+                                        ->whereDate(
+                                            'toxicology_valid_until',
+                                            '>=',
+                                            Carbon::today()
+                                        )
+                                        ->whereDate(
+                                            'toxicology_valid_until',
+                                            '<=',
+                                            Carbon::today()
+                                                ->addDays(
+                                                    30
+                                                )
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereNotNull(
+                                            'handling_flammable_materials_valid_until'
+                                        )
+                                        ->whereDate(
+                                            'handling_flammable_materials_valid_until',
+                                            '>=',
+                                            Carbon::today()
+                                        )
+                                        ->whereDate(
+                                            'handling_flammable_materials_valid_until',
+                                            '<=',
+                                            Carbon::today()
+                                                ->addDays(
+                                                    30
+                                                )
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereNotNull(
+                                            'employers_authorization_valid_until'
+                                        )
+                                        ->whereDate(
+                                            'employers_authorization_valid_until',
+                                            '>=',
+                                            Carbon::today()
+                                        )
+                                        ->whereDate(
+                                            'employers_authorization_valid_until',
+                                            '<=',
+                                            Carbon::today()
+                                                ->addDays(
+                                                    30
+                                                )
+                                        );
+                                }
+                            );
+                    }
+                ),
 
-            'certificates_expiring' => $query->where(function (Builder $query) {
-
-            $query->whereHas('certificates', function (Builder $q) {
-                $q->whereDate('valid_until', '>=', Carbon::today())
-                    ->whereDate('valid_until', '<=', Carbon::today()->addDays(30));
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNull('occupational_safety_valid_from')
-                    ->whereNotNull('employeed_at')
-                    ->whereDate('employeed_at', '>=', Carbon::today()->subDays(60))
-                    ->whereDate('employeed_at', '<=', Carbon::today()->subDays(30));
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNotNull('toxicology_valid_until')
-                    ->whereDate('toxicology_valid_until', '>=', Carbon::today())
-                    ->whereDate('toxicology_valid_until', '<=', Carbon::today()->addDays(30));
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNotNull('handling_flammable_materials_valid_until')
-                    ->whereDate('handling_flammable_materials_valid_until', '>=', Carbon::today())
-                    ->whereDate('handling_flammable_materials_valid_until', '<=', Carbon::today()->addDays(30));
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNotNull('employers_authorization_valid_until')
-                    ->whereDate('employers_authorization_valid_until', '>=', Carbon::today())
-                    ->whereDate('employers_authorization_valid_until', '<=', Carbon::today()->addDays(30));
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNotNull('first_aid_valid_until')
-                    ->whereDate('first_aid_valid_until', '>=', Carbon::today())
-                    ->whereDate('first_aid_valid_until', '<=', Carbon::today()->addDays(30));
-            });
-        }),
-
-        'certificates_expired' => $query->where(function (Builder $query) {
-
-            $query->whereHas('certificates', function (Builder $q) {
-                $q->whereDate('valid_until', '<', Carbon::today());
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNull('occupational_safety_valid_from')
-                    ->whereNotNull('employeed_at')
-                    ->whereDate('employeed_at', '<', Carbon::today()->subDays(60));
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNotNull('toxicology_valid_until')
-                    ->whereDate('toxicology_valid_until', '<', Carbon::today());
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNotNull('handling_flammable_materials_valid_until')
-                    ->whereDate('handling_flammable_materials_valid_until', '<', Carbon::today());
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNotNull('employers_authorization_valid_until')
-                    ->whereDate('employers_authorization_valid_until', '<', Carbon::today());
-            })
-
-            ->orWhere(function (Builder $q) {
-                $q->whereNotNull('first_aid_valid_until')
-                    ->whereDate('first_aid_valid_until', '<', Carbon::today());
-            });
-        }),
+            /*
+             * Ostali istekli rokovi.
+             *
+             * Prva pomoć namjerno nije ovdje
+             * jer nema rok važenja.
+             */
+            'certificates_expired' =>
+                $query->where(
+                    function (
+                        Builder $query
+                    ): void {
+                        $query
+                            ->whereHas(
+                                'certificates',
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereDate(
+                                            'valid_until',
+                                            '<',
+                                            Carbon::today()
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereNull(
+                                            'occupational_safety_valid_from'
+                                        )
+                                        ->whereNotNull(
+                                            'employeed_at'
+                                        )
+                                        ->whereDate(
+                                            'employeed_at',
+                                            '<',
+                                            Carbon::today()
+                                                ->subDays(
+                                                    60
+                                                )
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereNotNull(
+                                            'toxicology_valid_until'
+                                        )
+                                        ->whereDate(
+                                            'toxicology_valid_until',
+                                            '<',
+                                            Carbon::today()
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereNotNull(
+                                            'handling_flammable_materials_valid_until'
+                                        )
+                                        ->whereDate(
+                                            'handling_flammable_materials_valid_until',
+                                            '<',
+                                            Carbon::today()
+                                        );
+                                }
+                            )
+                            ->orWhere(
+                                function (
+                                    Builder $q
+                                ): void {
+                                    $q
+                                        ->whereNotNull(
+                                            'employers_authorization_valid_until'
+                                        )
+                                        ->whereDate(
+                                            'employers_authorization_valid_until',
+                                            '<',
+                                            Carbon::today()
+                                        );
+                                }
+                            );
+                    }
+                ),
 
             default => $query,
         };

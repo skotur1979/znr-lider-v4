@@ -13,4 +13,9 @@ class CreateUser extends CreateRecord
     {
         return UserResource::mutateFormDataBeforeCreate($data);
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }

@@ -516,59 +516,82 @@ class UserStatusSummaryService
         return "Prošli tjedan donio je {$created} novih i {$closed} zatvorenih stavki. Trenutno stanje sustava traži praćenje otvorenih aktivnosti i pravovremeno zatvaranje obveza. Trenutno je {$daysWithoutLta} dana bez LTA.";
     }
 
+        /**
+     * ID glavnog korisnika organizacije.
+     *
+     * Glavni korisnik dobiva vlastiti ID.
+     * Podkorisnik dobiva parent_user_id glavnog korisnika.
+     */
+    protected function ownerId(User $user): int
+    {
+        return (int) $user->ownerId();
+    }
+
     protected function employeeQuery(User $user): Builder
     {
-        return Employee::query()->where('user_id', $user->id);
+        return Employee::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function machineQuery(User $user): Builder
     {
-        return Machine::query()->where('user_id', $user->id);
+        return Machine::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function fireQuery(User $user): Builder
     {
-        return Fire::query()->where('user_id', $user->id);
+        return Fire::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function miscellaneousQuery(User $user): Builder
     {
-        return Miscellaneous::query()->where('user_id', $user->id);
+        return Miscellaneous::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function observationQuery(User $user): Builder
     {
-        return Observation::query()->where('user_id', $user->id);
+        return Observation::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function incidentQuery(User $user): Builder
     {
-        return Incident::query()->where('user_id', $user->id);
+        return Incident::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function inspectionFindingQuery(User $user): Builder
     {
-        return InspectionFinding::query()->whereIn(
-            'inspection_id',
-            Inspection::query()
-                ->where('user_id', $user->id)
-                ->select('id')
-        );
+        $ownerId = $this->ownerId($user);
+
+        return InspectionFinding::query()
+            ->whereIn(
+                'inspection_id',
+                Inspection::query()
+                    ->where('user_id', $ownerId)
+                    ->select('id')
+            );
     }
 
     protected function wasteTrackingFormsQuery(User $user): Builder
     {
-        return WasteTrackingForm::query()->where('user_id', $user->id);
+        return WasteTrackingForm::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function workTaskQuery(User $user): Builder
     {
-        return WorkTask::query()->where('user_id', $user->id);
+        return WorkTask::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function workPermitQuery(User $user): Builder
     {
-        return WorkPermit::query()->where('user_id', $user->id);
+        return WorkPermit::query()
+            ->where('user_id', $this->ownerId($user));
     }
 
     protected function firstAidItemsQuery(User $user): Collection
@@ -577,9 +600,11 @@ class UserStatusSummaryService
             return collect();
         }
 
+        $ownerId = $this->ownerId($user);
+
         return \App\Models\FirstAidItem::query()
-            ->whereHas('kit', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
+            ->whereHas('kit', function ($query) use ($ownerId) {
+                $query->where('user_id', $ownerId);
             })
             ->get();
     }

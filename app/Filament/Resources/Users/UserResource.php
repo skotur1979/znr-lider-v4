@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 
 
 class UserResource extends Resource
@@ -201,6 +202,57 @@ class UserResource extends Resource
             ->bulkToggleable();
     }
 
+    protected static function modulePermissionCheckbox(
+        string $moduleKey,
+        string $label
+    ): CheckboxList {
+        return CheckboxList::make('module_permissions.' . $moduleKey)
+            ->label($label)
+            ->options(User::MODULE_PERMISSION_ACTIONS)
+            ->default(User::fullModulePermissionSet())
+            ->afterStateHydrated(function ($component, ?User $record) use ($moduleKey): void {
+                if (! $record) {
+                    $component->state(User::fullModulePermissionSet());
+
+                    return;
+                }
+
+                $component->state($record->permissionsForModule($moduleKey));
+            })
+            ->columns(4)
+            ->bulkToggleable()
+            ->visible(function () use ($moduleKey): bool {
+                $authUser = Auth::user();
+
+                return $authUser?->isOrgAdmin() === true
+                    && $authUser->canAccessModule($moduleKey);
+            });
+    }
+
+    protected static function normalizeModulePermissions(
+        mixed $permissions,
+        User $owner
+    ): array {
+        $permissions = is_array($permissions) ? $permissions : [];
+        $normalized = [];
+
+        foreach (User::CONTROLLED_MODULES as $moduleKey => $label) {
+            if (! $owner->canAccessModule($moduleKey)) {
+                continue;
+            }
+
+            $selected = $permissions[$moduleKey] ?? [];
+            $selected = is_array($selected) ? $selected : [];
+
+            $normalized[$moduleKey] = array_values(array_intersect(
+                $selected,
+                array_keys(User::MODULE_PERMISSION_ACTIONS)
+            ));
+        }
+
+        return $normalized;
+    }
+
     public static function form(Schema $schema): Schema
     {
         $authUser = Auth::user();
@@ -223,28 +275,56 @@ class UserResource extends Resource
                 ->unique(ignoreRecord: true),
 
             TextInput::make('password')
-                ->label('Lozinka')
+                ->label(fn (string $operation): string =>
+                    $operation === 'create' ? 'Lozinka' : 'Nova lozinka'
+                )
                 ->password()
                 ->revealable()
-                ->required(fn (string $operation) => $operation === 'create')
-                ->dehydrated(fn ($state) => filled($state)),
+                ->required(fn (string $operation): bool => $operation === 'create')
+                ->dehydrated(fn (?string $state): bool => filled($state))
+                ->helperText(fn (string $operation): ?string =>
+                    $operation === 'edit'
+                        ? 'Ostavite prazno ako ne želite promijeniti postojeću lozinku.'
+                        : null
+                ),
 
             Select::make('role')
                 ->label('Uloga')
-                ->required()
-                ->options(function () use ($authUser) {
-                    if ($authUser?->isSuperAdmin()) {
+                ->options(function (?User $record): array {
+                    if ($record?->isSuperAdmin()) {
                         return [
-                            'org_admin' => 'Glavni korisnik organizacije',
-                            'org_user' => 'Podkorisnik organizacije',
+                            'super_admin' => 'Super admin',
                         ];
                     }
 
                     return [
+                        'org_admin' => 'Glavni korisnik organizacije',
                         'org_user' => 'Podkorisnik organizacije',
                     ];
                 })
-                ->default(fn () => $authUser?->isSuperAdmin() ? 'org_admin' : 'org_user'),
+                ->default(fn () => $authUser?->isSuperAdmin() ? 'org_admin' : 'org_user')
+                ->required()
+                ->native(false)
+                ->disabled(function (?User $record): bool {
+                    if ($record?->isSuperAdmin()) {
+                        return true;
+                    }
+
+                    return ! Auth::user()?->isSuperAdmin();
+                })
+                ->dehydrated(function (?User $record): bool {
+                    return Auth::user()?->isSuperAdmin()
+                        && ! $record?->isSuperAdmin();
+                })
+                ->helperText(function (?User $record): ?string {
+                    if ($record?->isSuperAdmin()) {
+                        return 'Uloga superadmina ne može se promijeniti.';
+                    }
+
+                    return Auth::user()?->isSuperAdmin()
+                        ? 'Superadmin može promijeniti ulogu korisnika.'
+                        : 'Ulogu korisnika može promijeniti samo superadmin.';
+                }),
 
             Placeholder::make('subusers_limit_info')
                 ->label('Podkorisnici organizacije')
@@ -269,21 +349,26 @@ class UserResource extends Resource
 
             Select::make('parent_user_id')
                 ->label('Glavni korisnik organizacije')
-                ->options(function () {
+                ->options(function (): array {
                     return User::query()
-                        ->whereIn('role', ['org_admin'])
-                        ->orWhere(function ($query) {
-                            $query->whereNull('role')
-                                ->where('is_admin', false);
-                        })
+                        ->where('role', 'org_admin')
+                        ->where('is_active', true)
+                        ->withoutTrashed()
                         ->orderBy('name')
                         ->pluck('name', 'id')
                         ->toArray();
                 })
                 ->searchable()
                 ->preload()
-                ->visible(fn () => Auth::user()?->isSuperAdmin())
-                ->helperText('Prazno = glavni korisnik organizacije.'),
+                ->visible(
+                    fn (): bool =>
+                        Auth::user()?->isSuperAdmin()
+                        === true
+                )
+                ->helperText(
+                    'Za glavnog korisnika ostavite prazno. '
+                    . 'Za podkorisnika obavezno odaberite glavnog korisnika organizacije.'
+                ),
 
             Hidden::make('parent_user_id')
                 ->default(function () {
@@ -370,6 +455,37 @@ class UserResource extends Resource
                                 . '%)';
                         }),
                 ])
+                ->columnSpanFull(),
+
+            Section::make('Dozvole podkorisnika po modulima')
+                ->description(
+                    'Odredi što podkorisnik smije raditi u najvažnijim modulima. '
+                    . 'Pregled dopušta otvaranje modula i izvoz, Dodavanje dopušta novi zapis, uvoz i kopiranje, '
+                    . 'Uređivanje dopušta izmjene, a Brisanje dopušta deaktiviranje, vraćanje i trajno brisanje.'
+                )
+                ->visible(function (?User $record): bool {
+                    $authUser = Auth::user();
+
+                    if (! $authUser?->isOrgAdmin()) {
+                        return false;
+                    }
+
+                    if (! $record) {
+                        return true;
+                    }
+
+                    return $record->isOrgUser()
+                        && (int) $record->parent_user_id === (int) $authUser->ownerId();
+                })
+                ->schema([
+                    static::modulePermissionCheckbox('observations', 'Zapažanja'),
+                    static::modulePermissionCheckbox('employees', 'Zaposlenici'),
+                    static::modulePermissionCheckbox('machines', 'Radna oprema'),
+                    static::modulePermissionCheckbox('waste_tracking_forms', 'Prateći listovi'),
+                    static::modulePermissionCheckbox('miscellaneous', 'Ostala ispitivanja'),
+                    static::modulePermissionCheckbox('categories', 'Kategorije ispitivanja'),
+                ])
+                ->columns(1)
                 ->columnSpanFull(),
 
             Section::make('Uključeni moduli')
@@ -502,17 +618,27 @@ class UserResource extends Resource
                     ->label('Uloga')
                     ->alignment('center')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'super_admin', 'admin' => 'Super admin',
-                        'org_admin' => 'Glavni korisnik',
-                        'org_user' => 'Podkorisnik',
-                        default => 'Korisnik',
+                    ->formatStateUsing(function (?string $state, User $record): string {
+                        if ($record->isSuperAdmin()) {
+                            return 'Super admin';
+                        }
+
+                        return match ($state) {
+                            'org_admin' => 'Glavni korisnik',
+                            'org_user' => 'Podkorisnik',
+                            default => 'Korisnik',
+                        };
                     })
-                    ->color(fn (?string $state) => match ($state) {
-                        'super_admin', 'admin' => 'danger',
-                        'org_admin' => 'warning',
-                        'org_user' => 'info',
-                        default => 'gray',
+                    ->color(function (?string $state, User $record): string {
+                        if ($record->isSuperAdmin()) {
+                            return 'danger';
+                        }
+
+                        return match ($state) {
+                            'org_admin' => 'warning',
+                            'org_user' => 'info',
+                            default => 'gray',
+                        };
                     }),
 
                 Tables\Columns\TextColumn::make('subusers_usage')
@@ -853,6 +979,47 @@ class UserResource extends Resource
                             ->success()
                             ->send();
                     }),
+                    Action::make('permanently_delete_user')
+                            ->label('Trajno izbriši')
+                            ->icon('heroicon-o-trash')
+                            ->color('danger')
+                            ->requiresConfirmation()
+                            ->modalHeading('Trajno izbrisati korisnika?')
+                            ->modalDescription(
+                                'Sustav će prije brisanja provjeriti postoje li podkorisnici, '
+                                . 'zapisi, dokumenti, audit tragovi ili drugi povezani podaci. '
+                                . 'Ova se radnja ne može poništiti.'
+                            )
+                            ->modalSubmitActionLabel('Provjeri i trajno izbriši')
+                            ->visible(fn (User $record): bool =>
+                                Auth::user()?->isSuperAdmin()
+                                && ! $record->isSuperAdmin()
+                                && (int) $record->id !== (int) Auth::id()
+                            )
+                            ->action(function (User $record): void {
+                                $blockReason = static::userDeletionBlockReason($record);
+
+                                if ($blockReason !== null) {
+                                    Notification::make()
+                                        ->title('Korisnik nije izbrisan.')
+                                        ->body($blockReason)
+                                        ->danger()
+                                        ->persistent()
+                                        ->send();
+
+                                    return;
+                                }
+
+                                DB::transaction(function () use ($record): void {
+                                    $record->forceDelete();
+                                });
+
+                                Notification::make()
+                                    ->title('Korisnik je trajno izbrisan.')
+                                    ->body('Provjera nije pronašla povezane podatke.')
+                                    ->success()
+                                    ->send();
+                            }),
             ])
             ->bulkActions([]);
     }
@@ -882,81 +1049,623 @@ class UserResource extends Resource
     }
 
     public static function mutateFormDataBeforeCreate(array $data): array
-    {
-        $data = static::mergeQuickActions($data);
-        $data = static::resetLegalAcceptance($data);
+{
+    $data = static::mergeQuickActions($data);
+    $data = static::resetLegalAcceptance($data);
 
-        $authUser = Auth::user();
-        if (! $authUser?->isSuperAdmin()) {
-        $owner = $authUser->owner();
+    $authUser = Auth::user();
 
-        if (! $owner->canAddMoreSubusers()) {
-            Notification::make()
-                ->title('Dosegnut je limit podkorisnika.')
-                ->body('Organizacija može imati najviše ' . User::MAX_SUBUSERS_PER_ORGANIZATION . ' podkorisnika.')
-                ->danger()
-                ->send();
-
-            throw ValidationException::withMessages([
-                'email' => 'Dosegnut je maksimalan broj podkorisnika za ovu organizaciju.',
-            ]);
-        }
+    if (! $authUser) {
+        throw ValidationException::withMessages([
+            'email' => 'Korisnik nije prijavljen.',
+        ]);
     }
 
-        if ($authUser?->isSuperAdmin()) {
-            $data['is_admin'] = false;
-            $data['role'] = $data['role'] ?? 'org_admin';
-            $data['is_active'] = $data['is_active'] ?? true;
+    /*
+     * ============================================================
+     * SUPERADMIN
+     * ============================================================
+     *
+     * Superadmin može kreirati:
+     *
+     * org_admin
+     * parent_user_id = NULL
+     *
+     * org_user
+     * parent_user_id = ID stvarnog org_admin korisnika
+     *
+     * Nikada ne stvaramo poslovni superadmin zapis
+     * kroz ovaj obrazac.
+     */
+    if ($authUser->isSuperAdmin()) {
+        $data['is_admin'] = false;
+
+        $role = $data['role'] ?? 'org_admin';
+
+        if (! in_array(
+            $role,
+            [
+                'org_admin',
+                'org_user',
+            ],
+            true
+        )) {
+            throw ValidationException::withMessages([
+                'role' => 'Odabrana uloga nije dopuštena.',
+            ]);
+        }
+
+        $data['role'] = $role;
+
+        /*
+         * GLAVNI KORISNIK ORGANIZACIJE
+         */
+        if ($role === 'org_admin') {
+            /*
+             * Glavni korisnik nema parent_user_id.
+             */
+            $data['parent_user_id'] = null;
+
+            /*
+             * Glavni korisnik može dobiti mogućnost
+             * upravljanja podkorisnicima.
+             */
+            $data['can_manage_subusers'] =
+                (bool) (
+                    $data['can_manage_subusers']
+                    ?? false
+                );
+
+            /*
+             * Granularne dozvole vrijede za
+             * podkorisnike, ne za org_admina.
+             */
+            unset(
+                $data['module_permissions']
+            );
+
+            $data['is_active'] =
+                $data['is_active']
+                ?? true;
+
             $data['account_status'] = 'active';
             $data['gdpr_request_status'] = null;
-
-            if (($data['role'] ?? null) === 'org_admin') {
-                $data['parent_user_id'] = null;
-            }
 
             return $data;
         }
 
-        $data['parent_user_id'] = $authUser->ownerId();
-        $data['organization_name'] = $authUser->owner()?->organization_name;
+        /*
+         * ========================================================
+         * PODKORISNIK KOJEG KREIRA SUPERADMIN
+         * ========================================================
+         */
+        $parentId = isset(
+            $data['parent_user_id']
+        )
+            ? (int) $data['parent_user_id']
+            : 0;
+
+        if ($parentId <= 0) {
+            throw ValidationException::withMessages([
+                'parent_user_id' =>
+                    'Za podkorisnika morate odabrati glavnog korisnika organizacije.',
+            ]);
+        }
+
+        $owner = User::query()
+            ->whereKey($parentId)
+            ->where(
+                'role',
+                'org_admin'
+            )
+            ->where(
+                'is_active',
+                true
+            )
+            ->withoutTrashed()
+            ->first();
+
+        if (! $owner) {
+            throw ValidationException::withMessages([
+                'parent_user_id' =>
+                    'Odabrani glavni korisnik organizacije nije valjan ili nije aktivan.',
+            ]);
+        }
+
+        if (! $owner->canAddMoreSubusers()) {
+            throw ValidationException::withMessages([
+                'parent_user_id' =>
+                    'Odabrana organizacija već ima maksimalan broj podkorisnika.',
+            ]);
+        }
+
+        $data['parent_user_id'] =
+            $owner->id;
+
+        $data['organization_name'] =
+            $owner->organization_name;
+
         $data['role'] = 'org_user';
         $data['is_admin'] = false;
-        $data['can_manage_subusers'] = false;
-        $data['is_active'] = true;
-        $data['account_status'] = 'active';
-        $data['gdpr_request_status'] = null;
+
+        /*
+         * Podkorisnik nikada ne upravlja drugim
+         * podkorisnicima.
+         */
+        $data['can_manage_subusers'] =
+            false;
+
+        $data['is_active'] =
+            $data['is_active']
+            ?? true;
+
+        $data['account_status'] =
+            'active';
+
+        $data['gdpr_request_status'] =
+            null;
+
+        /*
+         * Podkorisnik nema vlastiti storage limit.
+         * Dijeli storage organizacije.
+         */
+        unset(
+            $data['storage_quota_mb']
+        );
+
+        /*
+         * Superadmin ne određuje granularna prava
+         * podkorisnika na ovom mjestu.
+         *
+         * NULL znači puna prava dok ih glavni
+         * korisnik kasnije ne definira.
+         */
+        unset(
+            $data['module_permissions']
+        );
+
+        /*
+         * quick_actions podkorisnika se ne koriste kao
+         * njegov vlastiti tenant modul-popis.
+         *
+         * Module dobiva preko owner()->quick_actions.
+         */
         $data['quick_actions'] = null;
 
         return $data;
     }
 
+    /*
+     * ============================================================
+     * GLAVNI KORISNIK ORGANIZACIJE
+     * ============================================================
+     *
+     * Može kreirati isključivo podkorisnike
+     * vlastite organizacije.
+     */
+    if (! $authUser->isOrgAdmin()) {
+        throw ValidationException::withMessages([
+            'email' =>
+                'Nemate ovlasti za kreiranje korisnika.',
+        ]);
+    }
+
+    if (! $authUser->canCreateSubusers()) {
+        throw ValidationException::withMessages([
+            'email' =>
+                'Nemate ovlasti za dodavanje podkorisnika.',
+        ]);
+    }
+
+    $owner = $authUser->owner();
+
+    if (! $owner->canAddMoreSubusers()) {
+        Notification::make()
+            ->title(
+                'Dosegnut je limit podkorisnika.'
+            )
+            ->body(
+                'Organizacija može imati najviše '
+                . User::MAX_SUBUSERS_PER_ORGANIZATION
+                . ' podkorisnika.'
+            )
+            ->danger()
+            ->send();
+
+        throw ValidationException::withMessages([
+            'email' =>
+                'Dosegnut je maksimalan broj podkorisnika za ovu organizaciju.',
+        ]);
+    }
+
+    /*
+     * Ownership se postavlja SERVER-SIDE.
+     *
+     * Vrijednosti poslane iz forme ne mogu
+     * promijeniti organizaciju podkorisnika.
+     */
+    $data['parent_user_id'] =
+        $owner->id;
+
+    $data['organization_name'] =
+        $owner->organization_name;
+
+    $data['role'] = 'org_user';
+    $data['is_admin'] = false;
+
+    $data['can_manage_subusers'] =
+        false;
+
+    $data['is_active'] = true;
+
+    $data['account_status'] =
+        'active';
+
+    $data['gdpr_request_status'] =
+        null;
+
+    /*
+     * Podkorisnik module dobiva od organizacije.
+     */
+    $data['quick_actions'] = null;
+
+    /*
+     * Glavni korisnik određuje granularne dozvole
+     * samo za šest CONTROLLED_MODULES modula.
+     */
+    $data['module_permissions'] =
+        static::normalizeModulePermissions(
+            $data['module_permissions']
+                ?? User::defaultModulePermissions(),
+            $owner
+        );
+
+    /*
+     * Podkorisnik ne smije imati svoj storage limit.
+     */
+    unset(
+        $data['storage_quota_mb']
+    );
+
+    return $data;
+}
+
     public static function mutateFormDataBeforeSave(array $data): array
-    {
-        $data = static::mergeQuickActions($data);
+{
+    $data = static::mergeQuickActions($data);
 
-        $authUser = Auth::user();
+    $authUser = Auth::user();
 
-        if (! $authUser?->isSuperAdmin()) {
-            unset($data['storage_quota_mb']);
-            unset($data['quick_actions']);
-            unset($data['can_manage_subusers']);
-            unset($data['is_active']);
-            unset($data['account_status']);
-            unset($data['gdpr_request_status']);
-            unset($data['gdpr_request_processed_at']);
-            unset($data['organization_name']);
-            unset($data['role']);
-            unset($data['parent_user_id']);
-            unset($data['accepted_terms_at']);
-            unset($data['accepted_privacy_at']);
-            unset($data['terms_version']);
-            unset($data['privacy_version']);
-            unset($data['newsletter_opt_in']);
+    if (! $authUser) {
+        throw ValidationException::withMessages([
+            'email' => 'Korisnik nije prijavljen.',
+        ]);
+    }
+
+    /*
+     * ============================================================
+     * GLAVNI KORISNIK ORGANIZACIJE
+     * ============================================================
+     *
+     * On smije mijenjati granularne dozvole
+     * svojih podkorisnika.
+     *
+     * Ne smije mijenjati:
+     * - ownership
+     * - role
+     * - organization_name
+     * - aktivnost računa
+     * - storage
+     * - pravne/admin podatke.
+     */
+    if ($authUser->isOrgAdmin()) {
+        $data['module_permissions'] =
+            static::normalizeModulePermissions(
+                $data['module_permissions']
+                    ?? [],
+                $authUser->owner()
+            );
+
+        unset(
+            $data['storage_quota_mb'],
+            $data['quick_actions'],
+            $data['can_manage_subusers'],
+            $data['is_active'],
+            $data['account_status'],
+            $data['gdpr_request_status'],
+            $data['gdpr_request_processed_at'],
+            $data['organization_name'],
+            $data['role'],
+            $data['parent_user_id'],
+            $data['accepted_terms_at'],
+            $data['accepted_privacy_at'],
+            $data['terms_version'],
+            $data['privacy_version'],
+            $data['newsletter_opt_in']
+        );
+
+        return $data;
+    }
+
+    /*
+     * ============================================================
+     * SUPERADMIN
+     * ============================================================
+     */
+    if ($authUser->isSuperAdmin()) {
+        /*
+         * Superadmin račun se kroz obični User obrazac
+         * ne pretvara u drugu ulogu.
+         *
+         * Za ostale korisnike dopuštene su samo
+         * org_admin i org_user uloge.
+         */
+        $role =
+            $data['role']
+            ?? null;
+
+        if (
+            $role !== null
+            && ! in_array(
+                $role,
+                [
+                    'org_admin',
+                    'org_user',
+                ],
+                true
+            )
+        ) {
+            /*
+             * Postojeći superadmin može imati svoj
+             * zaključani role select koji nije dehydrated.
+             * Zato provjeravamo samo ako je role stvarno
+             * stigao iz forme.
+             */
+            throw ValidationException::withMessages([
+                'role' =>
+                    'Odabrana uloga nije dopuštena.',
+            ]);
+        }
+
+        /*
+         * Ako uređujemo običnog korisnika i
+         * odabran je org_admin:
+         *
+         * parent mora biti NULL.
+         */
+        if ($role === 'org_admin') {
+            $data['parent_user_id'] = null;
+
+            /*
+             * Org admin ne koristi granularne
+             * module_permissions.
+             */
+            unset(
+                $data['module_permissions']
+            );
+
+            return $data;
+        }
+
+        /*
+         * Ako je odabran podkorisnik,
+         * mora imati stvarnog glavnog korisnika.
+         */
+        if ($role === 'org_user') {
+            $parentId = isset(
+                $data['parent_user_id']
+            )
+                ? (int) $data['parent_user_id']
+                : 0;
+
+            if ($parentId <= 0) {
+                throw ValidationException::withMessages([
+                    'parent_user_id' =>
+                        'Za podkorisnika morate odabrati glavnog korisnika organizacije.',
+                ]);
+            }
+
+            $owner = User::query()
+                ->whereKey($parentId)
+                ->where(
+                    'role',
+                    'org_admin'
+                )
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->withoutTrashed()
+                ->first();
+
+            if (! $owner) {
+                throw ValidationException::withMessages([
+                    'parent_user_id' =>
+                        'Odabrani glavni korisnik organizacije nije valjan ili nije aktivan.',
+                ]);
+            }
+
+            $data['parent_user_id'] =
+                $owner->id;
+
+            /*
+             * Naziv organizacije uvijek dolazi
+             * od stvarnog ownera.
+             */
+            $data['organization_name'] =
+                $owner->organization_name;
+
+            /*
+             * Podkorisnik nikada ne smije
+             * upravljati drugim podkorisnicima.
+             */
+            $data['can_manage_subusers'] =
+                false;
+
+            /*
+             * Podkorisnik dijeli storage
+             * glavnog korisnika.
+             */
+            unset(
+                $data['storage_quota_mb']
+            );
+
+            /*
+             * Njegove granularne dozvole ne uređuje
+             * superadmin kroz ovaj dio sustava.
+             */
+            unset(
+                $data['module_permissions']
+            );
+
+            $data['quick_actions'] = null;
+        } else {
+            /*
+             * Ako role nije stigao iz forme,
+             * ne diramo postojeći ownership.
+             *
+             * To je važno za zaključane role forme.
+             */
+            unset(
+                $data['module_permissions']
+            );
         }
 
         return $data;
     }
 
+    /*
+     * Nepoznata uloga nema pravo uređivati Users modul.
+     * Dodatna fail-closed zaštita.
+     */
+    throw ValidationException::withMessages([
+        'email' =>
+            'Nemate ovlasti za uređivanje korisnika.',
+    ]);
+}
+protected static function getUserRelatedRecords(User $record): array
+{
+    $database = DB::getDatabaseName();
+
+    /*
+     * Pronalazi stvarne strane ključeve koji pokazuju na users.id.
+     */
+    $foreignKeys = DB::select(
+        '
+        SELECT TABLE_NAME, COLUMN_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = ?
+          AND REFERENCED_TABLE_NAME = ?
+          AND REFERENCED_COLUMN_NAME = ?
+        ',
+        [$database, 'users', 'id']
+    );
+
+    /*
+     * Dodatno provjerava stupce koji se u aplikaciji koriste
+     * i kada nije postavljen pravi foreign key.
+     */
+    $conventionalColumns = DB::select(
+        '
+        SELECT TABLE_NAME, COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = ?
+          AND COLUMN_NAME IN (
+              "user_id",
+              "owner_id",
+              "parent_user_id",
+              "created_by",
+              "updated_by",
+              "assigned_to",
+              "responsible_user_id"
+          )
+        ',
+        [$database]
+    );
+
+    $references = collect($foreignKeys)
+        ->merge($conventionalColumns)
+        ->unique(fn ($item) => $item->TABLE_NAME . '.' . $item->COLUMN_NAME);
+
+    $relatedRecords = [];
+
+    foreach ($references as $reference) {
+        $table = $reference->TABLE_NAME;
+        $column = $reference->COLUMN_NAME;
+
+        /*
+         * Ne provjeravamo users.id jer je to sam korisnik.
+         * users.parent_user_id se normalno provjerava zbog podkorisnika.
+         */
+        if ($table === 'users' && $column === 'id') {
+            continue;
+        }
+
+        try {
+            $count = DB::table($table)
+                ->where($column, $record->id)
+                ->count();
+
+            if ($count > 0) {
+                $relatedRecords[] = [
+                    'table' => $table,
+                    'column' => $column,
+                    'count' => $count,
+                ];
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            /*
+             * Ako provjera neke tablice ne uspije, iz sigurnosnih razloga
+             * tretiramo je kao zapreku za brisanje.
+             */
+            $relatedRecords[] = [
+                'table' => $table,
+                'column' => $column,
+                'count' => null,
+            ];
+        }
+    }
+
+    return $relatedRecords;
+}
+
+    protected static function userDeletionBlockReason(User $record): ?string
+{
+    if ($record->isSuperAdmin()) {
+        return 'Superadmin se ne može trajno izbrisati.';
+    }
+
+    if ((int) $record->id === (int) Auth::id()) {
+        return 'Ne možete trajno izbrisati korisnički račun s kojim ste trenutačno prijavljeni.';
+    }
+
+    $relatedRecords = static::getUserRelatedRecords($record);
+
+    if (empty($relatedRecords)) {
+        return null;
+    }
+
+    $details = collect($relatedRecords)
+        ->take(5)
+        ->map(function (array $item): string {
+            if ($item['count'] === null) {
+                return $item['table'] . '.' . $item['column'];
+            }
+
+            return $item['table']
+                . '.'
+                . $item['column']
+                . ' (' . $item['count'] . ')';
+        })
+        ->implode(', ');
+
+    return 'Korisnik ima povezane podatke i ne može se trajno izbrisati. '
+        . 'Pronađene veze: '
+        . $details
+        . (count($relatedRecords) > 5 ? ' i druge.' : '.');
+}
     public static function getPages(): array
     {
         return [

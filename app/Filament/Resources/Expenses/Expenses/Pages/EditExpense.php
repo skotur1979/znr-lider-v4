@@ -9,6 +9,14 @@ class EditExpense extends EditRecord
 {
     protected static string $resource = ExpenseResource::class;
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        return ExpenseResource::prepareOwnershipData(
+            $data,
+            $this->record
+        );
+    }
+
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');

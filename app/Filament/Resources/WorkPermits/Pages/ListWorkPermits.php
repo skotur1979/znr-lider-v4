@@ -17,16 +17,31 @@ class ListWorkPermits extends ListRecords
         return [
             Actions\CreateAction::make()
                 ->label('Nova dozvola za rad')
-                ->icon('heroicon-o-plus'),
+                ->icon('heroicon-o-plus')
+                ->visible(
+                    fn (): bool =>
+                        WorkPermitResource::canCreate()
+                ),
 
             Actions\Action::make('exportExcel')
                 ->label('Izvoz u Excel')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->action(function () {
+                    /*
+                     * Izvozimo upravo zapise koji su trenutno
+                     * vidljivi kroz filtre, pretragu i sortiranje.
+                     */
+                    $permitIds = $this
+                        ->getFilteredSortedTableQuery()
+                        ->pluck('work_permits.id')
+                        ->toArray();
+
                     return Excel::download(
-                        new WorkPermitsExport(),
-                        'dozvole-za-rad-' . now()->format('Y-m-d') . '.xlsx'
+                        new WorkPermitsExport($permitIds),
+                        'dozvole-za-rad-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
                     );
                 }),
         ];

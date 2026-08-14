@@ -25,9 +25,12 @@ class ZonesRelationManager extends RelationManager
     {
         $inspection = $this->getOwnerRecord();
 
-        return InspectionResource::getUrl('edit', [
-            'record' => $inspection,
-        ]) . '?relation=1';
+        return InspectionResource::getUrl(
+            'edit',
+            [
+                'record' => $inspection,
+            ]
+        ) . '?relation=1';
     }
 
     public function form(Schema $schema): Schema
@@ -48,7 +51,9 @@ class ZonesRelationManager extends RelationManager
     {
         return $table
             ->emptyStateHeading('Nema 5S zona')
-            ->emptyStateDescription('Stvori 5S zonu kako bi započeo.')
+            ->emptyStateDescription(
+                'Stvori 5S zonu kako bi započeo.'
+            )
             ->columns([
                 TextColumn::make('name')
                     ->label('Zona')
@@ -57,25 +62,43 @@ class ZonesRelationManager extends RelationManager
                 TextColumn::make('total_points')
                     ->label('Bodovi')
                     ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn ($state) => filled($state) ? $state : '-'),
+                    ->formatStateUsing(
+                        fn ($state) =>
+                            filled($state)
+                                ? $state
+                                : '-'
+                    ),
 
                 TextColumn::make('max_points')
                     ->label('Max')
                     ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn ($state) => filled($state) ? $state : '-'),
+                    ->formatStateUsing(
+                        fn ($state) =>
+                            filled($state)
+                                ? $state
+                                : '-'
+                    ),
 
                 TextColumn::make('percentage')
                     ->label('Rezultat')
                     ->alignment(Alignment::Center)
                     ->html()
                     ->state(function ($record) {
-                        $percentage = (float) ($record->percentage ?? 0);
+                        $percentage =
+                            (float) ($record->percentage ?? 0);
 
                         $styles = match (true) {
-                            $percentage < 40 => 'background:#991b1b;color:#ffffff;',
-                            $percentage < 60 => 'background:#f59e0b;color:#111827;',
-                            $percentage < 80 => 'background:#fde047;color:#111827;',
-                            default => 'background:#16a34a;color:#ffffff;',
+                            $percentage < 40 =>
+                                'background:#991b1b;color:#ffffff;',
+
+                            $percentage < 60 =>
+                                'background:#f59e0b;color:#111827;',
+
+                            $percentage < 80 =>
+                                'background:#fde047;color:#111827;',
+
+                            default =>
+                                'background:#16a34a;color:#ffffff;',
                         };
 
                         return '<div style="
@@ -91,7 +114,14 @@ class ZonesRelationManager extends RelationManager
                             line-height:1;
                             box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
                             ' . $styles . '
-                        ">' . e(number_format($percentage, 0)) . '%</div>';
+                        ">'
+                            . e(
+                                number_format(
+                                    $percentage,
+                                    0
+                                )
+                            )
+                            . '%</div>';
                     }),
             ])
             ->headerActions([
@@ -101,12 +131,21 @@ class ZonesRelationManager extends RelationManager
             ->actions([
                 Action::make('ocijeni')
                     ->label('Ocijeni zonu')
-                    ->icon('heroicon-o-clipboard-document-check')
+                    ->icon(
+                        'heroicon-o-clipboard-document-check'
+                    )
                     ->color('success')
-                    ->url(fn ($record) => InspectionZoneResource::getUrl('edit', [
-                        'record' => $record,
-                        'return_url' => $this->getInspectionViewUrl(),
-                    ])),
+                    ->url(
+                        fn ($record) =>
+                            InspectionZoneResource::getUrl(
+                                'edit',
+                                [
+                                    'record' => $record,
+                                    'return_url' =>
+                                        $this->getInspectionViewUrl(),
+                                ]
+                            )
+                    ),
 
                 EditAction::make()
                     ->label('Uredi zonu'),

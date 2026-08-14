@@ -3,7 +3,6 @@
 namespace App\Exports;
 
 use App\Filament\Resources\ActivityLogs\ActivityLogResource;
-use App\Models\ActivityLog;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -21,7 +20,6 @@ class ActivityLogsExport implements FromCollection, WithHeadings, WithMapping, S
     {
         $this->logs = ActivityLogResource::getEloquentQuery()
             ->with('user')
-            ->orderByDesc('created_at')
             ->get();
     }
 
@@ -56,6 +54,10 @@ class ActivityLogsExport implements FromCollection, WithHeadings, WithMapping, S
                 'import' => 'Import',
                 'export' => 'Export',
                 'status' => 'Status',
+                'sent' => 'Poslano',
+                'login' => 'Prijava',
+                'logout' => 'Odjava',
+                'failed_login' => 'Neuspješna prijava',
                 default => $log->action ?? '-',
             },
             $log->title ?? '-',
@@ -70,7 +72,9 @@ class ActivityLogsExport implements FromCollection, WithHeadings, WithMapping, S
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                $sheet->getStyle('A1:G1')->getFont()->setBold(true);
+                $sheet->getStyle('A1:G1')
+                    ->getFont()
+                    ->setBold(true);
 
                 $sheet->getStyle('A:G')
                     ->getAlignment()

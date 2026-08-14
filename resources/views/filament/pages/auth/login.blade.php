@@ -270,6 +270,58 @@
         .znr-about p + p {
             margin-top: 9px;
         }
+        /* =====================================================
+           FILAMENT LOGIN FORMA – BOJE TEKSTA
+           ===================================================== */
+        
+        /* Adresa e-pošte i Lozinka */
+        .znr-form form .fi-fo-field-wrp-label,
+        .znr-form form .fi-fo-field-wrp-label span,
+        .znr-form form label,
+        .znr-form form label span {
+            color: #e5e7eb !important;
+        }
+        
+        /* Obavezna zvjezdica uz naziv polja */
+        .znr-form form .fi-fo-field-wrp-label .text-danger-600,
+        .znr-form form .fi-fo-field-wrp-label sup {
+            color: #f59e0b !important;
+        }
+        
+        /* Zapamti me */
+        .znr-form form .fi-checkbox-label,
+        .znr-form form .fi-checkbox-label span,
+        .znr-form form .fi-fo-checkbox-list-option-label,
+        .znr-form form .fi-fo-checkbox-list-option-label span {
+            color: #d4d4d8 !important;
+        }
+        
+        /* Pomoćni tekst i poruke ispod polja */
+        .znr-form form .fi-fo-field-wrp-helper-text,
+        .znr-form form .fi-fo-field-wrp-helper-text span {
+            color: #a1a1aa !important;
+        }
+        
+        /* Tekst koji korisnik upisuje u bijela polja */
+        .znr-form form input {
+            color: #111827 !important;
+            background-color: #ffffff !important;
+        }
+        
+        /* Placeholder unutar polja */
+        .znr-form form input::placeholder {
+            color: #6b7280 !important;
+            opacity: 1 !important;
+        }
+        
+        /* Poveznica Zaboravljena lozinka */
+        .znr-form form a {
+            color: #f59e0b !important;
+        }
+        
+        .znr-form form a:hover {
+            color: #fbbf24 !important;
+        }
 
         .znr-trust {
             display: grid;
@@ -403,6 +455,34 @@
             border-radius: 12px !important;
             font-weight: 900 !important;
         }
+        .znr-test-notice {
+            margin-top: 14px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: linear-gradient(
+            135deg,
+            rgba(245, 158, 11, .12),
+            rgba(234, 88, 12, .05)
+            );
+            border: 1px solid rgba(245, 158, 11, .28);
+        }
+
+        .znr-test-title {
+            color: #fbbf24;
+            font-size: 14px;
+            font-weight: 900;
+            margin-bottom: 10px;
+        }
+
+        .znr-test-text {
+            color: #e5e7eb;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .znr-test-text + .znr-test-text {
+            margin-top: 8px;
+        }
 
         @media (max-width: 1120px) {
             .znr-login-grid {
@@ -442,34 +522,7 @@
                 align-items: flex-start;
                 flex-direction: column;
             }
-            .znr-test-notice {
-                margin-top: 14px;
-                padding: 16px 18px;
-                border-radius: 18px;
-                background: linear-gradient(
-                    135deg,
-                    rgba(245, 158, 11, .12),
-                    rgba(234, 88, 12, .05)
-                );
-                border: 1px solid rgba(245, 158, 11, .28);
-            }
-
-            .znr-test-title {
-                color: #fbbf24;
-                font-size: 14px;
-                font-weight: 900;
-                margin-bottom: 10px;
-            }
-
-            .znr-test-text {
-                color: #e5e7eb;
-                font-size: 13px;
-                line-height: 1.6;
-            }
-
-            .znr-test-text + .znr-test-text {
-                margin-top: 8px;
-            }
+            
         }
     </style>
 

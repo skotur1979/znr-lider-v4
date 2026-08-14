@@ -21,18 +21,24 @@ class EmployeeResource extends BaseResource
 {
     protected static ?string $model = Employee::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
+    protected static string|BackedEnum|null $navigationIcon =
+        Heroicon::OutlinedUsers;
 
     protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?string $navigationLabel = 'Zaposlenici';
+
     protected static ?string $modelLabel = 'Zaposlenik';
+
     protected static ?string $pluralModelLabel = 'Zaposlenici';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Zaposlenici';
+    protected static string|\UnitEnum|null $navigationGroup =
+        'Zaposlenici';
+
     protected static ?int $navigationSort = 1;
 
     protected static bool $usesSoftDeletes = true;
+
     protected static bool $hasOwnership = true;
 
     protected static function getModuleKey(): ?string

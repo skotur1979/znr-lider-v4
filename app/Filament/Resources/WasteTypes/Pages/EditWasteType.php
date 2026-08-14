@@ -4,7 +4,6 @@ namespace App\Filament\Resources\WasteTypes\Pages;
 
 use App\Filament\Resources\WasteTypes\WasteTypeResource;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Support\Facades\Auth;
 
 class EditWasteType extends EditRecord
 {
@@ -12,15 +11,18 @@ class EditWasteType extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        if (blank($this->record->user_id)) {
-            $data['user_id'] = WasteTypeResource::resolveOwnerId() ?: Auth::id();
-        }
+        /*
+         * Ownership vrste otpada se ne mijenja
+         * prilikom uređivanja.
+         */
+        $data['user_id'] = $this->record->user_id;
 
         return $data;
     }
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl('index');
     }
 }

@@ -5,11 +5,15 @@ namespace App\Providers;
 use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
 use App\Models\ActivityLog;
+use App\Filament\Pages\Auth\Login;
+use App\Filament\Widgets\QuickActionsWidget;
+use App\Models\LearningCategory;
+use App\Models\LearningMaterial;
 use App\Models\OperationalLog;
 use App\Services\ActivityLogger;
 use Illuminate\Auth\Events\Failed;
-use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -29,6 +33,13 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        DatePicker::configureUsing(function (DatePicker $datePicker): void {
+        $datePicker
+            ->native(false)
+            ->displayFormat('d.m.Y.')
+            ->locale('hr')
+            ->weekStartsOnMonday();
+    });
         ResetPassword::toMailUsing(function (object $notifiable, string $token) {
             $expireMinutes = (int) config('auth.passwords.users.expire', 60);
 
@@ -62,6 +73,16 @@ class AppServiceProvider extends ServiceProvider
         Livewire::component(
             'app.filament.widgets.dashboard-calendar-widget',
             DashboardCalendarWidget::class
+        );
+
+        Livewire::component(
+            'app.filament.pages.auth.login',
+            Login::class
+        );
+
+        Livewire::component(
+            'app.filament.widgets.quick-actions-widget',
+            QuickActionsWidget::class
         );
 
         Event::listen(Login::class, function (Login $event): void {
@@ -101,6 +122,21 @@ class AppServiceProvider extends ServiceProvider
             }
 
             if ($model instanceof ActivityLog) {
+                return;
+            }
+
+            /*
+            * Edukacijske kategorije i edukacijski materijali
+            * imaju vlastitu global/org ownership logiku.
+            *
+            * Globalni zapis namjerno mora imati:
+            * user_id = NULL
+            * is_global = true
+            */
+            if (
+                $model instanceof LearningCategory
+                || $model instanceof LearningMaterial
+            ) {
                 return;
             }
 

@@ -32,8 +32,7 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
         $user = auth()->user();
 
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+            (bool) $user?->isSuperAdmin();
 
         $this->kits = FirstAidKitResource::getEloquentQuery()
             ->with([

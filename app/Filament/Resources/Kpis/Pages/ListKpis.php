@@ -49,6 +49,10 @@ class ListKpis extends ListRecords
                 ->label('Bulk unos')
                 ->icon('heroicon-o-table-cells')
                 ->color('warning')
+                ->visible(
+                    fn (): bool =>
+                        auth()->user()?->isSuperAdmin() !== true
+                )
                 ->url(static::getResource()::getUrl('bulk-entry')),
 
             Action::make('generate_current_month')
@@ -56,6 +60,10 @@ class ListKpis extends ListRecords
                 ->icon('heroicon-o-arrow-path')
                 ->color('success')
                 ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        auth()->user()?->isSuperAdmin() !== true
+                )
                 ->modalHeading('Ažuriranje KPI vrijednosti')
                 ->modalDescription('Sustav će ponovno izračunati automatske KPI vrijednosti za tekući mjesec. Postojeće vrijednosti za isti mjesec bit će ažurirane, a ručni KPI unosi neće se mijenjati.')
                 ->modalSubmitActionLabel('Ažuriraj KPI')
@@ -89,6 +97,10 @@ class ListKpis extends ListRecords
                 ->label('Novi KPI')
                 ->icon('heroicon-o-plus')
                 ->color('warning')
+                ->visible(
+                    fn (): bool =>
+                        KpiResource::canCreate()
+                )
                 ->url(static::getResource()::getUrl('create')),
         ];
     }

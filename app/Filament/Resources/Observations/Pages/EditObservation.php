@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Observations\Pages;
 
+use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Mail\ObservationNotificationMail;
 use Filament\Actions\DeleteAction;
@@ -11,15 +12,43 @@ use Illuminate\Support\Facades\Mail;
 
 class EditObservation extends EditRecord
 {
-    protected static string $resource = ObservationResource::class;
+    use InteractsWithModulePagePermissions;
+
+    protected static string $resource =
+        ObservationResource::class;
 
     protected array $oldData = [];
+
+    protected array $oldNotificationEmails = [];
+
+    public function mount(int|string $record): void
+    {
+        /*
+         * Kod EditRecord stranice parent::mount() mora
+         * biti prvi kako bi Filament ID iz URL-a pretvorio
+         * u Observation model.
+         */
+        parent::mount($record);
+
+        $this->redirectIfMissingModulePermission(
+            'update'
+        );
+    }
 
     protected function getHeaderActions(): array
     {
         return [
-            ViewAction::make(),
-            DeleteAction::make(),
+            ViewAction::make()
+                ->label('Prikaži'),
+
+            DeleteAction::make()
+                ->label('Deaktiviraj')
+                ->requiresConfirmation()
+                ->before(
+                    ObservationResource::beforeModulePermission(
+                        'delete'
+                    )
+                ),
         ];
     }
 
@@ -36,8 +65,16 @@ class EditObservation extends EditRecord
         return 'full';
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
+    protected function beforeSave(): void
     {
+        $this->haltIfMissingModulePermission(
+            'update'
+        );
+    }
+
+    protected function mutateFormDataBeforeSave(
+        array $data
+    ): array {
         $this->oldData = $this->record->only([
             'incident_date',
             'observation_type',
@@ -54,6 +91,18 @@ class EditObservation extends EditRecord
             'comments',
         ]);
 
+        $this->oldNotificationEmails = collect(
+            $this->record->notification_emails ?? []
+        )
+            ->map(
+                fn ($email): string =>
+                    trim((string) $email)
+            )
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         if (blank($data['priority'] ?? null)) {
             $data['priority'] = 'medium';
         }
@@ -62,17 +111,41 @@ class EditObservation extends EditRecord
             $data['status'] = 'Not started';
         }
 
+        $data['notification_emails'] = collect(
+            $data['notification_emails'] ?? []
+        )
+            ->map(
+                fn ($email): string =>
+                    trim((string) $email)
+            )
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         return $data;
     }
 
     protected function afterSave(): void
     {
-        $emails = collect($this->record->notification_emails ?? [])
-            ->push('prvostupnik@gmail.com')
+        $emails = collect(
+            $this->record->notification_emails ?? []
+        )
+            ->map(
+                fn ($email): string =>
+                    trim((string) $email)
+            )
             ->filter()
             ->unique()
             ->values()
             ->all();
+
+        /*
+         * Ako nema primatelja, ništa se ne šalje.
+         */
+        if (empty($emails)) {
+            return;
+        }
 
         foreach ($emails as $email) {
             Mail::to($email)->send(
@@ -89,8 +162,12 @@ class EditObservation extends EditRecord
             'sent_at' => now(),
         ]);
     }
+
     protected function getRedirectUrl(): string
     {
-        return $this->previousUrl ?? static::getResource()::getUrl('index');
+        return $this->previousUrl
+            ?? static::getResource()::getUrl(
+                'index'
+            );
     }
 }

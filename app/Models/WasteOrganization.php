@@ -33,10 +33,18 @@ class WasteOrganization extends Model
 
     protected static function booted(): void
     {
-        static::creating(function (self $record) {
-            if (blank($record->user_id)) {
-                $record->user_id = Auth::id();
+        static::creating(function (self $record): void {
+            if (filled($record->user_id)) {
+                return;
             }
+
+            $user = Auth::user();
+
+            if (! $user || $user->isSuperAdmin()) {
+                return;
+            }
+
+            $record->user_id = $user->ownerId();
         });
     }
 

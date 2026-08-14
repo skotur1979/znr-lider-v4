@@ -24,6 +24,26 @@ class Answer extends Model
         'is_correct' => 'boolean',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (Answer $answer): void {
+            if (! $answer->question_id) {
+                return;
+            }
+
+            $question = Question::query()
+                ->with('test')
+                ->find($answer->question_id);
+
+            if (! $question || ! $question->test) {
+                return;
+            }
+
+            // Answer ownership uvijek prati Test ownership.
+            $answer->user_id = $question->test->user_id;
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
