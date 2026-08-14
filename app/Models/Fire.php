@@ -38,25 +38,21 @@ class Fire extends Model
         'pdf' => 'array',
     ];
 
-    protected function factoryNumberYearOfProduction(): Attribute
+    protected function regularExaminationValidUntil(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->attributes['factory_number/year_of_production'] ?? null,
-            set: fn ($value) => ['factory_number/year_of_production' => $value],
+            get: function () {
+                if (! $this->regular_examination_valid_from) {
+                    return null;
+                }
+
+                return $this->regular_examination_valid_from
+                    ->copy()
+                    ->addMonthsNoOverflow(3);
+            },
         );
     }
-    protected function regularExaminationValidUntil(): Attribute
-{
-    return Attribute::make(
-        get: function () {
-            if (! $this->regular_examination_valid_from) {
-                return null;
-            }
 
-            return $this->regular_examination_valid_from->copy()->addMonthsNoOverflow(3);
-        },
-    );
-}
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

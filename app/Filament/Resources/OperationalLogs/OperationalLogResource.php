@@ -323,21 +323,20 @@ class OperationalLogResource extends BaseResource
 
                 RestoreAction::make()
                     ->label('Vrati')
+                    ->requiresConfirmation()
                     ->visible(
-                        fn (
-                            OperationalLog $record
-                        ): bool =>
-                            static::canRestore($record)
+                        fn (OperationalLog $record): bool =>
+                            $record->trashed()
+                            && static::canRestore($record)
                     ),
 
                 ForceDeleteAction::make()
                     ->label('Trajno izbriši')
                     ->requiresConfirmation()
                     ->visible(
-                        fn (
-                            OperationalLog $record
-                        ): bool =>
-                            static::canForceDelete($record)
+                        fn (OperationalLog $record): bool =>
+                            $record->trashed()
+                            && static::canForceDelete($record)
                     ),
             ])
             ->bulkActions([

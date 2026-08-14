@@ -255,81 +255,53 @@ class RiskAssessmentResource extends BaseResource
                             FileUpload::make('file_path')
                                 ->label('Dokument')
                                 ->disk('public')
-                                ->directory(
-                                    'risk-assessments/attachments'
-                                )
+                                ->directory('risk-assessments/attachments')
                                 ->visibility('public')
                                 ->preserveFilenames()
                                 ->openable()
                                 ->downloadable()
                                 ->maxSize(30720)
                                 ->required()
-                                ->helperText(
-                                    function (
-                                        ?RiskAssessment $record
-                                    ) {
-                                        $user = auth()->user();
+                                ->helperText(function () {
+                                    $user = auth()->user();
 
-                                        if (! $user) {
-                                            return null;
-                                        }
-
-                                        /*
-                                         * Kod normalnog korisnika
-                                         * koristimo njegov ownerId().
-                                         *
-                                         * Superadmin ne uređuje zapis,
-                                         * ali kod prikaza postojećeg
-                                         * zapisa ownership možemo
-                                         * odrediti iz samog recorda.
-                                         */
-                                        $ownerId =
-                                            $user->isSuperAdmin()
-                                                ? $record?->user_id
-                                                : $user->ownerId();
-
-                                        if (! $ownerId) {
-                                            return null;
-                                        }
-
-                                        return
-                                            'Iskorištenost prostora organizacije: '
-                                            . app(
-                                                StorageQuotaService::class
-                                            )->usageText(
-                                                (int) $ownerId
-                                            );
+                                    if (! $user) {
+                                        return null;
                                     }
-                                )
+
+                                    $ownerId = $user->ownerId();
+
+                                    if (! $ownerId) {
+                                        return null;
+                                    }
+
+                                    return
+                                        'Iskorištenost prostora organizacije: '
+                                        . app(StorageQuotaService::class)->usageText(
+                                            (int) $ownerId
+                                        );
+                                })
                                 ->rules([
-                                    function (
-                                        ?RiskAssessment $record
-                                    ) {
+                                    function () {
                                         return function (
                                             string $attribute,
                                             mixed $value,
                                             \Closure $fail
-                                        ) use ($record): void {
-                                            $user =
-                                                auth()->user();
+                                        ): void {
+                                            $user = auth()->user();
 
                                             if (! $user) {
                                                 return;
                                             }
 
-                                            $ownerId =
-                                                $user->isSuperAdmin()
-                                                    ? $record?->user_id
-                                                    : $user->ownerId();
+                                            $ownerId = $user->ownerId();
 
                                             if (! $ownerId) {
                                                 return;
                                             }
 
                                             if (
-                                                ! app(
-                                                    StorageQuotaService::class
-                                                )->canUpload(
+                                                ! app(StorageQuotaService::class)->canUpload(
                                                     $value,
                                                     (int) $ownerId
                                                 )

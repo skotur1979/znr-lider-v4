@@ -10,6 +10,7 @@ use App\Services\ActivityLogger;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -29,6 +30,13 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        DatePicker::configureUsing(function (DatePicker $datePicker): void {
+        $datePicker
+            ->native(false)
+            ->displayFormat('d.m.Y.')
+            ->locale('hr')
+            ->weekStartsOnMonday();
+    });
         ResetPassword::toMailUsing(function (object $notifiable, string $token) {
             $expireMinutes = (int) config('auth.passwords.users.expire', 60);
 
