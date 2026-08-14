@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
 use App\Models\ActivityLog;
+use App\Models\LearningCategory;
+use App\Models\LearningMaterial;
 use App\Models\OperationalLog;
 use App\Services\ActivityLogger;
 use Illuminate\Auth\Events\Failed;
@@ -109,6 +111,21 @@ class AppServiceProvider extends ServiceProvider
             }
 
             if ($model instanceof ActivityLog) {
+                return;
+            }
+
+            /*
+            * Edukacijske kategorije i edukacijski materijali
+            * imaju vlastitu global/org ownership logiku.
+            *
+            * Globalni zapis namjerno mora imati:
+            * user_id = NULL
+            * is_global = true
+            */
+            if (
+                $model instanceof LearningCategory
+                || $model instanceof LearningMaterial
+            ) {
                 return;
             }
 
