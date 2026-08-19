@@ -12,7 +12,8 @@ use App\Models\Expense;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\BulkAction;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\MaxWidth;
@@ -291,13 +292,52 @@ class ExpenseResource extends BaseResource
                     }),
             ])
             ->actions([
-                ActionGroup::make([
-                    EditAction::make()
-                        ->label('Uredi'),
+                    ActionGroup::make([
+                        EditAction::make()
+                            ->label('Uredi'),
+
+                        Action::make('deletePermanently')
+                            ->label('Trajno obriši')
+                            ->icon(Heroicon::Trash)
+                            ->color('danger')
+                            ->requiresConfirmation()
+                            ->modalHeading(
+                                'Trajno obriši trošak'
+                            )
+                            ->modalDescription(
+                                'Jesi li siguran/a da želiš trajno obrisati ovaj trošak? Ova radnja se ne može poništiti.'
+                            )
+                            ->modalSubmitActionLabel(
+                                'Trajno obriši'
+                            )
+                            ->modalCancelActionLabel(
+                                'Odustani'
+                            )
+                            ->visible(
+                                fn (Expense $record): bool =>
+                                    static::canDelete($record)
+                            )
+                            ->action(
+                                function (
+                                    Expense $record
+                                ): void {
+                                    if (
+                                        ! static::canDelete(
+                                            $record
+                                        )
+                                    ) {
+                                        abort(403);
+                                    }
+
+                                    $record->delete();
+                                }
+                            ),
+                    ])
+                        ->icon(
+                            Heroicon::EllipsisVertical
+                        )
+                        ->label(''),
                 ])
-                    ->icon(Heroicon::EllipsisVertical)
-                    ->label(''),
-            ])
             ->headerActions([
                 CreateAction::make()
                     ->label('Novi trošak')
@@ -332,8 +372,55 @@ class ExpenseResource extends BaseResource
                     }),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Obriši označeno'),
+                BulkAction::make(
+                    'deleteSelectedPermanently'
+                )
+                    ->label(
+                        'Trajno obriši označeno'
+                    )
+                    ->icon(
+                        Heroicon::Trash
+                    )
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Trajno obriši odabrane troškove'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš trajno obrisati odabrane troškove? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno obriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->visible(
+                        fn (): bool =>
+                            static::canDeleteAny()
+                    )
+                    ->action(
+                        function (
+                            EloquentCollection $records
+                        ): void {
+                            $records->each(
+                                function (
+                                    Expense $record
+                                ): void {
+                                    if (
+                                        ! static::canDelete(
+                                            $record
+                                        )
+                                    ) {
+                                        return;
+                                    }
+
+                                    $record->delete();
+                                }
+                            );
+                        }
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 

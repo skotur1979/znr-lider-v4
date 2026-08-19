@@ -8,8 +8,9 @@ use App\Models\DocumentationItem;
 use App\Support\SecureFilePreview;
 use App\Services\StorageQuotaService;
 use Filament\Actions\ActionGroup;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
@@ -400,7 +401,7 @@ class DocumentationItemResource extends BaseResource
                 50,
                 'all',
             ])
-            ->actions([
+           ->actions([
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Prikaži'),
@@ -408,43 +409,98 @@ class DocumentationItemResource extends BaseResource
                     EditAction::make()
                         ->label('Uredi'),
 
-                    DeleteAction::make()
-                        ->label('Obriši')
+                    Action::make('deletePermanently')
+                        ->label('Trajno obriši')
+                        ->icon(Heroicon::Trash)
+                        ->color('danger')
                         ->requiresConfirmation()
                         ->modalHeading(
-                            'Obriši dokumentaciju'
+                            'Trajno obriši dokumentaciju'
                         )
                         ->modalDescription(
-                            'Jesi li siguran/a da želiš to učiniti?'
+                            'Jesi li siguran/a da želiš trajno obrisati ovu dokumentaciju? Ova radnja se ne može poništiti.'
                         )
                         ->modalSubmitActionLabel(
-                            'Obriši'
+                            'Trajno obriši'
                         )
                         ->modalCancelActionLabel(
                             'Odustani'
+                        )
+                        ->visible(
+                            fn (DocumentationItem $record): bool =>
+                                static::canDelete($record)
+                        )
+                        ->action(
+                            function (
+                                DocumentationItem $record
+                            ): void {
+                                if (
+                                    ! static::canDelete(
+                                        $record
+                                    )
+                                ) {
+                                    abort(403);
+                                }
+
+                                $record->delete();
+                            }
                         ),
                 ])
                     ->icon(
                         Heroicon::EllipsisVertical
                     )
                     ->label(''),
-            ])
-            ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Obriši označeno')
+                    ])
+                    ->bulkActions([
+                BulkAction::make(
+                    'deleteSelectedPermanently'
+                )
+                    ->label(
+                        'Trajno obriši označeno'
+                    )
+                    ->icon(
+                        Heroicon::Trash
+                    )
+                    ->color('danger')
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Obriši odabrano'
+                        'Trajno obriši odabranu dokumentaciju'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
+                        'Jesi li siguran/a da želiš trajno obrisati odabranu dokumentaciju? Ova radnja se ne može poništiti.'
                     )
                     ->modalSubmitActionLabel(
-                        'Obriši'
+                        'Trajno obriši'
                     )
                     ->modalCancelActionLabel(
                         'Odustani'
-                    ),
+                    )
+                    ->visible(
+                        fn (): bool =>
+                            static::canDeleteAny()
+                    )
+                    ->action(
+                        function (
+                            EloquentCollection $records
+                        ): void {
+                            $records->each(
+                                function (
+                                    DocumentationItem $record
+                                ): void {
+                                    if (
+                                        ! static::canDelete(
+                                            $record
+                                        )
+                                    ) {
+                                        return;
+                                    }
+
+                                    $record->delete();
+                                }
+                            );
+                        }
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 

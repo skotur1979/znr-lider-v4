@@ -9,8 +9,9 @@ use App\Models\RiskAssessment;
 use App\Support\SecureFilePreview;
 use App\Services\StorageQuotaService;
 use Filament\Actions\ActionGroup;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
@@ -522,20 +523,39 @@ class RiskAssessmentResource extends BaseResource
                     EditAction::make()
                         ->label('Uredi'),
 
-                    DeleteAction::make()
-                        ->label('Obriši')
+                    Action::make('deletePermanently')
+                        ->label('Trajno obriši')
+                        ->icon(Heroicon::Trash)
+                        ->color('danger')
                         ->requiresConfirmation()
                         ->modalHeading(
-                            'Obriši procjenu rizika'
+                            'Trajno obriši procjenu rizika'
                         )
                         ->modalDescription(
-                            'Jeste li sigurni da želite obrisati ovu procjenu rizika?'
+                            'Jesi li siguran/a da želiš trajno obrisati ovu procjenu rizika? Ova radnja se ne može poništiti.'
                         )
                         ->modalSubmitActionLabel(
-                            'Obriši'
+                            'Trajno obriši'
                         )
                         ->modalCancelActionLabel(
                             'Odustani'
+                        )
+                        ->visible(
+                            fn (RiskAssessment $record): bool =>
+                                static::canDelete($record)
+                        )
+                        ->action(
+                            function (
+                                RiskAssessment $record
+                            ): void {
+                                if (
+                                    ! static::canDelete($record)
+                                ) {
+                                    abort(403);
+                                }
+
+                                $record->delete();
+                            }
                         ),
                 ])
                     ->icon(
@@ -544,21 +564,55 @@ class RiskAssessmentResource extends BaseResource
                     ->label(''),
             ])
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Obriši označeno')
+                BulkAction::make(
+                    'deleteSelectedPermanently'
+                )
+                    ->label(
+                        'Trajno obriši označeno'
+                    )
+                    ->icon(
+                        Heroicon::Trash
+                    )
+                    ->color('danger')
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Obriši odabrano'
+                        'Trajno obriši odabrane procjene rizika'
                     )
                     ->modalDescription(
-                        'Jeste li sigurni da želite obrisati odabrane procjene rizika?'
+                        'Jesi li siguran/a da želiš trajno obrisati odabrane procjene rizika? Ova radnja se ne može poništiti.'
                     )
                     ->modalSubmitActionLabel(
-                        'Obriši'
+                        'Trajno obriši'
                     )
                     ->modalCancelActionLabel(
                         'Odustani'
-                    ),
+                    )
+                    ->visible(
+                        fn (): bool =>
+                            static::canDeleteAny()
+                    )
+                    ->action(
+                        function (
+                            EloquentCollection $records
+                        ): void {
+                            $records->each(
+                                function (
+                                    RiskAssessment $record
+                                ): void {
+                                    if (
+                                        ! static::canDelete(
+                                            $record
+                                        )
+                                    ) {
+                                        return;
+                                    }
+
+                                    $record->delete();
+                                }
+                            );
+                        }
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 

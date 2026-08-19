@@ -24,7 +24,8 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\TrashedFilter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -345,7 +346,33 @@ class OperationalLogResource extends BaseResource
                         }
                     ),
 
-                TrashedFilter::make(),
+                SelectFilter::make('record_state')
+                ->label('Status zapisa')
+                ->placeholder('Aktivni zapisi')
+                ->options([
+                    'active' => 'Aktivni zapisi',
+                    'trashed' => 'Deaktivirani zapisi',
+                    'all' => 'Svi zapisi',
+                ])
+                ->query(
+                    function (
+                        Builder $query,
+                        array $data
+                    ): Builder {
+                        return match (
+                            $data['value'] ?? null
+                        ) {
+                            'trashed' =>
+                                $query->onlyTrashed(),
+
+                            'all' =>
+                                $query->withTrashed(),
+
+                            default =>
+                                $query->withoutTrashed(),
+                        };
+                    }
+                ),
             ])
             ->recordActions([
                 ViewAction::make()
@@ -362,8 +389,20 @@ class OperationalLogResource extends BaseResource
                     ),
 
                 DeleteAction::make()
-                    ->label('Obriši')
+                    ->label('Deaktiviraj')
                     ->requiresConfirmation()
+                    ->modalHeading(
+                        'Deaktiviraj zapis operativnog dnevnika'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš deaktivirati ovaj zapis operativnog dnevnika? Zapis ćeš kasnije moći vratiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(
                         fn (
                             OperationalLog $record
@@ -391,30 +430,96 @@ class OperationalLogResource extends BaseResource
                     ),
             ])
             ->bulkActions([
+
+                /*
+                * DEAKTIVIRANJE
+                *
+                * Dostupno kod aktivnog prikaza
+                * i prikaza svih zapisa.
+                */
                 DeleteBulkAction::make()
-                    ->label('Obriši označeno')
+                    ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
+                    ->modalHeading(
+                        'Deaktiviraj odabrane zapise operativnog dnevnika'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš deaktivirati odabrane zapise operativnog dnevnika? Zapise ćeš kasnije moći vratiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(
-                        fn (): bool =>
-                            ! static::isSuperAdmin()
+                        fn (HasTable $livewire): bool =>
+                            ! static::isOnlyTrashed(
+                                $livewire
+                            )
+                            && static::canDeleteAny()
                     )
                     ->deselectRecordsAfterCompletion(),
 
+                /*
+                * VRAĆANJE
+                *
+                * Prikazuje se samo kada gledamo
+                * deaktivirane zapise.
+                */
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Vrati odabrane zapise operativnog dnevnika'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš vratiti odabrane zapise operativnog dnevnika?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Vrati'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(
-                        fn (): bool =>
-                            ! static::isSuperAdmin()
-                    ),
+                        fn (HasTable $livewire): bool =>
+                            static::isOnlyTrashed(
+                                $livewire
+                            )
+                            && static::canRestoreAny()
+                    )
+                    ->deselectRecordsAfterCompletion(),
 
+                /*
+                * TRAJNO BRISANJE
+                *
+                * Dostupno i za aktivne i za
+                * već deaktivirane zapise.
+                */
                 ForceDeleteBulkAction::make()
                     ->label('Trajno izbriši označeno')
                     ->requiresConfirmation()
+                    ->modalHeading(
+                        'Trajno izbriši odabrane zapise operativnog dnevnika'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš trajno izbrisati odabrane zapise operativnog dnevnika? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno izbriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(
                         fn (): bool =>
-                            ! static::isSuperAdmin()
-                    ),
+                            static::canForceDeleteAny()
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
+
+            
     }
 
     /**
@@ -427,6 +532,20 @@ class OperationalLogResource extends BaseResource
      * vide isključivo dnevnik čiji je user_id
      * jednak njihovom vlastitom Auth::id().
      */
+
+    private static function isOnlyTrashed(
+        HasTable $livewire
+    ): bool {
+        $state =
+            $livewire->getTableFilterState(
+                'record_state'
+            );
+
+        return data_get(
+            $state,
+            'value'
+        ) === 'trashed';
+    }
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();

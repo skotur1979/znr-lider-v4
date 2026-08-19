@@ -746,57 +746,93 @@ class EmployeesTable
                         }),
 
                     DeleteAction::make()
-                        ->label('Deaktiviraj')
-                        ->requiresConfirmation()
-                        ->before(
-                            EmployeeResource::beforeModulePermission(
-                                'delete'
-                            )
-                        )
-                        ->visible(
-                            fn (Employee $record): bool =>
-                                ! (
-                                    method_exists(
-                                        $record,
-                                        'trashed'
-                                    )
-                                    && $record->trashed()
-                                )
-                        ),
+    ->label('Deaktiviraj')
+    ->requiresConfirmation()
+    ->modalHeading(
+        'Deaktiviraj zaposlenika'
+    )
+    ->modalDescription(
+        'Jesi li siguran/a da želiš deaktivirati ovog zaposlenika? Zapis ćeš kasnije moći vratiti.'
+    )
+    ->modalSubmitActionLabel(
+        'Deaktiviraj'
+    )
+    ->modalCancelActionLabel(
+        'Odustani'
+    )
+    ->before(
+        EmployeeResource::beforeModulePermission(
+            'delete'
+        )
+    )
+    ->visible(
+        fn (Employee $record): bool =>
+            ! (
+                method_exists(
+                    $record,
+                    'trashed'
+                )
+                && $record->trashed()
+            )
+    ),
 
-                    RestoreAction::make()
-                        ->label('Vrati')
-                        ->requiresConfirmation()
-                        ->before(
-                            EmployeeResource::beforeModulePermission(
-                                'delete'
-                            )
-                        )
-                        ->visible(
-                            fn (Employee $record): bool =>
-                                method_exists(
-                                    $record,
-                                    'trashed'
-                                )
-                                && $record->trashed()
-                        ),
+RestoreAction::make()
+    ->label('Vrati')
+    ->requiresConfirmation()
+    ->modalHeading(
+        'Vrati zaposlenika'
+    )
+    ->modalDescription(
+        'Jesi li siguran/a da želiš vratiti ovog zaposlenika?'
+    )
+    ->modalSubmitActionLabel(
+        'Vrati'
+    )
+    ->modalCancelActionLabel(
+        'Odustani'
+    )
+    ->before(
+        EmployeeResource::beforeModulePermission(
+            'delete'
+        )
+    )
+    ->visible(
+        fn (Employee $record): bool =>
+            method_exists(
+                $record,
+                'trashed'
+            )
+            && $record->trashed()
+    ),
 
-                    ForceDeleteAction::make()
-                        ->label('Trajno obriši')
-                        ->requiresConfirmation()
-                        ->before(
-                            EmployeeResource::beforeModulePermission(
-                                'delete'
-                            )
+                ForceDeleteAction::make()
+                    ->label('Trajno obriši')
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Trajno obriši zaposlenika'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš trajno obrisati ovog zaposlenika? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno obriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->before(
+                        EmployeeResource::beforeModulePermission(
+                            'delete'
                         )
-                        ->visible(
-                            fn (Employee $record): bool =>
-                                method_exists(
-                                    $record,
-                                    'trashed'
-                                )
-                                && $record->trashed()
-                        ),
+                    )
+                    ->visible(
+                        fn (Employee $record): bool =>
+                            method_exists(
+                                $record,
+                                'trashed'
+                            )
+                            && $record->trashed()
+                    ),
                 ])
                     ->label('Akcije'),
             ])
@@ -806,7 +842,7 @@ class EmployeesTable
             |--------------------------------------------------------------------------
             */
 
-            ->bulkActions([
+           ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
@@ -815,16 +851,25 @@ class EmployeesTable
                             'delete'
                         )
                     )
-                    ->modalHeading('Deaktiviraj odabrano')
-                    ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
+                    ->modalHeading(
+                        'Deaktiviraj odabrane zaposlenike'
                     )
-                    ->modalSubmitActionLabel('Deaktiviraj')
-                    ->modalCancelActionLabel('Odustani')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš deaktivirati odabrane zaposlenike? Zapise ćeš kasnije moći vratiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(
                         fn (HasTable $livewire): bool =>
-                            ! self::isOnlyTrashed($livewire)
-                    ),
+                            ! self::isOnlyTrashed(
+                                $livewire
+                            )
+                    )
+                    ->deselectRecordsAfterCompletion(),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
@@ -834,16 +879,25 @@ class EmployeesTable
                             'delete'
                         )
                     )
-                    ->modalHeading('Vrati odabrano')
-                    ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
+                    ->modalHeading(
+                        'Vrati odabrane zaposlenike'
                     )
-                    ->modalSubmitActionLabel('Vrati')
-                    ->modalCancelActionLabel('Odustani')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš vratiti odabrane zaposlenike?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Vrati'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(
                         fn (HasTable $livewire): bool =>
-                            self::isOnlyTrashed($livewire)
-                    ),
+                            self::isOnlyTrashed(
+                                $livewire
+                            )
+                    )
+                    ->deselectRecordsAfterCompletion(),
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
@@ -853,12 +907,23 @@ class EmployeesTable
                             'delete'
                         )
                     )
-                    ->modalHeading('Trajno obriši odabrano')
-                    ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                    ->modalHeading(
+                        'Trajno obriši odabrane zaposlenike'
                     )
-                    ->modalSubmitActionLabel('Trajno obriši')
-                    ->modalCancelActionLabel('Odustani'),
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš trajno obrisati odabrane zaposlenike? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno obriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->visible(
+                        fn (): bool =>
+                            EmployeeResource::canForceDeleteAny()
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ])
 
             ->paginated([10, 25, 50, 100, 'all']);

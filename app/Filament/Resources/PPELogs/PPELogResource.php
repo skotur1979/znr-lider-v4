@@ -649,9 +649,19 @@ class PPELogResource extends BaseResource
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
                     ->requiresConfirmation()
+                    ->modalHeading(
+                        'Deaktiviraj odabrano'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(function ($livewire): bool {
                         $filter =
                             $livewire->tableFilters['pregled']['value']
@@ -659,14 +669,23 @@ class PPELogResource extends BaseResource
 
                         return $filter !== 'deaktivirani'
                             && static::canDeleteAny();
-                    })
-                    ->deselectRecordsAfterCompletion(),
+                    }),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
-                    ->icon('heroicon-o-arrow-path')
-                    ->color('success')
                     ->requiresConfirmation()
+                    ->modalHeading(
+                        'Vrati odabrano'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš to učiniti?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Vrati'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(function ($livewire): bool {
                         $filter =
                             $livewire->tableFilters['pregled']['value']
@@ -674,19 +693,16 @@ class PPELogResource extends BaseResource
 
                         return $filter === 'deaktivirani'
                             && static::canRestoreAny();
-                    })
-                    ->deselectRecordsAfterCompletion(),
+                    }),
 
-                BulkAction::make('force_delete_selected')
+                ForceDeleteBulkAction::make()
                     ->label('Trajno izbriši označeno')
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Trajno izbriši odabrane zapise'
+                        'Trajno izbriši odabrano'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš trajno izbrisati odabrane OZO zapise? Ova radnja se ne može poništiti.'
+                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
                     )
                     ->modalSubmitActionLabel(
                         'Trajno izbriši'
@@ -697,29 +713,7 @@ class PPELogResource extends BaseResource
                     ->visible(
                         fn (): bool =>
                             static::canForceDeleteAny()
-                    )
-                    ->action(
-                        function (
-                            EloquentCollection $records
-                        ): void {
-                            $records->each(
-                                function (
-                                    PPELog $record
-                                ): void {
-                                    if (
-                                        ! static::canForceDelete(
-                                            $record
-                                        )
-                                    ) {
-                                        return;
-                                    }
-
-                                    $record->forceDelete();
-                                }
-                            );
-                        }
-                    )
-                    ->deselectRecordsAfterCompletion(),
+                    ),
             ]);
     }
 

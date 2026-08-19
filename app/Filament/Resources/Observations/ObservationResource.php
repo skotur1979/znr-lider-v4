@@ -960,8 +960,6 @@ protected static function priorityIcon(?string $state): ?string
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
                     ->requiresConfirmation()
                     ->before(
                         static::beforeModulePermission('delete')
@@ -997,8 +995,6 @@ protected static function priorityIcon(?string $state): ?string
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
                     ->requiresConfirmation()
                     ->before(
                         static::beforeModulePermission('delete')

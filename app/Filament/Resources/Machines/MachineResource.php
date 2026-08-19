@@ -612,10 +612,20 @@ class MachineResource extends BaseResource
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
+                        ->modalHeading(
+                            'Deaktiviraj radnu opremu'
+                        )
+                        ->modalDescription(
+                            'Jesi li siguran/a da želiš deaktivirati ovu radnu opremu? Zapis ćeš kasnije moći vratiti.'
+                        )
+                        ->modalSubmitActionLabel(
+                            'Deaktiviraj'
+                        )
+                        ->modalCancelActionLabel(
+                            'Odustani'
+                        )
                         ->visible(
-                            fn (
-                                Machine $record
-                            ) =>
+                            fn (Machine $record): bool =>
                                 ! $record->trashed()
                         )
                         ->before(
@@ -627,10 +637,20 @@ class MachineResource extends BaseResource
                     RestoreAction::make()
                         ->label('Vrati')
                         ->requiresConfirmation()
+                        ->modalHeading(
+                            'Vrati radnu opremu'
+                        )
+                        ->modalDescription(
+                            'Jesi li siguran/a da želiš vratiti ovu radnu opremu?'
+                        )
+                        ->modalSubmitActionLabel(
+                            'Vrati'
+                        )
+                        ->modalCancelActionLabel(
+                            'Odustani'
+                        )
                         ->visible(
-                            fn (
-                                Machine $record
-                            ) =>
+                            fn (Machine $record): bool =>
                                 $record->trashed()
                         )
                         ->before(
@@ -642,10 +662,20 @@ class MachineResource extends BaseResource
                     ForceDeleteAction::make()
                         ->label('Trajno obriši')
                         ->requiresConfirmation()
+                        ->modalHeading(
+                            'Trajno obriši radnu opremu'
+                        )
+                        ->modalDescription(
+                            'Jesi li siguran/a da želiš trajno obrisati ovu radnu opremu? Ova radnja se ne može poništiti.'
+                        )
+                        ->modalSubmitActionLabel(
+                            'Trajno obriši'
+                        )
+                        ->modalCancelActionLabel(
+                            'Odustani'
+                        )
                         ->visible(
-                            fn (
-                                Machine $record
-                            ) =>
+                            fn (Machine $record): bool =>
                                 $record->trashed()
                         )
                         ->before(
@@ -843,10 +873,10 @@ class MachineResource extends BaseResource
                     )
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Trajno obriši odabrano'
+                        'Trajno obriši odabranu radnu opremu'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                        'Jesi li siguran/a da želiš trajno obrisati odabranu radnu opremu? Ova radnja se ne može poništiti.'
                     )
                     ->modalSubmitActionLabel(
                         'Trajno obriši'
@@ -858,7 +888,8 @@ class MachineResource extends BaseResource
                         static::beforeModulePermission(
                             'delete'
                         )
-                    ),
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 

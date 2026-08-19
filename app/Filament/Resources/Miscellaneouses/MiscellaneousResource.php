@@ -773,76 +773,14 @@ class MiscellaneousResource extends BaseResource
                         ),
 
                     DeleteAction::make()
-                        ->label('Deaktiviraj')
-                        ->color('danger')
-                        ->requiresConfirmation()
-                        ->before(
-                            static::beforeModulePermission(
-                                'delete'
-                            )
-                        )
-                        ->visible(
-                            fn (
-                                Miscellaneous $record
-                            ): bool =>
-                                ! $record->trashed()
-                        ),
-
-                    RestoreAction::make()
-                        ->label('Vrati')
-                        ->requiresConfirmation()
-                        ->before(
-                            static::beforeModulePermission(
-                                'delete'
-                            )
-                        )
-                        ->visible(
-                            fn (
-                                Miscellaneous $record
-                            ): bool =>
-                                $record->trashed()
-                        ),
-
-                    ForceDeleteAction::make()
-                        ->label(
-                            'Trajno obriši'
-                        )
-                        ->color('danger')
-                        ->requiresConfirmation()
-                        ->before(
-                            static::beforeModulePermission(
-                                'delete'
-                            )
-                        )
-                        ->visible(
-                            fn (
-                                Miscellaneous $record
-                            ): bool =>
-                                $record->trashed()
-                        ),
-                ])
-                    ->icon(
-                        'heroicon-o-ellipsis-vertical'
-                    )
-                    ->label(''),
-            ])
-
-            ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label(
-                        'Deaktiviraj označeno'
-                    )
+                    ->label('Deaktiviraj')
+                    ->color('danger')
                     ->requiresConfirmation()
-                    ->before(
-                        static::beforeModulePermission(
-                            'delete'
-                        )
-                    )
                     ->modalHeading(
-                        'Deaktiviraj odabrano'
+                        'Deaktiviraj ispitivanje'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
+                        'Jesi li siguran/a da želiš deaktivirati ovo ispitivanje? Zapis ćeš kasnije moći vratiti.'
                     )
                     ->modalSubmitActionLabel(
                         'Deaktiviraj'
@@ -850,28 +788,24 @@ class MiscellaneousResource extends BaseResource
                     ->modalCancelActionLabel(
                         'Odustani'
                     )
-                    ->visible(
-                        fn (
-                            HasTable $livewire
-                        ): bool =>
-                            ! static::isOnlyTrashed(
-                                $livewire
-                            )
-                    ),
-
-                RestoreBulkAction::make()
-                    ->label('Vrati označeno')
-                    ->requiresConfirmation()
                     ->before(
                         static::beforeModulePermission(
                             'delete'
                         )
                     )
+                    ->visible(
+                        fn (Miscellaneous $record): bool =>
+                            ! $record->trashed()
+                    ),
+
+                RestoreAction::make()
+                    ->label('Vrati')
+                    ->requiresConfirmation()
                     ->modalHeading(
-                        'Vrati odabrano'
+                        'Vrati ispitivanje'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
+                        'Jesi li siguran/a da želiš vratiti ovo ispitivanje?'
                     )
                     ->modalSubmitActionLabel(
                         'Vrati'
@@ -879,37 +813,122 @@ class MiscellaneousResource extends BaseResource
                     ->modalCancelActionLabel(
                         'Odustani'
                     )
-                    ->visible(
-                        fn (
-                            HasTable $livewire
-                        ): bool =>
-                            static::isOnlyTrashed(
-                                $livewire
-                            )
-                    ),
-
-                ForceDeleteBulkAction::make()
-                    ->label(
-                        'Trajno obriši označeno'
-                    )
-                    ->requiresConfirmation()
                     ->before(
                         static::beforeModulePermission(
                             'delete'
                         )
                     )
+                    ->visible(
+                        fn (Miscellaneous $record): bool =>
+                            $record->trashed()
+                    ),
+
+                ForceDeleteAction::make()
+                    ->label('Trajno obriši')
+                    ->color('danger')
+                    ->requiresConfirmation()
                     ->modalHeading(
-                        'Trajno obriši odabrano'
+                        'Trajno obriši ispitivanje'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                        'Jesi li siguran/a da želiš trajno obrisati ovo ispitivanje? Ova radnja se ne može poništiti.'
                     )
                     ->modalSubmitActionLabel(
                         'Trajno obriši'
                     )
                     ->modalCancelActionLabel(
                         'Odustani'
+                    )
+                    ->before(
+                        static::beforeModulePermission(
+                            'delete'
+                        )
+                    )
+                    ->visible(
+                        fn (Miscellaneous $record): bool =>
+                            $record->trashed()
                     ),
+                ]),
+            ])
+
+            ->bulkActions([
+                DeleteBulkAction::make()
+                ->label('Deaktiviraj označeno')
+                ->requiresConfirmation()
+                ->before(
+                    static::beforeModulePermission(
+                        'delete'
+                    )
+                )
+                ->modalHeading(
+                    'Deaktiviraj odabrana ispitivanja'
+                )
+                ->modalDescription(
+                    'Jesi li siguran/a da želiš deaktivirati odabrana ispitivanja? Zapise ćeš kasnije moći vratiti.'
+                )
+                ->modalSubmitActionLabel(
+                    'Deaktiviraj'
+                )
+                ->modalCancelActionLabel(
+                    'Odustani'
+                )
+                ->visible(
+                    fn (HasTable $livewire): bool =>
+                        ! static::isOnlyTrashed(
+                            $livewire
+                        )
+                )
+                ->deselectRecordsAfterCompletion(),
+
+            RestoreBulkAction::make()
+                ->label('Vrati označeno')
+                ->requiresConfirmation()
+                ->before(
+                    static::beforeModulePermission(
+                        'delete'
+                    )
+                )
+                ->modalHeading(
+                    'Vrati odabrana ispitivanja'
+                )
+                ->modalDescription(
+                    'Jesi li siguran/a da želiš vratiti odabrana ispitivanja?'
+                )
+                ->modalSubmitActionLabel(
+                    'Vrati'
+                )
+                ->modalCancelActionLabel(
+                    'Odustani'
+                )
+                ->visible(
+                    fn (HasTable $livewire): bool =>
+                        static::isOnlyTrashed(
+                            $livewire
+                        )
+                )
+                ->deselectRecordsAfterCompletion(),
+
+            ForceDeleteBulkAction::make()
+                ->label('Trajno obriši označeno')
+                ->requiresConfirmation()
+                ->before(
+                    static::beforeModulePermission(
+                        'delete'
+                    )
+                )
+                ->modalHeading(
+                    'Trajno obriši odabrana ispitivanja'
+                )
+                ->modalDescription(
+                    'Jesi li siguran/a da želiš trajno obrisati odabrana ispitivanja? Ova radnja se ne može poništiti.'
+                )
+                ->modalSubmitActionLabel(
+                    'Trajno obriši'
+                )
+                ->modalCancelActionLabel(
+                    'Odustani'
+                )
+                ->deselectRecordsAfterCompletion(),
             ]);
     }
 

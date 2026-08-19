@@ -907,8 +907,6 @@ class WorkPermitResource extends BaseResource
             ->bulkActions([
                DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
                     ->requiresConfirmation()
                     ->modalHeading(
                         'Deaktiviraj odabrane dozvole za rad'
@@ -1080,8 +1078,6 @@ class WorkPermitResource extends BaseResource
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
                     ->requiresConfirmation()
                     ->modalHeading(
                         'Trajno obriši odabrane dozvole za rad'

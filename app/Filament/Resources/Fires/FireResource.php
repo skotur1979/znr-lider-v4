@@ -660,38 +660,64 @@ class FireResource extends BaseResource
                         ),
 
                     DeleteAction::make()
-                        ->label(
-                            'Deaktiviraj'
-                        )
-                        ->requiresConfirmation()
-                        ->visible(
-                            fn (
-                                Fire $record
-                            ) =>
-                                ! $record->trashed()
-                        ),
+                    ->label('Deaktiviraj')
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Deaktiviraj vatrogasni aparat'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš deaktivirati ovaj vatrogasni aparat? Zapis ćeš kasnije moći vratiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->visible(
+                        fn (Fire $record): bool =>
+                            ! $record->trashed()
+                    ),
 
-                    RestoreAction::make()
-                        ->label('Vrati')
-                        ->requiresConfirmation()
-                        ->visible(
-                            fn (
-                                Fire $record
-                            ) =>
-                                $record->trashed()
-                        ),
+                RestoreAction::make()
+                    ->label('Vrati')
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Vrati vatrogasni aparat'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš vratiti ovaj vatrogasni aparat?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Vrati'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->visible(
+                        fn (Fire $record): bool =>
+                            $record->trashed()
+                    ),
 
-                    ForceDeleteAction::make()
-                        ->label(
-                            'Trajno obriši'
-                        )
-                        ->requiresConfirmation()
-                        ->visible(
-                            fn (
-                                Fire $record
-                            ) =>
-                                $record->trashed()
-                        ),
+                ForceDeleteAction::make()
+                    ->label('Trajno obriši')
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Trajno obriši vatrogasni aparat'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš trajno obrisati ovaj vatrogasni aparat? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno obriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->visible(
+                        fn (Fire $record): bool =>
+                            $record->trashed()
+                    ),
                 ])
                     ->icon(
                         Heroicon::EllipsisVertical
@@ -877,15 +903,13 @@ class FireResource extends BaseResource
                     ),
 
                 DeleteBulkAction::make()
-                    ->label(
-                        'Deaktiviraj označeno'
-                    )
+                    ->label('Deaktiviraj označeno')
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Deaktiviraj odabrano'
+                        'Deaktiviraj odabrane vatrogasne aparate'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
+                        'Jesi li siguran/a da želiš deaktivirati odabrane vatrogasne aparate? Zapise ćeš kasnije moći vratiti.'
                     )
                     ->modalSubmitActionLabel(
                         'Deaktiviraj'
@@ -894,24 +918,21 @@ class FireResource extends BaseResource
                         'Odustani'
                     )
                     ->visible(
-                        fn (
-                            HasTable $livewire
-                        ) =>
+                        fn (HasTable $livewire): bool =>
                             ! self::isOnlyTrashed(
                                 $livewire
                             )
-                    ),
+                    )
+                    ->deselectRecordsAfterCompletion(),
 
                 RestoreBulkAction::make()
-                    ->label(
-                        'Vrati označeno'
-                    )
+                    ->label('Vrati označeno')
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Vrati odabrano'
+                        'Vrati odabrane vatrogasne aparate'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
+                        'Jesi li siguran/a da želiš vratiti odabrane vatrogasne aparate?'
                     )
                     ->modalSubmitActionLabel(
                         'Vrati'
@@ -920,13 +941,12 @@ class FireResource extends BaseResource
                         'Odustani'
                     )
                     ->visible(
-                        fn (
-                            HasTable $livewire
-                        ) =>
+                        fn (HasTable $livewire): bool =>
                             self::isOnlyTrashed(
                                 $livewire
                             )
-                    ),
+                    )
+                    ->deselectRecordsAfterCompletion(),
 
                 BulkAction::make(
                     'copyAndCreateNew'
@@ -1035,22 +1055,21 @@ class FireResource extends BaseResource
                     ),
 
                 ForceDeleteBulkAction::make()
-                    ->label(
-                        'Trajno obriši označeno'
-                    )
+                    ->label('Trajno obriši označeno')
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Trajno obriši odabrano'
+                        'Trajno obriši odabrane vatrogasne aparate'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                        'Jesi li siguran/a da želiš trajno obrisati odabrane vatrogasne aparate? Ova radnja se ne može poništiti.'
                     )
                     ->modalSubmitActionLabel(
                         'Trajno obriši'
                     )
                     ->modalCancelActionLabel(
                         'Odustani'
-                    ),
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 
