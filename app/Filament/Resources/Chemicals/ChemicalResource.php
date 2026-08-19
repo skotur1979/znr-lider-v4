@@ -6,6 +6,8 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Chemicals\Pages;
 use App\Filament\Resources\Chemicals\Schemas\ChemicalForm;
 use App\Models\Chemical;
+use Filament\Actions\BulkAction;
+use Illuminate\Database\Eloquent\Collection;
 use BackedEnum;
 use App\Support\SecureFilePreview;
 use Filament\Actions\ActionGroup;
@@ -403,76 +405,138 @@ class ChemicalResource extends BaseResource
                 ]),
             ])
             ->bulkActions([
-               DeleteBulkAction::make()
-        ->label('Deaktiviraj označeno')
-        ->requiresConfirmation()
-        ->modalHeading(
-            'Deaktiviraj odabrano'
-        )
-        ->modalDescription(
-            'Jesi li siguran/a da želiš to učiniti?'
-        )
-        ->modalSubmitActionLabel(
-            'Deaktiviraj'
-        )
-        ->modalCancelActionLabel(
-            'Odustani'
-        )
-        ->visible(
-            fn (
-                HasTable $livewire
-            ): bool =>
-                ! static::isOnlyTrashed(
-                    $livewire
-                            )
-                    ),
 
-                    RestoreBulkAction::make()
-        ->label('Vrati označeno')
-        ->requiresConfirmation()
-        ->modalHeading(
-            'Vrati odabrane kemikalije'
-        )
-        ->modalDescription(
-            'Jesi li siguran/a da želiš vratiti odabrane zapise?'
-        )
-        ->modalSubmitActionLabel('Vrati')
-        ->modalCancelActionLabel('Odustani')
-        ->visible(
-            fn (
-                HasTable $livewire
-            ): bool =>
-                static::isOnlyTrashed(
-                    $livewire
+            /*
+            * DEAKTIVIRANJE
+            *
+            * Soft delete - zapis ostaje u bazi
+            * i kasnije ga možemo vratiti.
+            */
+            DeleteBulkAction::make()
+                ->label('Deaktiviraj označeno')
+                ->icon('heroicon-o-trash')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->modalHeading(
+                    'Deaktiviraj odabrane kemikalije'
                 )
-        ),
+                ->modalDescription(
+                    'Jesi li siguran/a da želiš deaktivirati odabrane zapise?'
+                )
+                ->modalSubmitActionLabel(
+                    'Deaktiviraj'
+                )
+                ->modalCancelActionLabel(
+                    'Odustani'
+                )
+                ->visible(
+                    fn (HasTable $livewire): bool =>
+                        ! static::isOnlyTrashed(
+                            $livewire
+                        )
+                )
+                ->deselectRecordsAfterCompletion(),
 
-                ForceDeleteBulkAction::make()
-        ->label(
-            'Trajno obriši označeno'
-        )
-        ->requiresConfirmation()
-        ->modalHeading(
-            'Trajno obriši odabrano'
-        )
-        ->modalDescription(
-            'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
-        )
-        ->modalSubmitActionLabel(
-            'Trajno obriši'
-        )
-        ->modalCancelActionLabel(
-            'Odustani'
-        )
-        ->visible(
-            fn (
-                HasTable $livewire
-            ): bool =>
-                static::isOnlyTrashed(
-                    $livewire
-                    )
-        ),
-            ]);
+            BulkAction::make('delete_selected_permanently')
+                ->label('Trajno obriši označeno')
+                ->icon('heroicon-o-trash')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->modalHeading(
+                    'Trajno obriši odabrane kemikalije'
+                )
+                ->modalDescription(
+                    'Jesi li siguran/a da želiš trajno obrisati odabrane kemikalije? Ova radnja se ne može poništiti.'
+                )
+                ->modalSubmitActionLabel(
+                    'Trajno obriši'
+                )
+                ->modalCancelActionLabel(
+                    'Odustani'
+                )
+                ->visible(
+                    fn (HasTable $livewire): bool =>
+                        ! static::isOnlyTrashed(
+                            $livewire
+                        )
+                )
+                ->action(
+                    function (
+                        Collection $records
+                    ): void {
+                        $records->each(
+                            function (
+                                Chemical $record
+                            ): void {
+                                if (
+                                    ! static::canForceDelete(
+                                        $record
+                                    )
+                                ) {
+                                    return;
+                                }
+
+                                $record->forceDelete();
+                            }
+                        );
+                    }
+                )
+                ->deselectRecordsAfterCompletion(),
+
+            /*
+            * VRAĆANJE DEAKTIVIRANIH
+            */
+            RestoreBulkAction::make()
+                ->label('Vrati označeno')
+                ->requiresConfirmation()
+                ->modalHeading(
+                    'Vrati odabrane kemikalije'
+                )
+                ->modalDescription(
+                    'Jesi li siguran/a da želiš vratiti odabrane zapise?'
+                )
+                ->modalSubmitActionLabel(
+                    'Vrati'
+                )
+                ->modalCancelActionLabel(
+                    'Odustani'
+                )
+                ->visible(
+                    fn (HasTable $livewire): bool =>
+                        static::isOnlyTrashed(
+                            $livewire
+                        )
+                )
+                ->deselectRecordsAfterCompletion(),
+
+            /*
+            * TRAJNO BRISANJE VEĆ DEAKTIVIRANIH
+            */
+            ForceDeleteBulkAction::make()
+                ->label(
+                    'Trajno obriši označeno'
+                )
+                ->requiresConfirmation()
+                ->modalHeading(
+                    'Trajno obriši odabrano'
+                )
+                ->modalDescription(
+                    'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                )
+                ->modalSubmitActionLabel(
+                    'Trajno obriši'
+                )
+                ->modalCancelActionLabel(
+                    'Odustani'
+                )
+                ->visible(
+                    fn (HasTable $livewire): bool =>
+                        static::isOnlyTrashed(
+                            $livewire
+                        )
+                )
+                ->deselectRecordsAfterCompletion(),
+        ]);
     }
 
     private static function isOnlyTrashed(

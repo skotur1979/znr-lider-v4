@@ -960,19 +960,24 @@ protected static function priorityIcon(?string $state): ?string
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Deaktiviraj označeno')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
                     ->requiresConfirmation()
                     ->before(
                         static::beforeModulePermission('delete')
                     )
-                    ->modalHeading('Deaktiviraj odabrano')
-                    ->modalDescription('Jesi li siguran/a da želiš to učiniti?')
+                    ->modalHeading('Deaktiviraj odabrana zapažanja')
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš deaktivirati odabrana zapažanja?'
+                    )
                     ->modalSubmitActionLabel('Deaktiviraj')
                     ->modalCancelActionLabel('Odustani')
                     ->visible(
                         fn (HasTable $livewire): bool =>
                             ! self::isOnlyTrashed($livewire)
                             && static::canDeleteAny()
-                    ),
+                    )
+                    ->deselectRecordsAfterCompletion(),
 
                 RestoreBulkAction::make()
                     ->label('Vrati označeno')
@@ -992,21 +997,23 @@ protected static function priorityIcon(?string $state): ?string
 
                 ForceDeleteBulkAction::make()
                     ->label('Trajno obriši označeno')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
                     ->requiresConfirmation()
                     ->before(
                         static::beforeModulePermission('delete')
                     )
-                    ->modalHeading('Trajno obriši odabrano')
+                    ->modalHeading('Trajno obriši odabrana zapažanja')
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti? Ova radnja se ne može poništiti.'
+                        'Jesi li siguran/a da želiš trajno obrisati odabrana zapažanja? Ova radnja se ne može poništiti.'
                     )
                     ->modalSubmitActionLabel('Trajno obriši')
                     ->modalCancelActionLabel('Odustani')
                     ->visible(
                         fn (HasTable $livewire): bool =>
-                            self::isOnlyTrashed($livewire)
-                            && static::canForceDeleteAny()
-                    ),
+                            static::canForceDeleteAny()
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ])
             ->defaultSort('incident_date', 'desc');
     }

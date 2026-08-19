@@ -7,6 +7,8 @@ use App\Filament\Resources\PPELogs\Pages;
 use App\Filament\Resources\PPELogs\RelationManagers\ItemsRelationManager;
 use App\Models\Employee;
 use App\Models\PPELog;
+use Filament\Actions\BulkAction;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use BackedEnum;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -646,33 +648,78 @@ class PPELogResource extends BaseResource
             ])
             ->bulkActions([
                 DeleteBulkAction::make()
-                    ->label(
-                        'Deaktiviraj označeno'
-                    )
-                    ->visible(
-                        fn (): bool =>
-                            static::canDeleteAny()
-                    ),
+                    ->label('Deaktiviraj označeno')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(function ($livewire): bool {
+                        $filter =
+                            $livewire->tableFilters['pregled']['value']
+                            ?? null;
 
+                        return $filter !== 'deaktivirani'
+                            && static::canDeleteAny();
+                    })
+                    ->deselectRecordsAfterCompletion(),
 
                 RestoreBulkAction::make()
-                    ->label(
-                        'Vrati označeno'
+                    ->label('Vrati označeno')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(function ($livewire): bool {
+                        $filter =
+                            $livewire->tableFilters['pregled']['value']
+                            ?? null;
+
+                        return $filter === 'deaktivirani'
+                            && static::canRestoreAny();
+                    })
+                    ->deselectRecordsAfterCompletion(),
+
+                BulkAction::make('force_delete_selected')
+                    ->label('Trajno izbriši označeno')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Trajno izbriši odabrane zapise'
                     )
-                    ->visible(
-                        fn (): bool =>
-                            static::canRestoreAny()
-                    ),
-
-
-                ForceDeleteBulkAction::make()
-                    ->label(
-                        'Trajno izbriši označeno'
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš trajno izbrisati odabrane OZO zapise? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno izbriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
                     )
                     ->visible(
                         fn (): bool =>
                             static::canForceDeleteAny()
-                    ),
+                    )
+                    ->action(
+                        function (
+                            EloquentCollection $records
+                        ): void {
+                            $records->each(
+                                function (
+                                    PPELog $record
+                                ): void {
+                                    if (
+                                        ! static::canForceDelete(
+                                            $record
+                                        )
+                                    ) {
+                                        return;
+                                    }
+
+                                    $record->forceDelete();
+                                }
+                            );
+                        }
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 

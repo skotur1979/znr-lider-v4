@@ -410,20 +410,38 @@ class GlobalSearchService
                     ->orWhere('type', 'like', "%{$term}%")
                     ->orWhere('serial_label_number', 'like', "%{$term}%")
                     ->orWhere('service', 'like', "%{$term}%")
-                    ->orWhereRaw("`factory_number/year_of_production` LIKE ?", ["%{$term}%"]);
+                    ->orWhere('factory_number_year_of_production', 'like', "%{$term}%");
             })
             ->get()
             ->map(function (Fire $record) use ($term) {
                 return [
                     'title' => $record->place ?: 'Bez naziva',
+
                     'subtitle' => collect([
-                        $record->type ? 'Tip: ' . $record->type : null,
-                        $record->serial_label_number ? 'Serijski broj: ' . $record->serial_label_number : null,
-                        $record->factory_number_year_of_production ? 'Tv. broj / god.: ' . $record->factory_number_year_of_production : null,
-                        $record->service ? 'Servis: ' . $record->service : null,
+                        $record->type
+                            ? 'Tip: ' . $record->type
+                            : null,
+
+                        $record->serial_label_number
+                            ? 'Serijski broj: ' . $record->serial_label_number
+                            : null,
+
+                        $record->factory_number_year_of_production
+                            ? 'Tv. broj / god.: ' . $record->factory_number_year_of_production
+                            : null,
+
+                        $record->service
+                            ? 'Servis: ' . $record->service
+                            : null,
                     ])->filter()->implode(' · '),
-                    'url' => $this->resourceRecordUrl(FireResource::class, $record),
+
+                    'url' => $this->resourceRecordUrl(
+                        FireResource::class,
+                        $record
+                    ),
+
                     'icon' => 'heroicon-o-fire',
+
                     'score' => $this->rankRecord([
                         $record->place,
                         $record->type,

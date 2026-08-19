@@ -905,19 +905,31 @@ class WorkPermitResource extends BaseResource
             ])
 
             ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label(
-                        'Deaktiviraj označeno'
-                    )
+               DeleteBulkAction::make()
+                    ->label('Deaktiviraj označeno')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
                     ->requiresConfirmation()
+                    ->modalHeading(
+                        'Deaktiviraj odabrane dozvole za rad'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš deaktivirati odabrane dozvole za rad?'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(
-                        fn (
-                            HasTable $livewire
-                        ): bool =>
+                        fn (HasTable $livewire): bool =>
                             ! static::isOnlyTrashed(
                                 $livewire
                             )
-                    ),
+                            && static::canDeleteAny()
+                    )
+                    ->deselectRecordsAfterCompletion(),
 
                 RestoreBulkAction::make()
                     ->label(
@@ -1067,18 +1079,27 @@ class WorkPermitResource extends BaseResource
                     ),
 
                 ForceDeleteBulkAction::make()
-                    ->label(
-                        'Trajno obriši označeno'
-                    )
+                    ->label('Trajno obriši označeno')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
                     ->requiresConfirmation()
+                    ->modalHeading(
+                        'Trajno obriši odabrane dozvole za rad'
+                    )
+                    ->modalDescription(
+                        'Jesi li siguran/a da želiš trajno obrisati odabrane dozvole za rad? Ova radnja se ne može poništiti.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno obriši'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
                     ->visible(
-                        fn (
-                            HasTable $livewire
-                        ): bool =>
-                            static::isOnlyTrashed(
-                                $livewire
-                            )
-                    ),
+                        fn (HasTable $livewire): bool =>
+                            static::canForceDeleteAny()
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 

@@ -24,25 +24,17 @@ class EditOperationalLog extends EditRecord
 
     public function mount(int|string $record): void
     {
-        /*
-         * Prvo Filament učitava zapis kroz Resource query.
-         *
-         * Obični korisnik već kroz Resource može dohvatiti
-         * samo vlastiti osobni dnevnik.
-         */
         parent::mount($record);
 
         /*
-         * Superadmin smije pregledavati osobne dnevnike,
-         * ali ih ne smije uređivati.
+         * Superadmin može pregledavati osobne dnevnike,
+         * ali ih ne uređuje.
          *
-         * Ovo štiti i direktan /edit URL.
+         * Autor dnevnika može uređivati samo vlastiti zapis.
          */
         if (
             Auth::user()?->isSuperAdmin()
-            || ! OperationalLogResource::canEdit(
-                $this->record
-            )
+            || ! OperationalLogResource::canEdit($this->record)
         ) {
             $this->redirect(
                 OperationalLogResource::getUrl(
@@ -61,7 +53,8 @@ class EditOperationalLog extends EditRecord
     protected function beforeSave(): void
     {
         /*
-         * Serverska zaštita neposredno prije spremanja.
+         * Dodatna serverska provjera neposredno
+         * prije spremanja.
          */
         if (
             ! OperationalLogResource::canEdit(
@@ -73,21 +66,22 @@ class EditOperationalLog extends EditRecord
     }
 
     protected function mutateFormDataBeforeSave(
-    array $data
+        array $data
     ): array {
         /*
-        * Vlasnik osobnog dnevnika nikada se
-        * ne može promijeniti kroz uređivanje.
-        */
-        $data['user_id'] = $this->record->user_id;
+         * Vlasnik osobnog dnevnika nikada se
+         * ne mijenja kroz edit formu.
+         */
+        $data['user_id'] =
+            $this->record->user_id;
 
         /*
-        * task_id ne smijemo vjerovati izravno
-        * Livewire formi.
-        *
-        * Pri uređivanju prihvaćamo samo task_id
-        * koji je već bio spremljen u ovom dnevniku.
-        */
+         * task_id prihvaćamo samo ako je već bio
+         * spremljen u ovom dnevniku.
+         *
+         * Time korisnik ne može kroz Livewire
+         * podmetnuti ID nekog drugog radnog zadatka.
+         */
         $existingTaskIds = collect(
             $this->record->items ?? []
         )
@@ -111,22 +105,26 @@ class EditOperationalLog extends EditRecord
                 function (array $item) use (
                     $existingTaskIds
                 ): array {
-                    $taskId =
+                    $taskId = null;
+
+                    if (
                         isset($item['task_id'])
+                        && filled($item['task_id'])
                         && $existingTaskIds->contains(
                             (int) $item['task_id']
                         )
-                            ? (int) $item['task_id']
-                            : null;
+                    ) {
+                        $taskId =
+                            (int) $item['task_id'];
+                    }
 
                     /*
-                    * Ako je iz bilješke već nastao
-                    * WorkTask, ta poveznica ostaje.
-                    *
-                    * Ne dopuštamo da se kasnijim
-                    * uklanjanjem kvačice izgubi podatak
-                    * da je zadatak već kreiran.
-                    */
+                     * Ako je radni zadatak već kreiran,
+                     * poveznica ostaje aktivna.
+                     *
+                     * Uklanjanjem kvačice ne brišemo
+                     * postojeći WorkTask niti gubimo vezu.
+                     */
                     $createTask =
                         $taskId !== null
                         || (bool) (
@@ -142,15 +140,21 @@ class EditOperationalLog extends EditRecord
                             )
                         ),
 
-                        'create_task' => $createTask,
+                        'create_task' =>
+                            $createTask,
 
-                        'task_id' => $taskId,
+                        'task_id' =>
+                            $taskId,
                     ];
                 }
             )
             ->values()
             ->toArray();
 
+        /*
+         * Glavno note polje ostaje sinkronizirano
+         * sa svim bilješkama iz repeatera.
+         */
         $data['note'] = collect(
             $data['items']
         )
@@ -167,12 +171,6 @@ class EditOperationalLog extends EditRecord
         /** @var OperationalLog $record */
         $record = $this->record;
 
-        /*
-         * Dohvaćamo autora dnevnika.
-         *
-         * U ovom trenutku zapis može uređivati
-         * samo sam autor dnevnika.
-         */
         $record->loadMissing('user');
 
         $author = $record->user;
@@ -182,9 +180,10 @@ class EditOperationalLog extends EditRecord
         }
 
         /*
-         * WorkTask pripada organizaciji autora dnevnika.
+         * Radni zadaci pripadaju organizaciji autora.
          */
-        $taskUserId = $author->ownerId();
+        $taskUserId =
+            $author->ownerId();
 
         if (! $taskUserId) {
             return;
@@ -197,34 +196,132 @@ class EditOperationalLog extends EditRecord
             ->toArray();
 
         $createdTasks = 0;
+        $updatedTasks = 0;
 
         foreach ($items as $index => $item) {
+            $note = trim(
+                (string) (
+                    $item['note']
+                    ?? ''
+                )
+            );
+
+            if ($note === '') {
+                continue;
+            }
+
+            $taskId =
+                ! empty($item['task_id'])
+                    ? (int) $item['task_id']
+                    : null;
+
+            /*
+             * POSTOJEĆI RADNI ZADATAK
+             *
+             * Ako bilješka već ima task_id,
+             * ne radimo novi WorkTask.
+             *
+             * Umjesto toga ažuriramo postojeći.
+             */
+            if ($taskId !== null) {
+                $task = WorkTask::query()
+                    ->where(
+                        'user_id',
+                        $taskUserId
+                    )
+                    ->whereKey($taskId)
+                    ->first();
+
+                if ($task) {
+                    $newTitle = Str::limit(
+                        $note,
+                        80
+                    );
+
+                    $newDueDate =
+                        $record->log_date;
+
+                    $changed =
+                        $task->title !== $newTitle
+                        || $task->description !== $note
+                        || optional(
+                            $task->due_date
+                        )->toDateString()
+                            !== optional(
+                                $newDueDate
+                            )->toDateString();
+
+                    if ($changed) {
+                        $task->update([
+                            'title' =>
+                                $newTitle,
+
+                            'description' =>
+                                $note,
+
+                            'due_date' =>
+                                $newDueDate,
+                        ]);
+
+                        $updatedTasks++;
+                    }
+                }
+
+                continue;
+            }
+
+            /*
+             * NOVI RADNI ZADATAK
+             *
+             * Kreiramo ga samo ako:
+             *
+             * - bilješka je označena kao Radni zadatak
+             * - još nema task_id.
+             */
             if (
-                empty($item['create_task'])
-                || ! empty($item['task_id'])
+                empty(
+                    $item['create_task']
+                )
             ) {
                 continue;
             }
 
             $task = WorkTask::create([
-                'user_id' => $taskUserId,
+                'user_id' =>
+                    $taskUserId,
 
-                'title' => Str::limit(
-                    $item['note'],
-                    80
-                ),
+                'title' =>
+                    Str::limit(
+                        $note,
+                        80
+                    ),
 
-                'description' => $item['note'],
+                'description' =>
+                    $note,
 
-                'due_date' => $record->log_date,
+                'due_date' =>
+                    $record->log_date,
 
-                'is_done' => false,
+                'is_done' =>
+                    false,
 
-                'completed_at' => null,
+                'completed_at' =>
+                    null,
             ]);
 
+            /*
+             * Spremamo ID upravo napravljenog
+             * zadatka natrag u JSON dnevnika.
+             *
+             * Kod sljedećeg uređivanja taj ID će
+             * kroz Hidden::make('task_id') ponovno
+             * doći u formu.
+             */
             $items[$index]['task_id'] =
                 $task->id;
+
+            $items[$index]['create_task'] =
+                true;
 
             $createdTasks++;
         }
@@ -234,19 +331,26 @@ class EditOperationalLog extends EditRecord
             ->filter()
             ->isNotEmpty();
 
+        /*
+         * Quiet update kako ne bismo ponovno
+         * pokretali Filament save ciklus.
+         */
         $record->updateQuietly([
-            'items' => $items,
+            'items' =>
+                $items,
 
-            'note' => collect($items)
-                ->pluck('note')
-                ->implode("\n"),
+            'note' =>
+                collect($items)
+                    ->pluck('note')
+                    ->implode("\n"),
 
             'converted_type' =>
                 $hasTasks
                     ? WorkTask::class
                     : null,
 
-            'converted_id' => null,
+            'converted_id' =>
+                null,
 
             'status' =>
                 $hasTasks
@@ -254,9 +358,14 @@ class EditOperationalLog extends EditRecord
                     : 'recorded',
         ]);
 
+        /*
+         * Logiramo samo stvarno NOVO kreirane
+         * radne zadatke.
+         */
         if ($createdTasks > 0) {
             ActivityLogger::status(
-                module: 'Operativni dnevnik',
+                module:
+                    'Operativni dnevnik',
 
                 title:
                     'Naknadno kreirani radni zadaci iz operativnog dnevnika',
@@ -269,9 +378,16 @@ class EditOperationalLog extends EditRecord
                         $record->log_date
                     )->format('d.m.Y.'),
 
-                record: $record,
+                record:
+                    $record,
             );
+        }
 
+        /*
+         * Obavijest prikazujemo samo ako je
+         * stvarno nastao novi zadatak.
+         */
+        if ($createdTasks > 0) {
             Notification::make()
                 ->title(
                     'Kreirani su novi radni zadaci.'
@@ -283,6 +399,12 @@ class EditOperationalLog extends EditRecord
                 ->success()
                 ->send();
         }
+
+        /*
+         * Ako smo samo izmijenili postojeće
+         * zadatke, nije potrebna posebna poruka
+         * jer Filament već javlja da je zapis spremljen.
+         */
     }
 
     protected function getHeaderActions(): array
@@ -293,17 +415,19 @@ class EditOperationalLog extends EditRecord
                 ->requiresConfirmation()
                 ->visible(
                     fn (): bool =>
-                        OperationalLogResource::canDelete(
+                        ! $this->record->trashed()
+                        && OperationalLogResource::canDelete(
                             $this->record
                         )
-                        && ! $this->record->trashed()
                 ),
 
             RestoreAction::make()
                 ->label('Vrati')
+                ->requiresConfirmation()
                 ->visible(
                     fn (): bool =>
-                        OperationalLogResource::canRestore(
+                        $this->record->trashed()
+                        && OperationalLogResource::canRestore(
                             $this->record
                         )
                 ),
@@ -313,7 +437,8 @@ class EditOperationalLog extends EditRecord
                 ->requiresConfirmation()
                 ->visible(
                     fn (): bool =>
-                        OperationalLogResource::canForceDelete(
+                        $this->record->trashed()
+                        && OperationalLogResource::canForceDelete(
                             $this->record
                         )
                 ),
@@ -322,9 +447,12 @@ class EditOperationalLog extends EditRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->previousUrl
-            ?? static::getResource()::getUrl(
-                'index'
-            );
+        return static::getResource()::getUrl(
+            'view',
+            [
+                'record' =>
+                    $this->record,
+            ]
+        );
     }
 }

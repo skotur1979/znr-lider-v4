@@ -105,6 +105,9 @@ class OperationalLogResource extends BaseResource
                     Repeater::make('items')
                         ->label('Bilješke / natuknice')
                         ->schema([
+                            Hidden::make('task_id')
+                                ->dehydrated(),
+
                             Textarea::make('note')
                                 ->label('Bilješka')
                                 ->rows(3)
@@ -164,33 +167,90 @@ class OperationalLogResource extends BaseResource
                     ->label('Bilješke')
                     ->badge()
                     ->getStateUsing(
-                        fn (
-                            OperationalLog $record
-                        ): string =>
+                        fn (OperationalLog $record): string =>
                             (string) $record->itemsCount()
                     )
                     ->color('info')
+                    ->tooltip(
+                        fn (OperationalLog $record): string =>
+                            'Ukupno bilješki: ' . $record->itemsCount()
+                    )
+                    ->alignCenter()
                     ->toggleable(),
 
                 TextColumn::make('items_preview')
                     ->label('Sažetak')
                     ->getStateUsing(
-                        function (
-                            OperationalLog $record
-                        ): string {
+                        function (OperationalLog $record): array {
+                            return collect($record->items ?? [])
+                                ->filter(
+                                    fn (array $item): bool =>
+                                        filled($item['note'] ?? null)
+                                )
+                                ->map(
+                                    function (array $item): string {
+                                        $note = trim(
+                                            (string) ($item['note'] ?? '')
+                                        );
+
+                                        $isTask =
+                                            ! empty($item['create_task'])
+                                            || ! empty($item['task_id']);
+
+                                        return $isTask
+                                            ? '✓ Radni zadatak: ' . $note
+                                            : '📝 Bilješka: ' . $note;
+                                    }
+                                )
+                                ->values()
+                                ->all();
+                        }
+                    )
+                    ->listWithLineBreaks()
+                    ->limitList(4)
+                    ->wrap()
+                    ->tooltip(
+                        function (OperationalLog $record): ?string {
                             $items = collect(
                                 $record->items ?? []
                             )
-                                ->pluck('note')
-                                ->filter()
-                                ->take(3)
-                                ->implode(' • ');
+                                ->filter(
+                                    fn (array $item): bool =>
+                                        filled($item['note'] ?? null)
+                                )
+                                ->map(
+                                    function (
+                                        array $item,
+                                        int $index
+                                    ): string {
+                                        $note = trim(
+                                            (string) ($item['note'] ?? '')
+                                        );
 
-                            return $items ?: '-';
+                                        $isTask =
+                                            ! empty($item['create_task'])
+                                            || ! empty($item['task_id']);
+
+                                        $type = $isTask
+                                            ? 'RADNI ZADATAK'
+                                            : 'BILJEŠKA';
+
+                                        return ($index + 1)
+                                            . '. ['
+                                            . $type
+                                            . '] '
+                                            . $note;
+                                    }
+                                )
+                                ->values();
+
+                            if ($items->isEmpty()) {
+                                return null;
+                            }
+
+                            return $items->implode("\n");
                         }
                     )
-                    ->limit(160)
-                    ->wrap()
                     ->searchable(
                         query:
                             function (
@@ -204,25 +264,28 @@ class OperationalLogResource extends BaseResource
                                 );
                             }
                     )
+                    ->grow()
                     ->toggleable(),
 
                 TextColumn::make('tasks_count')
-                    ->label('Radni zadaci')
+                    ->label('Broj zadataka')
                     ->badge()
                     ->getStateUsing(
-                        fn (
-                            OperationalLog $record
-                        ): string =>
+                        fn (OperationalLog $record): string =>
                             (string) $record->tasksCount()
                     )
                     ->color(
-                        fn (
-                            OperationalLog $record
-                        ): string =>
+                        fn (OperationalLog $record): string =>
                             $record->tasksCount() > 0
                                 ? 'warning'
                                 : 'gray'
                     )
+                    ->tooltip(
+                        fn (OperationalLog $record): string =>
+                            'Ukupno radnih zadataka iz ovog dnevnika: '
+                            . $record->tasksCount()
+                    )
+                    ->alignCenter()
                     ->toggleable(),
 
                 TextColumn::make('created_at')
