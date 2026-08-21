@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Observations\Pages;
 use App\Mail\ObservationNotificationMail;
 use App\Models\ActivityLog;
+use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Employee;
 use App\Models\Observation;
@@ -429,7 +430,7 @@ protected static function priorityIcon(?string $state): ?string
                                 ->columns(2)
                                 ->schema([
                             FileUpload::make('camera_picture')
-                                ->label('Fotografiraj')
+                                ->label('📷 Fotografiraj')
                                 ->image()
                                 ->disk('public')
                                 ->directory('observations')
@@ -440,10 +441,25 @@ protected static function priorityIcon(?string $state): ?string
                                     'accept' => 'image/*',
                                     'capture' => 'environment',
                                 ])
-                                ->helperText('Otvori kameru i snimi novu fotografiju.'),
+                                ->live()
+                                ->afterStateUpdated(
+                                    function ($state, Set $set): void {
+                                        if (filled($state)) {
+                                            /*
+                                            * Ako je snimljena nova fotografija,
+                                            * poništavamo eventualni izbor
+                                            * iz galerije.
+                                            */
+                                            $set('picture_path', null);
+                                        }
+                                    }
+                                )
+                                ->helperText(
+                                    '📷 Odaberi fotoaparat i snimi novu fotografiju.'
+                                ),
 
                             FileUpload::make('picture_path')
-                                ->label('Odaberi iz galerije')
+                                ->label('🖼️ Odaberi iz galerije')
                                 ->image()
                                 ->disk('public')
                                 ->directory('observations')
@@ -455,11 +471,24 @@ protected static function priorityIcon(?string $state): ?string
                                 ->extraInputAttributes([
                                     'accept' => 'image/*',
                                 ])
+                                ->live()
+                                ->afterStateUpdated(
+                                    function ($state, Set $set): void {
+                                        if (filled($state)) {
+                                            /*
+                                            * Ako je odabrana slika iz galerije,
+                                            * poništavamo fotografiju iz kamere.
+                                            */
+                                            $set('camera_picture', null);
+                                        }
+                                    }
+                                )
                                 ->helperText(function () {
-                                    $ownerId = auth()->user()?->ownerId();
+                                    $ownerId =
+                                        auth()->user()?->ownerId();
 
                                     $text =
-                                        'Odaberi postojeću fotografiju iz galerije ili datoteka.';
+                                        '🖼️ Odaberi ranije spremljenu fotografiju iz galerije.';
 
                                     if (! $ownerId) {
                                         return $text;
