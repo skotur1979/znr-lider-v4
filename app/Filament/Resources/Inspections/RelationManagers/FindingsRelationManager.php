@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Inspections\RelationManagers;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Models\Employee;
 use App\Models\InspectionFinding;
+use App\Filament\Resources\Inspections\InspectionResource;
 use App\Services\ActivityLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
@@ -513,19 +514,47 @@ class FindingsRelationManager extends RelationManager
         ]),
             ])
             ->headerActions([
-    Action::make('export_findings_pdf')
-        ->label('Izvoz u PDF')
-        ->icon('heroicon-o-arrow-down-tray')
-        ->color('warning')
-        ->action(function () {
-            $inspection = $this->getOwnerRecord();
+    // postojeći Izvoz u PDF
+    // postojeći Izvoz u Excel
+            CreateAction::make()
+                ->label('Dodaj nalaz')
+                ->modalHeading('Napravi novi nalaz')
+                ->modalSubmitActionLabel('Napravi')
+                ->modalCancelActionLabel('Odustani')
+                ->mutateDataUsing(
+                    fn (array $data): array => $this->mutateFindingData($data)
+                ),
 
-            $findings = $this->getFilteredSortedTableQuery()
-                ->get();
+            Action::make('inspectionReports')
+                ->label('Izvještaji')
+                ->icon('heroicon-o-chart-bar-square')
+                ->color('info')
+                ->url(function (): string {
+                    $inspection =
+                        $this->getOwnerRecord();
 
-            $pdf = Pdf::loadView('pdf.inspection-findings', [
-                'inspection' => $inspection,
-                'findings' => $findings,
+                    return InspectionResource::getUrl(
+                        'reports',
+                        [
+                            'inspection' =>
+                                $inspection->getKey(),
+                        ]
+                    );
+                }),
+
+            Action::make('export_findings_pdf')
+                ->label('Izvoz u PDF')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('warning')
+                ->action(function () {
+                    $inspection = $this->getOwnerRecord();
+
+                    $findings = $this->getFilteredSortedTableQuery()
+                        ->get();
+
+                    $pdf = Pdf::loadView('pdf.inspection-findings', [
+                        'inspection' => $inspection,
+                        'findings' => $findings,
             ])
                 ->setPaper('a4', 'landscape')
                 ->setOptions([
@@ -556,14 +585,6 @@ class FindingsRelationManager extends RelationManager
                     );
                 }),
 
-            CreateAction::make()
-                ->label('Dodaj nalaz')
-                ->modalHeading('Napravi novi nalaz')
-                ->modalSubmitActionLabel('Napravi')
-                ->modalCancelActionLabel('Odustani')
-                ->mutateDataUsing(
-                    fn (array $data): array => $this->mutateFindingData($data)
-                ),
         ])
             ->actions([
                 ActionGroup::make([

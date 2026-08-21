@@ -23,7 +23,7 @@ class ListInspections extends ListRecords
                     fn (): bool =>
                         InspectionResource::canCreate()
                 ),
-
+                
             Action::make('create_five_s')
                 ->label('Novi 5S nadzor')
                 ->icon('heroicon-o-squares-2x2')

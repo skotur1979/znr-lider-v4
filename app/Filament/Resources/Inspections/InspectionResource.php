@@ -307,6 +307,11 @@ class InspectionResource extends BaseResource
                     '/create'
                 ),
 
+            'reports' =>
+                Pages\InspectionReports::route(
+                    '/reports'
+                ),
+
             'zone-results-report' =>
                 Pages\ZoneResultsReport::route(
                     '/zone-results-report'
