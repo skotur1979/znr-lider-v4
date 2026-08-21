@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Observations\Pages;
 use App\Mail\ObservationNotificationMail;
 use App\Models\ActivityLog;
+use Filament\Forms\Components\Placeholder;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Employee;
@@ -429,6 +430,15 @@ protected static function priorityIcon(?string $state): ?string
                             Section::make('Slika i komentar')
                                 ->columns(2)
                                 ->schema([
+                            Placeholder::make('picture_info')
+                                ->label('')
+                                ->content(
+                                    '📷 Odaberite jedan način dodavanja fotografije: '
+                                    . 'fotografirajte novu fotografiju ili odaberite postojeću iz galerije. '
+                                    . 'Moguće je spremiti samo jednu fotografiju po zapažanju.'
+                                )
+                                ->columnSpanFull(),
+
                             FileUpload::make('camera_picture')
                                 ->label('📷 Fotografiraj')
                                 ->image()
@@ -445,11 +455,6 @@ protected static function priorityIcon(?string $state): ?string
                                 ->afterStateUpdated(
                                     function ($state, Set $set): void {
                                         if (filled($state)) {
-                                            /*
-                                            * Ako je snimljena nova fotografija,
-                                            * poništavamo eventualni izbor
-                                            * iz galerije.
-                                            */
                                             $set('picture_path', null);
                                         }
                                     }
@@ -475,17 +480,12 @@ protected static function priorityIcon(?string $state): ?string
                                 ->afterStateUpdated(
                                     function ($state, Set $set): void {
                                         if (filled($state)) {
-                                            /*
-                                            * Ako je odabrana slika iz galerije,
-                                            * poništavamo fotografiju iz kamere.
-                                            */
                                             $set('camera_picture', null);
                                         }
                                     }
                                 )
                                 ->helperText(function () {
-                                    $ownerId =
-                                        auth()->user()?->ownerId();
+                                    $ownerId = auth()->user()?->ownerId();
 
                                     $text =
                                         '🖼️ Odaberi ranije spremljenu fotografiju iz galerije.';
