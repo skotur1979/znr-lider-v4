@@ -303,13 +303,19 @@ class InspectionResource extends BaseResource
                 Pages\ListInspections::route('/'),
 
             'create' =>
-                Pages\CreateInspection::route('/create'),
+                Pages\CreateInspection::route(
+                    '/create'
+                ),
 
-            'view' =>
-                Pages\ViewInspection::route('/{record}'),
+            'zone-results-report' =>
+                Pages\ZoneResultsReport::route(
+                    '/zone-results-report'
+                ),
 
             'edit' =>
-                Pages\EditInspection::route('/{record}/edit'),
+                Pages\EditInspection::route(
+                    '/{record}/edit'
+                ),
         ];
     }
 }
