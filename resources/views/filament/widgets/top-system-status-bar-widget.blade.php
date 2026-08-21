@@ -393,15 +393,47 @@
         }
 
         @media (max-width:700px){
-            .tsb-wrap{padding:18px 16px;}
-            .tsb-right{width:100%;}
-            .tsb-score-card{min-width:0;flex:1;}
-            .tsb-report-card{min-width:100%;width:100%;}
-            .tsb-summary-row{align-items:flex-start;}
-            .tsb-alert-icon{width:48px;height:48px;font-size:1.6rem;}
-            .tsb-summary-title{white-space:normal;}
-            .tsb-modules{grid-template-columns:1fr;}
+        .tsb-wrap{padding:18px 16px;}
+
+        .tsb-right{
+            width:100%;
         }
+
+        .tsb-score-card{
+            min-width:0;
+            flex:1;
+        }
+
+        .tsb-report-card{
+            min-width:100%;
+            width:100%;
+            justify-content:center;
+            text-align:center;
+        }
+
+        .tsb-report-text{
+            align-items:center;
+            text-align:center;
+        }
+
+        .tsb-summary-row{
+            align-items:flex-start;
+        }
+
+        .tsb-alert-icon{
+            width:48px;
+            height:48px;
+            font-size:1.6rem;
+        }
+
+        .tsb-summary-title{
+            white-space:normal;
+        }
+
+        .tsb-modules{
+            grid-template-columns:1fr;
+        }
+    }
 
         @media (prefers-reduced-motion:reduce){
             .tsb-expired-blink,

@@ -439,27 +439,56 @@ protected static function priorityIcon(?string $state): ?string
                                 ->downloadable()
                                 ->maxSize(30720)
 
+                                /*
+                                * Na mobitelu omogućuje odabir slike
+                                * iz kamere, galerije ili datoteka.
+                                *
+                                * Namjerno NE koristimo:
+                                * 'capture' => 'environment'
+                                * jer bi to favoriziralo direktno kameru.
+                                */
+                                ->extraInputAttributes([
+                                    'accept' => 'image/*',
+                                ])
+
                                 ->helperText(function () {
                                     $ownerId = auth()->user()?->ownerId();
 
+                                    $text =
+                                        'Na mobitelu možeš fotografirati novu sliku '
+                                        . 'ili odabrati postojeću iz galerije.';
+
                                     if (! $ownerId) {
-                                        return null;
+                                        return $text;
                                     }
 
-                                    return 'Iskorištenost prostora organizacije: '
-                                        . app(StorageQuotaService::class)->usageText($ownerId);
+                                    return $text
+                                        . ' Iskorištenost prostora organizacije: '
+                                        . app(StorageQuotaService::class)
+                                            ->usageText($ownerId);
                                 })
 
                                 ->rules([
                                     function () {
-                                        return function (string $attribute, mixed $value, \Closure $fail) {
-                                            $ownerId = auth()->user()?->ownerId();
+                                        return function (
+                                            string $attribute,
+                                            mixed $value,
+                                            \Closure $fail
+                                        ) {
+                                            $ownerId =
+                                                auth()->user()?->ownerId();
 
                                             if (! $ownerId) {
                                                 return;
                                             }
 
-                                            if (! app(StorageQuotaService::class)->canUpload($value, $ownerId)) {
+                                            if (
+                                                ! app(StorageQuotaService::class)
+                                                    ->canUpload(
+                                                        $value,
+                                                        $ownerId
+                                                    )
+                                            ) {
                                                 $fail(
                                                     'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
                                                     . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'

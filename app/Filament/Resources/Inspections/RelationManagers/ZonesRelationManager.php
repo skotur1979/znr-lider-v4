@@ -231,7 +231,8 @@ class ZonesRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->label('Dodaj zonu'),
+                    ->label('Dodaj zonu')
+                    ->modalHeading('Napravi zonu'),
 
                 Action::make('zoneResultsReport')
                     ->label('Izvještaj rezultata zona')

@@ -34,7 +34,7 @@ class FirstAidKitResource extends BaseResource
         FirstAidKit::class;
 
     protected static string|BackedEnum|null $navigationIcon =
-        'heroicon-o-plus-circle';
+        'heroicon-o-briefcase';
 
     protected static string|UnitEnum|null $navigationGroup =
         'Ispitivanja';

@@ -46,7 +46,7 @@ class PPEEquipmentResource extends BaseResource
     protected static bool $superAdminCanCreate = true;
 
     protected static BackedEnum|string|null $navigationIcon =
-        'heroicon-o-shield-check';
+        'heroicon-o-hand-raised';
 
     protected static string|UnitEnum|null $navigationGroup =
         'Zaposlenici';

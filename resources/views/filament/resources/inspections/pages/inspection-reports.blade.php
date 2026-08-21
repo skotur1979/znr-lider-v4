@@ -103,269 +103,308 @@
 
     <style>
 
-        .inspection-report {
-            display:flex;
-            flex-direction:column;
-            gap:16px;
-        }
+    .inspection-report {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
 
-        .ir-panel,
-        .ir-card {
-            background:rgb(255 255 255);
-            border:1px solid rgb(229 231 235);
-            border-radius:14px;
-            overflow:hidden;
-        }
+    .ir-panel,
+    .ir-card {
+        background: rgb(255 255 255);
+        border: 1px solid rgb(229 231 235);
+        border-radius: 14px;
+        overflow: hidden;
+    }
 
-        .dark .ir-panel,
-        .dark .ir-card {
-            background:rgb(24 24 27);
-            border-color:
-                rgba(255,255,255,.10);
-        }
+    .dark .ir-panel,
+    .dark .ir-card {
+        background: rgb(24 24 27);
+        border-color: rgba(255, 255, 255, .10);
+    }
 
-        .ir-title {
-            padding:14px 16px;
-            border-bottom:
-                1px solid rgb(229 231 235);
-            font-size:15px;
-            font-weight:800;
-        }
+    .ir-title {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgb(229 231 235);
+        font-size: 15px;
+        font-weight: 800;
+    }
 
-        .dark .ir-title {
-            border-color:
-                rgba(255,255,255,.10);
-        }
+    .dark .ir-title {
+        border-color: rgba(255, 255, 255, .10);
+    }
 
-        .ir-filters {
-            display:grid;
-            grid-template-columns:
-                repeat(
-                    4,
-                    minmax(0,1fr)
-                );
-            gap:12px;
-            padding:16px;
-        }
+    .ir-filters {
+        display: grid;
+        grid-template-columns:
+            repeat(
+                4,
+                minmax(0, 1fr)
+            );
+        gap: 12px;
+        padding: 16px;
+    }
 
-        .ir-label {
-            display:block;
-            margin-bottom:5px;
-            font-size:10px;
-            font-weight:800;
-            text-transform:uppercase;
-            color:rgb(107 114 128);
-        }
+    .ir-label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: rgb(107 114 128);
+    }
 
-        .ir-select {
-            width:100%;
-            min-height:38px;
-            padding:7px 10px;
-            border-radius:9px;
-            border:
-                1px solid rgb(209 213 219);
-            background:white;
-            color:#111827;
-        }
+    .ir-select {
+        width: 100%;
+        min-height: 38px;
+        padding: 7px 10px;
+        border-radius: 9px;
+        border: 1px solid rgb(209 213 219);
+        background: white;
+        color: #111827;
+    }
 
-        .dark .ir-select {
-            background:#111827;
-            color:#f3f4f6;
-            border-color:#374151;
-        }
+    .dark .ir-select {
+        background: #111827;
+        color: #f3f4f6;
+        border-color: #374151;
+    }
 
-        .ir-actions {
-            padding:
-                0 16px 16px;
-        }
+    .ir-actions {
+        padding: 0 16px 16px;
+    }
 
-        .ir-reset {
-            min-height:38px;
-            padding:0 18px;
-            border:0;
-            border-radius:9px;
-            background:#f59e0b;
-            color:#111827;
-            font-weight:800;
-            cursor:pointer;
-        }
+    .ir-reset {
+        min-height: 38px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 9px;
+        background: #f59e0b;
+        color: #111827;
+        font-weight: 800;
+        cursor: pointer;
+    }
 
+    .ir-cards {
+        display: grid;
+        grid-template-columns:
+            repeat(
+                4,
+                minmax(0, 1fr)
+            );
+        gap: 12px;
+    }
+
+    .ir-card {
+        padding: 15px;
+        min-height: 98px;
+    }
+
+    .ir-card-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: #9ca3af;
+    }
+
+    .ir-card-value {
+        margin-top: 7px;
+        font-size: 26px;
+        line-height: 1;
+        font-weight: 900;
+    }
+
+    .ir-grid {
+        display: grid;
+        grid-template-columns:
+            repeat(
+                2,
+                minmax(0, 1fr)
+            );
+        gap: 16px;
+    }
+
+    .ir-bars {
+        padding: 15px;
+    }
+
+    .ir-bar-row {
+        display: grid;
+        grid-template-columns:
+            minmax(
+                130px,
+                220px
+            )
+            1fr
+            45px;
+
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .ir-bar-label {
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .ir-bar-track {
+        height: 12px;
+        border-radius: 999px;
+        background:
+            rgba(
+                156,
+                163,
+                175,
+                .20
+            );
+        overflow: hidden;
+    }
+
+    .ir-bar-fill {
+        height: 100%;
+        background: #f59e0b;
+        border-radius: 999px;
+    }
+
+    .ir-bar-value {
+        text-align: right;
+        font-weight: 900;
+    }
+
+    .ir-table-wrap {
+        overflow-x: auto;
+    }
+
+    .ir-table {
+        width: 100%;
+        min-width: 1000px;
+        border-collapse: collapse;
+        table-layout: auto;
+    }
+
+    /*
+     * Sve ćelije u tablicama
+     * centralno poravnate.
+     */
+    .ir-table th,
+    .ir-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgb(229 231 235);
+        font-size: 12px;
+        vertical-align: middle;
+        text-align: center;
+        line-height: 1.45;
+    }
+
+    .dark .ir-table th,
+    .dark .ir-table td {
+        border-color:
+            rgba(
+                255,
+                255,
+                255,
+                .08
+            );
+    }
+
+    .ir-table th {
+        font-weight: 800;
+        background:
+            rgba(
+                156,
+                163,
+                175,
+                .08
+            );
+        white-space: nowrap;
+    }
+
+    /*
+     * Koristi se gdje želimo
+     * izričito centriranje.
+     */
+    .ir-center {
+        text-align: center !important;
+    }
+
+    /*
+     * Samo duži opis nalaza
+     * ostavljamo lijevo radi čitljivosti.
+     */
+    .ir-description {
+        text-align: left !important;
+        min-width: 260px;
+        max-width: 420px;
+        white-space: normal;
+        word-break: normal;
+        overflow-wrap: anywhere;
+    }
+
+    /*
+     * Malo više prostora za lokaciju
+     * i odgovornu osobu da se tekst
+     * ne lomi nepotrebno.
+     */
+    .ir-location {
+        min-width: 130px;
+    }
+
+    .ir-responsible {
+        min-width: 150px;
+    }
+
+    /*
+     * Datum, broj i rok ostaju
+     * kompaktni i u jednom redu
+     * gdje ima dovoljno prostora.
+     */
+    .ir-nowrap {
+        white-space: nowrap;
+    }
+
+    .ir-empty {
+        padding: 30px;
+        text-align: center;
+        color: #9ca3af;
+    }
+
+    .ir-danger {
+        color: #ef4444;
+        font-weight: 800;
+    }
+
+    @media (
+        max-width: 1200px
+    ) {
         .ir-cards {
-            display:grid;
-            grid-template-columns:
-                repeat(
-                    4,
-                    minmax(0,1fr)
-                );
-            gap:12px;
-        }
-
-        .ir-card {
-            padding:15px;
-            min-height:98px;
-        }
-
-        .ir-card-label {
-            font-size:10px;
-            text-transform:uppercase;
-            font-weight:800;
-            color:#9ca3af;
-        }
-
-        .ir-card-value {
-            margin-top:7px;
-            font-size:26px;
-            line-height:1;
-            font-weight:900;
-        }
-
-        .ir-grid {
-            display:grid;
             grid-template-columns:
                 repeat(
                     2,
-                    minmax(0,1fr)
+                    minmax(0, 1fr)
                 );
-            gap:16px;
         }
 
-        .ir-bars {
-            padding:15px;
-        }
-
-        .ir-bar-row {
-            display:grid;
+        .ir-filters {
             grid-template-columns:
-                minmax(
-                    130px,
-                    220px
-                )
-                1fr
-                45px;
-
-            gap:10px;
-            align-items:center;
-            margin-bottom:10px;
-        }
-
-        .ir-bar-label {
-            font-size:12px;
-            font-weight:700;
-        }
-
-        .ir-bar-track {
-            height:12px;
-            border-radius:999px;
-            background:
-                rgba(
-                    156,
-                    163,
-                    175,
-                    .20
-                );
-            overflow:hidden;
-        }
-
-        .ir-bar-fill {
-            height:100%;
-            background:#f59e0b;
-            border-radius:999px;
-        }
-
-        .ir-bar-value {
-            text-align:right;
-            font-weight:900;
-        }
-
-        .ir-table-wrap {
-            overflow-x:auto;
-        }
-
-        .ir-table {
-            width:100%;
-            min-width:1000px;
-            border-collapse:collapse;
-        }
-
-        .ir-table th,
-        .ir-table td {
-            padding:10px 12px;
-            border-bottom:
-                1px solid rgb(229 231 235);
-            font-size:12px;
-            vertical-align:middle;
-        }
-
-        .dark .ir-table th,
-        .dark .ir-table td {
-            border-color:
-                rgba(
-                    255,
-                    255,
-                    255,
-                    .08
+                repeat(
+                    2,
+                    minmax(0, 1fr)
                 );
         }
+    }
 
-        .ir-table th {
-            font-weight:800;
-            background:
-                rgba(
-                    156,
-                    163,
-                    175,
-                    .08
-                );
-            white-space:nowrap;
+    @media (
+        max-width: 750px
+    ) {
+        .ir-cards,
+        .ir-grid,
+        .ir-filters {
+            grid-template-columns: 1fr;
         }
+    }
 
-        .ir-center {
-            text-align:center;
-        }
-
-        .ir-empty {
-            padding:30px;
-            text-align:center;
-            color:#9ca3af;
-        }
-
-        .ir-danger {
-            color:#ef4444;
-            font-weight:800;
-        }
-
-        @media (
-            max-width:1200px
-        ) {
-            .ir-cards {
-                grid-template-columns:
-                    repeat(
-                        2,
-                        minmax(0,1fr)
-                    );
-            }
-
-            .ir-filters {
-                grid-template-columns:
-                    repeat(
-                        2,
-                        minmax(0,1fr)
-                    );
-            }
-        }
-
-        @media (
-            max-width:750px
-        ) {
-            .ir-cards,
-            .ir-grid,
-            .ir-filters {
-                grid-template-columns:
-                    1fr;
-            }
-        }
-
-    </style>
+</style>
 
 
     <div class="inspection-report">
@@ -960,19 +999,17 @@
 
                                 <tr>
 
-                                    <td>
+                                    <td class="ir-nowrap">
                                         {{
                                             $row['date']
                                                 ? \Illuminate\Support\Carbon::parse(
                                                     $row['date']
-                                                )->format(
-                                                    'd.m.Y.'
-                                                )
+                                                )->format('d.m.Y.')
                                                 : '-'
                                         }}
                                     </td>
 
-                                    <td>
+                                    <td class="ir-nowrap">
                                         <strong>
                                             {{
                                                 $row['number']
@@ -988,14 +1025,14 @@
                                         }}
                                     </td>
 
-                                    <td>
+                                    <td class="ir-location">
                                         {{
                                             $row['location']
                                             ?? '-'
                                         }}
                                     </td>
 
-                                    <td>
+                                    <td class="ir-responsible">
                                         {{
                                             $row['performed_by']
                                             ?? '-'
@@ -1003,14 +1040,10 @@
                                     </td>
 
                                     <td class="ir-center">
-
                                         {{
-                                            $row[
-                                                'findings_count'
-                                            ]
+                                            $row['findings_count']
                                             ?? 0
                                         }}
-
                                     </td>
 
                                 </tr>
@@ -1104,113 +1137,72 @@
 
                                 <tr>
 
-                                    <td>
-
+                                    <td class="ir-nowrap">
                                         {{
-                                            $row[
-                                                'inspection_date'
-                                            ]
+                                            $row['inspection_date']
                                                 ? \Illuminate\Support\Carbon::parse(
-                                                    $row[
-                                                        'inspection_date'
-                                                    ]
-                                                )->format(
-                                                    'd.m.Y.'
-                                                )
+                                                    $row['inspection_date']
+                                                )->format('d.m.Y.')
                                                 : '-'
                                         }}
-
                                     </td>
 
-
-                                    <td>
-
+                                    <td class="ir-nowrap">
                                         <strong>
-
                                             {{
-                                                $row[
-                                                    'inspection_number'
-                                                ]
+                                                $row['inspection_number']
                                                 ?? '-'
                                             }}
-
                                         </strong>
-
                                     </td>
 
-
-                                    <td>
-
+                                    <td class="ir-location">
                                         {{
                                             $row['location']
                                             ?? '-'
                                         }}
-
                                     </td>
 
-
                                     <td>
-
                                         {{
                                             $row['category']
                                             ?? '-'
                                         }}
-
                                     </td>
 
-
-                                    <td>
-
+                                    <td class="ir-description">
                                         {{
                                             $row['description']
                                             ?? '-'
                                         }}
-
                                     </td>
 
-
                                     <td>
-
                                         {{
                                             $findingTypeLabel(
-                                                $row[
-                                                    'finding_status'
-                                                ]
+                                                $row['finding_status']
                                                 ?? null
                                             )
                                         }}
-
                                     </td>
 
-
                                     <td>
-
                                         {{
                                             $workflowLabel(
-                                                $row[
-                                                    'workflow_status'
-                                                ]
+                                                $row['workflow_status']
                                                 ?? null
                                             )
                                         }}
-
                                     </td>
 
-
-                                    <td>
-
+                                    <td class="ir-responsible">
                                         {{
-                                            $row[
-                                                'responsible_person'
-                                            ]
+                                            $row['responsible_person']
                                             ?? '-'
                                         }}
-
                                     </td>
 
-
-                                    <td>
-
+                                    <td class="ir-nowrap">
                                         @if(
                                             ! empty(
                                                 $row['due_date']
@@ -1225,9 +1217,7 @@
 
                                                 $isOverdue =
                                                     ! in_array(
-                                                        $row[
-                                                            'workflow_status'
-                                                        ],
+                                                        $row['workflow_status'],
                                                         [
                                                             'closed',
                                                             'resolved_no_action',
@@ -1239,8 +1229,7 @@
                                                         ->copy()
                                                         ->startOfDay()
                                                         ->lt(
-                                                            now()
-                                                                ->startOfDay()
+                                                            now()->startOfDay()
                                                         );
                                             @endphp
 
@@ -1261,7 +1250,6 @@
                                         @else
                                             -
                                         @endif
-
                                     </td>
 
                                 </tr>

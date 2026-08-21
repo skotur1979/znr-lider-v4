@@ -41,7 +41,7 @@ class WasteTypeResource extends BaseResource
     protected static bool $hasOwnership = true;
 
     protected static string|\BackedEnum|null $navigationIcon =
-        'heroicon-o-tag';
+        'heroicon-o-trash';
 
     protected static ?string $navigationLabel =
         'Vrste otpada';
