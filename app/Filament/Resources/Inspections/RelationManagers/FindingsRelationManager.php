@@ -19,17 +19,20 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Filament\Tables\Filters\SelectFilter;
 use App\Exports\InspectionFindingsExport;
 use Maatwebsite\Excel\Facades\Excel;
@@ -40,6 +43,13 @@ class FindingsRelationManager extends RelationManager
     protected static string $relationship = 'findings';
 
     protected static ?string $title = 'Nalazi nadzora';
+
+    /**
+     * Stara fotografija po ID-u nalaza tijekom uređivanja.
+     * Koristi se kako bi se nakon uspješnog spremanja
+     * obrisala fizička datoteka koju je zamijenila nova.
+     */
+    protected array $oldPhotoPaths = [];
 
     protected function getEmployeeSuggestions(): array
 {
@@ -98,11 +108,21 @@ class FindingsRelationManager extends RelationManager
         $data['finding_status'] = 'recommendation';
     }
 
+    /*
+     * camera_photo je samo pomoćno polje forme.
+     * Ako je snimljena nova fotografija, ona postaje
+     * stvarna photo_path vrijednost nalaza.
+     */
+    if (filled($data['camera_photo'] ?? null)) {
+        $data['photo_path'] = $data['camera_photo'];
+    }
+
     unset(
         $data['category_select'],
         $data['category_custom'],
         $data['finding_status_select'],
-        $data['finding_status_custom']
+        $data['finding_status_custom'],
+        $data['camera_photo']
     );
 
     return $data;
@@ -316,8 +336,82 @@ class FindingsRelationManager extends RelationManager
                 ->displayFormat('d.m.Y.')
                 ->columnSpan(1),
 
+            Placeholder::make('photo_info')
+                ->label('')
+                ->content(
+                    '📷 Odaberite jedan način dodavanja fotografije: '
+                    . 'fotografirajte novu fotografiju ili odaberite postojeću iz galerije. '
+                    . 'Moguće je spremiti samo jednu fotografiju po nalazu nadzora.'
+                )
+                ->columnSpanFull(),
+
+            FileUpload::make('camera_photo')
+                ->label('📷 Fotografiraj')
+                ->image()
+                ->disk('public')
+                ->directory('inspection-findings')
+                ->visibility('public')
+                ->acceptedFileTypes([
+                    'image/jpeg',
+                    'image/png',
+                    'image/gif',
+                    'image/webp',
+                ])
+                ->maxSize(30720)
+                ->preserveFilenames()
+                ->extraInputAttributes([
+                    'accept' => 'image/*',
+                    'capture' => 'environment',
+                ])
+                ->live()
+                ->afterStateUpdated(
+                    function ($state, Set $set): void {
+                        if (filled($state)) {
+                            /*
+                             * Ako je snimljena nova fotografija,
+                             * poništavamo eventualni izbor
+                             * iz galerije / postojeću sliku.
+                             */
+                            $set('photo_path', null);
+                        }
+                    }
+                )
+                ->helperText(
+                    '📷 Odaberi fotoaparat i snimi novu fotografiju.'
+                )
+                ->rules([
+                    function () {
+                        return function (
+                            string $attribute,
+                            mixed $value,
+                            \Closure $fail
+                        ): void {
+                            $ownerId =
+                                $this->getOwnerRecord()?->user_id;
+
+                            if (! $ownerId) {
+                                return;
+                            }
+
+                            if (
+                                ! app(StorageQuotaService::class)
+                                    ->canUpload(
+                                        $value,
+                                        (int) $ownerId
+                                    )
+                            ) {
+                                $fail(
+                                    'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                    . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                );
+                            }
+                        };
+                    },
+                ])
+                ->columnSpan(1),
+
             FileUpload::make('photo_path')
-                ->label('Slika')
+                ->label('🖼️ Odaberi iz galerije')
                 ->image()
                 ->disk('public')
                 ->directory('inspection-findings')
@@ -335,17 +429,32 @@ class FindingsRelationManager extends RelationManager
                 ->imageEditor()
                 ->extraInputAttributes([
                     'accept' => 'image/*',
-                    'capture' => 'environment',
                 ])
+                ->live()
+                ->afterStateUpdated(
+                    function ($state, Set $set): void {
+                        if (filled($state)) {
+                            /*
+                             * Ako je odabrana fotografija iz galerije,
+                             * poništavamo fotografiju iz kamere.
+                             */
+                            $set('camera_photo', null);
+                        }
+                    }
+                )
                 ->helperText(function () {
-                    $ownerId = $this->getOwnerRecord()?->user_id;
+                    $ownerId =
+                        $this->getOwnerRecord()?->user_id;
+
+                    $text =
+                        '🖼️ Odaberi ranije spremljenu fotografiju iz galerije.';
 
                     if (! $ownerId) {
-                        return 'Na mobitelu i tabletu možeš odmah slikati kamerom ili odabrati postojeću sliku.';
+                        return $text;
                     }
 
-                    return 'Na mobitelu i tabletu možeš odmah slikati kamerom ili odabrati postojeću sliku. '
-                        . 'Iskorištenost prostora organizacije: '
+                    return $text
+                        . ' Iskorištenost prostora organizacije: '
                         . app(StorageQuotaService::class)
                             ->usageText((int) $ownerId);
                 })
@@ -378,7 +487,8 @@ class FindingsRelationManager extends RelationManager
                         };
                     },
                 ])
-                ->columnSpanFull(),
+                ->columnSpan(1),
+
             Textarea::make('resolution_note')
                 ->label('Napomena / rješenje')
                 ->rows(3)
@@ -592,7 +702,49 @@ class FindingsRelationManager extends RelationManager
 
                     EditAction::make()
                         ->label('Uredi')
-                        ->mutateDataUsing(fn (array $data): array => $this->mutateFindingData($data)),
+                        ->before(function (InspectionFinding $record): void {
+                            /*
+                             * Pamtimo staru fotografiju prije spremanja.
+                             */
+                            $this->oldPhotoPaths[$record->getKey()] =
+                                filled($record->photo_path)
+                                    ? (string) $record->photo_path
+                                    : null;
+                        })
+                        ->mutateDataUsing(
+                            fn (array $data): array =>
+                                $this->mutateFindingData($data)
+                        )
+                        ->after(function (InspectionFinding $record): void {
+                            /*
+                             * Nakon uspješnog spremanja brišemo staru
+                             * fizičku datoteku samo ako je fotografija
+                             * stvarno zamijenjena ili uklonjena.
+                             */
+                            $oldPhotoPath =
+                                $this->oldPhotoPaths[$record->getKey()]
+                                ?? null;
+
+                            $newPhotoPath =
+                                filled($record->photo_path)
+                                    ? (string) $record->photo_path
+                                    : null;
+
+                            if (
+                                filled($oldPhotoPath)
+                                && $oldPhotoPath !== $newPhotoPath
+                            ) {
+                                $disk = Storage::disk('public');
+
+                                if ($disk->exists($oldPhotoPath)) {
+                                    $disk->delete($oldPhotoPath);
+                                }
+                            }
+
+                            unset(
+                                $this->oldPhotoPaths[$record->getKey()]
+                            );
+                        }),
 
                     Action::make('createObservation')
                         ->label('Napravi negativno zapažanje')
