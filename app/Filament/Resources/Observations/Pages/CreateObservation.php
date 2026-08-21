@@ -14,7 +14,8 @@ class CreateObservation extends CreateRecord
 {
     use InteractsWithModulePagePermissions;
 
-    protected static string $resource = ObservationResource::class;
+    protected static string $resource =
+        ObservationResource::class;
 
     protected ?string $returnInspectionEditUrl = null;
 
@@ -75,7 +76,9 @@ class CreateObservation extends CreateRecord
             if (
                 $finding?->inspection
                 && InspectionResource::getEloquentQuery()
-                    ->whereKey($finding->inspection->getKey())
+                    ->whereKey(
+                        $finding->inspection->getKey()
+                    )
                     ->exists()
             ) {
                 $this->validatedInspectionFindingId =
@@ -85,7 +88,8 @@ class CreateObservation extends CreateRecord
                     InspectionResource::getUrl(
                         'edit',
                         [
-                            'record' => $finding->inspection,
+                            'record' =>
+                                $finding->inspection,
                         ]
                     );
             }
@@ -100,59 +104,85 @@ class CreateObservation extends CreateRecord
         $this->form->fill([
             /*
              * user_id iz URL-a namjerno se ne koristi.
-             * Ownership će se postaviti preko fillOwnershipData().
+             * Ownership će se postaviti preko
+             * fillOwnershipData().
              */
-            'incident_date' => request()->query(
-                'incident_date'
-            ),
 
-            'observation_type' => request()->query(
-                'observation_type'
-            ),
+            'incident_date' =>
+                request()->query(
+                    'incident_date'
+                ),
 
-            'priority' => request()->query(
-                'priority'
-            ) ?? 'medium',
+            'observation_type' =>
+                request()->query(
+                    'observation_type'
+                ),
 
-            'location' => request()->query(
-                'location'
-            ),
+            'priority' =>
+                request()->query(
+                    'priority'
+                ) ?? 'medium',
 
-            'item' => request()->query(
-                'item'
-            ),
+            'location' =>
+                request()->query(
+                    'location'
+                ),
 
-            'potential_incident_type' => request()->query(
-                'potential_incident_type'
-            ),
+            'item' =>
+                request()->query(
+                    'item'
+                ),
 
-            'picture_path' => request()->query(
-                'picture_path'
-            ),
+            'potential_incident_type' =>
+                request()->query(
+                    'potential_incident_type'
+                ),
 
-            'action' => request()->query(
-                'action'
-            ),
+            /*
+             * Postojeće standardno polje
+             * za galeriju / datoteku.
+             */
+            'picture_path' =>
+                request()->query(
+                    'picture_path'
+                ),
 
-            'responsible' => request()->query(
-                'responsible'
-            ),
+            /*
+             * Pomoćno polje kamere namjerno
+             * počinje prazno.
+             */
+            'camera_picture' =>
+                null,
 
-            'notification_emails' => request()->query(
-                'notification_emails'
-            ),
+            'action' =>
+                request()->query(
+                    'action'
+                ),
 
-            'target_date' => request()->query(
-                'target_date'
-            ),
+            'responsible' =>
+                request()->query(
+                    'responsible'
+                ),
 
-            'status' => request()->query(
-                'status'
-            ) ?? 'Not started',
+            'notification_emails' =>
+                request()->query(
+                    'notification_emails'
+                ),
 
-            'comments' => request()->query(
-                'comments'
-            ),
+            'target_date' =>
+                request()->query(
+                    'target_date'
+                ),
+
+            'status' =>
+                request()->query(
+                    'status'
+                ) ?? 'Not started',
+
+            'comments' =>
+                request()->query(
+                    'comments'
+                ),
         ]);
     }
 
@@ -172,6 +202,38 @@ class CreateObservation extends CreateRecord
     ): array {
         /*
         |--------------------------------------------------------------------------
+        | Fotografija snimljena kamerom
+        |--------------------------------------------------------------------------
+        |
+        | camera_picture je samo pomoćno polje forme.
+        |
+        | Ako je korisnik fotografirao novu sliku,
+        | spremamo njen put u stvarno DB polje:
+        |
+        | picture_path
+        |
+        */
+
+        if (
+            ! empty(
+                $data['camera_picture']
+                ?? null
+            )
+        ) {
+            $data['picture_path'] =
+                $data['camera_picture'];
+        }
+
+        /*
+         * camera_picture ne postoji u observations
+         * tablici i zato ga obavezno uklanjamo.
+         */
+        unset(
+            $data['camera_picture']
+        );
+
+        /*
+        |--------------------------------------------------------------------------
         | Ownership
         |--------------------------------------------------------------------------
         |
@@ -180,9 +242,10 @@ class CreateObservation extends CreateRecord
         |
         */
 
-        $data = ObservationResource::fillOwnershipData(
-            $data
-        );
+        $data =
+            ObservationResource::fillOwnershipData(
+                $data
+            );
 
         /*
         |--------------------------------------------------------------------------
@@ -190,12 +253,24 @@ class CreateObservation extends CreateRecord
         |--------------------------------------------------------------------------
         */
 
-        if (blank($data['priority'] ?? null)) {
-            $data['priority'] = 'medium';
+        if (
+            blank(
+                $data['priority']
+                ?? null
+            )
+        ) {
+            $data['priority'] =
+                'medium';
         }
 
-        if (blank($data['status'] ?? null)) {
-            $data['status'] = 'Not started';
+        if (
+            blank(
+                $data['status']
+                ?? null
+            )
+        ) {
+            $data['status'] =
+                'Not started';
         }
 
         /*
@@ -204,17 +279,22 @@ class CreateObservation extends CreateRecord
         |--------------------------------------------------------------------------
         */
 
-        $data['notification_emails'] = collect(
-            $data['notification_emails'] ?? []
-        )
-            ->map(
-                fn ($email): string =>
-                    trim((string) $email)
+        $data['notification_emails'] =
+            collect(
+                $data[
+                    'notification_emails'
+                ] ?? []
             )
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
+                ->map(
+                    fn ($email): string =>
+                        trim(
+                            (string) $email
+                        )
+                )
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
 
         return $data;
     }
@@ -231,18 +311,24 @@ class CreateObservation extends CreateRecord
         |
         */
 
-        if ($this->validatedInspectionFindingId) {
-            $finding = InspectionFinding::query()
-                ->whereKey(
-                    $this->validatedInspectionFindingId
-                )
-                ->first();
+        if (
+            $this->validatedInspectionFindingId
+        ) {
+            $finding =
+                InspectionFinding::query()
+                    ->whereKey(
+                        $this
+                            ->validatedInspectionFindingId
+                    )
+                    ->first();
 
             if (
                 $finding
                 && $finding->inspection
                 && InspectionResource::getEloquentQuery()
-                    ->whereKey($finding->inspection_id)
+                    ->whereKey(
+                        $finding->inspection_id
+                    )
                     ->exists()
             ) {
                 $finding->update([
@@ -262,11 +348,15 @@ class CreateObservation extends CreateRecord
         */
 
         $emails = collect(
-            $this->record->notification_emails ?? []
+            $this->record
+                ->notification_emails
+                ?? []
         )
             ->map(
                 fn ($email): string =>
-                    trim((string) $email)
+                    trim(
+                        (string) $email
+                    )
             )
             ->filter()
             ->unique()
@@ -281,7 +371,10 @@ class CreateObservation extends CreateRecord
             return;
         }
 
-        foreach ($emails as $email) {
+        foreach (
+            $emails
+            as $email
+        ) {
             Mail::to($email)->send(
                 new ObservationNotificationMail(
                     $this->record
@@ -290,19 +383,28 @@ class CreateObservation extends CreateRecord
         }
 
         $this->record->updateQuietly([
-            'notification_emails' => $emails,
-            'sent_at' => now(),
+            'notification_emails' =>
+                $emails,
+
+            'sent_at' =>
+                now(),
         ]);
     }
 
     protected function getRedirectUrl(): string
     {
-        if (filled($this->returnInspectionEditUrl)) {
-            return $this->returnInspectionEditUrl;
+        if (
+            filled(
+                $this->returnInspectionEditUrl
+            )
+        ) {
+            return $this
+                ->returnInspectionEditUrl;
         }
 
-        return $this->getResource()::getUrl(
-            'index'
-        );
+        return $this
+            ->getResource()::getUrl(
+                'index'
+            );
     }
 }

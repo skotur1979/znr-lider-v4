@@ -428,8 +428,22 @@ protected static function priorityIcon(?string $state): ?string
                             Section::make('Slika i komentar')
                                 ->columns(2)
                                 ->schema([
+                            FileUpload::make('camera_picture')
+                                ->label('Fotografiraj')
+                                ->image()
+                                ->disk('public')
+                                ->directory('observations')
+                                ->visibility('public')
+                                ->preserveFilenames()
+                                ->maxSize(30720)
+                                ->extraInputAttributes([
+                                    'accept' => 'image/*',
+                                    'capture' => 'environment',
+                                ])
+                                ->helperText('Otvori kameru i snimi novu fotografiju.'),
+
                             FileUpload::make('picture_path')
-                                ->label('Slika')
+                                ->label('Odaberi iz galerije')
                                 ->image()
                                 ->disk('public')
                                 ->directory('observations')
@@ -438,25 +452,14 @@ protected static function priorityIcon(?string $state): ?string
                                 ->openable()
                                 ->downloadable()
                                 ->maxSize(30720)
-
-                                /*
-                                * Na mobitelu omogućuje odabir slike
-                                * iz kamere, galerije ili datoteka.
-                                *
-                                * Namjerno NE koristimo:
-                                * 'capture' => 'environment'
-                                * jer bi to favoriziralo direktno kameru.
-                                */
                                 ->extraInputAttributes([
                                     'accept' => 'image/*',
                                 ])
-
                                 ->helperText(function () {
                                     $ownerId = auth()->user()?->ownerId();
 
                                     $text =
-                                        'Na mobitelu možeš fotografirati novu sliku '
-                                        . 'ili odabrati postojeću iz galerije.';
+                                        'Odaberi postojeću fotografiju iz galerije ili datoteka.';
 
                                     if (! $ownerId) {
                                         return $text;
@@ -467,7 +470,6 @@ protected static function priorityIcon(?string $state): ?string
                                         . app(StorageQuotaService::class)
                                             ->usageText($ownerId);
                                 })
-
                                 ->rules([
                                     function () {
                                         return function (
