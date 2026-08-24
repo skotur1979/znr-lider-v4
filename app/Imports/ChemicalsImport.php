@@ -2,6 +2,8 @@
 
 namespace App\Imports;
 
+use App\Enums\HazardStatement;
+use App\Enums\PrecautionaryStatement;
 use App\Models\Chemical;
 use App\Services\ActivityLogger;
 use Illuminate\Support\Carbon;
@@ -189,21 +191,23 @@ class ChemicalsImport implements ToCollection
                 );
 
             $hStatements =
-                $this->parseList(
+                $this->parseStatementList(
                     $this->value(
                         $row,
                         $map,
                         'h_oznake'
-                    )
+                    ),
+                    'H'
                 );
 
             $pStatements =
-                $this->parseList(
+                $this->parseStatementList(
                     $this->value(
                         $row,
                         $map,
                         'p_oznake'
-                    )
+                    ),
+                    'P'
                 );
 
             $data = [
@@ -577,6 +581,392 @@ class ChemicalsImport implements ToCollection
             ->all();
     }
 
+    /**
+     * Normalizira H / EUH / P oznake iz Excela
+     * prema stvarnim vrijednostima dostupnim
+     * u HazardStatement i PrecautionaryStatement enumima.
+     *
+     * Prazna ćelija vraća null kako UPDATE ne bi
+     * obrisao postojeće vrijednosti.
+     *
+     * @return array<int, string>|null
+     */
+    private function parseStatementList(
+        $value,
+        string $type
+    ): ?array {
+        $value = $this->clean($value);
+
+        if (! $value) {
+            return null;
+        }
+
+        $type = strtoupper($type);
+
+        $available =
+            $type === 'H'
+                ? HazardStatement::list()
+                : PrecautionaryStatement::list();
+
+        /*
+        * Case-insensitive mapa:
+        *
+        * H361D -> H361d
+        * H360FD -> H360FD
+        * EUH066 -> EUH066
+        */
+        $availableMap = [];
+
+        foreach (
+            array_keys($available)
+            as $code
+        ) {
+            $availableMap[
+                strtoupper($code)
+            ] = $code;
+        }
+
+        return collect(
+            preg_split(
+                '/[,\n\r;:]+/',
+                $value
+            ) ?: []
+        )
+            ->map(
+                fn ($item): string =>
+                    trim(
+                        (string) $item
+                    )
+            )
+            ->filter()
+            ->flatMap(
+                function (
+                    string $item
+                ) use (
+                    $type,
+                    $availableMap
+                ): array {
+                    return $this
+                        ->normalizeImportedStatement(
+                            $item,
+                            $type,
+                            $availableMap
+                        );
+                }
+            )
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+    /**
+     * Pretvara jednu oznaku / kombinaciju iz Excela
+     * u jednu ili više oznaka koje aplikacija poznaje.
+     *
+     * @param array<string, string> $availableMap
+     * @return array<int, string>
+     */
+    private function normalizeImportedStatement(
+        string $item,
+        string $type,
+        array $availableMap
+    ): array {
+        $item = trim($item);
+
+        if ($item === '') {
+            return [];
+        }
+
+        /*
+        * Brišemo razmake i znakove koji se često
+        * pojavljuju u Excel zapisima.
+        */
+        $item = str_replace(
+            [
+                ' ',
+                '_',
+            ],
+            '',
+            $item
+        );
+
+        /*
+        * Normalizacija crtice.
+        */
+        $item = str_replace(
+            [
+                '–',
+                '—',
+            ],
+            '-',
+            $item
+        );
+
+        /*
+        * Kod statementa crtica između kodova
+        * nije separator pa ju uklanjamo.
+        */
+        $item = str_replace(
+            '-',
+            '',
+            $item
+        );
+
+        $upper =
+            strtoupper($item);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Poznate H kombinacije
+        |--------------------------------------------------------------------------
+        |
+        | U našem HazardStatement enumu ove kombinacije
+        | već predstavlja jedan glavni ključ.
+        |
+        */
+
+        if ($type === 'H') {
+            $aliases = [
+                'H300+H310+H330' =>
+                    'H300',
+
+                'H301+H311+H331' =>
+                    'H301',
+
+                'H302+H312+H332' =>
+                    'H302',
+
+                'H310+H330' =>
+                    'H310',
+
+                'H311+H331' =>
+                    'H311',
+
+                'H312+H332' =>
+                    'H312',
+            ];
+
+            /*
+            * Dopuni prefiks ako Excel ima:
+            *
+            * H300+310+330
+            *
+            * umjesto:
+            *
+            * H300+H310+H330
+            */
+            if (
+                preg_match(
+                    '/^(H)(\d{3})(\+\d{3})+$/',
+                    $upper,
+                    $matches
+                )
+            ) {
+                $upper =
+                    preg_replace(
+                        '/\+(\d{3})/',
+                        '+H$1',
+                        $upper
+                    )
+                    ?? $upper;
+            }
+
+            if (
+                isset(
+                    $aliases[$upper]
+                )
+            ) {
+                return [
+                    $aliases[$upper],
+                ];
+            }
+
+            /*
+            * Direktno postoji u enumu.
+            *
+            * Ovdje se npr.
+            * H361D automatski vrati kao H361d.
+            */
+            if (
+                isset(
+                    $availableMap[$upper]
+                )
+            ) {
+                return [
+                    $availableMap[$upper],
+                ];
+            }
+
+            /*
+            * Nepoznata H/EUH oznaka
+            * ne sprema se u bazu.
+            *
+            * Primjer: H366.
+            */
+            return [];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | P oznake
+        |--------------------------------------------------------------------------
+        */
+
+        /*
+        * P305+351+338
+        *
+        * pretvaramo u:
+        *
+        * P305+P351+P338
+        */
+        if (
+            preg_match(
+                '/^P\d{3}(?:\+\d{3})+$/',
+                $upper
+            )
+        ) {
+            $upper =
+                preg_replace(
+                    '/\+(\d{3})/',
+                    '+P$1',
+                    $upper
+                )
+                ?? $upper;
+        }
+
+        /*
+        * Ako kompletna kombinacija već postoji,
+        * koristimo baš nju.
+        *
+        * Primjer:
+        *
+        * P305+P351+P338
+        */
+        if (
+            isset(
+                $availableMap[$upper]
+            )
+        ) {
+            return [
+                $availableMap[$upper],
+            ];
+        }
+
+        /*
+        * Ako nije kombinacija, a ne postoji
+        * u enumu, ne spremamo je.
+        */
+        if (
+            ! str_contains(
+                $upper,
+                '+'
+            )
+        ) {
+            return [];
+        }
+
+        /*
+        * Razbijamo kombinaciju na pojedinačne kodove.
+        */
+        $parts =
+            array_values(
+                array_filter(
+                    explode(
+                        '+',
+                        $upper
+                    )
+                )
+            );
+
+        if (empty($parts)) {
+            return [];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Greedy kombiniranje
+        |--------------------------------------------------------------------------
+        |
+        | P305+P351+P338+P310
+        |
+        | postaje:
+        |
+        | P305+P351+P338
+        | P310
+        |
+        | P403+P233+P235
+        |
+        | postaje:
+        |
+        | P403+P233
+        | P235
+        |
+        */
+
+        $result = [];
+
+        $count =
+            count($parts);
+
+        $index = 0;
+
+        while ($index < $count) {
+            $matched = false;
+
+            /*
+            * Tražimo najdužu kombinaciju
+            * počevši od trenutnog elementa.
+            */
+            for (
+                $end = $count;
+                $end > $index;
+                $end--
+            ) {
+                $candidate =
+                    implode(
+                        '+',
+                        array_slice(
+                            $parts,
+                            $index,
+                            $end - $index
+                        )
+                    );
+
+                if (
+                    isset(
+                        $availableMap[
+                            $candidate
+                        ]
+                    )
+                ) {
+                    $result[] =
+                        $availableMap[
+                            $candidate
+                        ];
+
+                    $index =
+                        $end;
+
+                    $matched =
+                        true;
+
+                    break;
+                }
+            }
+
+            if ($matched) {
+                continue;
+            }
+
+            /*
+            * Nepoznata oznaka poput P030
+            * preskače se.
+            */
+            $index++;
+        }
+
+        return $result;
+    }
     private function parseDate(
         $value
     ): ?string {

@@ -33,6 +33,7 @@ final class PrecautionaryStatement
             "P243" => "P243 – Poduzeti mjere protiv stvaranja statičkog elektriciteta.",
             "P244" => "P244 – Oprema s regulacijom tlaka: redovito provjeravati i održavati.",
             "P250" => "P250 – Ne podvrgavati trljanju/udarima/trenju.",
+            "P251" => "P251 – Ne bušiti niti paliti, čak niti nakon uporabe.",
             "P260" => "P260 – Ne udisati prašinu/dim/plin/maglu/pare/raspršene kapljice.",
             "P261" => "P261 – Izbjegavati udisanje prašine/dima/plina/magle/para/raspršenih kapljica.",
             "P262" => "P262 – Ne dopustiti dodir s očima, kožom ili odjećom.",
@@ -116,6 +117,11 @@ final class PrecautionaryStatement
             "P372" => "P372 – Opasnost od eksplozije u slučaju požara.",
             "P373" => "P373 – NE gasiti požar ako plamen dopire do eksploziva.",
             "P374" => "P374 – Gasiti požar prema standardnim postupcima za kemikalije.",
+
+            "P377" => "P377 – Požar zbog istjecanja plina: ne gasiti ako nije moguće sa sigurnošću zaustaviti istjecanje.",
+            "P378" => "P378 – Za gašenje rabiti odgovarajuće sredstvo za gašenje.",
+            "P390" => "P390 – Apsorbirati proliveno kako bi se spriječila materijalna šteta.",
+            "P391" => "P391 – Sakupiti proliveno/rasuto.",
 
             // SKLADIŠTENJE
             "P401" => "P401 – Pohraniti prema propisima.",
