@@ -155,14 +155,220 @@ class OperationalLogResource extends BaseResource
                     ->date(),
             ])
             ->columns([
+
+                /*
+                |--------------------------------------------------------------------------
+                | MOBILNI PRIKAZ
+                |--------------------------------------------------------------------------
+                |
+                | Na mobitelu skrivamo klasične stupce i svaki zapis prikazujemo
+                | kao jednu preglednu karticu pune širine.
+                |
+                */
+                TextColumn::make('mobile_summary')
+                    ->label('Operativni dnevnik')
+                    ->html()
+                    ->hiddenFrom('md')
+                    ->state(function (OperationalLog $record): string {
+                        $items = collect($record->items ?? [])
+                            ->filter(
+                                fn (array $item): bool =>
+                                    filled($item['note'] ?? null)
+                            );
+
+                        $date = $record->log_date
+                            ? $record->log_date->format('d.m.Y.')
+                            : '-';
+
+                        $itemsCount =
+                            $record->itemsCount();
+
+                        $tasksCount =
+                            $record->tasksCount();
+
+                        $itemsHtml = $items
+                            ->map(
+                                function (array $item): string {
+                                    $note = e(
+                                        trim(
+                                            (string) ($item['note'] ?? '')
+                                        )
+                                    );
+
+                                    $isTask =
+                                        ! empty($item['create_task'])
+                                        || ! empty($item['task_id']);
+
+                                    if ($isTask) {
+                                        return '
+                                            <div style="
+                                                margin-top:10px;
+                                                padding:10px 12px;
+                                                border-radius:10px;
+                                                background:rgba(245,158,11,.10);
+                                                border:1px solid rgba(245,158,11,.25);
+                                            ">
+                                                <div style="
+                                                    margin-bottom:4px;
+                                                    font-size:11px;
+                                                    line-height:1.2;
+                                                    font-weight:800;
+                                                    color:#d97706;
+                                                ">
+                                                    ✓ RADNI ZADATAK
+                                                </div>
+
+                                                <div style="
+                                                    font-size:14px;
+                                                    line-height:1.5;
+                                                    white-space:normal;
+                                                    overflow-wrap:anywhere;
+                                                ">
+                                                    ' . $note . '
+                                                </div>
+                                            </div>
+                                        ';
+                                    }
+
+                                    return '
+                                        <div style="
+                                            margin-top:10px;
+                                            padding:10px 12px;
+                                            border-radius:10px;
+                                            background:rgba(59,130,246,.08);
+                                            border:1px solid rgba(59,130,246,.20);
+                                        ">
+                                            <div style="
+                                                margin-bottom:4px;
+                                                font-size:11px;
+                                                line-height:1.2;
+                                                font-weight:800;
+                                                color:#3b82f6;
+                                            ">
+                                                📝 BILJEŠKA
+                                            </div>
+
+                                            <div style="
+                                                font-size:14px;
+                                                line-height:1.5;
+                                                white-space:normal;
+                                                overflow-wrap:anywhere;
+                                            ">
+                                                ' . $note . '
+                                            </div>
+                                        </div>
+                                    ';
+                                }
+                            )
+                            ->implode('');
+
+                        if ($itemsHtml === '') {
+                            $itemsHtml = '
+                                <div style="
+                                    padding:10px 0;
+                                    color:#9ca3af;
+                                    font-size:14px;
+                                ">
+                                    Nema bilješki.
+                                </div>
+                            ';
+                        }
+
+                        return '
+                            <div style="
+                                width:100%;
+                                min-width:0;
+                                padding:3px 0 6px;
+                            ">
+
+                                <div style="
+                                    display:flex;
+                                    align-items:center;
+                                    justify-content:space-between;
+                                    gap:10px;
+                                    width:100%;
+                                    margin-bottom:4px;
+                                ">
+
+                                    <div style="
+                                        font-size:16px;
+                                        line-height:1.2;
+                                        font-weight:800;
+                                        white-space:nowrap;
+                                    ">
+                                        ' . e($date) . '
+                                    </div>
+
+                                    <div style="
+                                        display:flex;
+                                        align-items:center;
+                                        gap:7px;
+                                        flex-shrink:0;
+                                    ">
+
+                                        <span
+                                            title="Ukupno bilješki"
+                                            style="
+                                                display:inline-flex;
+                                                align-items:center;
+                                                justify-content:center;
+                                                min-width:34px;
+                                                height:28px;
+                                                padding:0 8px;
+                                                border-radius:8px;
+                                                background:rgba(59,130,246,.12);
+                                                color:#3b82f6;
+                                                font-size:12px;
+                                                font-weight:800;
+                                            "
+                                        >
+                                            📝 ' . $itemsCount . '
+                                        </span>
+
+                                        <span
+                                            title="Broj radnih zadataka"
+                                            style="
+                                                display:inline-flex;
+                                                align-items:center;
+                                                justify-content:center;
+                                                min-width:34px;
+                                                height:28px;
+                                                padding:0 8px;
+                                                border-radius:8px;
+                                                background:rgba(245,158,11,.12);
+                                                color:#d97706;
+                                                font-size:12px;
+                                                font-weight:800;
+                                            "
+                                        >
+                                            ✓ ' . $tasksCount . '
+                                        </span>
+
+                                    </div>
+                                </div>
+
+                                ' . $itemsHtml . '
+
+                            </div>
+                        ';
+                    }),
+
+                /*
+                |--------------------------------------------------------------------------
+                | DESKTOP / TABLET PRIKAZ
+                |--------------------------------------------------------------------------
+                */
+
                 TextColumn::make('log_date')
                     ->label('Datum')
                     ->date('d.m.Y.')
                     ->sortable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 static::userTableColumn()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('items_count')
                     ->label('Bilješke')
@@ -174,10 +380,12 @@ class OperationalLogResource extends BaseResource
                     ->color('info')
                     ->tooltip(
                         fn (OperationalLog $record): string =>
-                            'Ukupno bilješki: ' . $record->itemsCount()
+                            'Ukupno bilješki: '
+                            . $record->itemsCount()
                     )
                     ->alignCenter()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('items_preview')
                     ->label('Sažetak')
@@ -266,7 +474,8 @@ class OperationalLogResource extends BaseResource
                             }
                     )
                     ->grow()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('tasks_count')
                     ->label('Broj zadataka')
@@ -287,7 +496,8 @@ class OperationalLogResource extends BaseResource
                             . $record->tasksCount()
                     )
                     ->alignCenter()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('created_at')
                     ->label('Uneseno')
@@ -295,7 +505,8 @@ class OperationalLogResource extends BaseResource
                     ->sortable()
                     ->toggleable(
                         isToggledHiddenByDefault: true
-                    ),
+                    )
+                    ->visibleFrom('md'),
             ])
             ->filters([
                 Filter::make('log_date')
