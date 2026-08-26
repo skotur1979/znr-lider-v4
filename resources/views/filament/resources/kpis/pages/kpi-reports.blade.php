@@ -122,7 +122,7 @@
         */
         .kpi-table {
             width: 100%;
-            min-width: 1820px;
+            min-width: 2000px;
             border-collapse: collapse;
             table-layout: fixed;
         }
@@ -187,8 +187,8 @@
         }
 
         .kpi-col-month {
-            width: 95px;
-            min-width: 95px;
+            width: 105px;
+            min-width: 105px;
         }
 
         .kpi-col-summary {
@@ -205,8 +205,8 @@
             display: block;
             width: 100%;
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            overflow: visible;
+            text-overflow: clip;
             font-variant-numeric: tabular-nums;
         }
 
@@ -261,32 +261,52 @@
         |--------------------------------------------------------------------------
         */
         @media (max-width: 750px) {
-            .kpi-title-main {
-                font-size: 22px;
-            }
-
-            .kpi-sheet {
-                border-radius: 12px;
-            }
-
-            .kpi-filter-bar {
-                padding: 14px;
-            }
-
-            .kpi-input {
-                width: 100%;
-            }
-
-            .kpi-table {
-                min-width: 1780px;
-            }
-
-            .kpi-table th,
-            .kpi-table td {
-                padding: 8px;
-                font-size: 12px;
-            }
+        .kpi-title-main {
+            font-size: 22px;
         }
+
+        .kpi-sheet {
+            border-radius: 12px;
+        }
+
+        .kpi-filter-bar {
+            padding: 14px;
+        }
+
+        .kpi-input {
+            width: 100%;
+        }
+
+        /*
+        * Na mobitelu ne stišćemo 12 mjeseci u širinu ekrana.
+        * Tablica ostaje dovoljno široka da se svaki podatak
+        * može pročitati u cijelosti, a korisnik pomiče
+        * tablicu lijevo/desno.
+        */
+        .kpi-table {
+            min-width: 2000px;
+        }
+
+        .kpi-table th,
+        .kpi-table td {
+            padding: 8px 9px;
+            font-size: 12px;
+        }
+
+        .kpi-table-wrap {
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-x: contain;
+            touch-action: pan-x pan-y;
+        }
+
+        .kpi-number {
+            white-space: nowrap;
+            overflow: visible;
+            text-overflow: clip;
+        }
+    }
     </style>
 
     <div class="kpi-wrap">
