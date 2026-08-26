@@ -6,6 +6,7 @@ use App\Models\Incident;
 use App\Models\Inspection;
 use App\Models\InspectionFinding;
 use App\Models\Kpi;
+use Illuminate\Support\Facades\DB;
 use App\Models\KpiValue;
 use App\Models\Observation;
 use App\Models\OntoEntry;
@@ -271,28 +272,21 @@ class KpiCalculationService
                 ),
 
             'corrective_actions_open' =>
-                $this->correctiveActionCount(
+                $this->openCorrectiveActionCount(
                     $month,
-                    $year,
-                    ['open']
+                    $year
                 ),
 
             'corrective_actions_closed' =>
-                $this->correctiveActionCount(
+                $this->closedCorrectiveActionCount(
                     $month,
-                    $year,
-                    [
-                        'closed',
-                        'resolved_no_action',
-                        'converted_to_observation',
-                    ]
+                    $year
                 ),
 
             'corrective_actions_in_progress' =>
-                $this->correctiveActionCount(
+                $this->inProgressCorrectiveActionCount(
                     $month,
-                    $year,
-                    ['in_progress']
+                    $year
                 ),
 
             'corrective_actions_delay_days' =>
@@ -354,7 +348,7 @@ class KpiCalculationService
             'corrective_actions_closed',
             'corrective_actions_in_progress',
             'corrective_actions_delay_days'
-                => 'Nalazi nadzora',
+                => 'Zapažanja',
 
             'non_hazardous_waste_kg',
             'hazardous_waste_kg',
@@ -394,72 +388,73 @@ class KpiCalculationService
                 $compareYear,
                 $ownerId
             ): array {
-                $current = $ownerId
-                    ? $kpi->valueFor(
-                        $month,
-                        $year,
-                        $ownerId
-                    )
-                    : null;
+                $current = $kpi->valueFor(
+                    $month,
+                    $year,
+                    $ownerId
+                )?->value;
 
                 $compare = null;
 
                 if (
-                    $ownerId
-                    && $compareMonth !== null
+                    $compareMonth !== null
                     && $compareYear !== null
                 ) {
                     $compare = $kpi->valueFor(
                         $compareMonth,
                         $compareYear,
                         $ownerId
-                    );
+                    )?->value;
                 }
 
-                $target = $kpi
-                    ->effectiveTargetValueForPeriod(
-                        $month,
-                        $year,
-                        $ownerId
-                    );
+                $difference = null;
+
+                if (
+                    $current !== null
+                    && $compare !== null
+                ) {
+                    $difference =
+                        (float) $current
+                        - (float) $compare;
+                }
+
+                $target = $kpi->effectiveTargetValue(
+                    $ownerId,
+                    $month,
+                    $year
+                );
 
                 return [
                     'id' => $kpi->id,
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
-                    'is_global' => is_null($kpi->user_id),
-
-                    'current_value' => $current?->value,
-                    'compare_value' => $compare?->value,
-
+                    'current_value' => $current,
+                    'compare_value' => $compare,
+                    'difference' => $difference,
+                    'delta' => $difference,
+                    'target' => $target,
+                    'status' => $kpi->evaluateStatus(
+                        $current,
+                        $ownerId,
+                        $month,
+                        $year
+                    ),
                     'formatted_current' =>
                         $kpi->formatNumberOnly(
-                            $current?->value
+                            $current
                         ),
-
                     'formatted_compare' =>
                         $kpi->formatNumberOnly(
-                            $compare?->value
+                            $compare
                         ),
-
+                    'formatted_difference' =>
+                        $kpi->formatNumberOnly(
+                            $difference
+                        ),
                     'formatted_target' =>
                         $kpi->formatNumberOnly(
                             $target
-                        ),
-
-                    'status' =>
-                        $kpi->evaluateStatusForPeriod(
-                            $current?->value,
-                            $month,
-                            $year,
-                            $ownerId
-                        ),
-
-                    'delta' =>
-                        $this->delta(
-                            $current?->value,
-                            $compare?->value
                         ),
                 ];
             })
@@ -484,107 +479,153 @@ class KpiCalculationService
                 $compareYear,
                 $ownerId
             ): array {
-                $currentValues = collect(range(1, 12))
-                    ->map(
-                        fn (int $month) =>
-                            $ownerId
-                                ? $kpi->valueFor(
-                                    $month,
-                                    $year,
-                                    $ownerId
-                                )?->value
-                                : null
-                    )
-                    ->filter(
-                        fn ($value) =>
-                            $value !== null
-                    );
+                $currentValues = [];
 
-                $current = $currentValues->isNotEmpty()
-                    ? round(
-                        (float) $currentValues->sum(),
-                        2
-                    )
-                    : null;
+                for ($month = 1; $month <= 12; $month++) {
+                    $value = $kpi->valueFor(
+                        $month,
+                        $year,
+                        $ownerId
+                    )?->value;
+
+                    if ($value !== null) {
+                        $currentValues[] =
+                            (float) $value;
+                    }
+                }
+
+                $current =
+                    count($currentValues) > 0
+                        ? $this->yearlyAggregateValue(
+                            $kpi,
+                            $currentValues
+                        )
+                        : null;
 
                 $compare = null;
 
-                if (
-                    $ownerId
-                    && $compareYear !== null
-                ) {
-                    $compareValues = collect(range(1, 12))
-                        ->map(
-                            fn (int $month) =>
-                                $kpi->valueFor(
-                                    $month,
-                                    $compareYear,
-                                    $ownerId
-                                )?->value
-                        )
-                        ->filter(
-                            fn ($value) =>
-                                $value !== null
-                        );
+                if ($compareYear !== null) {
+                    $compareValues = [];
 
-                    $compare = $compareValues->isNotEmpty()
-                        ? round(
-                            (float) $compareValues->sum(),
-                            2
-                        )
-                        : null;
+                    for (
+                        $month = 1;
+                        $month <= 12;
+                        $month++
+                    ) {
+                        $value = $kpi->valueFor(
+                            $month,
+                            $compareYear,
+                            $ownerId
+                        )?->value;
+
+                        if ($value !== null) {
+                            $compareValues[] =
+                                (float) $value;
+                        }
+                    }
+
+                    if (count($compareValues) > 0) {
+                        $compare =
+                            $this->yearlyAggregateValue(
+                                $kpi,
+                                $compareValues
+                            );
+                    }
                 }
 
-                $target = $kpi
-                    ->effectiveTargetValueForPeriod(
-                        12,
-                        $year,
-                        $ownerId
-                    );
+                $difference = null;
+
+                if (
+                    $current !== null
+                    && $compare !== null
+                ) {
+                    $difference =
+                        (float) $current
+                        - (float) $compare;
+                }
+
+                $target = $kpi->effectiveTargetValue(
+                    $ownerId,
+                    12,
+                    $year
+                );
 
                 return [
                     'id' => $kpi->id,
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
-                    'is_global' => is_null($kpi->user_id),
-
                     'current_value' => $current,
                     'compare_value' => $compare,
-
+                    'difference' => $difference,
+                    'delta' => $difference,
+                    'target' => $target,
+                    'status' => $kpi->evaluateStatus(
+                        $current,
+                        $ownerId,
+                        12,
+                        $year
+                    ),
                     'formatted_current' =>
                         $kpi->formatNumberOnly(
                             $current
                         ),
-
                     'formatted_compare' =>
                         $kpi->formatNumberOnly(
                             $compare
                         ),
-
+                    'formatted_difference' =>
+                        $kpi->formatNumberOnly(
+                            $difference
+                        ),
                     'formatted_target' =>
                         $kpi->formatNumberOnly(
                             $target
-                        ),
-
-                    'status' =>
-                        $kpi->evaluateStatusForPeriod(
-                            $current,
-                            12,
-                            $year,
-                            $ownerId
-                        ),
-
-                    'delta' =>
-                        $this->delta(
-                            $current,
-                            $compare
                         ),
                 ];
             })
             ->groupBy('category');
     }
 
+    protected function yearlyAggregateValue(
+        Kpi $kpi,
+        array $values
+    ): ?float {
+        if (empty($values)) {
+            return null;
+        }
+
+        /*
+         * Pokazatelji koji predstavljaju količinu ili broj
+         * kroz godinu zbrajaju se.
+         *
+         * AFR/ASR i slični indeksi ne smiju se zbrajati.
+         */
+        if (
+            in_array(
+                $kpi->source_key,
+                [
+                    'afr',
+                    'asr',
+                ],
+                true
+            )
+        ) {
+            return round(
+                array_sum($values)
+                / count($values),
+                4
+            );
+        }
+
+        return round(
+            array_sum($values),
+            4
+        );
+    }
+        /**
+     * Godišnji KPI izvještaj grupiran po kategorijama.
+     */
     public function yearlyReportGrouped(
         int $year
     ): Collection {
@@ -600,873 +641,1539 @@ class KpiCalculationService
                 $year,
                 $ownerId
             ): array {
-                $values = collect(range(1, 12))
-                    ->mapWithKeys(
-                        fn (int $month) => [
-                            $month => $ownerId
-                                ? $kpi->valueFor(
-                                    $month,
-                                    $year,
-                                    $ownerId
-                                )?->value
-                                : null,
-                        ]
-                    );
+                $values = [];
+                $statuses = [];
+                $targets = [];
 
-                $statuses = collect(range(1, 12))
-                    ->mapWithKeys(
-                        function (int $month) use (
-                            $kpi,
-                            $year,
-                            $ownerId
-                        ): array {
-                            $value = $ownerId
-                                ? $kpi->valueFor(
-                                    $month,
-                                    $year,
-                                    $ownerId
-                                )?->value
-                                : null;
+                for ($month = 1; $month <= 12; $month++) {
+                    $value = $kpi->valueFor(
+                        $month,
+                        $year,
+                        $ownerId
+                    )?->value;
 
-                            return [
-                                $month =>
-                                    $kpi->evaluateStatusForPeriod(
-                                        $value,
-                                        $month,
-                                        $year,
-                                        $ownerId
-                                    ),
-                            ];
-                        }
-                    );
+                    $value = $value !== null
+                        ? (float) $value
+                        : null;
 
-                $targets = collect(range(1, 12))
-                    ->mapWithKeys(
-                        fn (int $month) => [
-                            $month =>
-                                $kpi
-                                    ->effectiveTargetValueForPeriod(
-                                        $month,
-                                        $year,
-                                        $ownerId
-                                    ),
-                        ]
-                    );
+                    $values[$month] = $value;
 
-                $valuesWithData = $values->filter(
-                    fn ($value) =>
-                        $value !== null
-                );
+                    $targets[$month] =
+                        $kpi->effectiveTargetValue(
+                            $ownerId,
+                            $month,
+                            $year
+                        );
 
-                $total = $valuesWithData->sum();
+                    $statuses[$month] =
+                        $kpi->evaluateStatus(
+                            $value,
+                            $ownerId,
+                            $month,
+                            $year
+                        );
+                }
 
-                $average = $valuesWithData->isNotEmpty()
-                    ? $valuesWithData->avg()
+                $existingValues = collect($values)
+                    ->filter(
+                        fn ($value): bool =>
+                            $value !== null
+                    )
+                    ->values();
+
+                $average = $existingValues->isNotEmpty()
+                    ? round(
+                        (float) $existingValues->avg(),
+                        4
+                    )
                     : null;
+
+                $total = $existingValues->isNotEmpty()
+                    ? round(
+                        (float) $existingValues->sum(),
+                        4
+                    )
+                    : null;
+
+                $target = $kpi->effectiveTargetValue(
+                    $ownerId,
+                    12,
+                    $year
+                );
 
                 return [
                     'id' => $kpi->id,
                     'name' => $kpi->name,
                     'category' => $kpi->category,
                     'unit' => $kpi->unit,
-
-                    'formatted_target' =>
-                        $kpi->formatNumberOnly(
-                            $kpi
-                                ->effectiveTargetValueForPeriod(
-                                    12,
-                                    $year,
-                                    $ownerId
-                                )
-                        ),
-
+                    'direction' => $kpi->direction,
+                    'calculation_type' =>
+                        $kpi->calculation_type,
+                    'source_key' => $kpi->source_key,
                     'values' => $values,
                     'statuses' => $statuses,
                     'targets' => $targets,
-                    'total' => $total,
                     'average' => $average,
+                    'total' => $total,
+                    'target' => $target,
+                    'formatted_target' =>
+                        $kpi->formatNumberOnly(
+                            $target
+                        ),
                 ];
             })
             ->groupBy('category');
     }
 
-    protected function delta(
-        ?float $current,
-        ?float $compare
-    ): ?float {
-        if (
-            $current === null
-            || $compare === null
-        ) {
-            return null;
-        }
-
-        return round(
-            $current - $compare,
-            2
-        );
-    }
-
     /**
-     * KPI definicije dostupne određenoj organizaciji.
+     * KPI definicije koje organizacija smije koristiti.
      *
-     * Web organizacija:
-     * - vlastiti KPI
-     * - globalni KPI za koji nema organizacijsku kopiju
+     * Organizacija vidi:
+     * - svoje KPI definicije
+     * - globalne KPI definicije za koje nema svoju kopiju
      *
-     * Cron:
-     * ista logika preko forcedOwnerId.
-     *
-     * Superadmin:
-     * vidi sve KPI definicije, ali nema organizacijske vrijednosti.
+     * Time sprječavamo duplikate istog KPI-ja.
      */
     protected function baseKpiQuery(): Builder
     {
-        $query = Kpi::query();
-
         $ownerId = $this->resolveOwnerId();
 
         /*
-         * Ako imamo konkretan owner, bilo iz weba ili cron-a,
-         * primjenjujemo organizacijsku KPI logiku.
+         * Superadmin vidi globalne KPI definicije.
          */
-        if ($ownerId) {
-            return $query->where(
-                function (Builder $q) use (
-                    $ownerId
-                ): void {
-                    $q->where(
+        if ($this->isSuperAdmin()) {
+            return Kpi::query()
+                ->whereNull('user_id');
+        }
+
+        if (! $ownerId) {
+            return Kpi::query()
+                ->whereRaw('1 = 0');
+        }
+
+        return Kpi::query()
+            ->where(function (Builder $query) use (
+                $ownerId
+            ): void {
+                $query
+                    ->where(
                         'user_id',
                         $ownerId
                     )
-                        ->orWhere(
-                            function (
-                                Builder $global
-                            ) use (
-                                $ownerId
-                            ): void {
-                                $global
-                                    ->whereNull(
-                                        'user_id'
-                                    )
-                                    ->whereNotExists(
-                                        function (
-                                            $sub
-                                        ) use (
+                    ->orWhere(function (
+                        Builder $global
+                    ) use ($ownerId): void {
+                        $global
+                            ->whereNull('user_id')
+                            ->whereNotExists(
+                                function ($sub) use (
+                                    $ownerId
+                                ): void {
+                                    $sub
+                                        ->selectRaw('1')
+                                        ->from(
+                                            'kpis as org_kpis'
+                                        )
+                                        ->where(
+                                            'org_kpis.user_id',
                                             $ownerId
+                                        )
+                                        ->whereNull(
+                                            'org_kpis.deleted_at'
+                                        )
+                                        ->where(function (
+                                            $match
                                         ): void {
-                                            $sub
-                                                ->selectRaw('1')
-                                                ->from(
-                                                    'kpis as org_kpis'
-                                                )
-                                                ->where(
-                                                    'org_kpis.user_id',
-                                                    $ownerId
-                                                )
-                                                ->whereNull(
-                                                    'org_kpis.deleted_at'
-                                                )
-                                                ->where(
-                                                    function (
-                                                        $match
-                                                    ): void {
-                                                        $match
-                                                            ->where(
-                                                                function (
-                                                                    $bySource
-                                                                ): void {
-                                                                    $bySource
-                                                                        ->whereNotNull(
-                                                                            'kpis.source_key'
-                                                                        )
-                                                                        ->whereColumn(
-                                                                            'org_kpis.source_key',
-                                                                            'kpis.source_key'
-                                                                        );
-                                                                }
-                                                            )
-                                                            ->orWhere(
-                                                                function (
-                                                                    $byName
-                                                                ): void {
-                                                                    $byName
-                                                                        ->whereNull(
-                                                                            'kpis.source_key'
-                                                                        )
-                                                                        ->whereColumn(
-                                                                            'org_kpis.name',
-                                                                            'kpis.name'
-                                                                        );
-                                                                }
-                                                            );
-                                                    }
-                                                );
-                                        }
-                                    );
-                            }
-                        );
-                }
-            );
-        }
-
-        /*
-         * Bez ownera jedino superadmin smije vidjeti
-         * KPI definicije.
-         */
-        if ($this->isSuperAdmin()) {
-            return $query;
-        }
-
-        return $query->whereRaw('1 = 0');
+                                            $match
+                                                ->where(function (
+                                                    $bySource
+                                                ): void {
+                                                    $bySource
+                                                        ->whereNotNull(
+                                                            'kpis.source_key'
+                                                        )
+                                                        ->whereColumn(
+                                                            'org_kpis.source_key',
+                                                            'kpis.source_key'
+                                                        );
+                                                })
+                                                ->orWhere(function (
+                                                    $byName
+                                                ): void {
+                                                    $byName
+                                                        ->whereNull(
+                                                            'kpis.source_key'
+                                                        )
+                                                        ->whereColumn(
+                                                            'org_kpis.name',
+                                                            'kpis.name'
+                                                        );
+                                                });
+                                        });
+                                }
+                            );
+                    });
+            });
     }
 
     /**
-     * Tenant scope za modele koji imaju vlastiti user_id.
+     * Početak i kraj mjeseca.
      */
-    protected function userScopedQuery(
-        Builder $query
-    ): Builder {
-        $ownerId = $this->resolveOwnerId();
-
-        if (! $ownerId) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        if (
-            Schema::hasColumn(
-                $query->getModel()->getTable(),
-                'user_id'
-            )
-        ) {
-            return $query->where(
-                'user_id',
-                $ownerId
-            );
-        }
-
-        /*
-         * Fail-closed:
-         * ako model nema user_id, ne smije slučajno
-         * vratiti podatke svih organizacija.
-         */
-        return $query->whereRaw('1 = 0');
-    }
-
-    /**
-     * InspectionFinding nema user_id.
-     *
-     * Ownership ide:
-     *
-     * InspectionFinding
-     * -> Inspection
-     * -> user_id
-     */
-    protected function inspectionFindingScopedQuery(
-        Builder $query
-    ): Builder {
-        $ownerId = $this->resolveOwnerId();
-
-        if (! $ownerId) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        return $query->whereHas(
-            'inspection',
-            fn (Builder $inspectionQuery) =>
-                $inspectionQuery->where(
-                    'user_id',
-                    $ownerId
-                )
-        );
-    }
-
-    protected function dateRange(
+    protected function monthRange(
         int $month,
         int $year
     ): array {
-        $start = Carbon::create(
+        $from = Carbon::create(
             $year,
             $month,
             1
-        )->startOfMonth();
+        )->startOfDay();
 
-        $end = Carbon::create(
-            $year,
-            $month,
-            1
-        )->endOfMonth();
+        $to = $from
+            ->copy()
+            ->endOfMonth()
+            ->endOfDay();
 
         return [
-            $start,
-            $end,
+            $from,
+            $to,
         ];
     }
 
-    protected function daysWithoutLta(
-        int $month,
-        int $year
-    ): ?float {
-        if (
-            ! class_exists(Incident::class)
-            || ! Schema::hasTable('incidents')
-        ) {
-            return null;
-        }
-
-        $lastLta = $this
-            ->userScopedQuery(
-                Incident::query()
-            )
-            ->where(
-                'type_of_incident',
-                'LTA'
-            )
-            ->whereNotNull(
-                'date_occurred'
-            )
-            ->orderByDesc(
-                'date_occurred'
-            )
-            ->first();
-
-        if (! $lastLta?->date_occurred) {
-            return null;
-        }
-
-        return (float) Carbon::parse(
-            $lastLta->date_occurred
-        )
-            ->startOfDay()
-            ->diffInDays(
-                now()->startOfDay()
-            );
-    }
-
+    /**
+     * Broj LTA ozljeda u mjesecu.
+     */
     protected function ltaCount(
         int $month,
         int $year
-    ): ?float {
-        if (
-            ! class_exists(Incident::class)
-            || ! Schema::hasTable('incidents')
-        ) {
-            return null;
+    ): float {
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return 0.0;
         }
 
-        [$start, $end] =
-            $this->dateRange(
-                $month,
-                $year
-            );
+        [$from, $to] = $this->monthRange(
+            $month,
+            $year
+        );
 
-        return (float) $this
-            ->userScopedQuery(
-                Incident::query()
-            )
-            ->where(
-                'type_of_incident',
-                'LTA'
-            )
-            ->whereBetween(
+        $model = new Incident();
+        $table = $model->getTable();
+
+        $query = Incident::query();
+
+        $this->applyOwnerScope(
+            $query,
+            $table,
+            $ownerId
+        );
+
+        $dateColumn = $this->firstExistingColumn(
+            $table,
+            [
                 'date_occurred',
-                [
-                    $start->toDateString(),
-                    $end->toDateString(),
-                ]
-            )
-            ->count();
+                'incident_date',
+                'date',
+            ]
+        );
+
+        if (! $dateColumn) {
+            return 0.0;
+        }
+
+        $query->whereBetween(
+            $dateColumn,
+            [
+                $from,
+                $to,
+            ]
+        );
+
+        $typeColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'type_of_incident',
+                'incident_type',
+                'type',
+                'category',
+            ]
+        );
+
+        if (! $typeColumn) {
+            return 0.0;
+        }
+
+        $query->whereRaw(
+            'LOWER(TRIM(' . $typeColumn . ')) = ?',
+            ['lta']
+        );
+
+        return (float) $query->count();
     }
 
+    /**
+     * Izgubljeni radni dani zbog LTA.
+     */
     protected function ltaLostDays(
         int $month,
         int $year
-    ): ?float {
-        if (
-            ! class_exists(Incident::class)
-            || ! Schema::hasTable('incidents')
-        ) {
-            return null;
+    ): float {
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return 0.0;
         }
 
-        [$start, $end] =
-            $this->dateRange(
-                $month,
-                $year
+        [$from, $to] = $this->monthRange(
+            $month,
+            $year
+        );
+
+        $model = new Incident();
+        $table = $model->getTable();
+
+        $query = Incident::query();
+
+        $this->applyOwnerScope(
+            $query,
+            $table,
+            $ownerId
+        );
+
+        $dateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'date_occurred',
+                'incident_date',
+                'date',
+            ]
+        );
+
+        if (! $dateColumn) {
+            return 0.0;
+        }
+
+        $query->whereBetween(
+            $dateColumn,
+            [
+                $from,
+                $to,
+            ]
+        );
+
+        $typeColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'type_of_incident',
+                'incident_type',
+                'type',
+                'category',
+            ]
+        );
+
+        if ($typeColumn) {
+            $query->whereRaw(
+                'LOWER(TRIM(' . $typeColumn . ')) = ?',
+                ['lta']
+            );
+        }
+
+        $lostDaysColumn =
+            $this->firstExistingColumn(
+                $table,
+                [
+                    'working_days_lost',
+                    'lost_working_days',
+                    'lost_days',
+                ]
             );
 
-        return (float) $this
-            ->userScopedQuery(
-                Incident::query()
-            )
-            ->where(
-                'type_of_incident',
-                'LTA'
-            )
-            ->whereBetween(
-                'date_occurred',
-                [
-                    $start->toDateString(),
-                    $end->toDateString(),
-                ]
-            )
-            ->sum(
-                'working_days_lost'
-            );
+        if (! $lostDaysColumn) {
+            return 0.0;
+        }
+
+        return (float) $query->sum(
+            $lostDaysColumn
+        );
     }
 
+    /**
+     * Broj dana bez LTA.
+     *
+     * Ovaj source_key ostavljamo podržan zbog starih
+     * KPI definicija, iako ga više ne moramo prikazivati.
+     */
+    protected function daysWithoutLta(
+        int $month,
+        int $year
+    ): float {
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return 0.0;
+        }
+
+        [, $to] = $this->monthRange(
+            $month,
+            $year
+        );
+
+        $model = new Incident();
+        $table = $model->getTable();
+
+        $query = Incident::query();
+
+        $this->applyOwnerScope(
+            $query,
+            $table,
+            $ownerId
+        );
+
+        $dateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'date_occurred',
+                'incident_date',
+                'date',
+            ]
+        );
+
+        $typeColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'type_of_incident',
+                'incident_type',
+                'type',
+                'category',
+            ]
+        );
+
+        if (
+            ! $dateColumn
+            || ! $typeColumn
+        ) {
+            return 0.0;
+        }
+
+        $lastLta = $query
+            ->whereRaw(
+                'LOWER(TRIM(' . $typeColumn . ')) = ?',
+                ['lta']
+            )
+            ->where(
+                $dateColumn,
+                '<=',
+                $to
+            )
+            ->orderByDesc(
+                $dateColumn
+            )
+            ->first();
+
+        if (! $lastLta) {
+            return 0.0;
+        }
+
+        $lastDate = Carbon::parse(
+            $lastLta->{$dateColumn}
+        )->startOfDay();
+
+        return (float) max(
+            0,
+            $lastDate->diffInDays(
+                $to->copy()->startOfDay()
+            )
+        );
+    }
+
+    /**
+ * Broj Near Miss zapažanja u odabranom mjesecu.
+ */
     protected function nearMissCount(
         int $month,
         int $year
-    ): ?float {
-        if (
-            ! class_exists(Observation::class)
-            || ! Schema::hasTable('observations')
-        ) {
-            return null;
-        }
-
-        [$start, $end] =
-            $this->dateRange(
-                $month,
-                $year
-            );
-
-        return (float) $this
-            ->userScopedQuery(
-                Observation::query()
-            )
-            ->whereBetween(
-                'incident_date',
-                [
-                    $start->toDateString(),
-                    $end->toDateString(),
-                ]
-            )
-            ->where(
-                'observation_type',
-                'near_miss'
-            )
-            ->count();
+    ): float {
+        return $this->observationCount(
+            $month,
+            $year,
+            [
+                'near miss',
+                'near_miss',
+                'nm',
+            ]
+        );
     }
 
+    /**
+     * Broj negativnih zapažanja u odabranom mjesecu.
+     */
     protected function negativeObservationCount(
         int $month,
         int $year
-    ): ?float {
-        if (
-            ! class_exists(Observation::class)
-            || ! Schema::hasTable('observations')
-        ) {
-            return null;
-        }
-
-        [$start, $end] =
-            $this->dateRange(
-                $month,
-                $year
-            );
-
-        return (float) $this
-            ->userScopedQuery(
-                Observation::query()
-            )
-            ->whereBetween(
-                'incident_date',
-                [
-                    $start->toDateString(),
-                    $end->toDateString(),
-                ]
-            )
-            ->where(
-                'observation_type',
-                'negative'
-            )
-            ->count();
+    ): float {
+        return $this->observationCount(
+            $month,
+            $year,
+            [
+                'negative observation',
+                'negative_observation',
+                'negative',
+                'negativno',
+                'negativno zapažanje',
+            ]
+        );
     }
 
-    protected function inspectionCount(
-        int $month,
-        int $year
-    ): ?float {
-        if (
-            ! class_exists(Inspection::class)
-            || ! Schema::hasTable('inspections')
-        ) {
-            return null;
-        }
-
-        [$start, $end] =
-            $this->dateRange(
-                $month,
-                $year
-            );
-
-        return (float) $this
-            ->userScopedQuery(
-                Inspection::query()
-            )
-            ->whereBetween(
-                'performed_at',
-                [
-                    $start->toDateString(),
-                    $end->toDateString(),
-                ]
-            )
-            ->count();
-    }
-
-    protected function correctiveActionCount(
+    /**
+     * Broji zapažanja određene vrste u odabranom mjesecu.
+     *
+     * Usporedba vrste je case-insensitive i ignorira
+     * početne/završne razmake.
+     */
+    protected function observationCount(
         int $month,
         int $year,
-        array $statuses
-    ): ?float {
-        if (
-            ! class_exists(
-                InspectionFinding::class
-            )
-            || ! Schema::hasTable(
-                'inspection_findings'
-            )
-        ) {
-            return null;
+        array $types
+    ): float {
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return 0.0;
         }
 
-        [$start, $end] =
-            $this->dateRange(
-                $month,
-                $year
-            );
+        [$from, $to] = $this->monthRange(
+            $month,
+            $year
+        );
 
-        return (float) $this
-            ->inspectionFindingScopedQuery(
-                InspectionFinding::query()
+        $model = new Observation();
+        $table = $model->getTable();
+
+        $query = Observation::query();
+
+        $this->applyOwnerScope(
+            $query,
+            $table,
+            $ownerId
+        );
+
+        $dateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'incident_date',
+                'observation_date',
+                'date',
+            ]
+        );
+
+        $typeColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'observation_type',
+                'type',
+            ]
+        );
+
+        if (
+            ! $dateColumn
+            || ! $typeColumn
+        ) {
+            return 0.0;
+        }
+
+        $normalizedTypes = collect($types)
+            ->map(
+                fn ($type): string =>
+                    mb_strtolower(
+                        trim((string) $type)
+                    )
             )
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($normalizedTypes)) {
+            return 0.0;
+        }
+
+        $query
             ->whereBetween(
-                'created_at',
+                $dateColumn,
                 [
-                    $start,
-                    $end,
+                    $from,
+                    $to,
                 ]
             )
             ->whereIn(
-                'workflow_status',
-                $statuses
-            )
-            ->count();
+                DB::raw(
+                    'LOWER(TRIM(' . $typeColumn . '))'
+                ),
+                $normalizedTypes
+            );
+
+        return (float) $query->count();
     }
 
+    /**
+     * Interni nadzori u mjesecu.
+     */
+    protected function inspectionCount(
+        int $month,
+        int $year
+    ): float {
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return 0.0;
+        }
+
+        [$from, $to] = $this->monthRange(
+            $month,
+            $year
+        );
+
+        $model = new Inspection();
+        $table = $model->getTable();
+
+        $query = Inspection::query();
+
+        $this->applyOwnerScope(
+            $query,
+            $table,
+            $ownerId
+        );
+
+        $dateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'inspection_date',
+                'date',
+                'performed_at',
+                'created_at',
+            ]
+        );
+
+        if (! $dateColumn) {
+            return 0.0;
+        }
+
+        $query->whereBetween(
+            $dateColumn,
+            [
+                $from,
+                $to,
+            ]
+        );
+
+        return (float) $query->count();
+    }
+
+    /**
+     * Broj otvorenih korektivnih radnji na kraju odabranog mjeseca.
+     *
+     * Otvorenom smatramo svako zapažanje koje ima potrebnu radnju
+     * i koje do kraja odabranog mjeseca nije završeno.
+     */
+    protected function openCorrectiveActionCount(
+        int $month,
+        int $year
+    ): float {
+        $query = $this->openObservationCorrectiveActionsQuery(
+            $month,
+            $year
+        );
+
+        return $query
+            ? (float) $query->count()
+            : 0.0;
+    }
+
+    /**
+     * Broj korektivnih radnji koje su zatvorene baš u
+     * odabranom mjesecu.
+     */
+    protected function closedCorrectiveActionCount(
+        int $month,
+        int $year
+    ): float {
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return 0.0;
+        }
+
+        [$from, $to] = $this->monthRange(
+            $month,
+            $year
+        );
+
+        $model = new Observation();
+        $table = $model->getTable();
+
+        $query = Observation::query();
+
+        $this->applyOwnerScope(
+            $query,
+            $table,
+            $ownerId
+        );
+
+        $this->applyCorrectiveActionPresenceFilter(
+            $query,
+            $table
+        );
+
+        $statusColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'status',
+                'workflow_status',
+            ]
+        );
+
+        $closedDateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'completed_at',
+                'completion_date',
+                'completed_date',
+                'closed_at',
+                'closed_date',
+                'date_closed',
+                'finished_at',
+                'finished_date',
+            ]
+        );
+
+        /*
+         * Najtočnija varijanta: koristimo stvarni datum zatvaranja.
+         */
+        if ($closedDateColumn) {
+            $query->whereBetween(
+                $closedDateColumn,
+                [
+                    $from,
+                    $to,
+                ]
+            );
+
+            return (float) $query->count();
+        }
+
+        /*
+         * Ako stara baza još nema poseban datum zatvaranja,
+         * kao sigurnosni fallback koristimo updated_at, ali samo
+         * za zapise koji su trenutno završeni.
+         */
+        if (
+            ! $statusColumn
+            || ! Schema::hasColumn(
+                $table,
+                'updated_at'
+            )
+        ) {
+            return 0.0;
+        }
+
+        $query
+            ->whereIn(
+                $statusColumn,
+                $this->observationClosedStatusVariants()
+            )
+            ->whereBetween(
+                'updated_at',
+                [
+                    $from,
+                    $to,
+                ]
+            );
+
+        return (float) $query->count();
+    }
+
+    /**
+     * Broj korektivnih radnji koje su na kraju odabranog
+     * mjeseca bile u statusu "U tijeku".
+     */
+    protected function inProgressCorrectiveActionCount(
+        int $month,
+        int $year
+    ): float {
+        $query = $this->openObservationCorrectiveActionsQuery(
+            $month,
+            $year
+        );
+
+        if (! $query) {
+            return 0.0;
+        }
+
+        $table = (new Observation())->getTable();
+
+        $statusColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'status',
+                'workflow_status',
+            ]
+        );
+
+        if (! $statusColumn) {
+            return 0.0;
+        }
+
+        $query->whereIn(
+            $statusColumn,
+            $this->observationInProgressStatusVariants()
+        );
+
+        return (float) $query->count();
+    }
+
+    /**
+     * Ukupan broj dana svih korektivnih radnji koje su još
+     * otvorene na kraju odabranog mjeseca.
+     *
+     * Primjer:
+     * - radnja A otvorena 10 dana
+     * - radnja B otvorena 20 dana
+     * - radnja C otvorena 35 dana
+     * KPI vrijednost = 65 dana.
+     *
+     * Dani se računaju od datuma zapažanja / nastanka radnje,
+     * a ne samo od prekoračenja roka.
+     */
     protected function correctiveActionDelayDays(
         int $month,
         int $year
-    ): ?float {
-        if (
-            ! class_exists(
-                InspectionFinding::class
-            )
-            || ! Schema::hasTable(
-                'inspection_findings'
-            )
-        ) {
-            return null;
+    ): float {
+        $query = $this->openObservationCorrectiveActionsQuery(
+            $month,
+            $year
+        );
+
+        if (! $query) {
+            return 0.0;
         }
 
-        [$start, $end] =
-            $this->dateRange(
-                $month,
-                $year
-            );
+        [, $to] = $this->monthRange(
+            $month,
+            $year
+        );
 
-        $records = $this
-            ->inspectionFindingScopedQuery(
-                InspectionFinding::query()
-            )
-            ->whereBetween(
+        $table = (new Observation())->getTable();
+
+        $startDateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'incident_date',
+                'observation_date',
+                'date',
                 'created_at',
-                [
-                    $start,
-                    $end,
-                ]
-            )
-            ->whereNotNull(
-                'due_date'
-            )
-            ->get([
-                'due_date',
-                'workflow_status',
-            ]);
+            ]
+        );
 
-        $delay = 0;
-
-        foreach ($records as $record) {
-            if (
-                in_array(
-                    $record->workflow_status,
-                    [
-                        'closed',
-                        'resolved_no_action',
-                        'converted_to_observation',
-                    ],
-                    true
-                )
-            ) {
-                continue;
-            }
-
-            $due = Carbon::parse(
-                $record->due_date
-            )->startOfDay();
-
-            $today = now()->startOfDay();
-
-            if ($due->lt($today)) {
-                $delay += $due->diffInDays(
-                    $today
-                );
-            }
+        if (! $startDateColumn) {
+            return 0.0;
         }
 
-        return (float) $delay;
-    }
+        $findings = $query->get([
+            'id',
+            $startDateColumn,
+        ]);
 
-    protected function nonHazardousWasteKg(
-        int $month,
-        int $year
-    ): ?float {
-        return $this->sumOntoWasteOutput(
-            $month,
-            $year,
+        $endDate = $to->copy()->startOfDay();
+
+        $days = $findings->sum(
             function (
-                string $normalizedCode,
-                bool $hasStar
-            ): bool {
-                return ! $hasStar
-                    && $normalizedCode !== '200301';
-            }
-        );
-    }
+                Observation $observation
+            ) use (
+                $startDateColumn,
+                $endDate
+            ): int {
+                if (! $observation->{$startDateColumn}) {
+                    return 0;
+                }
 
-    protected function hazardousWasteKg(
-        int $month,
-        int $year
-    ): ?float {
-        return $this->sumOntoWasteOutput(
-            $month,
-            $year,
-            function (
-                string $normalizedCode,
-                bool $hasStar
-            ): bool {
-                return $hasStar;
-            }
-        );
-    }
+                $startDate = Carbon::parse(
+                    $observation->{$startDateColumn}
+                )->startOfDay();
 
-    protected function municipalWasteKg(
-        int $month,
-        int $year
-    ): ?float {
-        return $this->sumOntoWasteOutput(
-            $month,
-            $year,
-            function (
-                string $normalizedCode,
-                bool $hasStar
-            ): bool {
-                return $normalizedCode === '200301';
-            }
-        );
-    }
+                if ($startDate->greaterThan($endDate)) {
+                    return 0;
+                }
 
-    protected function sumOntoWasteOutput(
-        int $month,
-        int $year,
-        callable $filter
-    ): ?float {
-        if (
-            ! class_exists(OntoEntry::class)
-            || ! Schema::hasTable('onto_entries')
-        ) {
-            return null;
-        }
-
-        [$start, $end] =
-            $this->dateRange(
-                $month,
-                $year
-            );
-
-        $entries = $this
-            ->userScopedQuery(
-                OntoEntry::query()
-                    ->with([
-                        'ontoRecord.wasteType',
-                    ])
-            )
-            ->whereDate(
-                'entry_date',
-                '>=',
-                $start->toDateString()
-            )
-            ->whereDate(
-                'entry_date',
-                '<=',
-                $end->toDateString()
-            )
-            ->get();
-
-        $sum = 0.0;
-
-        foreach ($entries as $entry) {
-            $code = (string) (
-                $entry
-                    ->ontoRecord
-                    ?->wasteType
-                    ?->waste_code
-                ?? ''
-            );
-
-            $normalizedCode =
-                preg_replace(
-                    '/[^0-9]/',
-                    '',
-                    $code
-                );
-
-            $hasStar =
-                str_contains(
-                    $code,
-                    '*'
-                );
-
-            if (
-                $filter(
-                    $normalizedCode,
-                    $hasStar
-                )
-            ) {
-                $sum += (float) (
-                    $entry->output_kg
-                    ?: 0
+                return $startDate->diffInDays(
+                    $endDate
                 );
             }
-        }
-
-        return round(
-            $sum,
-            2
         );
+
+        return (float) $days;
     }
 
-    protected function manualLinkedValue(
-        string $kpiName,
+    /**
+     * Osnovni query za korektivne radnje iz modula Zapažanja
+     * koje su otvorene na kraju odabranog mjeseca.
+     */
+    protected function openObservationCorrectiveActionsQuery(
         int $month,
         int $year
-    ): ?float {
+    ): ?Builder {
         $ownerId = $this->resolveOwnerId();
 
         if (! $ownerId) {
             return null;
         }
 
-        $kpi = Kpi::query()
-            ->where(
-                'name',
-                $kpiName
-            )
-            ->where(
-                function (
-                    Builder $query
-                ) use (
-                    $ownerId
-                ): void {
-                    $query
-                        ->where(
-                            'user_id',
-                            $ownerId
-                        )
-                        ->orWhereNull(
-                            'user_id'
-                        );
-                }
-            )
-            /*
-             * Organizacijski KPI ima prednost
-             * pred globalnim KPI-jem istog naziva.
-             */
-            ->orderByRaw(
-                'CASE WHEN user_id IS NULL THEN 1 ELSE 0 END'
-            )
-            ->first();
+        [, $to] = $this->monthRange(
+            $month,
+            $year
+        );
 
-        if (! $kpi) {
-            return null;
+        $model = new Observation();
+        $table = $model->getTable();
+
+        $query = Observation::query();
+
+        $this->applyOwnerScope(
+            $query,
+            $table,
+            $ownerId
+        );
+
+        $this->applyCorrectiveActionPresenceFilter(
+            $query,
+            $table
+        );
+
+        $startDateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'incident_date',
+                'observation_date',
+                'date',
+                'created_at',
+            ]
+        );
+
+        if ($startDateColumn) {
+            $query->where(
+                $startDateColumn,
+                '<=',
+                $to
+            );
         }
 
-        return $kpi->valueFor(
-            $month,
-            $year,
-            $ownerId
-        )?->value;
+        $statusColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'status',
+                'workflow_status',
+            ]
+        );
+
+        $closedDateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'completed_at',
+                'completion_date',
+                'completed_date',
+                'closed_at',
+                'closed_date',
+                'date_closed',
+                'finished_at',
+                'finished_date',
+            ]
+        );
+
+        /*
+         * Ako imamo datum zatvaranja, možemo korektno rekonstruirati
+         * stanje i za stare mjesece: radnja je bila otvorena ako nije
+         * zatvorena ili je zatvorena tek nakon kraja tog mjeseca.
+         */
+        if ($closedDateColumn) {
+            $query->where(
+                function (Builder $subQuery) use (
+                    $closedDateColumn,
+                    $to
+                ): void {
+                    $subQuery
+                        ->whereNull(
+                            $closedDateColumn
+                        )
+                        ->orWhere(
+                            $closedDateColumn,
+                            '>',
+                            $to
+                        );
+                }
+            );
+
+            return $query;
+        }
+
+        /*
+         * Fallback za staru strukturu bez datuma zatvaranja:
+         * gledamo trenutačni status.
+         */
+        if ($statusColumn) {
+            $query->whereNotIn(
+                $statusColumn,
+                $this->observationClosedStatusVariants()
+            );
+        }
+
+        return $query;
     }
 
+    /**
+     * U KPI korektivnih radnji ulaze samo zapažanja koja stvarno
+     * imaju upisanu potrebnu/korektivnu radnju.
+     */
+    protected function applyCorrectiveActionPresenceFilter(
+        Builder $query,
+        string $table
+    ): void {
+        $actionColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'corrective_action',
+                'required_action',
+                'action_required',
+                'action',
+                'needed_action',
+            ]
+        );
+
+        /*
+         * Ako postoji stupac za radnju, isključujemo prazne zapise.
+         * Ako ne postoji, ne nagađamo drugi stupac.
+         */
+        if ($actionColumn) {
+            $query
+                ->whereNotNull(
+                    $actionColumn
+                )
+                ->whereRaw(
+                    'TRIM(' . $actionColumn . ") <> ''"
+                );
+        }
+    }
+
+    protected function observationClosedStatusVariants(): array
+    {
+        return [
+            'Complete',
+            'complete',
+            'Completed',
+            'completed',
+            'Closed',
+            'closed',
+            'Završeno',
+            'završeno',
+            'Zatvoreno',
+            'zatvoreno',
+            'resolved',
+            'Resolved',
+        ];
+    }
+
+    protected function observationInProgressStatusVariants(): array
+    {
+        return [
+            'In progress',
+            'in progress',
+            'in_progress',
+            'U tijeku',
+            'u tijeku',
+            'u_tijeku',
+            'ongoing',
+            'Ongoing',
+        ];
+    }
+
+    /**
+     * AFR = broj LTA × 1.000.000 / broj odrađenih sati.
+     *
+     * Ključna izmjena:
+     * broj sati tražimo po organizaciji, mjesecu i godini,
+     * ne samo preko konkretnog KPI ID-a.
+     *
+     * Tako formula radi i kada je ručni KPI organizacijska
+     * kopija globalnog KPI-ja.
+     */
     protected function calculateAfr(
         int $month,
         int $year
     ): ?float {
+        $hours = $this->workedHours(
+            $month,
+            $year
+        );
+
+        if (
+            $hours === null
+            || $hours <= 0
+        ) {
+            return null;
+        }
+
+        /*
+         * LTA uzimamo izravno iz Incidenata.
+         * Time AFR ne može koristiti staru spremljenu KPI vrijednost.
+         */
         $lta = $this->ltaCount(
             $month,
             $year
         );
 
-        $hours = $this->manualLinkedValue(
-            'Ukupan broj odrađenih radnih sati',
-            $month,
-            $year
-        );
-
-        if (
-            $lta === null
-            || $hours === null
-            || $hours <= 0
-        ) {
-            return null;
-        }
-
         return round(
-            ($lta * 1000000)
+            (
+                $lta
+                * 1000000
+            )
             / $hours,
             4
         );
     }
 
+    /**
+     * ASR = izgubljeni radni dani × 1.000.000
+     *       / broj odrađenih sati.
+     */
     protected function calculateAsr(
         int $month,
         int $year
     ): ?float {
-        $lostDays = $this->ltaLostDays(
-            $month,
-            $year
-        );
-
-        $hours = $this->manualLinkedValue(
-            'Ukupan broj odrađenih radnih sati',
+        $hours = $this->workedHours(
             $month,
             $year
         );
 
         if (
-            $lostDays === null
-            || $hours === null
+            $hours === null
             || $hours <= 0
         ) {
             return null;
         }
 
+        /*
+         * Izgubljene dane uzimamo izravno iz Incidenata.
+         */
+        $lostDays = $this->ltaLostDays(
+            $month,
+            $year
+        );
+
         return round(
-            ($lostDays * 1000000)
+            (
+                $lostDays
+                * 1000000
+            )
             / $hours,
             4
         );
+    }
+
+    /**
+     * Dohvaća ručno uneseni broj odrađenih sati.
+     *
+     * Ovo je važno i za Dashboard i za AFR/ASR.
+     */
+    protected function workedHours(
+        int $month,
+        int $year
+    ): ?float {
+        return $this->metricValue(
+            null,
+            [
+                'Ukupan broj odrađenih radnih sati',
+                'Ukupno odrađenih radnih sati',
+            ],
+            $month,
+            $year
+        );
+    }
+
+    /**
+     * Pronalazi vrijednost KPI-ja neovisno o tome je li
+     * KPI globalni ili organizacijska kopija.
+     *
+     * Time AFR/ASR više nisu vezani za jedan fiksni kpi_id.
+     */
+    protected function metricValue(
+        ?string $sourceKey,
+        array $names,
+        int $month,
+        int $year
+    ): ?float {
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return null;
+        }
+
+        $kpiIds = Kpi::query()
+            ->where(function (
+                Builder $query
+            ) use (
+                $ownerId
+            ): void {
+                $query
+                    ->whereNull('user_id')
+                    ->orWhere(
+                        'user_id',
+                        $ownerId
+                    );
+            })
+            ->where(function (
+                Builder $query
+            ) use (
+                $sourceKey,
+                $names
+            ): void {
+                $hasCondition = false;
+
+                if ($sourceKey !== null) {
+                    $query->where(
+                        'source_key',
+                        $sourceKey
+                    );
+
+                    $hasCondition = true;
+                }
+
+                if (! empty($names)) {
+                    if ($hasCondition) {
+                        $query->orWhereIn(
+                            'name',
+                            $names
+                        );
+                    } else {
+                        $query->whereIn(
+                            'name',
+                            $names
+                        );
+                    }
+                }
+            })
+            ->pluck('id');
+
+        if ($kpiIds->isEmpty()) {
+            return null;
+        }
+
+        /*
+         * Ako postoje i globalni i organizacijski KPI,
+         * tražimo stvarnu vrijednost organizacije.
+         *
+         * KpiValue ionako nosi user_id organizacije.
+         */
+        $value = KpiValue::query()
+            ->where(
+                'user_id',
+                $ownerId
+            )
+            ->whereIn(
+                'kpi_id',
+                $kpiIds
+            )
+            ->where(
+                'month',
+                $month
+            )
+            ->where(
+                'year',
+                $year
+            )
+            ->orderByDesc('updated_at')
+            ->first();
+
+        return $value?->value !== null
+            ? (float) $value->value
+            : null;
+    }
+        /**
+     * Neopasni otpad predan u odabranom mjesecu.
+     */
+    protected function nonHazardousWasteKg(
+        int $month,
+        int $year
+    ): float {
+        return $this->wasteKgByType(
+            $month,
+            $year,
+            'non_hazardous'
+        );
+    }
+
+    /**
+     * Opasni otpad predan u odabranom mjesecu.
+     */
+    protected function hazardousWasteKg(
+        int $month,
+        int $year
+    ): float {
+        return $this->wasteKgByType(
+            $month,
+            $year,
+            'hazardous'
+        );
+    }
+
+    /**
+     * Miješani komunalni otpad predan u odabranom mjesecu.
+     */
+    protected function municipalWasteKg(
+        int $month,
+        int $year
+    ): float {
+        return $this->wasteKgByType(
+            $month,
+            $year,
+            'municipal'
+        );
+    }
+
+    /**
+     * Zbraja izlaz otpada iz ONTO evidencije.
+     *
+     * Funkcija je namjerno tolerantna na različite nazive
+     * stupaca kako bi radila i sa starijim verzijama modula.
+     */
+    protected function wasteKgByType(
+        int $month,
+        int $year,
+        string $type
+    ): float {
+        $ownerId = $this->resolveOwnerId();
+
+        if (! $ownerId) {
+            return 0.0;
+        }
+
+        /*
+         * Ako projekt nema ONTO model, KPI ne smije
+         * srušiti cijeli Dashboard.
+         */
+        $modelClass = $this->resolveOntoModelClass();
+
+        if (! $modelClass) {
+            return 0.0;
+        }
+
+        $model = new $modelClass();
+        $table = $model->getTable();
+
+        [$from, $to] = $this->monthRange(
+            $month,
+            $year
+        );
+
+        /** @var Builder $query */
+        $query = $modelClass::query();
+
+        $this->applyOwnerScope(
+            $query,
+            $table,
+            $ownerId
+        );
+
+        $dateColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'entry_date',
+                'handover_date',
+                'date',
+                'created_at',
+            ]
+        );
+
+        if (! $dateColumn) {
+            return 0.0;
+        }
+
+        $query->whereBetween(
+            $dateColumn,
+            [
+                $from,
+                $to,
+            ]
+        );
+
+        /*
+         * U ONTO evidenciji KPI pratimo izlaz otpada.
+         */
+        $outputColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'output_kg',
+                'quantity_kg',
+                'weight_kg',
+                'amount_kg',
+            ]
+        );
+
+        if (! $outputColumn) {
+            return 0.0;
+        }
+
+        /*
+         * Pokušavamo pronaći stupac koji označava vrstu
+         * otpada. Ako ga nema na samom ONTO zapisu,
+         * funkcija neće nagađati kategoriju.
+         */
+        $typeColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'waste_type',
+                'waste_category',
+                'category',
+                'type',
+            ]
+        );
+
+        if (! $typeColumn) {
+            return 0.0;
+        }
+
+        $variants = match ($type) {
+            'hazardous' => [
+                'hazardous',
+                'Hazardous',
+                'opasni',
+                'Opasni',
+                'opasan',
+                'Opasan',
+                'opasni otpad',
+                'Opasni otpad',
+            ],
+
+            'non_hazardous' => [
+                'non_hazardous',
+                'non-hazardous',
+                'Non hazardous',
+                'neopasni',
+                'Neopasni',
+                'neopasan',
+                'Neopasan',
+                'neopasni otpad',
+                'Neopasni otpad',
+            ],
+
+            'municipal' => [
+                'municipal',
+                'Municipal',
+                'mixed_municipal',
+                'miješani komunalni',
+                'Miješani komunalni',
+                'miješani komunalni otpad',
+                'Miješani komunalni otpad',
+            ],
+
+            default => [
+                $type,
+            ],
+        };
+
+        $query->whereIn(
+            $typeColumn,
+            $variants
+        );
+
+        return round(
+            (float) $query->sum(
+                $outputColumn
+            ),
+            4
+        );
+    }
+
+    /**
+     * Pronalazi ONTO model koji postoji u aplikaciji.
+     */
+    protected function resolveOntoModelClass(): ?string
+    {
+        $candidates = [
+            \App\Models\Onto::class,
+            \App\Models\OntoEntry::class,
+            \App\Models\WasteOnto::class,
+            \App\Models\WasteEntry::class,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (class_exists($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Primjenjuje tenant/organization ograničenje na model.
+     *
+     * Prioritet:
+     * 1. user_id
+     * 2. owner_id
+     *
+     * Ako model nema nijedan od tih stupaca, query ostaje
+     * nepromijenjen jer neki child modeli pripadaju
+     * organizaciji preko roditeljskog zapisa.
+     */
+    protected function applyOwnerScope(
+        Builder $query,
+        string $table,
+        int $ownerId
+    ): Builder {
+        if (
+            Schema::hasColumn(
+                $table,
+                'user_id'
+            )
+        ) {
+            return $query->where(
+                "{$table}.user_id",
+                $ownerId
+            );
+        }
+
+        if (
+            Schema::hasColumn(
+                $table,
+                'owner_id'
+            )
+        ) {
+            return $query->where(
+                "{$table}.owner_id",
+                $ownerId
+            );
+        }
+
+        return $query;
+    }
+
+    /**
+     * Vraća prvi postojeći stupac iz liste kandidata.
+     */
+    protected function firstExistingColumn(
+        string $table,
+        array $columns
+    ): ?string {
+        foreach ($columns as $column) {
+            if (
+                Schema::hasColumn(
+                    $table,
+                    $column
+                )
+            ) {
+                return $column;
+            }
+        }
+
+        return null;
     }
 }

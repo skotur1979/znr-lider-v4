@@ -1,13 +1,17 @@
 <x-filament-panels::page>
 @php
     $chartData = collect($chartRows ?? [])
-        ->filter(fn ($row) => $row['current_value'] !== null || $row['compare_value'] !== null)
+        ->filter(
+            fn ($row) =>
+                ($row['current_value'] ?? null) !== null
+                || ($row['compare_value'] ?? null) !== null
+        )
         ->values();
 
     $barMax = $chartData->flatMap(function ($row) {
         return array_filter([
-            $row['current_value'],
-            $row['compare_value'],
+            $row['current_value'] ?? null,
+            $row['compare_value'] ?? null,
         ], fn ($v) => $v !== null);
     })->max();
 
@@ -566,27 +570,36 @@
                     <tbody>
                         @foreach ($rows as $row)
                             @php
-                                $statusText = match($row['status']) {
+                                $status = $row['status'] ?? 'neutral';
+
+                                $statusText = match($status) {
                                     'success' => 'U cilju',
                                     'warning' => 'Upozorenje',
                                     'danger' => 'Izvan cilja',
                                     default => 'Bez cilja',
                                 };
 
-                                $statusClass = match($row['status']) {
+                                $statusClass = match($status) {
                                     'success' => 'success',
                                     'warning' => 'warning',
                                     'danger' => 'danger',
                                     default => 'neutral',
                                 };
+
+                                $delta = $row['delta'] ?? null;
                             @endphp
                             <tr>
-                                <td class="kpi-left">{{ $row['name'] }}</td>
-                                <td class="kpi-center">{{ $row['unit'] ?: '-' }}</td>
-                                <td class="kpi-right">{{ $row['formatted_current'] }}</td>
-                                <td class="kpi-right">{{ $row['formatted_compare'] }}</td>
-                                <td class="kpi-right">{{ $row['delta'] !== null ? number_format($row['delta'], 2, ',', '.') : '-' }}</td>
-                                <td class="kpi-right">{{ $row['formatted_target'] }}</td>
+                                <td class="kpi-left">{{ $row['name'] ?? '-' }}</td>
+                                <td class="kpi-center">{{ $row['unit'] ?? '-' }}</td>
+                                <td class="kpi-right">{{ $row['formatted_current'] ?? '-' }}</td>
+                                <td class="kpi-right">{{ $row['formatted_compare'] ?? '-' }}</td>
+                                <td class="kpi-right">
+                                    {{ $delta !== null
+                                        ? number_format((float) $delta, 2, ',', '.')
+                                        : '-'
+                                    }}
+                                </td>
+                                <td class="kpi-right">{{ $row['formatted_target'] ?? '-' }}</td>
                                 <td class="kpi-center">
                                     <span class="kpi-badge {{ $statusClass }}">{{ $statusText }}</span>
                                 </td>
@@ -594,7 +607,7 @@
                                 @if(!auth()->user()?->isSuperAdmin())
                                     <button
                                         type="button"
-                                        wire:click="openTargetModal({{ $row['id'] }})"
+                                        wire:click="openTargetModal({{ (int) ($row['id'] ?? 0) }})"
                                         class="kpi-target-btn"
                                     >
                                         Cilj
@@ -674,17 +687,20 @@
             <div class="kpi-bars">
                 @forelse ($chartData as $row)
                     @php
-                        $currentWidth = $row['current_value'] !== null
-                            ? max((($row['current_value'] / $barMax) * 100), 2)
+                        $currentValue = $row['current_value'] ?? null;
+                        $compareValue = $row['compare_value'] ?? null;
+
+                        $currentWidth = $currentValue !== null
+                            ? max((($currentValue / $barMax) * 100), 2)
                             : 0;
 
-                        $compareWidth = $row['compare_value'] !== null
-                            ? max((($row['compare_value'] / $barMax) * 100), 2)
+                        $compareWidth = $compareValue !== null
+                            ? max((($compareValue / $barMax) * 100), 2)
                             : 0;
                     @endphp
 
                     <div class="kpi-bar-row">
-                        <div class="kpi-bar-label">{{ $row['name'] }}</div>
+                        <div class="kpi-bar-label">{{ $row['name'] ?? '-' }}</div>
 
                         <div class="kpi-bar-stack">
                             <div class="kpi-bar-track">
@@ -699,12 +715,12 @@
                         </div>
 
                         <div class="kpi-bar-value">
-                            {{ $row['formatted_current'] }}
+                            {{ $row['formatted_current'] ?? '-' }}
                         </div>
 
                         <div class="kpi-bar-value kpi-bar-muted">
                             @if($hasCompare)
-                                {{ $row['formatted_compare'] }}
+                                {{ $row['formatted_compare'] ?? '-' }}
                             @else
                                 -
                             @endif

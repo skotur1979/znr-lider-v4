@@ -8,27 +8,29 @@ use App\Services\KpiCalculationService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ListKpis extends ListRecords
 {
     protected static string $resource = KpiResource::class;
 
-    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
-{
-    return new \Illuminate\Support\HtmlString('
-        <div class="flex items-center gap-2">
-            <span>KPI</span>
+    public function getHeading(): string|Htmlable
+    {
+        return new HtmlString('
+            <div class="flex items-center gap-2">
+                <span>KPI</span>
 
-            <span
-                title="KPI = Key Performance Indicators (Ključni pokazatelji uspješnosti)"
-                class="cursor-help text-primary-500"
-            >
-                ⓘ
-            </span>
-        </div>
-    ');
-}
+                <span
+                    title="KPI = Key Performance Indicators (Ključni pokazatelji uspješnosti)"
+                    class="cursor-help text-primary-500"
+                >
+                    ⓘ
+                </span>
+            </div>
+        ');
+    }
 
     protected function getHeaderActions(): array
     {
@@ -37,23 +39,29 @@ class ListKpis extends ListRecords
                 ->label('KPI Dashboard')
                 ->icon('heroicon-o-chart-bar-square')
                 ->color('info')
-                ->url(static::getResource()::getUrl('dashboard')),
+                ->url(
+                    static::getResource()::getUrl('dashboard')
+                ),
 
             Action::make('reports')
                 ->label('Izvještaji')
                 ->icon('heroicon-o-document-chart-bar')
                 ->color('gray')
-                ->url(static::getResource()::getUrl('reports')),
+                ->url(
+                    static::getResource()::getUrl('reports')
+                ),
 
-            Action::make('bulk_entry')
-                ->label('Bulk unos')
+            Action::make('manual_entry')
+                ->label('Ručni unos')
                 ->icon('heroicon-o-table-cells')
                 ->color('warning')
                 ->visible(
                     fn (): bool =>
                         auth()->user()?->isSuperAdmin() !== true
                 )
-                ->url(static::getResource()::getUrl('bulk-entry')),
+                ->url(
+                    static::getResource()::getUrl('bulk-entry')
+                ),
 
             Action::make('generate_current_month')
                 ->label('Ažuriraj tekući mjesec')
@@ -64,19 +72,36 @@ class ListKpis extends ListRecords
                     fn (): bool =>
                         auth()->user()?->isSuperAdmin() !== true
                 )
-                ->modalHeading('Ažuriranje KPI vrijednosti')
-                ->modalDescription('Sustav će ponovno izračunati automatske KPI vrijednosti za tekući mjesec. Postojeće vrijednosti za isti mjesec bit će ažurirane, a ručni KPI unosi neće se mijenjati.')
-                ->modalSubmitActionLabel('Ažuriraj KPI')
-                ->action(function () {
-                    $result = app(KpiCalculationService::class)
-                        ->generateForMonth(now()->month, now()->year);
+                ->modalHeading(
+                    'Ažuriranje automatskih KPI vrijednosti'
+                )
+                ->modalDescription(
+                    'Sustav će ponovno izračunati automatske i formula KPI vrijednosti za tekući mjesec. '
+                    . 'Postojeće vrijednosti za isti mjesec bit će ažurirane. '
+                    . 'Ručno unesene KPI vrijednosti neće se mijenjati.'
+                )
+                ->modalSubmitActionLabel(
+                    'Ažuriraj KPI'
+                )
+                ->action(function (): void {
+                    $result = app(
+                        KpiCalculationService::class
+                    )->generateForMonth(
+                        now()->month,
+                        now()->year
+                    );
 
                     Notification::make()
-                        ->title('KPI vrijednosti su ažurirane.')
+                        ->title(
+                            'KPI vrijednosti su ažurirane.'
+                        )
                         ->body(
-                            'Kreirano: ' . $result['generated'] .
-                            ' | Ažurirano: ' . $result['updated'] .
-                            ' | Preskočeno: ' . $result['skipped']
+                            'Kreirano: '
+                            . ($result['generated'] ?? 0)
+                            . ' | Ažurirano: '
+                            . ($result['updated'] ?? 0)
+                            . ' | Preskočeno: '
+                            . ($result['skipped'] ?? 0)
                         )
                         ->success()
                         ->send();
@@ -84,12 +109,16 @@ class ListKpis extends ListRecords
 
             Action::make('exportExcel')
                 ->label('Izvoz u Excel')
-                ->icon('heroicon-o-document-arrow-down')
+                ->icon(
+                    'heroicon-o-document-arrow-down'
+                )
                 ->color('success')
                 ->action(function () {
                     return Excel::download(
                         new KpisExport(),
-                        'kpi-' . now()->format('Y-m-d') . '.xlsx'
+                        'kpi-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
                     );
                 }),
 
@@ -101,7 +130,9 @@ class ListKpis extends ListRecords
                     fn (): bool =>
                         KpiResource::canCreate()
                 )
-                ->url(static::getResource()::getUrl('create')),
+                ->url(
+                    static::getResource()::getUrl('create')
+                ),
         ];
     }
 }
