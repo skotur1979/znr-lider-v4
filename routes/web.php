@@ -11,6 +11,80 @@ use App\Http\Controllers\LegalDocumentPdfController;
 use App\Http\Controllers\UserPrivacyController;
 use App\Http\Controllers\AccountDeletionController;
 use App\Http\Controllers\EmailTwoFactorController;
+use App\Http\Controllers\PublicQr\MachineQrController;
+use App\Http\Controllers\MachineQrAdminController;
+
+
+/*
+|--------------------------------------------------------------------------
+| JAVNE QR RUTE
+|--------------------------------------------------------------------------
+|
+| Ove rute MORAJU ostati izvan auth middlewarea.
+|
+| Radnik, posjetitelj ili druga osoba mora moći skenirati QR kod
+| i otvoriti podatke o konkretnoj radnoj opremi bez prijave
+| u ZNR LIDER.
+|
+*/
+
+Route::prefix('qr')
+    ->middleware('throttle:120,1')
+    ->group(function () {
+
+        Route::get(
+            '/machine/{token}',
+            [
+                MachineQrController::class,
+                'show',
+            ]
+        )
+            ->where(
+                'token',
+                '[A-Za-z0-9]{64}'
+            )
+            ->name(
+                'public.machine.show'
+            );
+
+        Route::get(
+            '/machine/{token}/qr.svg',
+            [
+                MachineQrController::class,
+                'svg',
+            ]
+        )
+            ->where(
+                'token',
+                '[A-Za-z0-9]{64}'
+            )
+            ->name(
+                'public.machine.svg'
+            );
+
+        Route::get(
+            '/machine/{token}/attachment/{index}',
+            [
+                MachineQrController::class,
+                'attachment',
+            ]
+        )
+            ->where(
+                'token',
+                '[A-Za-z0-9]{64}'
+            )
+            ->whereNumber('index')
+            ->name(
+                'public.machine.attachment'
+            );
+    });
+
+
+/*
+|--------------------------------------------------------------------------
+| AUTENTIFICIRANE RUTE
+|--------------------------------------------------------------------------
+*/
 
 Route::middleware(['auth'])->group(function () {
 
@@ -159,6 +233,79 @@ Route::middleware(['auth'])->group(function () {
         '/politika-kolacica/pdf',
         [LegalDocumentPdfController::class, 'cookies']
     )->name('legal.cookies.pdf');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | QR KODOVI - ADMINISTRACIJA RADNE OPREME
+    |--------------------------------------------------------------------------
+    |
+    | Ove rute zahtijevaju prijavljenog korisnika.
+    |
+    | Sam controller dodatno provjerava:
+    | - organizaciju
+    | - tenant ownership
+    | - module permissions
+    |
+    */
+
+    Route::prefix('machine-qr')
+        ->group(function () {
+
+            Route::get(
+                '/{machine}',
+                [
+                    MachineQrAdminController::class,
+                    'show',
+                ]
+            )
+                ->name(
+                    'machine.qr.admin'
+                );
+
+            Route::post(
+                '/{machine}/regenerate',
+                [
+                    MachineQrAdminController::class,
+                    'regenerate',
+                ]
+            )
+                ->name(
+                    'machine.qr.regenerate'
+                );
+
+            Route::post(
+                '/{machine}/deactivate',
+                [
+                    MachineQrAdminController::class,
+                    'deactivate',
+                ]
+            )
+                ->name(
+                    'machine.qr.deactivate'
+                );
+
+            Route::post(
+                '/{machine}/activate',
+                [
+                    MachineQrAdminController::class,
+                    'activate',
+                ]
+            )
+                ->name(
+                    'machine.qr.activate'
+                );
+            Route::get(
+                '/{machine}/download-pdf',
+                [
+                    MachineQrAdminController::class,
+                    'downloadPdf',
+                ]
+            )
+                ->name(
+                    'machine.qr.download.pdf'
+                );
+        });
 
 
     /*

@@ -7,6 +7,7 @@ use App\Filament\Resources\Machines\Pages;
 use App\Models\Machine;
 use App\Support\SecureFilePreview;
 use App\Support\ExpiryBadge;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
@@ -599,6 +600,30 @@ class MachineResource extends BaseResource
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Prikaži'),
+
+                        Action::make('machine_qr')
+                            ->label('QR kod')
+                            ->icon(
+                                'heroicon-o-qr-code'
+                            )
+                            ->color('success')
+                            ->url(
+                                fn (Machine $record): string =>
+                                    route(
+                                        'machine.qr.admin',
+                                        [
+                                            'machine' =>
+                                                $record,
+                                        ]
+                                    )
+                            )
+                            ->openUrlInNewTab()
+                            ->visible(
+                                fn (
+                                    Machine $record
+                                ): bool =>
+                                    ! $record->trashed()
+                            ),
 
                     EditAction::make()
                         ->label('Uredi')

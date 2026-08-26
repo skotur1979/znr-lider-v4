@@ -4,8 +4,9 @@ namespace App\Models;
 
 use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Machine extends Model
 {
@@ -38,5 +39,32 @@ class Machine extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function qrCode(): MorphOne
+    {
+        return $this
+            ->morphOne(
+                QrCode::class,
+                'qrable'
+            )
+            ->where('type', 'machine');
+    }
+
+    protected static function booted(): void
+    {
+        static::forceDeleted(function (Machine $machine): void {
+            QrCode::query()
+                ->where('type', 'machine')
+                ->where(
+                    'qrable_type',
+                    static::class
+                )
+                ->where(
+                    'qrable_id',
+                    $machine->getKey()
+                )
+                ->delete();
+        });
     }
 }
