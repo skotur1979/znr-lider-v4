@@ -643,13 +643,11 @@ class KpiResource extends BaseResource
                             'Obriši'
                         )
                         ->visible(
-                            function (
-                                Kpi $record
-                            ): bool {
+                            function (Kpi $record): bool {
                                 /*
-                                 * Superadmin može upravljati
-                                 * globalnim definicijama.
-                                 */
+                                * Superadmin smije upravljati
+                                * globalnim KPI definicijama.
+                                */
                                 if (
                                     auth()
                                         ->user()
@@ -659,21 +657,31 @@ class KpiResource extends BaseResource
                                 }
 
                                 /*
-                                 * Globalne KPI-je organizacija
-                                 * ne smije brisati.
-                                 */
+                                * Organizacija nikada ne smije
+                                * obrisati globalni KPI.
+                                */
+                                if (blank($record->user_id)) {
+                                    return false;
+                                }
+
+                                /*
+                                * Smiju se brisati samo
+                                * ručno dodani KPI-jevi.
+                                */
                                 if (
-                                    blank(
-                                        $record->user_id
-                                    )
+                                    $record->calculation_type
+                                    !== 'manual'
                                 ) {
                                     return false;
                                 }
 
                                 /*
-                                 * Sistemski KPI-ji organizacije
-                                 * ostaju zaštićeni.
-                                 */
+                                * Sistemski KPI mora ostati zaštićen.
+                                *
+                                * Posebno:
+                                * Ukupan broj odrađenih radnih sati
+                                * potreban je za AFR i ASR.
+                                */
                                 if (
                                     static::isProtectedSystemKpi(
                                         $record
@@ -683,10 +691,11 @@ class KpiResource extends BaseResource
                                 }
 
                                 /*
-                                 * Ručno dodani organizacijski
-                                 * KPI može se obrisati.
-                                 */
-                                return true;
+                                * KPI mora pripadati trenutnoj
+                                * organizaciji.
+                                */
+                                return (int) $record->user_id
+                                    === (int) static::resolveOwnerId();
                             }
                         ),
 
