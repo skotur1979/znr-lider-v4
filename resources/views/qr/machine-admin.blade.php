@@ -599,7 +599,12 @@
             }
 
             .label-wrapper {
-                margin: 0 !important;
+                margin:
+                    10mm
+                    0
+                    0
+                    10mm !important;
+
                 padding: 0 !important;
 
                 width: 70mm !important;
