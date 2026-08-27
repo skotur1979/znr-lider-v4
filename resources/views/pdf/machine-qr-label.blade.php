@@ -21,9 +21,6 @@
             margin: 0;
             padding: 0;
 
-            width: 210mm;
-            height: 297mm;
-
             font-family:
                 "DejaVu Sans",
                 sans-serif;
@@ -34,29 +31,49 @@
 
         /*
         |--------------------------------------------------------------------------
-        | A4 PAPIR
+        | A4 STRANICA
         |--------------------------------------------------------------------------
+        |
+        | Namjerno NE koristimo height: 297mm na wrapperu.
+        | Tako DomPDF neće generirati drugu praznu stranicu.
+        |
         */
 
         .pdf-page {
             position: relative;
 
             width: 210mm;
-            height: 297mm;
 
             margin: 0;
+            padding: 0;
 
-            /*
-             * Naljepnica 10 mm od lijevog
-             * i gornjeg ruba A4 papira.
-             */
-            padding:
-                10mm
-                0
-                0
-                10mm;
+            page-break-before: avoid;
+            page-break-after: avoid;
+            page-break-inside: avoid;
+        }
 
-            overflow: hidden;
+
+        /*
+        |--------------------------------------------------------------------------
+        | POZICIJA NALJEPNICE
+        |--------------------------------------------------------------------------
+        |
+        | Naljepnica je 10 mm od lijevog
+        | i 10 mm od gornjeg ruba A4 papira.
+        |
+        */
+
+        .label-position {
+            position: absolute;
+
+            top: 10mm;
+            left: 10mm;
+
+            width: 70mm;
+            height: 70mm;
+
+            margin: 0;
+            padding: 0;
         }
 
 
@@ -239,26 +256,30 @@
 
 <div class="pdf-page">
 
-    @php
+    <div class="label-position">
 
-        /*
-         * DomPDF koristi QR kao base64 SVG sliku.
-         */
+        @php
 
-        $qrImageHtml =
-            '<img src="'
-            . $qrDataUri
-            . '" alt="QR kod">';
+            /*
+             * DomPDF koristi QR kao base64 SVG sliku.
+             */
 
-    @endphp
+            $qrImageHtml =
+                '<img src="'
+                . $qrDataUri
+                . '" alt="QR kod">';
 
-    @include(
-        'qr.partials.machine-label',
-        [
-            'machine' => $machine,
-            'qrImageHtml' => $qrImageHtml,
-        ]
-    )
+        @endphp
+
+        @include(
+            'qr.partials.machine-label',
+            [
+                'machine' => $machine,
+                'qrImageHtml' => $qrImageHtml,
+            ]
+        )
+
+    </div>
 
 </div>
 
