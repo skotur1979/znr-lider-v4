@@ -6,6 +6,7 @@ use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Fire extends Model
@@ -13,7 +14,8 @@ class Fire extends Model
     use SoftDeletes;
     use LogsActivity;
 
-    protected static string $activityModule = 'Vatrogasni aparati';
+    protected static string $activityModule =
+        'Vatrogasni aparati';
 
     protected $fillable = [
         'user_id',
@@ -32,21 +34,32 @@ class Fire extends Model
     ];
 
     protected $casts = [
-        'examination_valid_from' => 'date',
-        'examination_valid_until' => 'date',
-        'regular_examination_valid_from' => 'date',
-        'pdf' => 'array',
+        'examination_valid_from' =>
+            'date',
+
+        'examination_valid_until' =>
+            'date',
+
+        'regular_examination_valid_from' =>
+            'date',
+
+        'pdf' =>
+            'array',
     ];
 
     protected function regularExaminationValidUntil(): Attribute
     {
         return Attribute::make(
             get: function () {
-                if (! $this->regular_examination_valid_from) {
+                if (
+                    ! $this
+                        ->regular_examination_valid_from
+                ) {
                     return null;
                 }
 
-                return $this->regular_examination_valid_from
+                return $this
+                    ->regular_examination_valid_from
                     ->copy()
                     ->addMonthsNoOverflow(3);
             },
@@ -55,6 +68,43 @@ class Fire extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(
+            User::class
+        );
+    }
+
+    public function qrCode(): MorphOne
+    {
+        return $this
+            ->morphOne(
+                QrCode::class,
+                'qrable'
+            )
+            ->where(
+                'type',
+                'fire'
+            );
+    }
+
+    protected static function booted(): void
+    {
+        static::forceDeleted(
+            function (Fire $fire): void {
+                QrCode::query()
+                    ->where(
+                        'type',
+                        'fire'
+                    )
+                    ->where(
+                        'qrable_type',
+                        static::class
+                    )
+                    ->where(
+                        'qrable_id',
+                        $fire->getKey()
+                    )
+                    ->delete();
+            }
+        );
     }
 }

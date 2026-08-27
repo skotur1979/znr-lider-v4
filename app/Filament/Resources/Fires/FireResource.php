@@ -7,6 +7,7 @@ use App\Filament\Resources\Fires\Pages;
 use App\Models\Fire;
 use App\Services\StorageQuotaService;
 use App\Support\ExpiryBadge;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
@@ -649,6 +650,27 @@ class FireResource extends BaseResource
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Prikaži'),
+
+                        Action::make('fire_qr')
+                            ->label('QR kod')
+                            ->icon(
+                                'heroicon-o-qr-code'
+                            )
+                            ->color('success')
+                            ->url(
+                                fn (Fire $record): string =>
+                                    route(
+                                        'fire.qr.admin',
+                                        [
+                                            'fire' => $record,
+                                        ]
+                                    )
+                            )
+                            ->openUrlInNewTab()
+                            ->visible(
+                                fn (Fire $record): bool =>
+                                    ! $record->trashed()
+                            ),
 
                     EditAction::make()
                         ->label('Uredi')

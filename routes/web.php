@@ -13,6 +13,8 @@ use App\Http\Controllers\AccountDeletionController;
 use App\Http\Controllers\EmailTwoFactorController;
 use App\Http\Controllers\PublicQr\MachineQrController;
 use App\Http\Controllers\MachineQrAdminController;
+use App\Http\Controllers\FireQrAdminController;
+use App\Http\Controllers\PublicQr\FireQrController;
 
 
 /*
@@ -78,7 +80,52 @@ Route::prefix('qr')
                 'public.machine.attachment'
             );
     });
+    
+    Route::get(
+        '/fire/{token}',
+        [
+            FireQrController::class,
+            'show',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->name(
+            'public.fire.show'
+        );
 
+    Route::get(
+        '/fire/{token}/qr.svg',
+        [
+            FireQrController::class,
+            'svg',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->name(
+            'public.fire.svg'
+        );
+
+    Route::get(
+        '/fire/{token}/attachment/{index}',
+        [
+            FireQrController::class,
+            'attachment',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->whereNumber('index')
+        ->name(
+            'public.fire.attachment'
+        );
 
 /*
 |--------------------------------------------------------------------------
@@ -307,7 +354,75 @@ Route::middleware(['auth'])->group(function () {
                 );
         });
 
+    Route::prefix('fire-qr')
+        ->group(function () {
 
+            Route::get(
+                '/{fire}',
+                [
+                    FireQrAdminController::class,
+                    'show',
+                ]
+            )
+                ->name(
+                    'fire.qr.admin'
+                );
+
+            Route::get(
+                '/{fire}/download-pdf',
+                [
+                    FireQrAdminController::class,
+                    'downloadPdf',
+                ]
+            )
+                ->name(
+                    'fire.qr.download.pdf'
+                );
+
+            Route::post(
+                '/{fire}/regenerate',
+                [
+                    FireQrAdminController::class,
+                    'regenerate',
+                ]
+            )
+                ->name(
+                    'fire.qr.regenerate'
+                );
+
+            Route::post(
+                '/{fire}/deactivate',
+                [
+                    FireQrAdminController::class,
+                    'deactivate',
+                ]
+            )
+                ->name(
+                    'fire.qr.deactivate'
+                );
+
+            Route::post(
+                '/{fire}/activate',
+                [
+                    FireQrAdminController::class,
+                    'activate',
+                ]
+            )
+                ->name(
+                    'fire.qr.activate'
+                );
+
+            Route::post(
+                '/{fire}/regular-inspection',
+                [
+                    FireQrAdminController::class,
+                    'regularInspection',
+                ]
+            )
+                ->name(
+                    'fire.qr.regular-inspection'
+                );
+        });
     /*
     |--------------------------------------------------------------------------
     | Siguran preview datoteka
