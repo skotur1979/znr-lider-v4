@@ -31,6 +31,7 @@
             background: #ffffff;
         }
 
+
         /*
         |--------------------------------------------------------------------------
         | A4 PAPIR
@@ -46,7 +47,7 @@
             margin: 0;
 
             /*
-             * Naljepnica je 10 mm od lijevog
+             * Naljepnica 10 mm od lijevog
              * i gornjeg ruba A4 papira.
              */
             padding:
@@ -61,21 +62,21 @@
 
         /*
         |--------------------------------------------------------------------------
-        | QR NALJEPNICA 80 × 80 mm
+        | QR NALJEPNICA 70 × 70 mm
         |--------------------------------------------------------------------------
         */
 
         .machine-qr-label {
             position: relative;
 
-            width: 80mm;
-            height: 80mm;
+            width: 70mm;
+            height: 70mm;
 
             margin: 0;
 
             padding:
-                2.5mm
-                3mm;
+                1.5mm
+                2mm;
 
             border:
                 0.3mm
@@ -94,19 +95,19 @@
 
         /*
         |--------------------------------------------------------------------------
-        | NASLOV
+        | ZNR LIDER · RADNA OPREMA
         |--------------------------------------------------------------------------
         */
 
         .machine-qr-label-type {
             margin: 0;
 
-            font-size: 9pt;
+            font-size: 6.5pt;
             font-weight: bold;
 
-            line-height: 1.05;
+            line-height: 1;
 
-            letter-spacing: 0.5pt;
+            letter-spacing: 0.35pt;
         }
 
 
@@ -118,14 +119,18 @@
 
         .machine-qr-label-name {
             margin:
-                0.6mm
+                0.4mm
                 0
                 0;
 
-            font-size: 13pt;
+            font-size: 9.5pt;
             font-weight: bold;
 
-            line-height: 1.02;
+            line-height: 1;
+
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
 
@@ -136,17 +141,17 @@
         */
 
         .machine-qr-label-location {
-            min-height: 4mm;
+            height: 2.5mm;
 
             margin-top: 0.3mm;
-            margin-bottom: 0.5mm;
+            margin-bottom: 0;
 
             color: #4b5563;
 
-            font-size: 10pt;
+            font-size: 6.5pt;
             font-weight: bold;
 
-            line-height: 1.15;
+            line-height: 1;
         }
 
 
@@ -163,12 +168,7 @@
             margin:
                 0.2mm
                 auto
-                0mm;
-
-            display: flex;
-
-            align-items: center;
-            justify-content: center;
+                0;
         }
 
         .machine-qr-label-code img {
@@ -184,17 +184,26 @@
 
         /*
         |--------------------------------------------------------------------------
-        | INVENTARNI / TVORNIČKI BROJ
+        | IDENTIFIKACIJSKI BROJEVI
         |--------------------------------------------------------------------------
         */
 
-        .machine-qr-label-identifier {
-            margin-top: 0.9mm;
+        .machine-qr-label-identifiers {
+            margin-top: 0;
+        }
 
-            font-size: 10pt;
+        .machine-qr-label-identifier {
+            margin: 0;
+
+            font-size: 8pt;
             font-weight: bold;
 
-            line-height: 1.05;
+            line-height: 1.08;
+        }
+
+        .machine-qr-label-identifier
+        + .machine-qr-label-identifier {
+            margin-top: 0.1mm;
         }
 
 
@@ -207,17 +216,17 @@
         .machine-qr-label-instruction {
             position: absolute;
 
-            left: 3mm;
-            right: 3mm;
-            bottom: 1.3mm;
+            left: 2mm;
+            right: 2mm;
+            bottom: 0.7mm;
 
             margin: 0;
 
             color: #374151;
 
-            font-size: 5.6pt;
+            font-size: 4.2pt;
 
-            line-height: 1.05;
+            line-height: 1;
 
             text-align: center;
         }

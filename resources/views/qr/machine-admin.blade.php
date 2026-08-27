@@ -171,7 +171,7 @@
             display: grid;
 
             grid-template-columns:
-                340px
+                300px
                 minmax(0, 1fr);
 
             gap: 22px;
@@ -193,28 +193,28 @@
 
         /*
         |--------------------------------------------------------------------------
-        | QR NALJEPNICA 80 × 80 mm
+        | QR NALJEPNICA 70 × 70 mm
         |--------------------------------------------------------------------------
         */
 
         .machine-qr-label {
             position: relative;
 
-            width: 80mm;
-            height: 80mm;
+            width: 70mm;
+            height: 70mm;
 
             margin: 0 auto;
 
             padding:
-                2.5mm
-                3mm;
+                1.5mm
+                2mm;
 
             border:
                 0.3mm
                 solid
                 #111827;
 
-            border-radius: 10px;
+            border-radius: 8px;
 
             box-sizing: border-box;
 
@@ -228,25 +228,25 @@
 
         /*
         |--------------------------------------------------------------------------
-        | NASLOV
+        | ZNR LIDER · RADNA OPREMA
         |--------------------------------------------------------------------------
         */
 
         .machine-qr-label-type {
             margin: 0;
 
-            font-size: 9pt;
+            font-size: 6.5pt;
             font-weight: bold;
 
-            line-height: 1.05;
+            line-height: 1;
 
-            letter-spacing: 0.5pt;
+            letter-spacing: 0.35pt;
         }
 
 
         /*
         |--------------------------------------------------------------------------
-        | NAZIV
+        | NAZIV RADNE OPREME
         |--------------------------------------------------------------------------
         */
 
@@ -254,14 +254,14 @@
             width: 100%;
 
             margin:
-                0.6mm
+                0.4mm
                 0
                 0;
 
-            font-size: 13pt;
+            font-size: 9.5pt;
             font-weight: bold;
 
-            line-height: 1.02;
+            line-height: 1;
 
             white-space: nowrap;
             overflow: hidden;
@@ -276,15 +276,16 @@
         */
 
         .machine-qr-label-location {
-            height: 3.5mm;
+            height: 2.5mm;
 
-            margin-top: 0.8mm;
-            margin-bottom: 0mm;
+            margin-top: 0.3mm;
+            margin-bottom: 0;
 
             color: #4b5563;
 
-            font-size: 9pt;
+            font-size: 6.5pt;
             font-weight: bold;
+
             line-height: 1;
         }
 
@@ -300,9 +301,9 @@
             height: 50mm;
 
             margin:
-                0mm
+                0.2mm
                 auto
-                0mm;
+                0;
 
             display: flex;
 
@@ -327,17 +328,26 @@
 
         /*
         |--------------------------------------------------------------------------
-        | INVENTARNI / TVORNIČKI BROJ
+        | IDENTIFIKACIJSKI BROJEVI
         |--------------------------------------------------------------------------
         */
 
-        .machine-qr-label-identifier {
-            margin-top: 1.1mm;
+        .machine-qr-label-identifiers {
+            margin-top: 0;
+        }
 
-            font-size: 10pt;
+        .machine-qr-label-identifier {
+            margin: 0;
+
+            font-size: 6.2pt;
             font-weight: bold;
 
-            line-height: 1.05;
+            line-height: 1.08;
+        }
+
+        .machine-qr-label-identifier
+        + .machine-qr-label-identifier {
+            margin-top: 0.4mm;
         }
 
 
@@ -350,17 +360,17 @@
         .machine-qr-label-instruction {
             position: absolute;
 
-            left: 3mm;
-            right: 3mm;
-            bottom: 1.3mm;
+            left: 2mm;
+            right: 2mm;
+            bottom: 0.7mm;
 
             margin: 0;
 
             color: #374151;
 
-            font-size: 5.6pt;
+            font-size: 4.2pt;
 
-            line-height: 1.05;
+            line-height: 1;
 
             text-align: center;
         }
@@ -545,7 +555,8 @@
         | PRINT
         |--------------------------------------------------------------------------
         |
-        | Isti raspored kao PDF.
+        | Naljepnica 7 × 7 cm.
+        | QR ostaje 50 × 50 mm.
         |
         */
 
@@ -591,21 +602,21 @@
                 margin: 0 !important;
                 padding: 0 !important;
 
-                width: 80mm;
-                height: 80mm;
+                width: 70mm !important;
+                height: 70mm !important;
 
                 overflow: visible !important;
             }
 
             .machine-qr-label {
-                width: 80mm !important;
-                height: 80mm !important;
+                width: 70mm !important;
+                height: 70mm !important;
 
                 margin: 0 !important;
 
                 padding:
-                    2.5mm
-                    3mm !important;
+                    1.5mm
+                    2mm !important;
 
                 border:
                     0.3mm
@@ -615,36 +626,38 @@
                 border-radius: 0 !important;
 
                 box-shadow: none !important;
+
+                overflow: hidden !important;
             }
 
             .machine-qr-label-type {
                 margin: 0 !important;
 
-                font-size: 9pt !important;
+                font-size: 6.5pt !important;
 
-                line-height: 1.05 !important;
+                line-height: 1 !important;
 
-                letter-spacing: 0.5pt !important;
+                letter-spacing: 0.35pt !important;
             }
 
             .machine-qr-label-name {
                 margin:
-                    0.6mm
+                    0.4mm
                     0
                     0 !important;
 
-                font-size: 13pt !important;
+                font-size: 9.5pt !important;
 
-                line-height: 1.02 !important;
+                line-height: 1 !important;
             }
 
             .machine-qr-label-location {
-                height: 3mm !important;
+                height: 2.5mm !important;
 
-                margin-top: 0.1mm !important;
+                margin-top: 0.3mm !important;
                 margin-bottom: 0 !important;
 
-                font-size: 8pt !important;
+                font-size: 6.5pt !important;
 
                 line-height: 1 !important;
             }
@@ -654,9 +667,9 @@
                 height: 50mm !important;
 
                 margin:
-                    0.5mm
+                    0.2mm
                     auto
-                    0.1mm !important;
+                    0 !important;
             }
 
             .machine-qr-label-code svg,
@@ -671,22 +684,31 @@
                 padding: 0 !important;
             }
 
+            .machine-qr-label-identifiers {
+                margin-top: 0 !important;
+            }
+
             .machine-qr-label-identifier {
-                margin-top: 0.2mm !important;
+                margin: 0 !important;
 
-                font-size: 8pt !important;
+                font-size: 6.2pt !important;
 
-                line-height: 1.02 !important;
+                line-height: 1.08 !important;
+            }
+
+            .machine-qr-label-identifier
+            + .machine-qr-label-identifier {
+                margin-top: 0.4mm !important;
             }
 
             .machine-qr-label-instruction {
-                left: 3mm !important;
-                right: 3mm !important;
-                bottom: 1.3mm !important;
+                left: 2mm !important;
+                right: 2mm !important;
+                bottom: 0.7mm !important;
 
-                font-size: 5.6pt !important;
+                font-size: 4.2pt !important;
 
-                line-height: 1.05 !important;
+                line-height: 1 !important;
             }
         }
 
@@ -861,13 +883,13 @@
 
             <div class="size-note">
                 Veličina naljepnice za ispis:
-                <strong>8 × 8 cm</strong>
+                <strong>7 × 7 cm</strong>
             </div>
 
         </div>
 
 
-        {{-- DESNO - QR INFORMACIJE --}}
+        {{-- DESNO - INFORMACIJE --}}
 
         <div class="details">
 
@@ -876,7 +898,6 @@
                 <h2>
                     Status QR koda
                 </h2>
-
 
                 <div class="info-row">
 
@@ -888,17 +909,13 @@
 
                         @if($qrCode->is_active)
 
-                            <span
-                                class="badge badge-active"
-                            >
+                            <span class="badge badge-active">
                                 Aktivan
                             </span>
 
                         @else
 
-                            <span
-                                class="badge badge-inactive"
-                            >
+                            <span class="badge badge-inactive">
                                 Deaktiviran
                             </span>
 
@@ -942,12 +959,8 @@
                             {{
                                 $qrCode
                                     ->last_scanned_at
-                                    ->timezone(
-                                        'Europe/Zagreb'
-                                    )
-                                    ->format(
-                                        'd.m.Y. H:i'
-                                    )
+                                    ->timezone('Europe/Zagreb')
+                                    ->format('d.m.Y. H:i')
                             }}
 
                         @else
@@ -972,12 +985,8 @@
                         {{
                             $qrCode
                                 ->created_at
-                                ?->timezone(
-                                    'Europe/Zagreb'
-                                )
-                                ->format(
-                                    'd.m.Y. H:i'
-                                )
+                                ?->timezone('Europe/Zagreb')
+                                ->format('d.m.Y. H:i')
                         }}
 
                     </div>

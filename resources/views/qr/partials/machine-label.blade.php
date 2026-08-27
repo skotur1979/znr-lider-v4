@@ -9,37 +9,47 @@
     </div>
 
     <div class="machine-qr-label-location">
+
         @if(
             filled($machine->location)
-            && trim($machine->location) !== '-'
+            && trim((string) $machine->location) !== '-'
         )
             {{ $machine->location }}
         @endif
+
     </div>
 
     <div class="machine-qr-label-code">
         {!! $qrImageHtml !!}
     </div>
 
-    @if(
-        filled($machine->inventory_number)
-        && trim($machine->inventory_number) !== '-'
-    )
-        <div class="machine-qr-label-identifier">
-            Inventarni broj:
-            {{ $machine->inventory_number }}
-        </div>
-    @endif
+    <div class="machine-qr-label-identifiers">
 
-    @if(
-        filled($machine->factory_number)
-        && trim($machine->factory_number) !== '-'
-    )
-        <div class="machine-qr-label-identifier">
-            Tvornički broj:
-            {{ $machine->factory_number }}
-        </div>
-    @endif
+        @if(
+            filled($machine->inventory_number)
+            && trim((string) $machine->inventory_number) !== '-'
+        )
+
+            <div class="machine-qr-label-identifier">
+                Inventarni broj:
+                {{ $machine->inventory_number }}
+            </div>
+
+        @endif
+
+        @if(
+            filled($machine->factory_number)
+            && trim((string) $machine->factory_number) !== '-'
+        )
+
+            <div class="machine-qr-label-identifier">
+                Tvornički broj:
+                {{ $machine->factory_number }}
+            </div>
+
+        @endif
+
+    </div>
 
     <div class="machine-qr-label-instruction">
         Skenirajte QR kod za pregled podataka
