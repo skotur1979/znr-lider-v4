@@ -15,6 +15,8 @@ use App\Http\Controllers\PublicQr\MachineQrController;
 use App\Http\Controllers\MachineQrAdminController;
 use App\Http\Controllers\FireQrAdminController;
 use App\Http\Controllers\PublicQr\FireQrController;
+use App\Http\Controllers\ObservationQrAdminController;
+use App\Http\Controllers\PublicQr\ObservationQrController;
 
 
 /*
@@ -126,7 +128,55 @@ Route::prefix('qr')
         ->name(
             'public.fire.attachment'
         );
+    Route::get(
+        '/qr/observation/{token}',
+        [
+            ObservationQrController::class,
+            'show',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->name(
+            'public.observation.show'
+        );
 
+
+    Route::post(
+        '/qr/observation/{token}',
+        [
+            ObservationQrController::class,
+            'store',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->middleware(
+            'throttle:10,10'
+        )
+        ->name(
+            'public.observation.store'
+        );
+
+
+    Route::get(
+        '/qr/observation/{token}/success',
+        [
+            ObservationQrController::class,
+            'success',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->name(
+            'public.observation.success'
+        );
 /*
 |--------------------------------------------------------------------------
 | AUTENTIFICIRANE RUTE
@@ -421,6 +471,67 @@ Route::middleware(['auth'])->group(function () {
             )
                 ->name(
                     'fire.qr.regular-inspection'
+                );
+        });
+
+            Route::prefix(
+        'observation-qr'
+    )
+        ->group(function () {
+
+            Route::get(
+                '/',
+                [
+                    ObservationQrAdminController::class,
+                    'show',
+                ]
+            )
+                ->name(
+                    'observation.qr.admin'
+                );
+
+            Route::get(
+                '/download-pdf',
+                [
+                    ObservationQrAdminController::class,
+                    'downloadPdf',
+                ]
+            )
+                ->name(
+                    'observation.qr.download.pdf'
+                );
+
+            Route::post(
+                '/regenerate',
+                [
+                    ObservationQrAdminController::class,
+                    'regenerate',
+                ]
+            )
+                ->name(
+                    'observation.qr.regenerate'
+                );
+
+            Route::post(
+                '/deactivate',
+                [
+                    ObservationQrAdminController::class,
+                    'deactivate',
+                ]
+            )
+                ->name(
+                    'observation.qr.deactivate'
+                );
+
+            Route::post(
+                '/activate',
+                [
+                    ObservationQrAdminController::class,
+                    'activate',
+                ]
+            )
+                ->name(
+                    'observation.qr.activate'
                 );
         });
     /*

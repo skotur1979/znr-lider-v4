@@ -35,20 +35,54 @@ class ListObservations extends BaseListRecords
                         ObservationResource::canCreate()
                 )
                 ->before(
-                    ObservationResource::beforeModulePermission(
-                        'create'
-                    )
+                    ObservationResource
+                        ::beforeModulePermission(
+                            'create'
+                        )
                 ),
+
+            Actions\Action::make(
+                'public_observation_qr'
+            )
+                ->label(
+                    'QR kod za prijavu'
+                )
+                ->icon(
+                    'heroicon-o-qr-code'
+                )
+                ->color(
+                    'success'
+                )
+                ->visible(
+                    fn (): bool =>
+                        auth()->user()
+                        && ! auth()->user()
+                            ->isSuperAdmin()
+                        && ObservationResource
+                            ::allowsModulePermission(
+                                'create'
+                            )
+                )
+                ->url(
+                    fn (): string =>
+                        route(
+                            'observation.qr.admin'
+                        )
+                )
+                ->openUrlInNewTab(),
 
             Actions\Action::make('reports')
                 ->label('Izvještaji')
-                ->icon('heroicon-o-chart-bar-square')
+                ->icon(
+                    'heroicon-o-chart-bar-square'
+                )
                 ->color('info')
                 ->action(function () {
                     if (
-                        ! ObservationResource::allowsModulePermission(
-                            'view'
-                        )
+                        ! ObservationResource
+                            ::allowsModulePermission(
+                                'view'
+                            )
                     ) {
                         return;
                     }
@@ -60,80 +94,109 @@ class ListObservations extends BaseListRecords
                     );
                 }),
 
-            Actions\Action::make('export_pdf')
-                ->label('Izvoz popisa u PDF')
-                ->icon('heroicon-o-arrow-down-tray')
+            Actions\Action::make(
+                'export_pdf'
+            )
+                ->label(
+                    'Izvoz popisa u PDF'
+                )
+                ->icon(
+                    'heroicon-o-arrow-down-tray'
+                )
                 ->color('warning')
                 ->action(function () {
                     if (
-                        ! ObservationResource::allowsModulePermission(
-                            'view'
-                        )
+                        ! ObservationResource
+                            ::allowsModulePermission(
+                                'view'
+                            )
                     ) {
                         return null;
                     }
 
-                    $observations = $this
-                        ->getFilteredSortedTableQuery()
-                        ->get();
+                    $observations =
+                        $this
+                            ->getFilteredSortedTableQuery()
+                            ->get();
 
-                    $pdf = Pdf::loadView(
-                        'pdf.observations',
-                        compact('observations')
-                    )
-                        ->setPaper(
-                            'a4',
-                            'landscape'
+                    $pdf =
+                        Pdf::loadView(
+                            'pdf.observations',
+                            compact(
+                                'observations'
+                            )
                         )
-                        ->setOptions([
-                            'isHtml5ParserEnabled' => true,
-                            'isRemoteEnabled' => true,
-                            'isPhpEnabled' => true,
-                            'dpi' => 96,
-                            'defaultFont' =>
-                                'DejaVu Sans',
-                        ]);
+                            ->setPaper(
+                                'a4',
+                                'landscape'
+                            )
+                            ->setOptions([
+                                'isHtml5ParserEnabled' =>
+                                    true,
 
-                    return response()->streamDownload(
-                        fn () => print(
-                            $pdf->output()
-                        ),
-                        'zapazanja-popis-'
-                            . now()->format('Y-m-d')
-                            . '.pdf'
-                    );
+                                'isRemoteEnabled' =>
+                                    true,
+
+                                'isPhpEnabled' =>
+                                    true,
+
+                                'dpi' =>
+                                    96,
+
+                                'defaultFont' =>
+                                    'DejaVu Sans',
+                            ]);
+
+                    return response()
+                        ->streamDownload(
+                            fn () =>
+                                print(
+                                    $pdf->output()
+                                ),
+                            'zapazanja-popis-'
+                                . now()->format(
+                                    'Y-m-d'
+                                )
+                                . '.pdf'
+                        );
                 }),
 
-            Actions\Action::make('export_excel')
-                ->label('Izvoz popisa u Excel')
+            Actions\Action::make(
+                'export_excel'
+            )
+                ->label(
+                    'Izvoz popisa u Excel'
+                )
                 ->icon(
                     'heroicon-o-document-arrow-down'
                 )
                 ->color('success')
                 ->action(function () {
                     if (
-                        ! ObservationResource::allowsModulePermission(
-                            'view'
-                        )
+                        ! ObservationResource
+                            ::allowsModulePermission(
+                                'view'
+                            )
                     ) {
                         return null;
                     }
 
-                    /*
-                     * Excel izvozi upravo zapise koji su trenutačno
-                     * vidljivi kroz filtere tablice.
-                     */
-                    $observationIds = $this
-                        ->getFilteredSortedTableQuery()
-                        ->pluck('observations.id')
-                        ->toArray();
+                    $observationIds =
+                        $this
+                            ->getFilteredSortedTableQuery()
+                            ->pluck(
+                                'observations.id'
+                            )
+                            ->toArray();
 
                     return Excel::download(
                         new ObservationsExport(
                             $observationIds
                         ),
                         'zapazanja-popis-'
-                            . now()->format('Y-m-d')
+                            . now()->format(
+                                'Y-m-d'
+                            )
                             . '.xlsx'
                     );
                 }),
@@ -142,15 +205,19 @@ class ListObservations extends BaseListRecords
 
     protected function getHeaderWidgets(): array
     {
-        return ObservationResource::getWidgets();
+        return ObservationResource
+            ::getWidgets();
     }
 
     protected function getTableQuery(): Builder
     {
-        $query = parent::getTableQuery();
+        $query =
+            parent::getTableQuery();
 
         $pregled =
-            request()->query('pregled')
+            request()->query(
+                'pregled'
+            )
             ?? data_get(
                 request()->query(),
                 'tableFilters.pregled.value'
@@ -161,42 +228,50 @@ class ListObservations extends BaseListRecords
             );
 
         return match ($pregled) {
-            'uskoro' => $query
-                ->whereNotNull('target_date')
-                ->whereIn(
-                    'status',
-                    [
-                        'Not started',
-                        'In progress',
-                    ]
-                )
-                ->whereDate(
-                    'target_date',
-                    '>=',
-                    Carbon::today()
-                )
-                ->whereDate(
-                    'target_date',
-                    '<=',
-                    Carbon::today()->addDays(30)
-                ),
+            'uskoro' =>
+                $query
+                    ->whereNotNull(
+                        'target_date'
+                    )
+                    ->whereIn(
+                        'status',
+                        [
+                            'Not started',
+                            'In progress',
+                        ]
+                    )
+                    ->whereDate(
+                        'target_date',
+                        '>=',
+                        Carbon::today()
+                    )
+                    ->whereDate(
+                        'target_date',
+                        '<=',
+                        Carbon::today()
+                            ->addDays(30)
+                    ),
 
-            'isteklo' => $query
-                ->whereNotNull('target_date')
-                ->whereIn(
-                    'status',
-                    [
-                        'Not started',
-                        'In progress',
-                    ]
-                )
-                ->whereDate(
-                    'target_date',
-                    '<',
-                    Carbon::today()
-                ),
+            'isteklo' =>
+                $query
+                    ->whereNotNull(
+                        'target_date'
+                    )
+                    ->whereIn(
+                        'status',
+                        [
+                            'Not started',
+                            'In progress',
+                        ]
+                    )
+                    ->whereDate(
+                        'target_date',
+                        '<',
+                        Carbon::today()
+                    ),
 
-            default => $query,
+            default =>
+                $query,
         };
     }
 
@@ -204,7 +279,9 @@ class ListObservations extends BaseListRecords
     {
         $year =
             data_get(
-                $this->getTableFilterState('year'),
+                $this->getTableFilterState(
+                    'year'
+                ),
                 'value'
             )
             ?? data_get(
@@ -237,7 +314,8 @@ class ListObservations extends BaseListRecords
 
     public function getSelectedYearLabel(): string
     {
-        return $this->getSelectedYearRaw()
+        return $this
+            ->getSelectedYearRaw()
             ?? 'SVE';
     }
 }

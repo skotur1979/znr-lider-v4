@@ -26,20 +26,32 @@ class QrCodeService
     ): QrCode {
         $actor ??= Auth::user();
 
-        $ownerId = $machine->user_id;
-
         return QrCode::query()
             ->firstOrCreate(
                 [
-                    'type' => 'machine',
-                    'qrable_type' => Machine::class,
-                    'qrable_id' => $machine->getKey(),
+                    'type' =>
+                        'machine',
+
+                    'qrable_type' =>
+                        Machine::class,
+
+                    'qrable_id' =>
+                        $machine->getKey(),
                 ],
                 [
-                    'owner_id' => $ownerId,
-                    'created_by' => $actor?->id,
-                    'name' => $this->machineQrName($machine),
-                    'is_active' => true,
+                    'owner_id' =>
+                        $machine->user_id,
+
+                    'created_by' =>
+                        $actor?->id,
+
+                    'name' =>
+                        $this->machineQrName(
+                            $machine
+                        ),
+
+                    'is_active' =>
+                        true,
                 ]
             );
     }
@@ -50,7 +62,8 @@ class QrCodeService
         return route(
             'public.machine.show',
             [
-                'token' => $qrCode->token,
+                'token' =>
+                    $qrCode->token,
             ]
         );
     }
@@ -60,7 +73,9 @@ class QrCodeService
         int $size = 500
     ): string {
         return $this->generateSvg(
-            $this->publicMachineUrl($qrCode),
+            $this->publicMachineUrl(
+                $qrCode
+            ),
             $size
         );
     }
@@ -69,7 +84,9 @@ class QrCodeService
         Machine $machine
     ): string {
         $identifier =
-            filled($machine->inventory_number)
+            filled(
+                $machine->inventory_number
+            )
                 ? $machine->inventory_number
                 : $machine->factory_number;
 
@@ -95,20 +112,32 @@ class QrCodeService
     ): QrCode {
         $actor ??= Auth::user();
 
-        $ownerId = $fire->user_id;
-
         return QrCode::query()
             ->firstOrCreate(
                 [
-                    'type' => 'fire',
-                    'qrable_type' => Fire::class,
-                    'qrable_id' => $fire->getKey(),
+                    'type' =>
+                        'fire',
+
+                    'qrable_type' =>
+                        Fire::class,
+
+                    'qrable_id' =>
+                        $fire->getKey(),
                 ],
                 [
-                    'owner_id' => $ownerId,
-                    'created_by' => $actor?->id,
-                    'name' => $this->fireQrName($fire),
-                    'is_active' => true,
+                    'owner_id' =>
+                        $fire->user_id,
+
+                    'created_by' =>
+                        $actor?->id,
+
+                    'name' =>
+                        $this->fireQrName(
+                            $fire
+                        ),
+
+                    'is_active' =>
+                        true,
                 ]
             );
     }
@@ -119,7 +148,8 @@ class QrCodeService
         return route(
             'public.fire.show',
             [
-                'token' => $qrCode->token,
+                'token' =>
+                    $qrCode->token,
             ]
         );
     }
@@ -129,7 +159,9 @@ class QrCodeService
         int $size = 500
     ): string {
         return $this->generateSvg(
-            $this->publicFireUrl($qrCode),
+            $this->publicFireUrl(
+                $qrCode
+            ),
             $size
         );
     }
@@ -144,7 +176,8 @@ class QrCodeService
 
         if (
             filled(
-                $fire->factory_number_year_of_production
+                $fire
+                    ->factory_number_year_of_production
             )
         ) {
             return $name
@@ -159,28 +192,114 @@ class QrCodeService
 
     /*
     |--------------------------------------------------------------------------
-    | ZAJEDNIČKA QR LOGIKA
+    | ZAPAŽANJA - JEDAN QR PO ORGANIZACIJI
+    |--------------------------------------------------------------------------
+    */
+
+    public function getOrCreateForObservationOwner(
+        User $owner,
+        ?User $actor = null
+    ): QrCode {
+        $actor ??= Auth::user();
+
+        return QrCode::query()
+            ->firstOrCreate(
+                [
+                    'type' =>
+                        'observation_report',
+
+                    /*
+                     * QR je vezan uz glavnog korisnika,
+                     * odnosno organizaciju.
+                     */
+                    'qrable_type' =>
+                        User::class,
+
+                    'qrable_id' =>
+                        $owner->getKey(),
+                ],
+                [
+                    'owner_id' =>
+                        $owner->getKey(),
+
+                    'created_by' =>
+                        $actor?->id,
+
+                    'name' =>
+                        'QR prijava zapažanja',
+
+                    'metadata' =>
+                        [
+                            'purpose' =>
+                                'public_observation_report',
+                        ],
+
+                    'is_active' =>
+                        true,
+                ]
+            );
+    }
+
+    public function publicObservationUrl(
+        QrCode $qrCode
+    ): string {
+        return route(
+            'public.observation.show',
+            [
+                'token' =>
+                    $qrCode->token,
+            ]
+        );
+    }
+
+    public function observationSvg(
+        QrCode $qrCode,
+        int $size = 900
+    ): string {
+        return $this->generateSvg(
+            $this->publicObservationUrl(
+                $qrCode
+            ),
+            $size
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ZAJEDNIČKI QR GENERATOR
     |--------------------------------------------------------------------------
     */
 
     protected function generateSvg(
         string $url,
-        int $size = 500
+        int $size
     ): string {
-        $renderer = new ImageRenderer(
-            new RendererStyle(
-                $size,
-                4
-            ),
-            new SvgImageBackEnd()
-        );
+        $renderer =
+            new ImageRenderer(
+                new RendererStyle(
+                    $size,
+                    4
+                ),
+                new SvgImageBackEnd()
+            );
 
-        $writer = new Writer($renderer);
+        $writer =
+            new Writer(
+                $renderer
+            );
 
         return $writer->writeString(
             $url
         );
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ZAJEDNIČKE QR AKCIJE
+    |--------------------------------------------------------------------------
+    */
 
     public function regenerate(
         QrCode $qrCode
@@ -206,7 +325,8 @@ class QrCodeService
         QrCode $qrCode
     ): void {
         $qrCode->update([
-            'is_active' => false,
+            'is_active' =>
+                false,
         ]);
     }
 
@@ -214,7 +334,8 @@ class QrCodeService
         QrCode $qrCode
     ): void {
         $qrCode->update([
-            'is_active' => true,
+            'is_active' =>
+                true,
         ]);
     }
 }

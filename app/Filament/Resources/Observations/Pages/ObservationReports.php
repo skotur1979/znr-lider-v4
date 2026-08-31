@@ -35,20 +35,15 @@ class ObservationReports extends Page
 
     public ?string $hazard = null;
 
+    /*
+     * NOVO - izvor prijave.
+     */
+    public ?string $source = null;
+
     public array $report = [];
 
     public function mount(): void
     {
-        /*
-        |--------------------------------------------------------------------------
-        | Dozvola pregleda
-        |--------------------------------------------------------------------------
-        |
-        | Stranica /reports mora biti zaštićena i kada
-        | korisnik ručno upiše URL.
-        |
-        */
-
         if (
             $this->redirectIfMissingModulePermission(
                 'view'
@@ -57,7 +52,8 @@ class ObservationReports extends Page
             return;
         }
 
-        $this->year = (string) now()->year;
+        $this->year =
+            (string) now()->year;
 
         $this->loadData();
     }
@@ -102,124 +98,193 @@ class ObservationReports extends Page
         $this->loadData();
     }
 
+    public function updatedSource(): void
+    {
+        $this->loadData();
+    }
+
     public function resetFilters(): void
     {
-        $this->year = (string) now()->year;
-        $this->month = 'all';
-        $this->location = null;
-        $this->responsible = null;
-        $this->priority = null;
-        $this->status = null;
-        $this->type = null;
-        $this->hazard = null;
+        $this->year =
+            (string) now()->year;
+
+        $this->month =
+            'all';
+
+        $this->location =
+            null;
+
+        $this->responsible =
+            null;
+
+        $this->priority =
+            null;
+
+        $this->status =
+            null;
+
+        $this->type =
+            null;
+
+        $this->hazard =
+            null;
+
+        $this->source =
+            null;
 
         $this->loadData();
     }
 
     public function loadData(): void
     {
-        /*
-         * Dodatna zaštita i za Livewire pozive.
-         */
         if (
-            ! ObservationResource::canViewModule()
+            ! ObservationResource
+                ::canViewModule()
         ) {
             return;
         }
 
-        $this->report = app(
-            ObservationReportService::class
-        )->report(
-            $this->filters()
-        );
+        $this->report =
+            app(
+                ObservationReportService::class
+            )->report(
+                $this->filters()
+            );
     }
 
     protected function filters(): array
     {
         return [
-            'year' => $this->year,
-            'month' => $this->month,
-            'location' => $this->location,
-            'responsible' => $this->responsible,
-            'priority' => $this->priority,
-            'status' => $this->status,
-            'type' => $this->type,
-            'hazard' => $this->hazard,
+            'year' =>
+                $this->year,
+
+            'month' =>
+                $this->month,
+
+            'location' =>
+                $this->location,
+
+            'responsible' =>
+                $this->responsible,
+
+            'priority' =>
+                $this->priority,
+
+            'status' =>
+                $this->status,
+
+            'type' =>
+                $this->type,
+
+            'hazard' =>
+                $this->hazard,
+
+            'source' =>
+                $this->source,
         ];
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('export_report_pdf')
-                ->label('Izvoz izvještaja u PDF')
+            Action::make(
+                'export_report_pdf'
+            )
+                ->label(
+                    'Izvoz izvještaja u PDF'
+                )
                 ->icon(
                     'heroicon-o-arrow-down-tray'
                 )
-                ->color('warning')
-                ->action(function () {
-                    /*
-                     * Izvoz spada pod pravo Pregled.
-                     */
-                    if (
-                        ! ObservationResource::allowsModulePermission(
-                            'view'
-                        )
-                    ) {
-                        return null;
+                ->color(
+                    'warning'
+                )
+                ->action(
+                    function () {
+                        if (
+                            ! ObservationResource
+                                ::allowsModulePermission(
+                                    'view'
+                                )
+                        ) {
+                            return null;
+                        }
+
+                        $report =
+                            app(
+                                ObservationReportService::class
+                            )->report(
+                                $this->filters()
+                            );
+
+                        $pdf =
+                            Pdf::loadView(
+                                'pdf.observation-reports',
+                                [
+                                    'report' =>
+                                        $report,
+
+                                    'filters' =>
+                                        $this->filters(),
+                                ]
+                            )
+                                ->setPaper(
+                                    'a4',
+                                    'landscape'
+                                )
+                                ->setOptions([
+                                    'isHtml5ParserEnabled' =>
+                                        true,
+
+                                    'isRemoteEnabled' =>
+                                        true,
+
+                                    'isPhpEnabled' =>
+                                        true,
+
+                                    'dpi' =>
+                                        96,
+
+                                    'defaultFont' =>
+                                        'DejaVu Sans',
+                                ]);
+
+                        $yearLabel =
+                            $this->year
+                                === 'all'
+                                ? 'sve-godine'
+                                : $this->year;
+
+                        return response()
+                            ->streamDownload(
+                                fn () =>
+                                    print(
+                                        $pdf->output()
+                                    ),
+                                'izvjestaj-zapazanja-'
+                                    . $yearLabel
+                                    . '-'
+                                    . now()->format(
+                                        'Y-m-d'
+                                    )
+                                    . '.pdf'
+                            );
                     }
-
-                    $report = app(
-                        ObservationReportService::class
-                    )->report(
-                        $this->filters()
-                    );
-
-                    $pdf = Pdf::loadView(
-                        'pdf.observation-reports',
-                        [
-                            'report' => $report,
-                            'filters' => $this->filters(),
-                        ]
-                    )
-                        ->setPaper(
-                            'a4',
-                            'landscape'
-                        )
-                        ->setOptions([
-                            'isHtml5ParserEnabled' => true,
-                            'isRemoteEnabled' => true,
-                            'isPhpEnabled' => true,
-                            'dpi' => 96,
-                            'defaultFont' =>
-                                'DejaVu Sans',
-                        ]);
-
-                    $yearLabel =
-                        $this->year === 'all'
-                            ? 'sve-godine'
-                            : $this->year;
-
-                    return response()->streamDownload(
-                        fn () => print(
-                            $pdf->output()
-                        ),
-                        'izvjestaj-zapazanja-'
-                            . $yearLabel
-                            . '-'
-                            . now()->format('Y-m-d')
-                            . '.pdf'
-                    );
-                }),
+                ),
 
             Action::make('back')
-                ->label('Popis zapažanja')
-                ->icon('heroicon-o-arrow-left')
+                ->label(
+                    'Popis zapažanja'
+                )
+                ->icon(
+                    'heroicon-o-arrow-left'
+                )
                 ->color('gray')
                 ->url(
-                    ObservationResource::getUrl(
-                        'index'
-                    )
+                    ObservationResource
+                        ::getUrl(
+                            'index'
+                        )
                 ),
         ];
     }

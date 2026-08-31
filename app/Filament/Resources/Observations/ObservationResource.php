@@ -6,6 +6,7 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Observations\Pages;
 use App\Mail\ObservationNotificationMail;
 use App\Models\ActivityLog;
+use App\Support\ObservationOptions;
 use Filament\Forms\Components\Placeholder;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
@@ -136,13 +137,9 @@ class ObservationResource extends BaseResource
     return MaxWidth::Full;
 }
 
-    protected static function observationTypeOptions(): array
+   protected static function observationTypeOptions(): array
     {
-        return [
-            'Near Miss' => 'Near Miss - Skoro nezgoda',
-            'Negative Observation' => 'Negativno zapažanje',
-            'Positive Observation' => 'Pozitivno zapažanje',
-        ];
+        return ObservationOptions::types();
     }
 
     protected static function observationTypeLabel(?string $state): ?string
@@ -156,14 +153,9 @@ class ObservationResource extends BaseResource
     }
 
     protected static function priorityOptions(): array
-{
-    return [
-        'low' => 'Nisko',
-        'medium' => 'Srednje',
-        'high' => 'Visoko',
-        'critical' => 'Kritično',
-    ];
-}
+    {
+        return ObservationOptions::priorities();
+    }
 
     protected static function priorityColor(?string $state): string
 {
@@ -189,11 +181,7 @@ protected static function priorityIcon(?string $state): ?string
 
     protected static function statusOptions(): array
     {
-        return [
-            'Not started' => 'Nije započeto',
-            'In progress' => 'U tijeku',
-            'Complete' => 'Završeno',
-        ];
+        return ObservationOptions::statuses();
     }
 
     protected static function statusColor(?string $state): string
@@ -208,31 +196,7 @@ protected static function priorityIcon(?string $state): ?string
 
     protected static function potentialIncidentTypes(): array
     {
-        return [
-            'Kontakt s pokretnim dijelovima strojeva',
-            'Utapanje ili gušenje',
-            'Izloženost struji',
-            'Izloženost ekstremnim temperaturama',
-            'Izloženost vatri',
-            'Pad s visine',
-            'Pad na istoj razini',
-            'Udarac pokretnim vozilom',
-            'Udarac pokretnim, letećim ili padajućim predmetom',
-            'Udarac u nešto nepomično',
-            'Ručno rukovanje, podizanje ili nošenje',
-            'Profesionalna bolest/bolest',
-            'Fizički napad',
-            'Padovi, spoticanje ili pokliznuće',
-            'Incident s trećom stranom',
-            'Zarobljenost nečim što se ruši',
-            'Ostalo',
-            'Porezotine, ogrebotine ili abrazije',
-            'Blokirana protupožarna oprema',
-            'Blokirani evakuacijski putevi',
-            'Nedostatak odgovarajuće rasvjete',
-            'Nedostatak čistoće',
-            'Nepravilno skladištenje',
-        ];
+        return ObservationOptions::hazards();
     }
 
     protected static function responsiblePersonOptions(): array
@@ -386,7 +350,30 @@ protected static function priorityIcon(?string $state): ?string
                                                 ->helperText(
                                                     'Broj kalendarskih dana od datuma zapažanja do datuma zatvaranja.'
                                                 ),
+                                            Placeholder::make(
+                                                'public_source_info'
+                                            )
+                                                ->label('Izvor prijave')
+                                                ->content(
+                                                    fn (?Observation $record): string =>
+                                                        $record?->source === 'qr_public'
+                                                            ? 'QR javna prijava'
+                                                            : 'Interni unos'
+                                                ),
 
+                                            TextInput::make(
+                                                'reporter_contact'
+                                            )
+                                                ->label(
+                                                    'Kontakt / ime prijavitelja'
+                                                )
+                                                ->maxLength(255)
+                                                ->placeholder(
+                                                    'Nije navedeno'
+                                                )
+                                                ->helperText(
+                                                    'Polje se popunjava samo ako je prijavitelj dobrovoljno ostavio kontakt.'
+                                                ),
                                             TagsInput::make('notification_emails')
                                                 ->label('E-mail primatelji')
                                                 ->placeholder('Upiši e-mail i pritisni Enter')
@@ -560,6 +547,35 @@ protected static function priorityIcon(?string $state): ?string
         ->wrap()
         ->formatStateUsing(fn (?string $state) => static::observationTypeLabel($state))
         ->toggleable(),
+
+    TextColumn::make('source')
+        ->label('Izvor')
+        ->badge()
+        ->alignment(
+            Alignment::Center
+        )
+        ->formatStateUsing(
+            fn (?string $state): string =>
+                $state === 'qr_public'
+                    ? 'QR prijava'
+                    : 'Interno'
+        )
+        ->color(
+            fn (?string $state): string =>
+                $state === 'qr_public'
+                    ? 'success'
+                    : 'gray'
+        )
+        ->icon(
+            fn (?string $state): string =>
+                $state === 'qr_public'
+                    ? 'heroicon-o-qr-code'
+                    : 'heroicon-o-user'
+        )
+        ->toggleable(
+            isToggledHiddenByDefault:
+                true
+        ),
 
     TextColumn::make('priority')
         ->label('Prioritet')
