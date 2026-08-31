@@ -17,6 +17,10 @@ use App\Http\Controllers\FireQrAdminController;
 use App\Http\Controllers\PublicQr\FireQrController;
 use App\Http\Controllers\ObservationQrAdminController;
 use App\Http\Controllers\PublicQr\ObservationQrController;
+use App\Http\Controllers\RiskAssessmentQrAdminController;
+use App\Http\Controllers\PublicQr\RiskAssessmentQrController;
+use App\Http\Controllers\DocumentationQrAdminController;
+use App\Http\Controllers\PublicQr\DocumentationQrController;
 
 
 /*
@@ -177,6 +181,120 @@ Route::prefix('qr')
         ->name(
             'public.observation.success'
         );
+
+    Route::get(
+        '/risk-assessment-qr/{riskAssessment}',
+        [
+            RiskAssessmentQrAdminController::class,
+            'show',
+        ]
+    )->name(
+        'risk-assessment.qr.admin'
+    );
+
+
+    Route::post(
+        '/risk-assessment-qr/{riskAssessment}/regenerate',
+        [
+            RiskAssessmentQrAdminController::class,
+            'regenerate',
+        ]
+    )->name(
+        'risk-assessment.qr.regenerate'
+    );
+
+
+    Route::post(
+        '/risk-assessment-qr/{riskAssessment}/deactivate',
+        [
+            RiskAssessmentQrAdminController::class,
+            'deactivate',
+        ]
+    )->name(
+        'risk-assessment.qr.deactivate'
+    );
+
+
+    Route::post(
+        '/risk-assessment-qr/{riskAssessment}/activate',
+        [
+            RiskAssessmentQrAdminController::class,
+            'activate',
+        ]
+    )->name(
+        'risk-assessment.qr.activate'
+    );
+
+
+    Route::get(
+        '/risk-assessment-qr/{riskAssessment}/download/pdf',
+        [
+            RiskAssessmentQrAdminController::class,
+            'downloadPdf',
+        ]
+    )->name(
+        'risk-assessment.qr.download.pdf'
+    );
+
+    Route::middleware([
+            'auth',
+        ])->group(function () {
+
+            Route::get(
+                '/documentation-qr/{documentationItem}',
+                [
+                    DocumentationQrAdminController::class,
+                    'show',
+                ]
+            )
+                ->name(
+                    'documentation.qr.admin'
+                );
+
+            Route::post(
+                '/documentation-qr/{documentationItem}/regenerate',
+                [
+                    DocumentationQrAdminController::class,
+                    'regenerate',
+                ]
+            )
+                ->name(
+                    'documentation.qr.regenerate'
+                );
+
+            Route::post(
+                '/documentation-qr/{documentationItem}/deactivate',
+                [
+                    DocumentationQrAdminController::class,
+                    'deactivate',
+                ]
+            )
+                ->name(
+                    'documentation.qr.deactivate'
+                );
+
+            Route::post(
+                '/documentation-qr/{documentationItem}/activate',
+                [
+                    DocumentationQrAdminController::class,
+                    'activate',
+                ]
+            )
+                ->name(
+                    'documentation.qr.activate'
+                );
+
+            Route::get(
+                '/documentation-qr/{documentationItem}/pdf',
+                [
+                    DocumentationQrAdminController::class,
+                    'downloadPdf',
+                ]
+            )
+                ->name(
+                    'documentation.qr.download.pdf'
+                );
+        });
 /*
 |--------------------------------------------------------------------------
 | AUTENTIFICIRANE RUTE
@@ -534,6 +652,52 @@ Route::middleware(['auth'])->group(function () {
                     'observation.qr.activate'
                 );
         });
+
+        Route::get(
+            '/qr/risk-assessment/{token}',
+            [
+                RiskAssessmentQrController::class,
+                'show',
+            ]
+        )->name(
+            'public.risk-assessment.show'
+        );
+
+
+        Route::get(
+            '/qr/risk-assessment/{token}/attachment/{index}',
+            [
+                RiskAssessmentQrController::class,
+                'attachment',
+            ]
+        )
+            ->whereNumber('index')
+            ->name(
+                'public.risk-assessment.attachment'
+            );
+
+        Route::get(
+            '/qr/documentation/{token}',
+            [
+                DocumentationQrController::class,
+                'show',
+            ]
+        )
+            ->name(
+                'public.documentation.show'
+            );
+
+        Route::get(
+            '/qr/documentation/{token}/attachment/{index}',
+            [
+                DocumentationQrController::class,
+                'attachment',
+            ]
+        )
+            ->whereNumber('index')
+            ->name(
+                'public.documentation.attachment'
+            );
     /*
     |--------------------------------------------------------------------------
     | Siguran preview datoteka

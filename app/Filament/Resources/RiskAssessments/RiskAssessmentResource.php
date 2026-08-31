@@ -520,6 +520,22 @@ class RiskAssessmentResource extends BaseResource
                     ViewAction::make()
                         ->label('Prikaži'),
 
+                    Action::make('qrCode')
+                        ->label('QR kod')
+                        ->icon('heroicon-o-qr-code')
+                        ->color('success')
+                        ->url(
+                            fn (RiskAssessment $record): string =>
+                                route(
+                                    'risk-assessment.qr.admin',
+                                    [
+                                        'riskAssessment' =>
+                                            $record,
+                                    ]
+                                )
+                        )
+                        ->openUrlInNewTab(),
+
                     EditAction::make()
                         ->label('Uredi'),
 

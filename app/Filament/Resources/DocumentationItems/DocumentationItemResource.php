@@ -406,6 +406,23 @@ class DocumentationItemResource extends BaseResource
                     ViewAction::make()
                         ->label('Prikaži'),
 
+                    Action::make('qrCode')
+                        ->label('QR kod')
+                        ->icon('heroicon-o-qr-code')
+                        ->color('success')
+                        ->url(
+                            fn (
+                                DocumentationItem $record
+                            ): string =>
+                                route(
+                                    'documentation.qr.admin',
+                                    [
+                                        'documentationItem' =>
+                                            $record,
+                                    ]
+                                )
+                        ),
+
                     EditAction::make()
                         ->label('Uredi'),
 
