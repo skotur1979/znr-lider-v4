@@ -21,6 +21,8 @@ use App\Http\Controllers\RiskAssessmentQrAdminController;
 use App\Http\Controllers\PublicQr\RiskAssessmentQrController;
 use App\Http\Controllers\DocumentationQrAdminController;
 use App\Http\Controllers\PublicQr\DocumentationQrController;
+use App\Http\Controllers\MiscellaneousQrAdminController;
+use App\Http\Controllers\PublicQr\MiscellaneousQrController;
 
 
 /*
@@ -295,6 +297,61 @@ Route::prefix('qr')
                     'documentation.qr.download.pdf'
                 );
         });
+
+    Route::get(
+        '/miscellaneous-qr/{miscellaneous}',
+        [
+            MiscellaneousQrAdminController::class,
+            'show',
+        ]
+    )
+        ->name(
+            'miscellaneous.qr.admin'
+        );
+
+    Route::post(
+        '/miscellaneous-qr/{miscellaneous}/regenerate',
+        [
+            MiscellaneousQrAdminController::class,
+            'regenerate',
+        ]
+    )
+        ->name(
+            'miscellaneous.qr.regenerate'
+        );
+
+    Route::post(
+        '/miscellaneous-qr/{miscellaneous}/deactivate',
+        [
+            MiscellaneousQrAdminController::class,
+            'deactivate',
+        ]
+    )
+        ->name(
+            'miscellaneous.qr.deactivate'
+        );
+
+    Route::post(
+        '/miscellaneous-qr/{miscellaneous}/activate',
+        [
+            MiscellaneousQrAdminController::class,
+            'activate',
+        ]
+    )
+        ->name(
+            'miscellaneous.qr.activate'
+        );
+
+    Route::get(
+        '/miscellaneous-qr/{miscellaneous}/pdf',
+        [
+            MiscellaneousQrAdminController::class,
+            'downloadPdf',
+        ]
+    )
+        ->name(
+            'miscellaneous.qr.download.pdf'
+        );
 /*
 |--------------------------------------------------------------------------
 | AUTENTIFICIRANE RUTE
@@ -697,6 +754,29 @@ Route::middleware(['auth'])->group(function () {
             ->whereNumber('index')
             ->name(
                 'public.documentation.attachment'
+            );
+
+        Route::get(
+            '/qr/miscellaneous/{token}',
+            [
+                MiscellaneousQrController::class,
+                'show',
+            ]
+        )
+            ->name(
+                'public.miscellaneous.show'
+            );
+
+        Route::get(
+            '/qr/miscellaneous/{token}/attachment/{index}',
+            [
+                MiscellaneousQrController::class,
+                'attachment',
+            ]
+        )
+            ->whereNumber('index')
+            ->name(
+                'public.miscellaneous.attachment'
             );
     /*
     |--------------------------------------------------------------------------

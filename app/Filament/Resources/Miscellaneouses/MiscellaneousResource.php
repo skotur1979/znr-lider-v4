@@ -729,6 +729,29 @@ class MiscellaneousResource extends BaseResource
                         ->label('Prikaži')
                         ->color('gray'),
 
+                    Action::make('qrCode')
+                        ->label('QR kod')
+                        ->icon('heroicon-o-qr-code')
+                        ->color('success')
+                        ->visible(
+                            fn (
+                                Miscellaneous $record
+                            ): bool =>
+                                ! $record->trashed()
+                        )
+                        ->url(
+                            fn (
+                                Miscellaneous $record
+                            ): string =>
+                                route(
+                                    'miscellaneous.qr.admin',
+                                    [
+                                        'miscellaneous' =>
+                                            $record,
+                                    ]
+                                )
+                        ),
+
                     /*
                      * Gumb ostaje vidljiv korisniku.
                      * Ako nema UPDATE dozvolu,

@@ -14,8 +14,9 @@ class ViewMiscellaneous extends ViewRecord
     protected static string $resource =
         MiscellaneousResource::class;
 
-    public function mount(int|string $record): void
-    {
+    public function mount(
+        int|string $record
+    ): void {
         parent::mount($record);
 
         $this->redirectIfMissingModulePermission(
@@ -26,29 +27,68 @@ class ViewMiscellaneous extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('editMiscellaneous')
-                ->label('Uredi')
-                ->icon('heroicon-o-pencil-square')
-                ->color('warning')
-                ->action(function () {
-                    if (
-                        ! MiscellaneousResource::allowsModulePermission(
-                            'update'
-                        )
-                    ) {
-                        return;
-                    }
-
-                    return redirect(
-                        MiscellaneousResource::getUrl(
-                            'edit',
+            /*
+             * QR kod aktivnog zapisa.
+             */
+            Action::make('qrCode')
+                ->label('QR kod')
+                ->icon('heroicon-o-qr-code')
+                ->color('success')
+                ->visible(
+                    fn (): bool =>
+                        ! $this
+                            ->getRecord()
+                            ->trashed()
+                )
+                ->url(
+                    fn (): string =>
+                        route(
+                            'miscellaneous.qr.admin',
                             [
-                                'record' =>
+                                'miscellaneous' =>
                                     $this->getRecord(),
                             ]
                         )
-                    );
-                }),
+                ),
+
+            Action::make(
+                'editMiscellaneous'
+            )
+                ->label('Uredi')
+                ->icon(
+                    'heroicon-o-pencil-square'
+                )
+                ->color('warning')
+                ->visible(
+                    fn (): bool =>
+                        ! $this
+                            ->getRecord()
+                            ->trashed()
+                )
+                ->action(
+                    function () {
+                        if (
+                            ! MiscellaneousResource
+                                ::allowsModulePermission(
+                                    'update'
+                                )
+                        ) {
+                            return;
+                        }
+
+                        return redirect(
+                            MiscellaneousResource
+                                ::getUrl(
+                                    'edit',
+                                    [
+                                        'record' =>
+                                            $this
+                                                ->getRecord(),
+                                    ]
+                                )
+                        );
+                    }
+                ),
         ];
     }
 }
