@@ -5,8 +5,8 @@ namespace App\Exports;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Models\Observation;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithCustomStartCell;
 use Maatwebsite\Excel\Concerns\WithDrawings;
@@ -18,54 +18,52 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing;
 
 class ObservationsExport implements
     FromCollection,
     WithHeadings,
     WithMapping,
     WithColumnFormatting,
-    ShouldAutoSize,
     WithEvents,
     WithDrawings,
     WithCustomStartCell
 {
     protected $observations;
 
-    protected bool $showUserColumn =
-        false;
+    protected bool $showUserColumn = false;
 
-    private int $imgHeight =
-        70;
+    /*
+     * Visina slike u Excelu.
+     *
+     * Prije je bila 70 px.
+     * Sada je malo veća radi boljeg pregleda.
+     */
+    private int $imgHeight = 90;
 
-    private int $headingRow =
-        6;
+    private int $headingRow = 6;
 
-    private int $firstDataRow =
-        7;
+    private int $firstDataRow = 7;
 
     public function __construct(
         ?array $observationIds = null
     ) {
-        $user =
-            auth()->user();
+        $user = auth()->user();
 
         $this->showUserColumn =
             (bool) $user?->isSuperAdmin()
             || (bool) $user?->canCreateSubusers();
 
         $query =
-            ObservationResource
-                ::getEloquentQuery()
+            ObservationResource::getEloquentQuery()
                 ->with('user')
-                ->orderByDesc(
-                    'incident_date'
-                );
+                ->orderByDesc('incident_date');
 
-        if (
-            $observationIds
-            !== null
-        ) {
+        /*
+         * Ako su poslani ID-evi iz filtrirane tablice,
+         * izvoz poštuje samo te zapise.
+         */
+        if ($observationIds !== null) {
             $query->whereIn(
                 'observations.id',
                 $observationIds
@@ -78,8 +76,7 @@ class ObservationsExport implements
 
     public function startCell(): string
     {
-        return 'A'
-            . $this->headingRow;
+        return 'A' . $this->headingRow;
     }
 
     public function collection()
@@ -93,11 +90,8 @@ class ObservationsExport implements
             'Datum zapažanja',
         ];
 
-        if (
-            $this->showUserColumn
-        ) {
-            $headings[] =
-                'Korisnik';
+        if ($this->showUserColumn) {
+            $headings[] = 'Korisnik';
         }
 
         return array_merge(
@@ -115,18 +109,8 @@ class ObservationsExport implements
                 'Datum zatvaranja',
                 'Broj dana do zatvaranja',
                 'Status',
-
-                /*
-                 * NOVO.
-                 */
                 'Kontakt / ime prijavitelja',
-
-                /*
-                 * Ovo ostaje jer predstavlja
-                 * primatelje sustavne obavijesti.
-                 */
                 'E-mail primatelji',
-
                 'Poslano',
                 'Komentar',
                 'Slika',
@@ -140,51 +124,34 @@ class ObservationsExport implements
         /** @var Observation $observation */
 
         $incidentDate =
-            filled(
-                $observation
-                    ->incident_date
-            )
+            filled($observation->incident_date)
                 ? Carbon::parse(
-                    $observation
-                        ->incident_date
+                    $observation->incident_date
                 )
                 : null;
 
         $targetDate =
-            filled(
-                $observation
-                    ->target_date
-            )
+            filled($observation->target_date)
                 ? Carbon::parse(
-                    $observation
-                        ->target_date
+                    $observation->target_date
                 )
                 : null;
 
         $completedAt =
-            filled(
-                $observation
-                    ->completed_at
-            )
+            filled($observation->completed_at)
                 ? Carbon::parse(
-                    $observation
-                        ->completed_at
+                    $observation->completed_at
                 )
                 : null;
 
         $sentAt =
-            filled(
-                $observation
-                    ->sent_at
-            )
+            filled($observation->sent_at)
                 ? Carbon::parse(
-                    $observation
-                        ->sent_at
+                    $observation->sent_at
                 )
                 : null;
 
-        $closingDays =
-            null;
+        $closingDays = null;
 
         if (
             $incidentDate
@@ -203,16 +170,13 @@ class ObservationsExport implements
 
         $row = [
             $incidentDate
-                ? ExcelDate
-                    ::dateTimeToExcel(
-                        $incidentDate
-                    )
+                ? ExcelDate::dateTimeToExcel(
+                    $incidentDate
+                )
                 : null,
         ];
 
-        if (
-            $this->showUserColumn
-        ) {
+        if ($this->showUserColumn) {
             $row[] =
                 $observation
                     ->user
@@ -223,60 +187,46 @@ class ObservationsExport implements
         return array_merge(
             $row,
             [
-                $this
-                    ->observationTypeLabel(
-                        $observation
-                            ->observation_type
-                    ),
+                $this->observationTypeLabel(
+                    $observation->observation_type
+                ),
 
-                $this
-                    ->sourceLabel(
-                        $observation
-                            ->source
-                    ),
+                $this->sourceLabel(
+                    $observation->source
+                ),
 
-                $this
-                    ->priorityLabel(
-                        $observation
-                            ->priority
-                    ),
+                $this->priorityLabel(
+                    $observation->priority
+                ),
 
-                $observation
-                    ->location,
+                $observation->location,
 
-                $observation
-                    ->item,
+                $observation->item,
 
                 $observation
                     ->potential_incident_type,
 
-                $observation
-                    ->action,
+                $observation->action,
 
-                $observation
-                    ->responsible,
+                $observation->responsible,
 
                 $targetDate
-                    ? ExcelDate
-                        ::dateTimeToExcel(
-                            $targetDate
-                        )
+                    ? ExcelDate::dateTimeToExcel(
+                        $targetDate
+                    )
                     : null,
 
                 $completedAt
-                    ? ExcelDate
-                        ::dateTimeToExcel(
-                            $completedAt
-                        )
+                    ? ExcelDate::dateTimeToExcel(
+                        $completedAt
+                    )
                     : null,
 
                 $closingDays,
 
-                $this
-                    ->statusLabel(
-                        $observation
-                            ->status
-                    ),
+                $this->statusLabel(
+                    $observation->status
+                ),
 
                 $observation
                     ->reporter_contact
@@ -289,17 +239,16 @@ class ObservationsExport implements
                 ),
 
                 $sentAt
-                    ? ExcelDate
-                        ::dateTimeToExcel(
-                            $sentAt
-                        )
+                    ? ExcelDate::dateTimeToExcel(
+                        $sentAt
+                    )
                     : null,
 
-                $observation
-                    ->comments,
+                $observation->comments,
 
                 /*
-                 * Slika dolazi kroz drawings().
+                 * Slika se ne zapisuje kao vrijednost ćelije.
+                 * Dodaje se kroz drawings().
                  */
                 null,
             ]
@@ -308,51 +257,59 @@ class ObservationsExport implements
 
     public function columnFormats(): array
     {
-        if (
-            $this->showUserColumn
-        ) {
+        if ($this->showUserColumn) {
             /*
-             * A datum zapažanja
-             * K rok
-             * L datum zatvaranja
-             * Q poslano
+             * A = datum zapažanja
+             * K = rok
+             * L = datum zatvaranja
+             * Q = poslano
              */
             return [
-                'A' =>
-                    'dd.mm.yyyy',
-
-                'K' =>
-                    'dd.mm.yyyy',
-
-                'L' =>
-                    'dd.mm.yyyy',
-
-                'Q' =>
-                    'dd.mm.yyyy hh:mm',
+                'A' => 'dd.mm.yyyy',
+                'K' => 'dd.mm.yyyy',
+                'L' => 'dd.mm.yyyy',
+                'Q' => 'dd.mm.yyyy hh:mm',
             ];
         }
 
         /*
-         * Bez korisnika:
-         * A datum
-         * J rok
-         * K zatvaranje
-         * P poslano
+         * Bez stupca korisnika:
+         *
+         * A = datum zapažanja
+         * J = rok
+         * K = datum zatvaranja
+         * P = poslano
          */
         return [
-            'A' =>
-                'dd.mm.yyyy',
-
-            'J' =>
-                'dd.mm.yyyy',
-
-            'K' =>
-                'dd.mm.yyyy',
-
-            'P' =>
-                'dd.mm.yyyy hh:mm',
+            'A' => 'dd.mm.yyyy',
+            'J' => 'dd.mm.yyyy',
+            'K' => 'dd.mm.yyyy',
+            'P' => 'dd.mm.yyyy hh:mm',
         ];
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SLIKE
+    |--------------------------------------------------------------------------
+    |
+    | Stara verzija slala je originalnu fotografiju direktno u XLSX.
+    |
+    | Fotografija s mobitela može imati:
+    | - 3000 - 5000 px
+    | - nekoliko MB
+    | - EXIF Orientation
+    |
+    | Zato je Excel izvoz bio spor i velik, a neke slike bile su bočno.
+    |
+    | Nova verzija:
+    | - učita sliku u GD
+    | - pročita EXIF Orientation
+    | - pravilno je rotira
+    | - smanji je na max. 600 x 600 px
+    | - tek tada je ugradi u Excel
+    |
+    */
 
     public function drawings(): array
     {
@@ -365,56 +322,66 @@ class ObservationsExport implements
 
         foreach (
             $this->observations
-            as $index =>
-                $observation
+            as $index => $observation
         ) {
             if (
                 blank(
-                    $observation
-                        ->picture_path
+                    $observation->picture_path
                 )
             ) {
                 continue;
             }
 
             $fullPath =
-                storage_path(
-                    'app/public/'
-                    . ltrim(
-                        (string)
-                        $observation
-                            ->picture_path,
-                        '/'
-                    )
+                $this->pictureFullPath(
+                    (string)
+                    $observation->picture_path
                 );
 
-            if (
-                ! file_exists(
+            if (! $fullPath) {
+                continue;
+            }
+
+            $image =
+                $this->prepareImageForExcel(
                     $fullPath
-                )
-            ) {
+                );
+
+            if (! $image) {
                 continue;
             }
 
             $row =
                 $index
-                + $this
-                    ->firstDataRow;
+                + $this->firstDataRow;
 
             $drawing =
-                new Drawing();
+                new MemoryDrawing();
 
             $drawing->setName(
-                'slika_'
-                . $row
+                'slika_' . $row
             );
 
             $drawing->setDescription(
                 'Slika zapažanja'
             );
 
-            $drawing->setPath(
-                $fullPath
+            /*
+             * U MemoryDrawing stavljamo već:
+             * - rotiranu
+             * - smanjenu
+             * fotografiju.
+             */
+            $drawing->setImageResource(
+                $image
+            );
+
+            $drawing->setRenderingFunction(
+                MemoryDrawing::RENDERING_JPEG
+            );
+
+            $drawing->setMimeType(
+                MemoryDrawing::MIMETYPE_JPEG
             );
 
             $drawing->setHeight(
@@ -422,28 +389,428 @@ class ObservationsExport implements
             );
 
             $drawing->setCoordinates(
-                $imageColumn
-                . $row
+                $imageColumn . $row
             );
 
-            $drawing->setOffsetX(
-                5
+            $drawing->setOffsetX(8);
+            $drawing->setOffsetY(5);
+
+            $drawing->setResizeProportional(
+                true
             );
 
-            $drawing->setOffsetY(
-                5
-            );
-
-            $drawing
-                ->setResizeProportional(
-                    true
-                );
-
-            $drawings[] =
-                $drawing;
+            $drawings[] = $drawing;
         }
 
         return $drawings;
+    }
+
+    private function pictureFullPath(
+        string $picturePath
+    ): ?string {
+        $relativePath =
+            Str::of($picturePath)
+                ->replaceFirst(
+                    '/storage/',
+                    ''
+                )
+                ->replaceFirst(
+                    'storage/',
+                    ''
+                )
+                ->ltrim('/')
+                ->toString();
+
+        if ($relativePath === '') {
+            return null;
+        }
+
+        /*
+         * Ne dopuštamo izlazak iz public storagea.
+         */
+        if (
+            preg_match(
+                '#(^|/)\.\.(/|$)#',
+                $relativePath
+            ) === 1
+        ) {
+            return null;
+        }
+
+        $fullPath =
+            storage_path(
+                'app/public/'
+                . $relativePath
+            );
+
+        if (
+            ! is_file($fullPath)
+            || ! is_readable($fullPath)
+        ) {
+            return null;
+        }
+
+        return $fullPath;
+    }
+
+    private function prepareImageForExcel(
+        string $fullPath
+    ) {
+        /*
+         * Ako PHP GD nije dostupan,
+         * sliku preskačemo umjesto da ponovno
+         * ugrađujemo ogromni original.
+         */
+        if (
+            ! function_exists(
+                'imagecreatefromstring'
+            )
+        ) {
+            return null;
+        }
+
+        $binary =
+            @file_get_contents(
+                $fullPath
+            );
+
+        if ($binary === false) {
+            return null;
+        }
+
+        $image =
+            @imagecreatefromstring(
+                $binary
+            );
+
+        /*
+         * Više nam ne treba originalni binary.
+         */
+        unset($binary);
+
+        if ($image === false) {
+            return null;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | EXIF ORIENTATION
+        |--------------------------------------------------------------------------
+        */
+
+        $extension =
+            strtolower(
+                pathinfo(
+                    $fullPath,
+                    PATHINFO_EXTENSION
+                )
+            );
+
+        if (
+            in_array(
+                $extension,
+                [
+                    'jpg',
+                    'jpeg',
+                ],
+                true
+            )
+            && function_exists(
+                'exif_read_data'
+            )
+        ) {
+            try {
+                $exif =
+                    @exif_read_data(
+                        $fullPath
+                    );
+
+                $orientation =
+                    (int) (
+                        $exif['Orientation']
+                        ?? 1
+                    );
+
+                $image =
+                    $this->applyExifOrientation(
+                        $image,
+                        $orientation
+                    );
+            } catch (\Throwable $exception) {
+                /*
+                 * Ako EXIF nije dostupan ili je
+                 * neispravan, izvoz se nastavlja.
+                 */
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | SMANJIVANJE
+        |--------------------------------------------------------------------------
+        |
+        | Za prikaz slike veličine oko 90 px nema razloga
+        | ugrađivati fotografiju od 4000 px.
+        |
+        | 600 px ostavlja dovoljno kvalitete čak i ako
+        | korisnik malo poveća sliku u Excelu.
+        |
+        */
+
+        $sourceWidth =
+            imagesx($image);
+
+        $sourceHeight =
+            imagesy($image);
+
+        if (
+            $sourceWidth <= 0
+            || $sourceHeight <= 0
+        ) {
+            imagedestroy($image);
+
+            return null;
+        }
+
+        $maxWidth = 600;
+        $maxHeight = 600;
+
+        $ratio =
+            min(
+                $maxWidth
+                    / $sourceWidth,
+
+                $maxHeight
+                    / $sourceHeight,
+
+                1
+            );
+
+        $targetWidth =
+            max(
+                1,
+                (int) round(
+                    $sourceWidth
+                    * $ratio
+                )
+            );
+
+        $targetHeight =
+            max(
+                1,
+                (int) round(
+                    $sourceHeight
+                    * $ratio
+                )
+            );
+
+        /*
+         * Ako je slika već dovoljno mala,
+         * ipak je prebacujemo u novi JPEG resource.
+         *
+         * Time standardiziramo fotografije za XLSX.
+         */
+        $thumbnail =
+            imagecreatetruecolor(
+                $targetWidth,
+                $targetHeight
+            );
+
+        if ($thumbnail === false) {
+            imagedestroy($image);
+
+            return null;
+        }
+
+        /*
+         * Bijela pozadina za PNG/WebP/GIF slike
+         * koje mogu sadržavati transparentnost.
+         */
+        $white =
+            imagecolorallocate(
+                $thumbnail,
+                255,
+                255,
+                255
+            );
+
+        imagefill(
+            $thumbnail,
+            0,
+            0,
+            $white
+        );
+
+        $copied =
+            imagecopyresampled(
+                $thumbnail,
+                $image,
+                0,
+                0,
+                0,
+                0,
+                $targetWidth,
+                $targetHeight,
+                $sourceWidth,
+                $sourceHeight
+            );
+
+        imagedestroy($image);
+
+        if (! $copied) {
+            imagedestroy(
+                $thumbnail
+            );
+
+            return null;
+        }
+
+        return $thumbnail;
+    }
+
+    private function applyExifOrientation(
+        $image,
+        int $orientation
+    ) {
+        switch ($orientation) {
+            /*
+             * Horizontalno zrcaljenje.
+             */
+            case 2:
+                if (
+                    function_exists(
+                        'imageflip'
+                    )
+                ) {
+                    imageflip(
+                        $image,
+                        IMG_FLIP_HORIZONTAL
+                    );
+                }
+
+                break;
+
+            /*
+             * Rotacija 180°.
+             */
+            case 3:
+                $image =
+                    $this->rotateImage(
+                        $image,
+                        180
+                    );
+
+                break;
+
+            /*
+             * Vertikalno zrcaljenje.
+             */
+            case 4:
+                if (
+                    function_exists(
+                        'imageflip'
+                    )
+                ) {
+                    imageflip(
+                        $image,
+                        IMG_FLIP_VERTICAL
+                    );
+                }
+
+                break;
+
+            /*
+             * Mirror + 90°.
+             */
+            case 5:
+                if (
+                    function_exists(
+                        'imageflip'
+                    )
+                ) {
+                    imageflip(
+                        $image,
+                        IMG_FLIP_HORIZONTAL
+                    );
+                }
+
+                $image =
+                    $this->rotateImage(
+                        $image,
+                        -90
+                    );
+
+                break;
+
+            /*
+             * 90° udesno.
+             */
+            case 6:
+                $image =
+                    $this->rotateImage(
+                        $image,
+                        -90
+                    );
+
+                break;
+
+            /*
+             * Mirror + 90° ulijevo.
+             */
+            case 7:
+                if (
+                    function_exists(
+                        'imageflip'
+                    )
+                ) {
+                    imageflip(
+                        $image,
+                        IMG_FLIP_HORIZONTAL
+                    );
+                }
+
+                $image =
+                    $this->rotateImage(
+                        $image,
+                        90
+                    );
+
+                break;
+
+            /*
+             * 90° ulijevo.
+             */
+            case 8:
+                $image =
+                    $this->rotateImage(
+                        $image,
+                        90
+                    );
+
+                break;
+        }
+
+        return $image;
+    }
+
+    private function rotateImage(
+        $image,
+        int $angle
+    ) {
+        $rotated =
+            @imagerotate(
+                $image,
+                $angle,
+                0
+            );
+
+        if ($rotated === false) {
+            return $image;
+        }
+
+        imagedestroy($image);
+
+        return $rotated;
     }
 
     public function registerEvents(): array
@@ -469,16 +836,18 @@ class ObservationsExport implements
                             $this
                                 ->observations
                                 ->count()
-                                + $this
-                                    ->headingRow
+                            + $this->headingRow
                         );
 
                     $user =
                         auth()->user();
 
                     /*
-                     * Naslov.
-                     */
+                    |--------------------------------------------------------------------------
+                    | NASLOV
+                    |--------------------------------------------------------------------------
+                    */
+
                     $sheet->mergeCells(
                         "A1:{$lastColumn}1"
                     );
@@ -492,15 +861,10 @@ class ObservationsExport implements
                         ->getStyle('A1')
                         ->applyFromArray([
                             'font' => [
-                                'bold' =>
-                                    true,
-
-                                'size' =>
-                                    16,
-
+                                'bold' => true,
+                                'size' => 16,
                                 'name' =>
                                     'DejaVu Sans',
-
                                 'color' => [
                                     'rgb' =>
                                         'FFFFFF',
@@ -528,13 +892,14 @@ class ObservationsExport implements
 
                     $sheet
                         ->getRowDimension(1)
-                        ->setRowHeight(
-                            28
-                        );
+                        ->setRowHeight(28);
 
                     /*
-                     * Podatci izvoza.
-                     */
+                    |--------------------------------------------------------------------------
+                    | PODATCI IZVOZA
+                    |--------------------------------------------------------------------------
+                    */
+
                     $sheet->mergeCells(
                         "A2:{$lastColumn}2"
                     );
@@ -559,8 +924,7 @@ class ObservationsExport implements
                                 'name' =>
                                     'DejaVu Sans',
 
-                                'size' =>
-                                    10,
+                                'size' => 10,
 
                                 'italic' =>
                                     true,
@@ -578,8 +942,11 @@ class ObservationsExport implements
                         ]);
 
                     /*
-                     * Sažetak.
-                     */
+                    |--------------------------------------------------------------------------
+                    | SAŽETAK
+                    |--------------------------------------------------------------------------
+                    */
+
                     $total =
                         $this
                             ->observations
@@ -685,8 +1052,7 @@ class ObservationsExport implements
                                 'name' =>
                                     'DejaVu Sans',
 
-                                'size' =>
-                                    10,
+                                'size' => 10,
 
                                 'bold' =>
                                     true,
@@ -721,20 +1087,23 @@ class ObservationsExport implements
 
                     $sheet
                         ->getRowDimension(3)
-                        ->setRowHeight(
-                            30
-                        );
+                        ->setRowHeight(30);
 
                     /*
-                     * Legenda.
-                     */
+                    |--------------------------------------------------------------------------
+                    | LEGENDA
+                    |--------------------------------------------------------------------------
+                    */
+
                     $sheet->mergeCells(
                         "A4:{$lastColumn}4"
                     );
 
                     $sheet->setCellValue(
                         'A4',
-                        'Legenda roka: CRVENO = rok je istekao | ŽUTO = rok istječe u sljedećih 30 dana'
+                        'Legenda: CRVENO = isteklo / nije započeto | '
+                        . 'ŽUTO = rok istječe u sljedećih 30 dana / u tijeku | '
+                        . 'ZELENO = završeno'
                     );
 
                     $sheet
@@ -744,8 +1113,7 @@ class ObservationsExport implements
                                 'name' =>
                                     'DejaVu Sans',
 
-                                'size' =>
-                                    9,
+                                'size' => 9,
 
                                 'bold' =>
                                     true,
@@ -762,6 +1130,12 @@ class ObservationsExport implements
                             ],
                         ]);
 
+                    /*
+                    |--------------------------------------------------------------------------
+                    | FONT CIJELOG IZVOZA
+                    |--------------------------------------------------------------------------
+                    */
+
                     $sheet
                         ->getStyle(
                             "A1:{$lastColumn}{$lastDataRow}"
@@ -770,13 +1144,14 @@ class ObservationsExport implements
                         ->setName(
                             'DejaVu Sans'
                         )
-                        ->setSize(
-                            10
-                        );
+                        ->setSize(10);
 
                     /*
-                     * Zaglavlje.
-                     */
+                    |--------------------------------------------------------------------------
+                    | ZAGLAVLJE TABLICE
+                    |--------------------------------------------------------------------------
+                    */
+
                     $sheet
                         ->getStyle(
                             "A{$this->headingRow}:{$lastColumn}{$this->headingRow}"
@@ -794,8 +1169,7 @@ class ObservationsExport implements
                                 'name' =>
                                     'DejaVu Sans',
 
-                                'size' =>
-                                    10,
+                                'size' => 10,
                             ],
 
                             'fill' => [
@@ -836,9 +1210,13 @@ class ObservationsExport implements
                         ->getRowDimension(
                             $this->headingRow
                         )
-                        ->setRowHeight(
-                            32
-                        );
+                        ->setRowHeight(32);
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | TIJELO TABLICE
+                    |--------------------------------------------------------------------------
+                    */
 
                     if (
                         $this
@@ -876,11 +1254,35 @@ class ObservationsExport implements
                     }
 
                     /*
-                     * Stupci.
-                     */
-                    if (
-                        $this->showUserColumn
-                    ) {
+                    |--------------------------------------------------------------------------
+                    | ŠIRINE STUPACA
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if ($this->showUserColumn) {
+                        /*
+                         * Sa stupcem Korisnik:
+                         *
+                         * A Datum
+                         * B Korisnik
+                         * C Vrsta
+                         * D Izvor
+                         * E Prioritet
+                         * F Lokacija
+                         * G Opis
+                         * H Vrsta opasnosti
+                         * I Potrebna radnja
+                         * J Odgovorna osoba
+                         * K Rok
+                         * L Datum zatvaranja
+                         * M Dani zatvaranja
+                         * N Status
+                         * O Kontakt
+                         * P E-mail
+                         * Q Poslano
+                         * R Komentar
+                         * S Slika
+                         */
                         $widths = [
                             'A' => 15,
                             'B' => 24,
@@ -900,27 +1302,24 @@ class ObservationsExport implements
                             'P' => 34,
                             'Q' => 19,
                             'R' => 35,
-                            'S' => 15,
+
+                            /*
+                             * Slika je prije bila 15.
+                             */
+                            'S' => 24,
                         ];
 
-                        $sourceColumn =
-                            'D';
-
-                        $priorityColumn =
-                            'E';
-
-                        $targetDateColumn =
-                            'K';
-
-                        $completedDateColumn =
-                            'L';
-
-                        $closingDaysColumn =
-                            'M';
-
-                        $statusColumn =
-                            'N';
+                        $sourceColumn = 'D';
+                        $priorityColumn = 'E';
+                        $targetDateColumn = 'K';
+                        $completedDateColumn = 'L';
+                        $closingDaysColumn = 'M';
+                        $statusColumn = 'N';
+                        $imageColumn = 'S';
                     } else {
+                        /*
+                         * Bez stupca Korisnik.
+                         */
                         $widths = [
                             'A' => 15,
                             'B' => 24,
@@ -939,32 +1338,25 @@ class ObservationsExport implements
                             'O' => 34,
                             'P' => 19,
                             'Q' => 35,
-                            'R' => 15,
+
+                            /*
+                             * Slika je prije bila 15.
+                             */
+                            'R' => 24,
                         ];
 
-                        $sourceColumn =
-                            'C';
-
-                        $priorityColumn =
-                            'D';
-
-                        $targetDateColumn =
-                            'J';
-
-                        $completedDateColumn =
-                            'K';
-
-                        $closingDaysColumn =
-                            'L';
-
-                        $statusColumn =
-                            'M';
+                        $sourceColumn = 'C';
+                        $priorityColumn = 'D';
+                        $targetDateColumn = 'J';
+                        $completedDateColumn = 'K';
+                        $closingDaysColumn = 'L';
+                        $statusColumn = 'M';
+                        $imageColumn = 'R';
                     }
 
                     foreach (
                         $widths
-                        as $column =>
-                            $width
+                        as $column => $width
                     ) {
                         $sheet
                             ->getColumnDimension(
@@ -974,6 +1366,12 @@ class ObservationsExport implements
                                 $width
                             );
                     }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CENTRIRANI STUPCI
+                    |--------------------------------------------------------------------------
+                    */
 
                     if (
                         $this
@@ -988,6 +1386,7 @@ class ObservationsExport implements
                             $completedDateColumn,
                             $closingDaysColumn,
                             $statusColumn,
+                            $imageColumn,
                         ];
 
                         foreach (
@@ -1005,15 +1404,19 @@ class ObservationsExport implements
                         }
                     }
 
+                    /*
+                    |--------------------------------------------------------------------------
+                    | VISINA REDOVA
+                    |--------------------------------------------------------------------------
+                    */
+
                     foreach (
                         $this->observations
-                        as $index =>
-                            $observation
+                        as $index => $observation
                     ) {
                         $row =
                             $index
-                            + $this
-                                ->firstDataRow;
+                            + $this->firstDataRow;
 
                         $sheet
                             ->getRowDimension(
@@ -1024,25 +1427,43 @@ class ObservationsExport implements
                                     $observation
                                         ->picture_path
                                 )
-                                    ? $this
-                                        ->imgHeight
-                                        * 0.75
+                                    /*
+                                     * 90 px slike ≈ 67.5 pt,
+                                     * dodajemo malo prostora.
+                                     */
+                                    ? 74
                                     : 38
                             );
                     }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | BOJE
+                    |--------------------------------------------------------------------------
+                    */
 
                     $today =
                         Carbon::today();
 
                     foreach (
                         $this->observations
-                        as $index =>
-                            $observation
+                        as $index => $observation
                     ) {
                         $row =
                             $index
-                            + $this
-                                ->firstDataRow;
+                            + $this->firstDataRow;
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | ROK ZA PROVEDBU
+                        |--------------------------------------------------------------------------
+                        |
+                        | Isto kao Radna oprema:
+                        |
+                        | isteklo = čisto crveno
+                        | do 30 dana = čisto žuto
+                        |
+                        */
 
                         $targetDate =
                             filled(
@@ -1062,44 +1483,46 @@ class ObservationsExport implements
                                 !== 'Complete'
                         ) {
                             if (
-                                $targetDate
-                                    ->lt(
-                                        $today
-                                    )
+                                $targetDate->lt(
+                                    $today
+                                )
                             ) {
-                                $this
-                                    ->styleCell(
-                                        $sheet,
-                                        "{$targetDateColumn}{$row}",
-                                        'DC2626',
-                                        'FFFFFF'
-                                    );
+                                $this->styleCell(
+                                    $sheet,
+                                    "{$targetDateColumn}{$row}",
+                                    'FF0000',
+                                    '000000'
+                                );
                             } elseif (
-                                $targetDate
-                                    ->lte(
-                                        $today
-                                            ->copy()
-                                            ->addDays(
-                                                30
-                                            )
-                                    )
+                                $targetDate->lte(
+                                    $today
+                                        ->copy()
+                                        ->addDays(30)
+                                )
                             ) {
-                                $this
-                                    ->styleCell(
-                                        $sheet,
-                                        "{$targetDateColumn}{$row}",
-                                        'FDE047',
-                                        '111827'
-                                    );
+                                $this->styleCell(
+                                    $sheet,
+                                    "{$targetDateColumn}{$row}",
+                                    'FFFF00',
+                                    '000000'
+                                );
                             }
                         }
 
-                        [$priorityBackground, $priorityText] =
-                            $this
-                                ->priorityColors(
-                                    $observation
-                                        ->priority
-                                );
+                        /*
+                        |--------------------------------------------------------------------------
+                        | PRIORITET
+                        |--------------------------------------------------------------------------
+                        */
+
+                        [
+                            $priorityBackground,
+                            $priorityText,
+                        ] =
+                            $this->priorityColors(
+                                $observation
+                                    ->priority
+                            );
 
                         $this->styleCell(
                             $sheet,
@@ -1108,12 +1531,25 @@ class ObservationsExport implements
                             $priorityText
                         );
 
-                        [$statusBackground, $statusText] =
-                            $this
-                                ->statusColors(
-                                    $observation
-                                        ->status
-                                );
+                        /*
+                        |--------------------------------------------------------------------------
+                        | STATUS
+                        |--------------------------------------------------------------------------
+                        |
+                        | Nije započeto = crveno
+                        | U tijeku = žuto
+                        | Završeno = zeleno
+                        |
+                        */
+
+                        [
+                            $statusBackground,
+                            $statusText,
+                        ] =
+                            $this->statusColors(
+                                $observation
+                                    ->status
+                            );
 
                         $this->styleCell(
                             $sheet,
@@ -1123,12 +1559,12 @@ class ObservationsExport implements
                         );
 
                         /*
-                         * Vizualno označi QR izvor.
+                         * QR prijava.
                          */
                         if (
                             $observation
                                 ->source
-                                === 'qr_public'
+                            === 'qr_public'
                         ) {
                             $this->styleCell(
                                 $sheet,
@@ -1138,10 +1574,13 @@ class ObservationsExport implements
                             );
                         }
 
+                        /*
+                         * Datum zatvaranja i broj dana.
+                         */
                         if (
                             $observation
                                 ->status
-                                === 'Complete'
+                            === 'Complete'
                             && filled(
                                 $observation
                                     ->completed_at
@@ -1150,29 +1589,37 @@ class ObservationsExport implements
                             $this->styleCell(
                                 $sheet,
                                 "{$completedDateColumn}{$row}",
-                                'DCFCE7',
-                                '166534'
+                                '00B050',
+                                'FFFFFF'
                             );
 
                             $this->styleCell(
                                 $sheet,
                                 "{$closingDaysColumn}{$row}",
-                                'DCFCE7',
-                                '166534'
+                                '00B050',
+                                'FFFFFF'
                             );
                         }
                     }
 
+                    /*
+                    |--------------------------------------------------------------------------
+                    | EXCEL FUNKCIONALNOSTI
+                    |--------------------------------------------------------------------------
+                    */
+
                     $sheet->freezePane(
                         'A'
-                        . $this
-                            ->firstDataRow
+                        . $this->firstDataRow
                     );
 
                     $sheet->setAutoFilter(
                         "A{$this->headingRow}:{$lastColumn}{$lastDataRow}"
                     );
 
+                    /*
+                     * Landscape ispis.
+                     */
                     $sheet
                         ->getPageSetup()
                         ->setOrientation(
@@ -1181,15 +1628,11 @@ class ObservationsExport implements
 
                     $sheet
                         ->getPageSetup()
-                        ->setFitToWidth(
-                            1
-                        );
+                        ->setFitToWidth(1);
 
                     $sheet
                         ->getPageSetup()
-                        ->setFitToHeight(
-                            0
-                        );
+                        ->setFitToHeight(0);
 
                     $sheet
                         ->getPageMargins()
@@ -1229,10 +1672,9 @@ class ObservationsExport implements
     private function sourceLabel(
         ?string $state
     ): string {
-        return $state
-            === 'qr_public'
-                ? 'QR prijava'
-                : 'Interni unos';
+        return $state === 'qr_public'
+            ? 'QR prijava'
+            : 'Interni unos';
     }
 
     private function priorityLabel(
@@ -1277,29 +1719,21 @@ class ObservationsExport implements
     private function emails(
         $value
     ): string {
-        if (
-            is_array($value)
-        ) {
-            return collect(
-                $value
-            )
+        if (is_array($value)) {
+            return collect($value)
                 ->map(
                     fn ($email) =>
                         trim(
-                            (string)
-                            $email
+                            (string) $email
                         )
                 )
                 ->filter()
                 ->unique()
-                ->implode(
-                    ', '
-                );
+                ->implode(', ');
         }
 
         return trim(
-            (string)
-            (
+            (string) (
                 $value
                 ?? ''
             )
@@ -1310,24 +1744,41 @@ class ObservationsExport implements
         ?string $priority
     ): array {
         return match ($priority) {
+
+            /*
+            * KRITIČNO
+            * Tamnije crveno.
+            */
             'critical' => [
-                'DC2626',
+                'C00000',
                 'FFFFFF',
             ],
 
+            /*
+            * VISOKO
+            * Isto jako crveno kao istekli rok.
+            */
             'high' => [
-                'F97316',
+                'FF0000',
                 'FFFFFF',
             ],
 
+            /*
+            * SREDNJE
+            * Isto jako žuto kao rok koji uskoro istječe.
+            */
             'medium' => [
-                'FDE68A',
-                '92400E',
+                'FFFF00',
+                '000000',
             ],
 
+            /*
+            * NISKO
+            * Narančasto.
+            */
             'low' => [
-                'E5E7EB',
-                '374151',
+                'F4B183',
+                '000000',
             ],
 
             default => [
@@ -1336,24 +1787,41 @@ class ObservationsExport implements
             ],
         };
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | BOJE STATUSA
+    |--------------------------------------------------------------------------
+    |
+    | Namjerno nisu pastelne kao prije.
+    |
+    | Koristimo jake boje radi usklađivanja
+    | s ostalim Excel izvozima:
+    |
+    | Nije započeto = CRVENO
+    | U tijeku       = ŽUTO
+    | Završeno       = ZELENO
+    |
+    */
 
     private function statusColors(
         ?string $status
     ): array {
         return match ($status) {
+
             'Not started' => [
-                'FEE2E2',
-                '991B1B',
+                'FF0000',
+                'FFFFFF',
             ],
 
             'In progress' => [
-                'FEF3C7',
-                '92400E',
+                'FFFF00',
+                '000000',
             ],
 
             'Complete' => [
-                'DCFCE7',
-                '166534',
+                '00B050',
+                'FFFFFF',
             ],
 
             default => [
@@ -1362,7 +1830,6 @@ class ObservationsExport implements
             ],
         };
     }
-
     private function styleCell(
         $sheet,
         string $cell,
@@ -1370,18 +1837,14 @@ class ObservationsExport implements
         string $fontColor
     ): void {
         $sheet
-            ->getStyle(
-                $cell
-            )
+            ->getStyle($cell)
             ->getFill()
             ->setFillType(
                 Fill::FILL_SOLID
             );
 
         $sheet
-            ->getStyle(
-                $cell
-            )
+            ->getStyle($cell)
             ->getFill()
             ->getStartColor()
             ->setRGB(
@@ -1389,22 +1852,16 @@ class ObservationsExport implements
             );
 
         $sheet
-            ->getStyle(
-                $cell
-            )
+            ->getStyle($cell)
             ->getFont()
-            ->setBold(
-                true
-            )
+            ->setBold(true)
             ->getColor()
             ->setRGB(
                 $fontColor
             );
 
         $sheet
-            ->getStyle(
-                $cell
-            )
+            ->getStyle($cell)
             ->getAlignment()
             ->setHorizontal(
                 Alignment::HORIZONTAL_CENTER

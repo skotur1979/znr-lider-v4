@@ -421,7 +421,8 @@ class DocumentationItemResource extends BaseResource
                                             $record,
                                     ]
                                 )
-                        ),
+                        )
+                        ->openUrlInNewTab(),
 
                     EditAction::make()
                         ->label('Uredi'),

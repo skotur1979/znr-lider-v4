@@ -1,11 +1,44 @@
+@php
+
+    $labelName =
+        trim(
+            (string) $miscellaneous->name
+        );
+
+    $nameLength =
+        mb_strlen(
+            $labelName
+        );
+
+    /*
+     * Duži nazivi dobivaju manji font.
+     *
+     * Tekst ostaje maksimalno u dva reda.
+     */
+    $nameClass =
+        match (true) {
+
+            $nameLength > 75 =>
+                'misc-qr-label-name very-long',
+
+            $nameLength > 48 =>
+                'misc-qr-label-name long',
+
+            default =>
+                'misc-qr-label-name',
+        };
+
+@endphp
+
+
 <div class="misc-qr-label">
 
     <div class="misc-qr-label-type">
         ZNR LIDER · OSTALA ISPITIVANJA
     </div>
 
-    <div class="misc-qr-label-name">
-        {{ $miscellaneous->name }}
+    <div class="{{ $nameClass }}">
+        {{ $labelName }}
     </div>
 
     <div class="misc-qr-label-category">

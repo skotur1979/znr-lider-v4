@@ -49,7 +49,8 @@ class ViewMiscellaneous extends ViewRecord
                                     $this->getRecord(),
                             ]
                         )
-                ),
+                )
+                ->openUrlInNewTab(),
 
             Action::make(
                 'editMiscellaneous'

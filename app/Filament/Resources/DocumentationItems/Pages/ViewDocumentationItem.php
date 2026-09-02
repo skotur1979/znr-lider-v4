@@ -28,7 +28,8 @@ class ViewDocumentationItem extends ViewRecord
                                     $this->getRecord(),
                             ]
                         )
-                ),
+                )
+                ->openUrlInNewTab(),
 
             EditAction::make()
                 ->label('Uredi'),

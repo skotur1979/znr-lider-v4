@@ -93,20 +93,40 @@
 
         .misc-qr-label-name {
             width: 100%;
+            height: 6.2mm;
 
             margin:
-                0.4mm
+                0.3mm
                 0
                 0;
 
-            font-size: 9pt;
+            padding: 0;
+
+            font-size: 8.2pt;
             font-weight: bold;
 
-            line-height: 1;
+            line-height: 1.05;
 
-            white-space: nowrap;
+            text-align: center;
+
+            white-space: normal;
+
             overflow: hidden;
-            text-overflow: ellipsis;
+
+            word-break: normal;
+            overflow-wrap: normal;
+
+            display: block;
+        }
+
+        .misc-qr-label-name.long {
+            font-size: 7.2pt;
+            line-height: 1.05;
+        }
+
+        .misc-qr-label-name.very-long {
+            font-size: 6.3pt;
+            line-height: 1.05;
         }
 
         .misc-qr-label-category {

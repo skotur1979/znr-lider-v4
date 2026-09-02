@@ -750,7 +750,8 @@ class MiscellaneousResource extends BaseResource
                                             $record,
                                     ]
                                 )
-                        ),
+                        )
+                        ->openUrlInNewTab(),
 
                     /*
                      * Gumb ostaje vidljiv korisniku.
