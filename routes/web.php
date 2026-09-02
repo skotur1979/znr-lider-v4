@@ -184,174 +184,108 @@ Route::prefix('qr')
             'public.observation.success'
         );
 
-    Route::get(
-        '/risk-assessment-qr/{riskAssessment}',
-        [
-            RiskAssessmentQrAdminController::class,
-            'show',
-        ]
-    )->name(
-        'risk-assessment.qr.admin'
-    );
-
-
-    Route::post(
-        '/risk-assessment-qr/{riskAssessment}/regenerate',
-        [
-            RiskAssessmentQrAdminController::class,
-            'regenerate',
-        ]
-    )->name(
-        'risk-assessment.qr.regenerate'
-    );
-
-
-    Route::post(
-        '/risk-assessment-qr/{riskAssessment}/deactivate',
-        [
-            RiskAssessmentQrAdminController::class,
-            'deactivate',
-        ]
-    )->name(
-        'risk-assessment.qr.deactivate'
-    );
-
-
-    Route::post(
-        '/risk-assessment-qr/{riskAssessment}/activate',
-        [
-            RiskAssessmentQrAdminController::class,
-            'activate',
-        ]
-    )->name(
-        'risk-assessment.qr.activate'
-    );
-
+    /*
+    |--------------------------------------------------------------------------
+    | QR - PROCJENE RIZIKA / DOKUMENTACIJA / OSTALA ISPITIVANJA
+    |--------------------------------------------------------------------------
+    |
+    | Ove rute su JAVNE i moraju ostati izvan auth middlewarea.
+    |
+    */
 
     Route::get(
-        '/risk-assessment-qr/{riskAssessment}/download/pdf',
+        '/qr/risk-assessment/{token}',
         [
-            RiskAssessmentQrAdminController::class,
-            'downloadPdf',
-        ]
-    )->name(
-        'risk-assessment.qr.download.pdf'
-    );
-
-    Route::middleware([
-            'auth',
-        ])->group(function () {
-
-            Route::get(
-                '/documentation-qr/{documentationItem}',
-                [
-                    DocumentationQrAdminController::class,
-                    'show',
-                ]
-            )
-                ->name(
-                    'documentation.qr.admin'
-                );
-
-            Route::post(
-                '/documentation-qr/{documentationItem}/regenerate',
-                [
-                    DocumentationQrAdminController::class,
-                    'regenerate',
-                ]
-            )
-                ->name(
-                    'documentation.qr.regenerate'
-                );
-
-            Route::post(
-                '/documentation-qr/{documentationItem}/deactivate',
-                [
-                    DocumentationQrAdminController::class,
-                    'deactivate',
-                ]
-            )
-                ->name(
-                    'documentation.qr.deactivate'
-                );
-
-            Route::post(
-                '/documentation-qr/{documentationItem}/activate',
-                [
-                    DocumentationQrAdminController::class,
-                    'activate',
-                ]
-            )
-                ->name(
-                    'documentation.qr.activate'
-                );
-
-            Route::get(
-                '/documentation-qr/{documentationItem}/pdf',
-                [
-                    DocumentationQrAdminController::class,
-                    'downloadPdf',
-                ]
-            )
-                ->name(
-                    'documentation.qr.download.pdf'
-                );
-        });
-
-    Route::get(
-        '/miscellaneous-qr/{miscellaneous}',
-        [
-            MiscellaneousQrAdminController::class,
+            RiskAssessmentQrController::class,
             'show',
         ]
     )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
         ->name(
-            'miscellaneous.qr.admin'
-        );
-
-    Route::post(
-        '/miscellaneous-qr/{miscellaneous}/regenerate',
-        [
-            MiscellaneousQrAdminController::class,
-            'regenerate',
-        ]
-    )
-        ->name(
-            'miscellaneous.qr.regenerate'
-        );
-
-    Route::post(
-        '/miscellaneous-qr/{miscellaneous}/deactivate',
-        [
-            MiscellaneousQrAdminController::class,
-            'deactivate',
-        ]
-    )
-        ->name(
-            'miscellaneous.qr.deactivate'
-        );
-
-    Route::post(
-        '/miscellaneous-qr/{miscellaneous}/activate',
-        [
-            MiscellaneousQrAdminController::class,
-            'activate',
-        ]
-    )
-        ->name(
-            'miscellaneous.qr.activate'
+            'public.risk-assessment.show'
         );
 
     Route::get(
-        '/miscellaneous-qr/{miscellaneous}/pdf',
+        '/qr/risk-assessment/{token}/attachment/{index}',
         [
-            MiscellaneousQrAdminController::class,
-            'downloadPdf',
+            RiskAssessmentQrController::class,
+            'attachment',
         ]
     )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->whereNumber('index')
         ->name(
-            'miscellaneous.qr.download.pdf'
+            'public.risk-assessment.attachment'
         );
+
+    Route::get(
+        '/qr/documentation/{token}',
+        [
+            DocumentationQrController::class,
+            'show',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->name(
+            'public.documentation.show'
+        );
+
+    Route::get(
+        '/qr/documentation/{token}/attachment/{index}',
+        [
+            DocumentationQrController::class,
+            'attachment',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->whereNumber('index')
+        ->name(
+            'public.documentation.attachment'
+        );
+
+    Route::get(
+        '/qr/miscellaneous/{token}',
+        [
+            MiscellaneousQrController::class,
+            'show',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->name(
+            'public.miscellaneous.show'
+        );
+
+    Route::get(
+        '/qr/miscellaneous/{token}/attachment/{index}',
+        [
+            MiscellaneousQrController::class,
+            'attachment',
+        ]
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->whereNumber('index')
+        ->name(
+            'public.miscellaneous.attachment'
+        );
+
 /*
 |--------------------------------------------------------------------------
 | AUTENTIFICIRANE RUTE
@@ -710,74 +644,177 @@ Route::middleware(['auth'])->group(function () {
                 );
         });
 
-        Route::get(
-            '/qr/risk-assessment/{token}',
-            [
-                RiskAssessmentQrController::class,
-                'show',
-            ]
-        )->name(
-            'public.risk-assessment.show'
-        );
+    /*
+    |--------------------------------------------------------------------------
+    | QR KODOVI - PROCJENE RIZIKA
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        '/risk-assessment-qr/{riskAssessment}',
+        [
+            RiskAssessmentQrAdminController::class,
+            'show',
+        ]
+    )->name(
+        'risk-assessment.qr.admin'
+    );
+
+    Route::post(
+        '/risk-assessment-qr/{riskAssessment}/regenerate',
+        [
+            RiskAssessmentQrAdminController::class,
+            'regenerate',
+        ]
+    )->name(
+        'risk-assessment.qr.regenerate'
+    );
+
+    Route::post(
+        '/risk-assessment-qr/{riskAssessment}/deactivate',
+        [
+            RiskAssessmentQrAdminController::class,
+            'deactivate',
+        ]
+    )->name(
+        'risk-assessment.qr.deactivate'
+    );
+
+    Route::post(
+        '/risk-assessment-qr/{riskAssessment}/activate',
+        [
+            RiskAssessmentQrAdminController::class,
+            'activate',
+        ]
+    )->name(
+        'risk-assessment.qr.activate'
+    );
+
+    Route::get(
+        '/risk-assessment-qr/{riskAssessment}/download/pdf',
+        [
+            RiskAssessmentQrAdminController::class,
+            'downloadPdf',
+        ]
+    )->name(
+        'risk-assessment.qr.download.pdf'
+    );
 
 
-        Route::get(
-            '/qr/risk-assessment/{token}/attachment/{index}',
-            [
-                RiskAssessmentQrController::class,
-                'attachment',
-            ]
-        )
-            ->whereNumber('index')
-            ->name(
-                'public.risk-assessment.attachment'
-            );
+    /*
+    |--------------------------------------------------------------------------
+    | QR KODOVI - DOKUMENTACIJA
+    |--------------------------------------------------------------------------
+    */
 
-        Route::get(
-            '/qr/documentation/{token}',
-            [
-                DocumentationQrController::class,
-                'show',
-            ]
-        )
-            ->name(
-                'public.documentation.show'
-            );
+    Route::get(
+        '/documentation-qr/{documentationItem}',
+        [
+            DocumentationQrAdminController::class,
+            'show',
+        ]
+    )->name(
+        'documentation.qr.admin'
+    );
 
-        Route::get(
-            '/qr/documentation/{token}/attachment/{index}',
-            [
-                DocumentationQrController::class,
-                'attachment',
-            ]
-        )
-            ->whereNumber('index')
-            ->name(
-                'public.documentation.attachment'
-            );
+    Route::post(
+        '/documentation-qr/{documentationItem}/regenerate',
+        [
+            DocumentationQrAdminController::class,
+            'regenerate',
+        ]
+    )->name(
+        'documentation.qr.regenerate'
+    );
 
-        Route::get(
-            '/qr/miscellaneous/{token}',
-            [
-                MiscellaneousQrController::class,
-                'show',
-            ]
-        )
-            ->name(
-                'public.miscellaneous.show'
-            );
+    Route::post(
+        '/documentation-qr/{documentationItem}/deactivate',
+        [
+            DocumentationQrAdminController::class,
+            'deactivate',
+        ]
+    )->name(
+        'documentation.qr.deactivate'
+    );
 
-        Route::get(
-            '/qr/miscellaneous/{token}/attachment/{index}',
-            [
-                MiscellaneousQrController::class,
-                'attachment',
-            ]
-        )
-            ->whereNumber('index')
-            ->name(
-                'public.miscellaneous.attachment'
-            );
+    Route::post(
+        '/documentation-qr/{documentationItem}/activate',
+        [
+            DocumentationQrAdminController::class,
+            'activate',
+        ]
+    )->name(
+        'documentation.qr.activate'
+    );
+
+    Route::get(
+        '/documentation-qr/{documentationItem}/pdf',
+        [
+            DocumentationQrAdminController::class,
+            'downloadPdf',
+        ]
+    )->name(
+        'documentation.qr.download.pdf'
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | QR KODOVI - OSTALA ISPITIVANJA
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        '/miscellaneous-qr/{miscellaneous}',
+        [
+            MiscellaneousQrAdminController::class,
+            'show',
+        ]
+    )->name(
+        'miscellaneous.qr.admin'
+    );
+
+    Route::post(
+        '/miscellaneous-qr/{miscellaneous}/regenerate',
+        [
+            MiscellaneousQrAdminController::class,
+            'regenerate',
+        ]
+    )->name(
+        'miscellaneous.qr.regenerate'
+    );
+
+    Route::post(
+        '/miscellaneous-qr/{miscellaneous}/deactivate',
+        [
+            MiscellaneousQrAdminController::class,
+            'deactivate',
+        ]
+    )->name(
+        'miscellaneous.qr.deactivate'
+    );
+
+    Route::post(
+        '/miscellaneous-qr/{miscellaneous}/activate',
+        [
+            MiscellaneousQrAdminController::class,
+            'activate',
+        ]
+    )->name(
+        'miscellaneous.qr.activate'
+    );
+
+    Route::get(
+        '/miscellaneous-qr/{miscellaneous}/pdf',
+        [
+            MiscellaneousQrAdminController::class,
+            'downloadPdf',
+        ]
+    )->name(
+        'miscellaneous.qr.download.pdf'
+    );
+
+
     /*
     |--------------------------------------------------------------------------
     | Siguran preview datoteka
