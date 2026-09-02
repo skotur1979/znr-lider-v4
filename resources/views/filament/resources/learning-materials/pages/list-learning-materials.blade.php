@@ -258,6 +258,35 @@
             color: #ffffff;
         }
 
+        .edu-card-top-actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .edu-qr-top {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 32px;
+            border-radius: 11px;
+            padding: 7px 11px;
+            font-size: 12px;
+            font-weight: 900;
+            text-decoration: none;
+            background: #16a34a;
+            color: #ffffff;
+            white-space: nowrap;
+        }
+
+        .dark .edu-qr-top {
+            background: rgba(34, 197, 94, .18);
+            color: #bbf7d0;
+            border: 1px solid rgba(34, 197, 94, .35);
+        }
+
         .edu-body {
             padding: 0 17px 12px;
             color: #475569;
@@ -418,10 +447,18 @@
             line-height: 1.15;
         }
 
-        .edu-edit-top {
+        .edu-card-top-actions {
             grid-column: 2;
-            width: fit-content;
+            justify-content: flex-start;
             margin-top: 8px;
+        }
+
+        .edu-qr-top,
+        .edu-edit-top {
+            width: fit-content;
+        }
+
+        .edu-edit-top {
             display: inline-flex;
             position: relative;
             z-index: 3;
@@ -560,13 +597,33 @@
                                 </div>
                             </div>
 
-                            @if ($this->canEditMaterial($material))
-                                <a
-                                    href="{{ \App\Filament\Resources\LearningMaterials\LearningMaterialResource::getUrl('edit', ['record' => $material]) }}"
-                                    class="edu-edit-top"
-                                >
-                                    Uredi
-                                </a>
+                            @if (
+                                $this->canManageQr($material)
+                                || $this->canEditMaterial($material)
+                            )
+                                <div class="edu-card-top-actions">
+
+                                    @if ($this->canManageQr($material))
+                                        <a
+                                            href="{{ $this->qrAdminUrl($material) }}"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="edu-qr-top"
+                                        >
+                                            QR kod
+                                        </a>
+                                    @endif
+
+                                    @if ($this->canEditMaterial($material))
+                                        <a
+                                            href="{{ \App\Filament\Resources\LearningMaterials\LearningMaterialResource::getUrl('edit', ['record' => $material]) }}"
+                                            class="edu-edit-top"
+                                        >
+                                            Uredi
+                                        </a>
+                                    @endif
+
+                                </div>
                             @endif
                         </div>
 

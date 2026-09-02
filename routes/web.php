@@ -25,6 +25,12 @@ use App\Http\Controllers\MiscellaneousQrAdminController;
 use App\Http\Controllers\PublicQr\MiscellaneousQrController;
 use App\Http\Controllers\PPEEquipmentQrAdminController;
 use App\Http\Controllers\PublicQr\PPEEquipmentQrController;
+use App\Http\Controllers\LearningMaterialQrAdminController;
+use App\Http\Controllers\PublicQr\LearningMaterialQrController;
+use App\Http\Controllers\FirstAidKitQrAdminController;
+use App\Http\Controllers\PublicQr\FirstAidKitQrController;
+use App\Http\Controllers\ChemicalQrAdminController;
+use App\Http\Controllers\PublicQr\ChemicalQrController;
 
 
 /*
@@ -310,6 +316,62 @@ Route::prefix('qr')
             ->name(
                 'public.ppe-equipment.attachment'
             );
+            Route::get(
+        '/qr/learning-material/{token}',
+        [
+            LearningMaterialQrController::class,
+            'show',
+        ]
+    )
+        ->name(
+            'public.learning-material.show'
+        );
+
+    Route::get(
+        '/qr/learning-material/{token}/attachment/{index}',
+        [
+            LearningMaterialQrController::class,
+            'attachment',
+        ]
+    )
+        ->whereNumber('index')
+        ->name(
+            'public.learning-material.attachment'
+        );
+
+    Route::get(
+        '/qr/first-aid-kit/{token}',
+        [
+            FirstAidKitQrController::class,
+            'show',
+        ]
+    )
+        ->name(
+            'public.first-aid-kit.show'
+        );
+
+    Route::get(
+        '/qr/chemical/{token}',
+        [
+            ChemicalQrController::class,
+            'show',
+        ]
+    )
+        ->name(
+            'public.chemical.show'
+        );
+
+    Route::get(
+        '/qr/chemical/{token}/attachment/{index}',
+        [
+            ChemicalQrController::class,
+            'attachment',
+        ]
+    )
+        ->whereNumber('index')
+        ->name(
+            'public.chemical.attachment'
+        );
 
 /*
 |--------------------------------------------------------------------------
@@ -899,8 +961,176 @@ Route::middleware(['auth'])->group(function () {
         ->name(
             'ppe-equipment.qr.download.pdf'
         );
+        /*
+    |--------------------------------------------------------------------------
+    | QR KODOVI - LEARNING MATERIJALI
+    |--------------------------------------------------------------------------
+    */
 
+    Route::get(
+        '/learning-material-qr/{learningMaterial}',
+        [
+            LearningMaterialQrAdminController::class,
+            'show',
+        ]
+    )
+        ->name(
+            'learning-material.qr.admin'
+        );
 
+    Route::post(
+        '/learning-material-qr/{learningMaterial}/regenerate',
+        [
+            LearningMaterialQrAdminController::class,
+            'regenerate',
+        ]
+    )
+        ->name(
+            'learning-material.qr.regenerate'
+        );
+
+    Route::post(
+        '/learning-material-qr/{learningMaterial}/deactivate',
+        [
+            LearningMaterialQrAdminController::class,
+            'deactivate',
+        ]
+    )
+        ->name(
+            'learning-material.qr.deactivate'
+        );
+
+    Route::post(
+        '/learning-material-qr/{learningMaterial}/activate',
+        [
+            LearningMaterialQrAdminController::class,
+            'activate',
+        ]
+    )
+        ->name(
+            'learning-material.qr.activate'
+        );
+
+    Route::get(
+        '/learning-material-qr/{learningMaterial}/pdf',
+        [
+            LearningMaterialQrAdminController::class,
+            'downloadPdf',
+        ]
+    )
+        ->name(
+            'learning-material.qr.download.pdf'
+        );
+
+        Route::get(
+    '/first-aid-kit-qr/{firstAidKit}',
+    [
+        FirstAidKitQrAdminController::class,
+        'show',
+    ]
+)
+    ->name(
+        'first-aid-kit.qr.admin'
+    );
+
+    Route::post(
+        '/first-aid-kit-qr/{firstAidKit}/regenerate',
+        [
+            FirstAidKitQrAdminController::class,
+            'regenerate',
+        ]
+    )
+        ->name(
+            'first-aid-kit.qr.regenerate'
+        );
+
+    Route::post(
+        '/first-aid-kit-qr/{firstAidKit}/deactivate',
+        [
+            FirstAidKitQrAdminController::class,
+            'deactivate',
+        ]
+    )
+        ->name(
+            'first-aid-kit.qr.deactivate'
+        );
+
+    Route::post(
+        '/first-aid-kit-qr/{firstAidKit}/activate',
+        [
+            FirstAidKitQrAdminController::class,
+            'activate',
+        ]
+    )
+        ->name(
+            'first-aid-kit.qr.activate'
+        );
+
+    Route::get(
+        '/first-aid-kit-qr/{firstAidKit}/pdf',
+        [
+            FirstAidKitQrAdminController::class,
+            'downloadPdf',
+        ]
+    )
+        ->name(
+            'first-aid-kit.qr.download.pdf'
+        );
+
+    Route::get(
+        '/chemical-qr/{chemical}',
+        [
+            ChemicalQrAdminController::class,
+            'show',
+        ]
+    )
+        ->name(
+            'chemical.qr.admin'
+        );
+
+    Route::post(
+        '/chemical-qr/{chemical}/regenerate',
+        [
+            ChemicalQrAdminController::class,
+            'regenerate',
+        ]
+    )
+        ->name(
+            'chemical.qr.regenerate'
+        );
+
+    Route::post(
+        '/chemical-qr/{chemical}/deactivate',
+        [
+            ChemicalQrAdminController::class,
+            'deactivate',
+        ]
+    )
+        ->name(
+            'chemical.qr.deactivate'
+        );
+
+    Route::post(
+        '/chemical-qr/{chemical}/activate',
+        [
+            ChemicalQrAdminController::class,
+            'activate',
+        ]
+    )
+        ->name(
+            'chemical.qr.activate'
+        );
+
+    Route::get(
+        '/chemical-qr/{chemical}/pdf',
+        [
+            ChemicalQrAdminController::class,
+            'downloadPdf',
+        ]
+    )
+        ->name(
+            'chemical.qr.download.pdf'
+        );
     /*
     |--------------------------------------------------------------------------
     | Siguran preview datoteka

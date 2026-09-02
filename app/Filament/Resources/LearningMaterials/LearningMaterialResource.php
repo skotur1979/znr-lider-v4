@@ -648,6 +648,34 @@ class LearningMaterialResource extends BaseResource
             ])
             ->actions([
                 ActionGroup::make([
+                    Action::make('qrCode')
+                        ->label('QR kod')
+                        ->icon(
+                            'heroicon-o-qr-code'
+                        )
+                        ->color('success')
+                        ->visible(
+                            fn (
+                                LearningMaterial $record
+                            ): bool =>
+                                static::canManageQr(
+                                    $record
+                                )
+                        )
+                        ->url(
+                            fn (
+                                LearningMaterial $record
+                            ): string =>
+                                route(
+                                    'learning-material.qr.admin',
+                                    [
+                                        'learningMaterial' =>
+                                            $record,
+                                    ]
+                                )
+                        )
+                        ->openUrlInNewTab(),
+
                     Action::make(
                         'open_first_link'
                     )
@@ -957,6 +985,44 @@ class LearningMaterialResource extends BaseResource
             === (int) static::ownerId();
     }
 
+    public static function canManageQr(
+        LearningMaterial $record
+    ): bool {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        /*
+        * Superadmin:
+        * - globalni materijali
+        * - organizacijski materijali
+        */
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        /*
+        * Organizacija ne administrira
+        * QR globalnog materijala.
+        */
+        if (
+            (bool) $record->is_global
+            || $record->user_id === null
+        ) {
+            return false;
+        }
+
+        /*
+        * Organizacija administrira QR
+        * samo svog materijala.
+        */
+        return
+            (int) $record->user_id
+            ===
+            (int) $user->ownerId();
+    }
     public static function getPages(): array
     {
         return [

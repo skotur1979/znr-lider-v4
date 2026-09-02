@@ -12,6 +12,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
@@ -316,6 +317,24 @@ class FirstAidKitResource extends BaseResource
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Prikaz'),
+
+                    Action::make('qrCode')
+                        ->label('QR kod')
+                        ->icon('heroicon-o-qr-code')
+                        ->color('success')
+                        ->url(
+                            fn (
+                                FirstAidKit $record
+                            ): string =>
+                                route(
+                                    'first-aid-kit.qr.admin',
+                                    [
+                                        'firstAidKit' =>
+                                            $record,
+                                    ]
+                                )
+                        )
+                        ->openUrlInNewTab(),
 
                     EditAction::make()
                         ->label('Uredi'),

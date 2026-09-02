@@ -19,6 +19,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ViewAction;
+use Filament\Actions\Action;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Tables\Columns\TextColumn;
@@ -356,6 +357,30 @@ class ChemicalResource extends BaseResource
                     ViewAction::make()
                         ->label('Prikaži')
                         ->color('gray'),
+
+                    Action::make('qrCode')
+                        ->label('QR kod')
+                        ->icon('heroicon-o-qr-code')
+                        ->color('success')
+                        ->visible(
+                            fn (
+                                Chemical $record
+                            ): bool =>
+                                ! $record->trashed()
+                        )
+                        ->url(
+                            fn (
+                                Chemical $record
+                            ): string =>
+                                route(
+                                    'chemical.qr.admin',
+                                    [
+                                        'chemical' =>
+                                            $record,
+                                    ]
+                                )
+                        )
+                        ->openUrlInNewTab(),
 
                     EditAction::make()
                         ->label('Uredi')

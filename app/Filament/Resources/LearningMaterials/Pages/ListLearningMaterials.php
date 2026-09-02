@@ -322,7 +322,7 @@ class ListLearningMaterials extends Page
     }
 
     public function materialFiles(
-    LearningMaterial $record
+        LearningMaterial $record
     ): array {
         $files = [];
 
@@ -347,7 +347,9 @@ class ListLearningMaterials extends Page
             if (! blank($file)) {
                 $files[] = [
                     'label' =>
-                        basename($file),
+                        basename(
+                            $file
+                        ),
 
                     'url' =>
                         SecureFilePreview::url(
@@ -404,6 +406,16 @@ class ListLearningMaterials extends Page
         };
     }
 
+    /**
+     * Može li korisnik uređivati materijal.
+     *
+     * Superadmin:
+     * - može uređivati sve.
+     *
+     * Organizacija:
+     * - ne može uređivati globalni materijal
+     * - može uređivati samo materijal svoje organizacije.
+     */
     public function canEditMaterial(
         LearningMaterial $record
     ): bool {
@@ -416,7 +428,44 @@ class ListLearningMaterials extends Page
         }
 
         return (int) $record->user_id
-            === (int) $this->ownerId();
+            ===
+            (int) $this->ownerId();
+    }
+
+    /**
+     * Može li korisnik administrirati QR kod.
+     *
+     * Globalni materijal:
+     * - QR administrira samo superadmin.
+     *
+     * Organizacijski materijal:
+     * - QR administrira superadmin
+     * - ili korisnik iste organizacije.
+     */
+    public function canManageQr(
+        LearningMaterial $record
+    ): bool {
+        return LearningMaterialResource::canManageQr(
+            $record
+        );
+    }
+
+    /**
+     * URL za QR administraciju materijala.
+     *
+     * QR stranica se u Bladeu otvara
+     * u novom tabu.
+     */
+    public function qrAdminUrl(
+        LearningMaterial $record
+    ): string {
+        return route(
+            'learning-material.qr.admin',
+            [
+                'learningMaterial' =>
+                    $record,
+            ]
+        );
     }
 
     protected function isSuperAdmin(): bool
