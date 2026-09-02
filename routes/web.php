@@ -23,6 +23,8 @@ use App\Http\Controllers\DocumentationQrAdminController;
 use App\Http\Controllers\PublicQr\DocumentationQrController;
 use App\Http\Controllers\MiscellaneousQrAdminController;
 use App\Http\Controllers\PublicQr\MiscellaneousQrController;
+use App\Http\Controllers\PPEEquipmentQrAdminController;
+use App\Http\Controllers\PublicQr\PPEEquipmentQrController;
 
 
 /*
@@ -285,6 +287,29 @@ Route::prefix('qr')
         ->name(
             'public.miscellaneous.attachment'
         );
+
+        Route::get(
+            '/qr/ppe-equipment/{token}',
+            [
+                PPEEquipmentQrController::class,
+                'show',
+            ]
+        )
+            ->name(
+                'public.ppe-equipment.show'
+            );
+
+        Route::get(
+            '/qr/ppe-equipment/{token}/attachment/{index}',
+            [
+                PPEEquipmentQrController::class,
+                'attachment',
+            ]
+        )
+            ->whereNumber('index')
+            ->name(
+                'public.ppe-equipment.attachment'
+            );
 
 /*
 |--------------------------------------------------------------------------
@@ -813,6 +838,67 @@ Route::middleware(['auth'])->group(function () {
     )->name(
         'miscellaneous.qr.download.pdf'
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | QR KODOVI - OZO REGISTAR
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+    '/ppe-equipment-qr/{ppeEquipment}',
+    [
+        PPEEquipmentQrAdminController::class,
+        'show',
+    ]
+)
+    ->name(
+        'ppe-equipment.qr.admin'
+    );
+
+    Route::post(
+        '/ppe-equipment-qr/{ppeEquipment}/regenerate',
+        [
+            PPEEquipmentQrAdminController::class,
+            'regenerate',
+        ]
+    )
+        ->name(
+            'ppe-equipment.qr.regenerate'
+        );
+
+    Route::post(
+        '/ppe-equipment-qr/{ppeEquipment}/deactivate',
+        [
+            PPEEquipmentQrAdminController::class,
+            'deactivate',
+        ]
+    )
+        ->name(
+            'ppe-equipment.qr.deactivate'
+        );
+
+    Route::post(
+        '/ppe-equipment-qr/{ppeEquipment}/activate',
+        [
+            PPEEquipmentQrAdminController::class,
+            'activate',
+        ]
+    )
+        ->name(
+            'ppe-equipment.qr.activate'
+        );
+
+    Route::get(
+        '/ppe-equipment-qr/{ppeEquipment}/pdf',
+        [
+            PPEEquipmentQrAdminController::class,
+            'downloadPdf',
+        ]
+    )
+        ->name(
+            'ppe-equipment.qr.download.pdf'
+        );
 
 
     /*

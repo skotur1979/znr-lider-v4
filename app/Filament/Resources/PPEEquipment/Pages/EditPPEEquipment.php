@@ -8,15 +8,19 @@ use Filament\Resources\Pages\EditRecord;
 
 class EditPPEEquipment extends EditRecord
 {
-    protected static string $resource = PPEEquipmentResource::class;
+    protected static string $resource =
+        PPEEquipmentResource::class;
 
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
+    protected function mutateFormDataBeforeSave(
+        array $data
+    ): array {
         /*
-         * Globalni zapis mora ostati globalni,
-         * a organizacijski zapis mora zadržati svog vlasnika.
+         * Ownership postojećeg OZO zapisa
+         * nikada se ne mijenja kroz edit formu.
          */
-        $data['user_id'] = $this->record->user_id;
+        unset(
+            $data['user_id']
+        );
 
         return $data;
     }
@@ -26,13 +30,27 @@ class EditPPEEquipment extends EditRecord
         return [
             DeleteAction::make()
                 ->label('Izbriši')
-                ->requiresConfirmation(),
+                ->requiresConfirmation()
+                ->modalHeading(
+                    'Izbriši OZO opremu'
+                )
+                ->modalDescription(
+                    'Jesi li siguran/a da želiš izbrisati ovu OZO opremu?'
+                )
+                ->modalSubmitActionLabel(
+                    'Izbriši'
+                )
+                ->modalCancelActionLabel(
+                    'Odustani'
+                ),
         ];
     }
 
     protected function getRedirectUrl(): string
     {
         return $this->previousUrl
-            ?? static::getResource()::getUrl('index');
+            ?? static::getResource()::getUrl(
+                'index'
+            );
     }
 }

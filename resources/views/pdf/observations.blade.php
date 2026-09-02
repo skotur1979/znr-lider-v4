@@ -736,29 +736,24 @@
                         ),
 
                     'item' =>
-                        e(
-                            Str::limit(
-                                (string)
-                                $o->item,
-                                70
+                        nl2br(
+                            e(
+                                (string) $o->item
                             )
                         ),
 
                     'potential_incident_type' =>
-                        e(
-                            Str::limit(
+                        nl2br(
+                            e(
                                 (string)
-                                $o->potential_incident_type,
-                                55
+                                $o->potential_incident_type
                             )
                         ),
 
                     'action' =>
-                        e(
-                            Str::limit(
-                                (string)
-                                $o->action,
-                                70
+                        nl2br(
+                            e(
+                                (string) $o->action
                             )
                         ),
 

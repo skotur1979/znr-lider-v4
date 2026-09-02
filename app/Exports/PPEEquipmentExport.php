@@ -11,29 +11,53 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class PPEEquipmentExport implements FromCollection, WithHeadings, WithMapping, WithEvents
+class PPEEquipmentExport implements
+    FromCollection,
+    WithHeadings,
+    WithMapping,
+    WithEvents
 {
     protected $items;
 
     protected bool $showUserColumn = false;
 
-    public function __construct(?array $ids = null)
-    {
+    public function __construct(
+        ?array $ids = null
+    ) {
         $user = auth()->user();
 
         $this->showUserColumn =
             (bool) $user?->isSuperAdmin()
             || (bool) $user?->canCreateSubusers();
 
-        $query = PPEEquipmentResource::getEloquentQuery()
-            ->with('user')
-            ->orderBy('name');
+        /*
+         * BaseResource sada automatski osigurava:
+         *
+         * organizacijski korisnik:
+         * user_id = ownerId()
+         *
+         * superadmin:
+         * može administrativno vidjeti sve zapise.
+         */
+        $query =
+            PPEEquipmentResource::getEloquentQuery()
+                ->with('user')
+                ->orderBy('name');
 
-        if ($ids !== null && count($ids) > 0) {
-            $query->whereIn('ppe_equipments.id', $ids);
+        /*
+         * Ako su ID-evi poslani iz filtrirane
+         * Filament tablice, export poštuje
+         * upravo taj rezultat.
+         */
+        if ($ids !== null) {
+            $query->whereIn(
+                'ppe_equipments.id',
+                $ids
+            );
         }
 
-        $this->items = $query->get();
+        $this->items =
+            $query->get();
     }
 
     public function collection()
@@ -48,20 +72,24 @@ class PPEEquipmentExport implements FromCollection, WithHeadings, WithMapping, W
         ];
 
         if ($this->showUserColumn) {
-            $headings[] = 'Korisnik';
+            $headings[] =
+                'Korisnik';
         }
 
-        return array_merge($headings, [
-            'HRN EN / Norma',
-            'Rok uporabe (mjeseci)',
-            'Aktivno',
-            'Vrsta zapisa',
-            'Broj priloga',
-        ]);
+        return array_merge(
+            $headings,
+            [
+                'HRN EN / Norma',
+                'Rok uporabe (mjeseci)',
+                'Aktivno',
+                'Broj priloga',
+            ]
+        );
     }
 
-    public function map($item): array
-    {
+    public function map(
+        $item
+    ): array {
         /** @var PPEEquipment $item */
 
         $row = [
@@ -69,97 +97,279 @@ class PPEEquipmentExport implements FromCollection, WithHeadings, WithMapping, W
         ];
 
         if ($this->showUserColumn) {
-            $row[] = $item->user?->name ?? '';
+            $row[] =
+                $item->user?->name
+                ?? '';
         }
 
-        return array_merge($row, [
-            $item->standard,
-            $item->duration_months,
-            $item->is_active ? 'Da' : 'Ne',
-            $item->user_id === null ? 'Globalno' : 'Organizacija',
-            is_array($item->attachments) ? count($item->attachments) : 0,
-        ]);
+        return array_merge(
+            $row,
+            [
+                $item->standard,
+
+                $item->duration_months,
+
+                $item->is_active
+                    ? 'Da'
+                    : 'Ne',
+
+                is_array(
+                    $item->attachments
+                )
+                    ? count(
+                        $item->attachments
+                    )
+                    : 0,
+            ]
+        );
     }
 
     public function registerEvents(): array
     {
         return [
-            AfterSheet::class => function (AfterSheet $event) {
-                $sheet = $event->sheet->getDelegate();
+            AfterSheet::class =>
+                function (
+                    AfterSheet $event
+                ): void {
+                    $sheet =
+                        $event
+                            ->sheet
+                            ->getDelegate();
 
-                $lastRow = $this->items->count() + 1;
-                $lastCol = $this->showUserColumn ? 'G' : 'F';
+                    $lastRow =
+                        $this->items->count()
+                        + 1;
 
-                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
-                    ->getFont()
-                    ->setName('DejaVu Sans')
-                    ->setSize(10);
+                    /*
+                     * Sa korisnikom:
+                     *
+                     * A Naziv
+                     * B Korisnik
+                     * C Norma
+                     * D Rok
+                     * E Aktivno
+                     * F Broj priloga
+                     *
+                     * Bez korisnika:
+                     *
+                     * A Naziv
+                     * B Norma
+                     * C Rok
+                     * D Aktivno
+                     * E Broj priloga
+                     */
+                    $lastCol =
+                        $this->showUserColumn
+                            ? 'F'
+                            : 'E';
 
-                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['rgb' => 'FFFFFF'],
-                        'name' => 'DejaVu Sans',
-                        'size' => 10,
-                    ],
-                    'fill' => [
-                        'fillType' => 'solid',
-                        'startColor' => ['rgb' => '1F2937'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => Alignment::HORIZONTAL_CENTER,
-                        'vertical' => Alignment::VERTICAL_CENTER,
-                        'wrapText' => true,
-                    ],
-                ]);
+                    /*
+                    |--------------------------------------------------------------------------
+                    | FONT
+                    |--------------------------------------------------------------------------
+                    */
 
-                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
-                    ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER)
-                    ->setWrapText(true);
+                    $sheet
+                        ->getStyle(
+                            "A1:{$lastCol}{$lastRow}"
+                        )
+                        ->getFont()
+                        ->setName(
+                            'DejaVu Sans'
+                        )
+                        ->setSize(10);
 
-                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    /*
+                    |--------------------------------------------------------------------------
+                    | ZAGLAVLJE
+                    |--------------------------------------------------------------------------
+                    */
 
-                $centerColumns = $this->showUserColumn ? 'D2:G' : 'C2:F';
+                    $sheet
+                        ->getStyle(
+                            "A1:{$lastCol}1"
+                        )
+                        ->applyFromArray([
+                            'font' => [
+                                'bold' =>
+                                    true,
 
-                $sheet->getStyle($centerColumns . $lastRow)
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                                'color' => [
+                                    'rgb' =>
+                                        'FFFFFF',
+                                ],
 
-                $widths = $this->showUserColumn
-                    ? [
-                        'A' => 32,
-                        'B' => 24,
-                        'C' => 45,
-                        'D' => 18,
-                        'E' => 14,
-                        'F' => 18,
-                        'G' => 14,
-                    ]
-                    : [
-                        'A' => 32,
-                        'B' => 45,
-                        'C' => 18,
-                        'D' => 14,
-                        'E' => 18,
-                        'F' => 14,
-                    ];
+                                'name' =>
+                                    'DejaVu Sans',
 
-                foreach ($widths as $column => $width) {
-                    $sheet->getColumnDimension($column)->setWidth($width);
-                }
+                                'size' =>
+                                    10,
+                            ],
 
-                $sheet->getRowDimension(1)->setRowHeight(30);
+                            'fill' => [
+                                'fillType' =>
+                                    'solid',
 
-                for ($row = 2; $row <= $lastRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(28);
-                }
+                                'startColor' => [
+                                    'rgb' =>
+                                        '1F2937',
+                                ],
+                            ],
 
-                $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
-            },
+                            'alignment' => [
+                                'horizontal' =>
+                                    Alignment::HORIZONTAL_CENTER,
+
+                                'vertical' =>
+                                    Alignment::VERTICAL_CENTER,
+
+                                'wrapText' =>
+                                    true,
+                            ],
+                        ]);
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | PODACI
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if ($lastRow >= 2) {
+                        $sheet
+                            ->getStyle(
+                                "A2:{$lastCol}{$lastRow}"
+                            )
+                            ->getAlignment()
+                            ->setVertical(
+                                Alignment::VERTICAL_CENTER
+                            )
+                            ->setWrapText(
+                                true
+                            );
+
+                        $sheet
+                            ->getStyle(
+                                "A2:{$lastCol}{$lastRow}"
+                            )
+                            ->getAlignment()
+                            ->setHorizontal(
+                                Alignment::HORIZONTAL_LEFT
+                            );
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CENTRIRANI STUPCI
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if ($lastRow >= 2) {
+                        if (
+                            $this->showUserColumn
+                        ) {
+                            /*
+                             * D Rok
+                             * E Aktivno
+                             * F Broj priloga
+                             */
+                            $sheet
+                                ->getStyle(
+                                    "D2:F{$lastRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::HORIZONTAL_CENTER
+                                );
+                        } else {
+                            /*
+                             * C Rok
+                             * D Aktivno
+                             * E Broj priloga
+                             */
+                            $sheet
+                                ->getStyle(
+                                    "C2:E{$lastRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::HORIZONTAL_CENTER
+                                );
+                        }
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | ŠIRINE STUPACA
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $widths =
+                        $this->showUserColumn
+                            ? [
+                                'A' => 32,
+                                'B' => 24,
+                                'C' => 45,
+                                'D' => 20,
+                                'E' => 14,
+                                'F' => 14,
+                            ]
+                            : [
+                                'A' => 32,
+                                'B' => 45,
+                                'C' => 20,
+                                'D' => 14,
+                                'E' => 14,
+                            ];
+
+                    foreach (
+                        $widths
+                        as $column => $width
+                    ) {
+                        $sheet
+                            ->getColumnDimension(
+                                $column
+                            )
+                            ->setWidth(
+                                $width
+                            );
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | VISINA REDOVA
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $sheet
+                        ->getRowDimension(1)
+                        ->setRowHeight(30);
+
+                    for (
+                        $row = 2;
+                        $row <= $lastRow;
+                        $row++
+                    ) {
+                        $sheet
+                            ->getRowDimension(
+                                $row
+                            )
+                            ->setRowHeight(28);
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | EXCEL FUNKCIJE
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $sheet->freezePane(
+                        'A2'
+                    );
+
+                    $sheet->setAutoFilter(
+                        "A1:{$lastCol}{$lastRow}"
+                    );
+                },
         ];
     }
 }
