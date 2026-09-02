@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\PublicQr;
 
+use App\Filament\Resources\FirstAidKits\FirstAidKitResource;
 use App\Http\Controllers\Controller;
 use App\Models\FirstAidKit;
 use App\Models\QrCode;
@@ -69,13 +70,68 @@ class FirstAidKitQrController extends Controller
             404
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | MOŽE LI TRENUTNI KORISNIK UREĐIVATI ORMARIĆ
+        |--------------------------------------------------------------------------
+        |
+        | Javna QR ruta nema auth middleware,
+        | ali ako je korisnik već prijavljen u aplikaciju,
+        | auth()->user() će ga prepoznati kroz postojeću
+        | web sesiju.
+        |
+        | Posjetitelj:
+        | $user = null
+        | => samo javni pregled.
+        |
+        | Organizacijski korisnik:
+        | smije uređivati samo zapis svoje organizacije.
+        |
+        | Superadmin:
+        | smije administrativno otvoriti uređivanje.
+        |
+        */
+
+        $user =
+            auth()->user();
+
+        $canEdit = false;
+
+        if ($user) {
+            if ($user->isSuperAdmin()) {
+                $canEdit = true;
+            } else {
+                $canEdit =
+                    (int) $firstAidKit->user_id
+                    ===
+                    (int) $user->ownerId();
+            }
+        }
+
+        /*
+         * URL postoji samo ako trenutni
+         * korisnik smije uređivati zapis.
+         */
+        $editUrl =
+            $canEdit
+                ? FirstAidKitResource::getUrl(
+                    'edit',
+                    [
+                        'record' =>
+                            $firstAidKit,
+                    ]
+                )
+                : null;
+
         $qrCode->recordScan();
 
         return view(
             'public.qr.first-aid-kit',
             compact(
                 'firstAidKit',
-                'qrCode'
+                'qrCode',
+                'canEdit',
+                'editUrl'
             )
         );
     }

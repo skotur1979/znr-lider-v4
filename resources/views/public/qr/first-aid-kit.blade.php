@@ -88,6 +88,69 @@
             font-size: 14px;
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | UREĐIVANJE
+        |--------------------------------------------------------------------------
+        */
+
+        .edit-box {
+            margin-bottom: 14px;
+
+            padding: 14px;
+
+            background:
+                #ecfdf5;
+
+            border:
+                1px
+                solid
+                #86efac;
+
+            border-radius: 12px;
+        }
+
+        .edit-box-title {
+            margin-bottom: 9px;
+
+            color:
+                #166534;
+
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .edit-button {
+            display: inline-flex;
+
+            align-items: center;
+            justify-content: center;
+
+            min-height: 40px;
+
+            padding:
+                10px
+                16px;
+
+            border-radius: 8px;
+
+            background:
+                #16a34a;
+
+            color:
+                #ffffff;
+
+            font-size: 14px;
+            font-weight: 800;
+
+            text-decoration: none;
+        }
+
+        .edit-button:hover {
+            background:
+                #15803d;
+        }
+
         .card {
             margin-bottom: 14px;
 
@@ -303,6 +366,10 @@
 
                 gap: 4px;
             }
+
+            .edit-button {
+                width: 100%;
+            }
         }
 
     </style>
@@ -338,6 +405,36 @@
         </div>
 
     </div>
+
+
+    {{-- =========================================================
+         UREĐIVANJE - VIDI SAMO PRIJAVLJENI KORISNIK
+         ISTE ORGANIZACIJE ILI SUPERADMIN
+       ========================================================= --}}
+
+    @if(
+        $canEdit
+        && filled(
+            $editUrl
+        )
+    )
+
+        <div class="edit-box">
+
+            <div class="edit-box-title">
+                Prijavljeni ste i imate pravo uređivati ovaj ormarić.
+            </div>
+
+            <a
+                href="{{ $editUrl }}"
+                class="edit-button"
+            >
+                Uredi sadržaj ormarića
+            </a>
+
+        </div>
+
+    @endif
 
 
     <div class="card">
@@ -539,11 +636,22 @@
 
 
     <div class="footer">
-        Podaci su dostupni za pregled putem QR koda.
-        <br>
-        Za izmjene sadržaja obratite se odgovornoj osobi.
+
+        @if($canEdit)
+
+            Sadržaj ormarića možete uređivati nakon prijave u ZNR LIDER.
+
+        @else
+
+            Podaci su dostupni samo za pregled putem QR koda.
+            <br>
+            Za izmjene sadržaja obratite se odgovornoj osobi.
+
+        @endif
+
         <br>
         ZNR LIDER
+
     </div>
 
 </div>
