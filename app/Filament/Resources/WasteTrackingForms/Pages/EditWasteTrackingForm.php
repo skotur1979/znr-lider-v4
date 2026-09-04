@@ -5,6 +5,7 @@ namespace App\Filament\Resources\WasteTrackingForms\Pages;
 use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\WasteTrackingForms\WasteTrackingFormResource;
 use App\Models\OntoRecord;
+use App\Services\FormVersionService;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
@@ -17,23 +18,18 @@ class EditWasteTrackingForm extends EditRecord
     protected static string $resource =
         WasteTrackingFormResource::class;
 
-    public function mount(int|string $record): void
-    {
-        /*
-         * Filament prvo učitava stvarni model kroz
-         * tenant-scoped Resource query.
-         */
+    public function mount(
+        int|string $record
+    ): void {
         parent::mount($record);
 
-        /*
-         * Zaključani PL-O više se ne smije uređivati.
-         */
         if ($this->record->isLocked()) {
             $this->redirect(
                 WasteTrackingFormResource::getUrl(
                     'view',
                     [
-                        'record' => $this->record,
+                        'record' =>
+                            $this->record,
                     ]
                 ),
                 navigate: true
@@ -106,11 +102,6 @@ class EditWasteTrackingForm extends EditRecord
             'update'
         );
 
-        /*
-         * Zaključani zapis ne smije biti spremljen
-         * ni ako je forma već bila otvorena prije
-         * zaključavanja.
-         */
         if ($this->record->isLocked()) {
             $this->halt();
         }
@@ -125,39 +116,28 @@ class EditWasteTrackingForm extends EditRecord
             abort(403);
         }
 
-        /*
-        * Ownership postojećeg PL-O zapisa
-        * uvijek ostaje nepromijenjen.
-        */
-        $ownerId = (int) $this->record->user_id;
+        $ownerId =
+            (int) $this->record->user_id;
 
         if ($ownerId <= 0) {
             abort(403);
         }
 
-        /*
-        * Organizacijski korisnik smije uređivati
-        * samo zapis svoje organizacije.
-        *
-        * Superadmin preskače ovu tenant provjeru jer
-        * smije administrirati postojeće zapise.
-        */
         if (
             ! $user->isSuperAdmin()
-            && (int) $user->ownerId() !== $ownerId
+            && (int) $user->ownerId()
+                !== $ownerId
         ) {
             abort(403);
         }
 
         $data['user_id'] = $ownerId;
 
-        /*
-        * Ako se mijenja ONTO obrazac,
-        * on mora pripadati ISTOJ organizaciji
-        * kao postojeći PL-O.
-        */
         $ontoRecordId =
-            (int) ($data['onto_record_id'] ?? 0);
+            (int) (
+                $data['onto_record_id']
+                ?? 0
+            );
 
         if ($ontoRecordId <= 0) {
             abort(
@@ -166,13 +146,16 @@ class EditWasteTrackingForm extends EditRecord
             );
         }
 
-        $validOntoRecord = OntoRecord::query()
-            ->whereKey($ontoRecordId)
-            ->where(
-                'user_id',
-                $ownerId
-            )
-            ->exists();
+        $validOntoRecord =
+            OntoRecord::query()
+                ->whereKey(
+                    $ontoRecordId
+                )
+                ->where(
+                    'user_id',
+                    $ownerId
+                )
+                ->exists();
 
         abort_unless(
             $validOntoRecord,
@@ -180,13 +163,52 @@ class EditWasteTrackingForm extends EditRecord
             'Odabrani ONTO obrazac ne pripada organizaciji ovog pratećeg lista.'
         );
 
+        /*
+        * Poštujemo ručni odabir verzije.
+        *
+        * Ako verzija iz nekog razloga nije poslana
+        * iz forme, zadržavamo postojeću.
+        */
+        $data['form_version'] =
+            $data['form_version']
+            ?? $this->record->form_version
+            ?? FormVersionService::ploForDate(
+                $data['handover_date']
+                ?? $this->record->handover_date
+            );
+
+        if (
+            FormVersionService::isCurrentPlo(
+                $data['form_version']
+            )
+        ) {
+    /*
+     * Nova verzija obrasca više nema
+     * ovo polje.
+     */
+    $data['report_choice'] = null;
+}
+
+        /*
+         * Novi obrazac više nema
+         * report_choice.
+         */
+        if (
+            FormVersionService::isCurrentPlo(
+                $data['form_version']
+            )
+        ) {
+            $data['report_choice'] = null;
+        }
+
         return $data;
     }
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl(
-            'index'
-        );
+        return $this
+            ->getResource()::getUrl(
+                'index'
+            );
     }
 }

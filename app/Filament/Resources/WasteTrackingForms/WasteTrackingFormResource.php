@@ -8,6 +8,8 @@ use App\Filament\Resources\WasteTrackingForms\Pages\EditWasteTrackingForm;
 use App\Filament\Resources\WasteTrackingForms\Pages\ListWasteTrackingForms;
 use App\Filament\Resources\WasteTrackingForms\Pages\ViewWasteTrackingForm;
 use App\Models\OntoRecord;
+use App\Models\OntoEntry;
+use Illuminate\Support\Carbon;
 use App\Models\WasteTrackingForm;
 use App\Services\ActivityLogger;
 use App\Services\FormVersionService;
@@ -249,6 +251,58 @@ class WasteTrackingFormResource extends BaseResource
 
         return $data;
     }
+    protected static function getFirstOntoInputDate(
+        int|string|null $ontoRecordId
+    ): ?string {
+        if (! $ontoRecordId) {
+            return null;
+        }
+
+        return OntoEntry::query()
+            ->where(
+                'onto_record_id',
+                $ontoRecordId
+            )
+            ->where(
+                'entry_type',
+                'input'
+            )
+            ->min('entry_date');
+    }
+
+    protected static function latestDate(
+        mixed ...$dates
+    ): ?string {
+        $dates = collect($dates)
+            ->filter(
+                fn ($date) =>
+                    filled($date)
+            )
+            ->map(
+                function ($date) {
+                    try {
+                        return Carbon::parse(
+                            $date
+                        )->startOfDay();
+                    } catch (\Throwable) {
+                        return null;
+                    }
+                }
+            )
+            ->filter();
+
+        if ($dates->isEmpty()) {
+            return null;
+        }
+
+        return $dates
+            ->sortBy(
+                fn (Carbon $date) =>
+                    $date->timestamp
+            )
+            ->last()
+            ->format('Y-m-d');
+    }
 
     public static function form(
         Schema $schema
@@ -264,10 +318,21 @@ class WasteTrackingFormResource extends BaseResource
                         FormVersionService::currentPlo()
                     )
                     ->required()
+                    ->disabled(
+                        fn (
+                            ?WasteTrackingForm $record
+                        ): bool =>
+                            $record
+                                ?->outputEntry()
+                                ->exists()
+                            ?? false
+                    )
+                    ->dehydrated()
+                    ->live()
                     ->helperText(
-                        'Verzija se sprema uz prateći list. '
-                        . 'Stari prateći listovi ostaju na '
-                        . 'staroj verziji obrasca.'
+                        'Nova verzija PL-O obrasca koristi se od 08.09.2026. '
+                        . 'Po potrebi možete ručno odabrati staru verziju, '
+                        . 'primjerice kod ispravka ranije izrađenog pratećeg lista.'
                     ),
 
                 FormSection::make(
@@ -661,6 +726,12 @@ class WasteTrackingFormResource extends BaseResource
                                     ->content(
                                         'IZVJEŠĆE: O OBRADI OTPADA:'
                                     )
+                                    ->visible(
+                                        fn (callable $get): bool =>
+                                            FormVersionService::isOldPlo(
+                                                $get('form_version')
+                                            )
+                                    )
                                     ->columnSpan(6),
 
                                 Radio::make(
@@ -672,6 +743,12 @@ class WasteTrackingFormResource extends BaseResource
                                         'ne' => 'Ne',
                                     ])
                                     ->inline()
+                                    ->visible(
+                                        fn (callable $get): bool =>
+                                            FormVersionService::isOldPlo(
+                                                $get('form_version')
+                                            )
+                                    )
                                     ->columnSpan(6),
 
                                 Placeholder::make(
@@ -749,6 +826,8 @@ class WasteTrackingFormResource extends BaseResource
                                     ->label('kg')
                                     ->required()
                                     ->numeric()
+                                    ->minValue(0.01)
+                                    ->live(onBlur: true)
                                     ->columnSpan(2),
 
                                 Radio::make(
@@ -781,6 +860,30 @@ class WasteTrackingFormResource extends BaseResource
                                     ->native(false)
                                     ->displayFormat(
                                         'd.m.Y.'
+                                    )
+                                    ->format('Y-m-d')
+                                    ->live()
+                                    ->minDate(
+                                        function (
+                                            callable $get
+                                        ): ?string {
+                                            $firstInputDate =
+                                                static::getFirstOntoInputDate(
+                                                    $get(
+                                                        'onto_record_id'
+                                                    )
+                                                );
+
+                                            return static::latestDate(
+                                                $firstInputDate,
+                                                $get(
+                                                    'carrier_taken_over_at'
+                                                )
+                                            );
+                                        }
+                                    )
+                                    ->helperText(
+                                        'Datum predaje ne može biti prije nastanka/ulaza otpada niti prije datuma predaje prijevozniku.'
                                     )
                                     ->columnSpan(9),
 
@@ -889,17 +992,31 @@ class WasteTrackingFormResource extends BaseResource
                                                 'PREUZEO'
                                             ),
 
-                                        DatePicker::make(
-                                            'carrier_taken_over_at'
+                                       DatePicker::make(
+                                        'carrier_taken_over_at'
+                                    )
+                                        ->label(
+                                            'DATUM PREDAJE'
                                         )
-                                            ->label(
-                                                'DATUM PREDAJE'
-                                            )
-                                            ->displayFormat(
-                                                'd.m.Y.'
-                                            )
-                                            ->native(false),
-
+                                        ->displayFormat(
+                                            'd.m.Y.'
+                                        )
+                                        ->format('Y-m-d')
+                                        ->native(false)
+                                        ->live()
+                                        ->minDate(
+                                            fn (
+                                                callable $get
+                                            ): ?string =>
+                                                static::getFirstOntoInputDate(
+                                                    $get(
+                                                        'onto_record_id'
+                                                    )
+                                                )
+                                        )
+                                        ->helperText(
+                                            'Datum predaje prijevozniku ne može biti prije datuma prvog ulaza otpada u ONTO.'
+                                        ),
                                         TextInput::make(
                                             'carrier_delivered_by'
                                         )
@@ -975,7 +1092,31 @@ class WasteTrackingFormResource extends BaseResource
                                             ->displayFormat(
                                                 'd.m.Y.'
                                             )
-                                            ->native(false),
+                                            ->format('Y-m-d')
+                                            ->native(false)
+                                            ->live()
+                                            ->minDate(
+                                                function (
+                                                    callable $get
+                                                ): ?string {
+                                                    return static::latestDate(
+                                                        static::getFirstOntoInputDate(
+                                                            $get(
+                                                                'onto_record_id'
+                                                            )
+                                                        ),
+                                                        $get(
+                                                            'carrier_taken_over_at'
+                                                        ),
+                                                        $get(
+                                                            'handover_date'
+                                                        )
+                                                    );
+                                                }
+                                            )
+                                            ->helperText(
+                                                'Datum vaganja ne može biti prije datuma predaje niti prije datuma predaje prijevozniku.'
+                                            ),
 
                                         TextInput::make(
                                             'receiver_measured_quantity_kg'
@@ -983,7 +1124,41 @@ class WasteTrackingFormResource extends BaseResource
                                             ->label(
                                                 'PREUZETA KOLIČINA (kg)'
                                             )
-                                            ->numeric(),
+                                            ->numeric()
+                                            ->minValue(0.01)
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(
+                                                function (
+                                                    $state,
+                                                    callable $set
+                                                ): void {
+                                                    if (
+                                                        $state === null
+                                                        || $state === ''
+                                                    ) {
+                                                        return;
+                                                    }
+
+                                                    $quantity =
+                                                        (float) $state;
+
+                                                    if ($quantity <= 0) {
+                                                        return;
+                                                    }
+
+                                                    /*
+                                                    * Stvarna izvagana/preuzeta količina
+                                                    * postaje konačna količina PL-O.
+                                                    */
+                                                    $set(
+                                                        'quantity_kg',
+                                                        $quantity
+                                                    );
+                                                }
+                                            )
+                                            ->helperText(
+                                                'Ako se stvarno preuzeta količina razlikuje od prethodno upisane, količina PL-O automatski se usklađuje s izmjerenom količinom.'
+                                            ),
                                     ])
                                     ->columns(1),
                             ]),
@@ -1056,7 +1231,33 @@ class WasteTrackingFormResource extends BaseResource
                             ->displayFormat(
                                 'd.m.Y.'
                             )
-                            ->native(false),
+                            ->format('Y-m-d')
+                            ->native(false)
+                            ->minDate(
+                                function (
+                                    callable $get
+                                ): ?string {
+                                    return static::latestDate(
+                                        static::getFirstOntoInputDate(
+                                            $get(
+                                                'onto_record_id'
+                                            )
+                                        ),
+                                        $get(
+                                            'carrier_taken_over_at'
+                                        ),
+                                        $get(
+                                            'handover_date'
+                                        ),
+                                        $get(
+                                            'receiver_weighing_time'
+                                        )
+                                    );
+                                }
+                            )
+                            ->helperText(
+                                'Datum završetka obrade ne može biti prije datuma predaje, predaje prijevozniku ili vaganja kod primatelja.'
+                            ),
 
                         TextInput::make(
                             'final_processing_method'
@@ -1480,11 +1681,11 @@ class WasteTrackingFormResource extends BaseResource
                         ),
 
                     /*
-                     * Zaključavanje je write
-                     * operacija.
-                     *
-                     * Superadmin je nema.
-                     */
+                    * Zaključavanje PL-O.
+                    *
+                    * Prvo zaključavanje kreira ONTO izlaz.
+                    * Ponovno zaključavanje ažurira postojeći izlaz.
+                    */
                     Action::make('lock')
                         ->label('Zaključi')
                         ->icon(
@@ -1496,24 +1697,31 @@ class WasteTrackingFormResource extends BaseResource
                             'Zaključi prateći list'
                         )
                         ->modalDescription(
-                            'Zaključavanjem će se automatski evidentirati izlaz u ONTO obrascu i skinuti količina sa stanja.'
+                            'Prvim zaključavanjem evidentira se izlaz u ONTO obrascu. '
+                            . 'Ako je prateći list ranije bio zaključan pa otključan, '
+                            . 'postojeći ONTO izlaz će se ažurirati i neće se kreirati novi.'
                         )
                         ->visible(
                             fn (
                                 WasteTrackingForm $record
                             ): bool =>
-                                static::canManageRecord(
+                                ! static::isSuperAdmin()
+                                && static::canManageRecord(
                                     $record
                                 )
-                                && ! $record
-                                    ->isLocked()
-                                && ! $record
-                                    ->trashed()
+                                && ! $record->isLocked()
+                                && ! $record->trashed()
                         )
                         ->action(
                             function (
                                 WasteTrackingForm $record
                             ): void {
+                                if (
+                                    static::isSuperAdmin()
+                                ) {
+                                    abort(403);
+                                }
+
                                 if (
                                     ! static::canManageRecord(
                                         $record
@@ -1530,11 +1738,6 @@ class WasteTrackingFormResource extends BaseResource
                                     return;
                                 }
 
-                                /*
-                                 * Dodatna serverska
-                                 * tenant provjera ONTO
-                                 * zapisa.
-                                 */
                                 $ontoValid =
                                     OntoRecord::query()
                                         ->whereKey(
@@ -1555,10 +1758,9 @@ class WasteTrackingFormResource extends BaseResource
                                 try {
                                     app(
                                         OntoService::class
-                                    )
-                                        ->lockTrackingForm(
-                                            $record
-                                        );
+                                    )->lockTrackingForm(
+                                        $record
+                                    );
 
                                     ActivityLogger::status(
                                         module:
@@ -1584,6 +1786,9 @@ class WasteTrackingFormResource extends BaseResource
                                         ->title(
                                             'Prateći list je zaključen.'
                                         )
+                                        ->body(
+                                            'ONTO izlaz i stanje uspješno su usklađeni.'
+                                        )
                                         ->success()
                                         ->send();
                                 } catch (
@@ -1591,8 +1796,131 @@ class WasteTrackingFormResource extends BaseResource
                                 ) {
                                     Notification::make()
                                         ->title(
-                                            $e
-                                                ->getMessage()
+                                            $e->getMessage()
+                                        )
+                                        ->danger()
+                                        ->send();
+                                }
+                            }
+                        ),
+
+                    /*
+                    * Otključavanje PL-O.
+                    *
+                    * Ne briše i ne mijenja postojeći
+                    * ONTO izlaz.
+                    */
+                    Action::make('unlock')
+                        ->label('Otključaj')
+                        ->icon(
+                            'heroicon-o-lock-open'
+                        )
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->modalHeading(
+                            'Otključaj prateći list'
+                        )
+                        ->modalDescription(
+                            'Prateći list će ponovno biti moguće uređivati. '
+                            . 'Postojeći ONTO izlaz i trenutno stanje neće se mijenjati '
+                            . 'dok prateći list ponovno ne zaključate.'
+                        )
+                        ->visible(
+                            fn (
+                                WasteTrackingForm $record
+                            ): bool =>
+                                ! static::isSuperAdmin()
+                                && static::canManageRecord(
+                                    $record
+                                )
+                                && $record->isLocked()
+                                && ! $record->trashed()
+                        )
+                        ->action(
+                            function (
+                                WasteTrackingForm $record
+                            ): void {
+                                if (
+                                    static::isSuperAdmin()
+                                ) {
+                                    abort(403);
+                                }
+
+                                if (
+                                    ! static::canManageRecord(
+                                        $record
+                                    )
+                                ) {
+                                    abort(403);
+                                }
+
+                                if (
+                                    ! static::allowsModulePermission(
+                                        'update'
+                                    )
+                                ) {
+                                    return;
+                                }
+
+                                $ontoValid =
+                                    OntoRecord::query()
+                                        ->whereKey(
+                                            $record
+                                                ->onto_record_id
+                                        )
+                                        ->where(
+                                            'user_id',
+                                            static::ownerId()
+                                        )
+                                        ->exists();
+
+                                abort_unless(
+                                    $ontoValid,
+                                    403
+                                );
+
+                                try {
+                                    app(
+                                        OntoService::class
+                                    )->unlockTrackingForm(
+                                        $record
+                                    );
+
+                                    ActivityLogger::status(
+                                        module:
+                                            'Prateći listovi otpada',
+
+                                        title:
+                                            'Prateći list otključan',
+
+                                        description:
+                                            'Otključan je prateći list radi ispravka: '
+                                            . (
+                                                $record
+                                                    ->document_number
+                                                ?: $record
+                                                    ->display_name
+                                            ),
+
+                                        record:
+                                            $record,
+                                    );
+
+                                    Notification::make()
+                                        ->title(
+                                            'Prateći list je otključan.'
+                                        )
+                                        ->body(
+                                            'Možete ga urediti i nakon toga ponovno zaključati.'
+                                        )
+                                        ->warning()
+                                        ->send();
+                                } catch (
+                                    RuntimeException $e
+                                ) {
+                                    Notification::make()
+                                        ->title(
+                                            $e->getMessage()
                                         )
                                         ->danger()
                                         ->send();
@@ -1833,10 +2161,26 @@ class WasteTrackingFormResource extends BaseResource
                             $new->attachments =
                                 [];
 
+                           /*
+                            * Ovo je NOVI poslovni zapis.
+                            * Dobiva današnji datum i verziju
+                            * koja vrijedi na taj datum.
+                            */
+                            $new->handover_date =
+                                now()->toDateString();
+
                             $new->form_version =
-                                $source
-                                    ->form_version
-                                ?: FormVersionService::currentPlo();
+                                FormVersionService::ploForDate(
+                                    $new->handover_date
+                                );
+
+                            if (
+                                FormVersionService::isCurrentPlo(
+                                    $new->form_version
+                                )
+                            ) {
+                                $new->report_choice = null;
+                            }
 
                             $new->save();
 

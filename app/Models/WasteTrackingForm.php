@@ -15,7 +15,8 @@ class WasteTrackingForm extends Model
     use SoftDeletes;
     use LogsActivity;
 
-    protected static string $activityModule = 'Prateći listovi otpada';
+    protected static string $activityModule =
+        'Prateći listovi otpada';
 
     protected $fillable = [
         'user_id',
@@ -122,40 +123,70 @@ class WasteTrackingForm extends Model
         'handover_datetime' => 'datetime',
         'carrier_taken_over_at' => 'datetime',
         'receiver_weighing_time' => 'datetime',
-        'receiver_measured_quantity_kg' => 'decimal:2',
+        'receiver_measured_quantity_kg' =>
+            'decimal:2',
         'processing_completed_at' => 'date',
     ];
 
     protected static function booted(): void
     {
-        static::creating(function (self $record): void {
-            if (blank($record->user_id)) {
-                $user = Auth::user();
+        static::creating(
+            function (self $record): void {
+                if (blank($record->user_id)) {
+                    $user = Auth::user();
 
-                if ($user && ! $user->isSuperAdmin()) {
-                    $record->user_id = $user->ownerId();
+                    if (
+                        $user
+                        && ! $user->isSuperAdmin()
+                    ) {
+                        $record->user_id =
+                            $user->ownerId();
+                    }
+                }
+
+                if (blank($record->status)) {
+                    $record->status = 'draft';
+                }
+
+                /*
+                 * Verziju određujemo prema
+                 * datumu predaje.
+                 */
+                if (blank($record->form_version)) {
+                    $record->form_version =
+                        FormVersionService::ploForDate(
+                            $record->handover_date
+                        );
+                }
+
+                /*
+                 * Novi PL-O od 09.09.2026.
+                 * nema report_choice.
+                 */
+                if (
+                    FormVersionService::isCurrentPlo(
+                        $record->form_version
+                    )
+                ) {
+                    $record->report_choice = null;
                 }
             }
-
-            if (blank($record->status)) {
-                $record->status = 'draft';
-            }
-
-            if (blank($record->form_version)) {
-                $record->form_version =
-                    FormVersionService::currentPlo();
-            }
-        });
+        );
     }
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(
+            User::class
+        );
     }
 
     public function ontoRecord(): BelongsTo
     {
-        return $this->belongsTo(OntoRecord::class, 'onto_record_id');
+        return $this->belongsTo(
+            OntoRecord::class,
+            'onto_record_id'
+        );
     }
 
     public function outputEntry(): HasOne
@@ -163,7 +194,10 @@ class WasteTrackingForm extends Model
         return $this->hasOne(
             OntoEntry::class,
             'waste_tracking_form_id'
-        )->where('entry_type', 'output');
+        )->where(
+            'entry_type',
+            'output'
+        );
     }
 
     public function isLocked(): bool
@@ -178,12 +212,24 @@ class WasteTrackingForm extends Model
 
     public function getDisplayNameAttribute(): string
     {
-        $doc = $this->document_number ?: 'PL-O';
-        $date = $this->handover_date?->format('d.m.Y.') ?? '-';
-        $waste = $this->ontoRecord?->wasteType?->waste_code ?? $this->waste_code_manual ?? '-';
+        $doc =
+            $this->document_number ?: 'PL-O';
+
+        $date =
+            $this->handover_date
+                ?->format('d.m.Y.')
+            ?? '-';
+
+        $waste =
+            $this->ontoRecord
+                ?->wasteType
+                ?->waste_code
+            ?? $this->waste_code_manual
+            ?? '-';
 
         return "{$doc} / {$waste} / {$date}";
     }
+
     public static function formVersions(): array
     {
         return FormVersionService::ploVersions();
@@ -191,7 +237,9 @@ class WasteTrackingForm extends Model
 
     public function getFormVersionLabelAttribute(): string
     {
-        return FormVersionService::ploVersions()[$this->form_version]
+        return FormVersionService::ploVersions()[
+            $this->form_version
+        ]
             ?? $this->form_version
             ?? FormVersionService::currentPlo();
     }

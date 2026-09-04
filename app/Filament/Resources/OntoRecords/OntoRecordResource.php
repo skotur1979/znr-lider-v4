@@ -601,7 +601,24 @@ class OntoRecordResource extends BaseResource
                                 ->format('Y-m-d')
                                 ->native(false)
                                 ->required()
-                                ->default(now()),
+                                ->default(now())
+                                ->minDate(
+                                    fn (
+                                        OntoRecord $record
+                                    ): ?string =>
+                                        $record
+                                            ->entries()
+                                            ->where(
+                                                'entry_type',
+                                                'input'
+                                            )
+                                            ->min(
+                                                'entry_date'
+                                            )
+                                )
+                                ->helperText(
+                                    'Izlaz ne može biti evidentiran prije prvog ulaza otpada.'
+                                ),
 
                             TextInput::make(
                                 'quantity_kg'
