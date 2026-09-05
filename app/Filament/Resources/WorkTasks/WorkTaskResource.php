@@ -220,6 +220,7 @@ class WorkTaskResource extends BaseResource
                     ->label('Radni zadatak')
                     ->hiddenFrom('md')
                     ->html()
+                    ->grow()
                     ->state(
                         function (
                             WorkTask $record
@@ -333,8 +334,8 @@ class WorkTaskResource extends BaseResource
                             /*
                             * OPIS
                             *
-                            * Ako je opis isti kao naslov,
-                            * nema smisla prikazivati ga dva puta.
+                            * Ako je opis jednak naslovu,
+                            * ne prikazujemo isti tekst dvaput.
                             */
                             $descriptionHtml = '';
 
@@ -353,10 +354,11 @@ class WorkTaskResource extends BaseResource
                                         margin-top:7px;
                                         color:#475569;
                                         font-size:.88rem;
-                                        line-height:1.42;
+                                        line-height:1.4;
                                         white-space:normal;
-                                        overflow-wrap:break-word;
+                                        overflow-wrap:normal;
                                         word-break:normal;
+                                        hyphens:none;
                                     ">'
                                     . nl2br(
                                         e($description)
@@ -368,8 +370,9 @@ class WorkTaskResource extends BaseResource
                                 '
                                 <div style="
                                     width:100%;
-                                    min-width:0;
-                                    padding:14px 15px;
+                                    min-width:240px;
+                                    max-width:100%;
+                                    padding:12px 12px;
                                     border-radius:15px;
                                     border:1px solid rgba(245,158,11,.28);
                                     background:rgba(245,158,11,.08);
@@ -383,6 +386,7 @@ class WorkTaskResource extends BaseResource
                                         line-height:1.2;
                                         font-weight:850;
                                         text-transform:uppercase;
+                                        white-space:nowrap;
                                     ">
                                         ✓ RADNI ZADATAK
                                     </div>
@@ -390,11 +394,12 @@ class WorkTaskResource extends BaseResource
                                     <div style="
                                         color:#111827;
                                         font-size:1rem;
-                                        line-height:1.42;
+                                        line-height:1.4;
                                         font-weight:650;
                                         white-space:normal;
-                                        overflow-wrap:break-word;
+                                        overflow-wrap:normal;
                                         word-break:normal;
+                                        hyphens:none;
                                     ">
                                         '
                                         . $title
@@ -442,7 +447,6 @@ class WorkTaskResource extends BaseResource
                             );
                         }
                     ),
-
                 /*
                 |--------------------------------------------------------------------------
                 | DESKTOP / TABLET
