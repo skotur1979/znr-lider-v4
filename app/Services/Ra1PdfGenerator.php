@@ -35,29 +35,129 @@ class Ra1PdfGenerator
             $mpdf->WriteFixedPosHTML($html, $x, $y, $w, $h);
         };
 
-        $fitToWidth = function (?string $text, float $w) use ($mpdf): array {
-            $t = trim((string) $text);
-            if ($t === '') return ['', ''];
+        $fitToWidth = function (
+        ?string $text,
+        float $w
+    ) use ($mpdf): array {
+        $t = preg_replace(
+            '/\s+/u',
+            ' ',
+            trim((string) $text)
+        );
 
-            $lo = 0;
-            $hi = mb_strlen($t);
+        if ($t === '') {
+            return ['', ''];
+        }
 
-            while ($lo < $hi) {
-                $mid = intdiv($lo + $hi + 1, 2);
-                $piece = mb_substr($t, 0, $mid);
+        /*
+        * Prvo pokušavamo lomiti tekst
+        * isključivo između cijelih riječi.
+        */
+        $words = preg_split(
+            '/\s+/u',
+            $t,
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
 
-                if ($mpdf->GetStringWidth($piece) <= $w) {
-                    $lo = $mid;
-                } else {
-                    $hi = $mid - 1;
-                }
+        $line = '';
+        $usedWords = 0;
+
+        foreach ($words as $index => $word) {
+            $candidate =
+                $line === ''
+                    ? $word
+                    : $line . ' ' . $word;
+
+            if (
+                $mpdf->GetStringWidth(
+                    $candidate
+                ) <= $w
+            ) {
+                $line = $candidate;
+                $usedWords = $index + 1;
+
+                continue;
             }
 
-            $first = mb_substr($t, 0, $lo);
-            $rest  = ltrim(mb_substr($t, $lo));
+            break;
+        }
 
-            return [$first, $rest];
-        };
+        /*
+        * Ako je barem jedna cijela riječ
+        * stala u red, vraćamo uredan prijelom.
+        */
+        if ($line !== '') {
+            $rest = implode(
+                ' ',
+                array_slice(
+                    $words,
+                    $usedWords
+                )
+            );
+
+            return [
+                $line,
+                trim($rest),
+            ];
+        }
+
+        /*
+        * Samo ako je jedna jedina riječ / oznaka
+        * duža od cijelog raspoloživog reda
+        * dopuštamo rezanje po znakovima.
+        *
+        * To je fallback za vrijednosti poput
+        * jako dugih šifri bez razmaka.
+        */
+        $lo = 0;
+        $hi = mb_strlen($t);
+
+        while ($lo < $hi) {
+            $mid =
+                intdiv(
+                    $lo + $hi + 1,
+                    2
+                );
+
+            $piece =
+                mb_substr(
+                    $t,
+                    0,
+                    $mid
+                );
+
+            if (
+                $mpdf->GetStringWidth(
+                    $piece
+                ) <= $w
+            ) {
+                $lo = $mid;
+            } else {
+                $hi = $mid - 1;
+            }
+        }
+
+        $first =
+            mb_substr(
+                $t,
+                0,
+                $lo
+            );
+
+        $rest =
+            ltrim(
+                mb_substr(
+                    $t,
+                    $lo
+                )
+            );
+
+        return [
+            $first,
+            $rest,
+        ];
+    };
 
         $writeOneLineNoWrap = function (float $x, float $y, ?string $text, float $w) use ($mpdf, $fitToWidth) {
             if ($text === null || $text === '') return;
@@ -290,7 +390,7 @@ class Ra1PdfGenerator
         $write(150, 14, $referral->referral_number);
         $write(
             150,
-            20,
+            21,
             $referral->referral_date
                 ? Carbon::parse($referral->referral_date)->format('d.m.Y.')
                 : ''
@@ -303,10 +403,26 @@ class Ra1PdfGenerator
         $maxChars = mb_strlen($law);
 
         $writeTwoLineAutoFitWidths(
-            76.0, 81.3, 31.0,
-            76.0, 83.8, 31.0,
+            76.0,
+            81.3,
+            31.0,
+
+            76.0,
+            84.2,
+            31.0,
+
             $law,
-            8.5, 6,
+
+            /*
+            * Kratke vrijednosti prikazujemo
+            * normalno velikim fontom.
+            *
+            * Font se smanjuje tek ako tekst
+            * zaista ne stane.
+            */
+            10,
+            7,
+
             $maxChars
         );
 

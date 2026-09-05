@@ -28,31 +28,128 @@ class Nr1PdfGenerator
         $mpdf->AddPage();
         $mpdf->UseTemplate($tplId);
 
-        $fitToWidth = function (?string $text, float $w) use ($mpdf): array {
-            $t = trim((string) $text);
+        $fitToWidth = function (
+            ?string $text,
+            float $w
+        ) use ($mpdf): array {
+            $t = preg_replace(
+                '/\s+/u',
+                ' ',
+                trim((string) $text)
+            );
 
             if ($t === '') {
                 return ['', ''];
             }
 
+            /*
+            * Tekst prvo lomimo samo između
+            * cijelih riječi.
+            */
+            $words = preg_split(
+                '/\s+/u',
+                $t,
+                -1,
+                PREG_SPLIT_NO_EMPTY
+            );
+
+            $line = '';
+            $usedWords = 0;
+
+            foreach ($words as $index => $word) {
+                $candidate =
+                    $line === ''
+                        ? $word
+                        : $line . ' ' . $word;
+
+                if (
+                    $mpdf->GetStringWidth(
+                        $candidate
+                    ) <= $w
+                ) {
+                    $line = $candidate;
+                    $usedWords = $index + 1;
+
+                    continue;
+                }
+
+                break;
+            }
+
+            /*
+            * Ako je u red stala barem jedna
+            * cijela riječ, ostatak ide u
+            * sljedeći red.
+            */
+            if ($line !== '') {
+                $rest = implode(
+                    ' ',
+                    array_slice(
+                        $words,
+                        $usedWords
+                    )
+                );
+
+                return [
+                    $line,
+                    trim($rest),
+                ];
+            }
+
+            /*
+            * Fallback samo za jednu jako dugu
+            * riječ ili šifru bez razmaka.
+            *
+            * U tom slučaju dopuštamo rezanje
+            * po znakovima da tekst ne nestane.
+            */
             $lo = 0;
             $hi = mb_strlen($t);
 
             while ($lo < $hi) {
-                $mid = intdiv($lo + $hi + 1, 2);
-                $piece = mb_substr($t, 0, $mid);
+                $mid =
+                    intdiv(
+                        $lo + $hi + 1,
+                        2
+                    );
 
-                if ($mpdf->GetStringWidth($piece) <= $w) {
+                $piece =
+                    mb_substr(
+                        $t,
+                        0,
+                        $mid
+                    );
+
+                if (
+                    $mpdf->GetStringWidth(
+                        $piece
+                    ) <= $w
+                ) {
                     $lo = $mid;
                 } else {
                     $hi = $mid - 1;
                 }
             }
 
-            $first = mb_substr($t, 0, $lo);
-            $rest = ltrim(mb_substr($t, $lo));
+            $first =
+                mb_substr(
+                    $t,
+                    0,
+                    $lo
+                );
 
-            return [$first, $rest];
+            $rest =
+                ltrim(
+                    mb_substr(
+                        $t,
+                        $lo
+                    )
+                );
+
+            return [
+                $first,
+                $rest,
+            ];
         };
 
         $write = function (float $x, float $y, ?string $text, float $w = 70, float $h = 5) use ($mpdf) {

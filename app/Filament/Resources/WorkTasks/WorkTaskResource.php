@@ -9,6 +9,7 @@ use App\Filament\Resources\WorkTasks\Pages\ListWorkTasks;
 use App\Models\WorkTask;
 use App\Services\ActivityLogger;
 use BackedEnum;
+use Illuminate\Support\HtmlString;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
@@ -202,22 +203,274 @@ class WorkTaskResource extends BaseResource
                         ->latest('id')
             )
 
-            ->columns([
+           ->columns([
+                /*
+                |--------------------------------------------------------------------------
+                | MOBILNI PRIKAZ
+                |--------------------------------------------------------------------------
+                |
+                | Na mobitelu prikazujemo jedan široki "card" stupac,
+                | slično Operativnom dnevniku.
+                |
+                | Desktop stupci ispod sakriveni su na malim ekranima.
+                |
+                */
+
+                TextColumn::make('mobile_card')
+                    ->label('Radni zadatak')
+                    ->hiddenFrom('md')
+                    ->html()
+                    ->state(
+                        function (
+                            WorkTask $record
+                        ): HtmlString {
+                            $title = e(
+                                (string) $record->title
+                            );
+
+                            $description = trim(
+                                (string) $record->description
+                            );
+
+                            $date =
+                                $record->due_date
+                                    ?->format('d.m.Y.')
+                                ?? '—';
+
+                            /*
+                            * STATUS I DATUM
+                            */
+                            if ($record->is_done) {
+                                $dateStyle =
+                                    'color:#166534;'
+                                    . 'background:#f0fdf4;'
+                                    . 'border-color:#bbf7d0;';
+
+                                $status =
+                                    '<span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        border-radius:999px;
+                                        padding:4px 9px;
+                                        font-size:.72rem;
+                                        font-weight:800;
+                                        color:#166534;
+                                        background:#f0fdf4;
+                                        border:1px solid #bbf7d0;
+                                        white-space:nowrap;
+                                    ">
+                                        ✓ Završeno
+                                    </span>';
+                            } elseif (
+                                $record->due_date?->isPast()
+                            ) {
+                                $dateStyle =
+                                    'color:#b91c1c;'
+                                    . 'background:#fef2f2;'
+                                    . 'border-color:#fecaca;';
+
+                                $status =
+                                    '<span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        border-radius:999px;
+                                        padding:4px 9px;
+                                        font-size:.72rem;
+                                        font-weight:800;
+                                        color:#b91c1c;
+                                        background:#fef2f2;
+                                        border:1px solid #fecaca;
+                                        white-space:nowrap;
+                                    ">
+                                        Otvoreno
+                                    </span>';
+                            } elseif (
+                                $record->due_date?->isToday()
+                            ) {
+                                $dateStyle =
+                                    'color:#92400e;'
+                                    . 'background:#fffbeb;'
+                                    . 'border-color:#fde68a;';
+
+                                $status =
+                                    '<span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        border-radius:999px;
+                                        padding:4px 9px;
+                                        font-size:.72rem;
+                                        font-weight:800;
+                                        color:#92400e;
+                                        background:#fffbeb;
+                                        border:1px solid #fde68a;
+                                        white-space:nowrap;
+                                    ">
+                                        Danas
+                                    </span>';
+                            } else {
+                                $dateStyle =
+                                    'color:#2563eb;'
+                                    . 'background:#eff6ff;'
+                                    . 'border-color:#bfdbfe;';
+
+                                $status =
+                                    '<span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        border-radius:999px;
+                                        padding:4px 9px;
+                                        font-size:.72rem;
+                                        font-weight:800;
+                                        color:#475569;
+                                        background:#f8fafc;
+                                        border:1px solid #e2e8f0;
+                                        white-space:nowrap;
+                                    ">
+                                        Otvoreno
+                                    </span>';
+                            }
+
+                            /*
+                            * OPIS
+                            *
+                            * Ako je opis isti kao naslov,
+                            * nema smisla prikazivati ga dva puta.
+                            */
+                            $descriptionHtml = '';
+
+                            if (
+                                $description !== ''
+                                && mb_strtolower(
+                                    trim($description)
+                                ) !== mb_strtolower(
+                                    trim(
+                                        (string) $record->title
+                                    )
+                                )
+                            ) {
+                                $descriptionHtml =
+                                    '<div style="
+                                        margin-top:7px;
+                                        color:#475569;
+                                        font-size:.88rem;
+                                        line-height:1.42;
+                                        white-space:normal;
+                                        overflow-wrap:break-word;
+                                        word-break:normal;
+                                    ">'
+                                    . nl2br(
+                                        e($description)
+                                    )
+                                    . '</div>';
+                            }
+
+                            return new HtmlString(
+                                '
+                                <div style="
+                                    width:100%;
+                                    min-width:0;
+                                    padding:14px 15px;
+                                    border-radius:15px;
+                                    border:1px solid rgba(245,158,11,.28);
+                                    background:rgba(245,158,11,.08);
+                                    box-sizing:border-box;
+                                ">
+
+                                    <div style="
+                                        margin-bottom:7px;
+                                        color:#c66a05;
+                                        font-size:.73rem;
+                                        line-height:1.2;
+                                        font-weight:850;
+                                        text-transform:uppercase;
+                                    ">
+                                        ✓ RADNI ZADATAK
+                                    </div>
+
+                                    <div style="
+                                        color:#111827;
+                                        font-size:1rem;
+                                        line-height:1.42;
+                                        font-weight:650;
+                                        white-space:normal;
+                                        overflow-wrap:break-word;
+                                        word-break:normal;
+                                    ">
+                                        '
+                                        . $title
+                                        . '
+                                    </div>
+
+                                    '
+                                    . $descriptionHtml
+                                    . '
+
+                                    <div style="
+                                        display:flex;
+                                        align-items:center;
+                                        flex-wrap:wrap;
+                                        gap:7px;
+                                        margin-top:11px;
+                                    ">
+
+                                        <span style="
+                                            display:inline-flex;
+                                            align-items:center;
+                                            border-radius:999px;
+                                            padding:4px 9px;
+                                            font-size:.72rem;
+                                            line-height:1.2;
+                                            font-weight:800;
+                                            border:1px solid;
+                                            white-space:nowrap;
+                                            '
+                                            . $dateStyle
+                                            . '
+                                        ">
+                                            📅 '
+                                            . e($date)
+                                            . '
+                                        </span>
+
+                                        '
+                                        . $status
+                                        . '
+
+                                    </div>
+                                </div>
+                                '
+                            );
+                        }
+                    ),
+
+                /*
+                |--------------------------------------------------------------------------
+                | DESKTOP / TABLET
+                |--------------------------------------------------------------------------
+                |
+                | Od md širine naviše ostaje tvoj postojeći
+                | tablični prikaz.
+                |
+                */
+
                 TextColumn::make('title')
                     ->label('Zadatak')
                     ->searchable()
                     ->wrap()
                     ->weight('bold')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 static::userTableColumn()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('description')
                     ->label('Opis')
                     ->limit(80)
                     ->wrap()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('due_date')
                     ->label('Datum')
@@ -246,12 +499,14 @@ class WorkTaskResource extends BaseResource
                             return 'info';
                         }
                     )
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 IconColumn::make('is_done')
                     ->label('Riješeno')
                     ->boolean()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('completed_at')
                     ->label('Zatvoreno')
@@ -259,7 +514,8 @@ class WorkTaskResource extends BaseResource
                     ->placeholder('-')
                     ->toggleable(
                         isToggledHiddenByDefault: true
-                    ),
+                    )
+                    ->visibleFrom('md'),
             ])
 
             ->filters([

@@ -1,8 +1,6 @@
 <?php
 
-
 namespace App\Filament\Resources\PPELogs\RelationManagers;
-
 
 use App\Models\PPEEquipment;
 use App\Support\ExpiryBadge;
@@ -815,6 +813,8 @@ class ItemsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->label('Dodaj OZO')
+                    ->modalHeading('Napravi OZO')
+                    ->modalSubmitActionLabel('Spremi OZO')
                     ->visible(
                         fn (): bool =>
                             $this
@@ -832,6 +832,8 @@ class ItemsRelationManager extends RelationManager
             ->actions([
                 EditAction::make()
                     ->label('Uredi')
+                    ->modalHeading('Uredi OZO')
+                    ->modalSubmitActionLabel('Spremi promjene')
                     ->visible(
                         fn (): bool =>
                             $this
@@ -845,7 +847,6 @@ class ItemsRelationManager extends RelationManager
                                 $data
                             )
                     ),
-
 
                 Action::make('extend3')
                     ->label(
