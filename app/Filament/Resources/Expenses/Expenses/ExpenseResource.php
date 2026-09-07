@@ -342,16 +342,59 @@ class ExpenseResource extends BaseResource
                 CreateAction::make()
                     ->label('Novi trošak')
                     ->modalHeading('Novi trošak')
-                    ->visible(fn (): bool => static::canCreate())
-                    ->form(ExpenseForm::schema())
+                    ->visible(
+                        fn (): bool =>
+                            static::canCreate()
+                    )
+                    ->form(
+                        ExpenseForm::schema()
+                    )
                     ->mutateFormDataUsing(
-                        fn (array $data): array =>
-                            static::prepareOwnershipData($data)
+                        fn (
+                            array $data
+                        ): array =>
+                            static::prepareOwnershipData(
+                                $data
+                            )
+                    ),
+
+                /*
+                * IZVJEŠTAJI
+                */
+                Action::make('reports')
+                    ->label('Izvještaji')
+                    ->icon(
+                        'heroicon-o-chart-bar-square'
+                    )
+                    ->color('info')
+                    ->visible(
+                        fn (): bool =>
+                            static::canViewModule()
+                    )
+                    ->action(
+                        function () {
+                            if (
+                                ! static::
+                                    allowsModulePermission(
+                                        'view'
+                                    )
+                            ) {
+                                return;
+                            }
+
+                            return redirect(
+                                static::getUrl(
+                                    'reports'
+                                )
+                            );
+                        }
                     ),
 
                 Action::make('export_excel')
                     ->label('Izvoz u Excel')
-                    ->icon('heroicon-o-document-text')
+                    ->icon(
+                        'heroicon-o-document-text'
+                    )
                     ->color('success')
                     ->action(function ($livewire) {
                         $year = data_get(
@@ -360,14 +403,20 @@ class ExpenseResource extends BaseResource
                         );
 
                         if (! filled($year)) {
-                            $year = (string) Carbon::now(
-                                'Europe/Zagreb'
-                            )->year;
+                            $year =
+                                (string)
+                                Carbon::now(
+                                    'Europe/Zagreb'
+                                )->year;
                         }
 
                         return Excel::download(
-                            new ExpensesExport((string) $year),
-                            'Troskovi_' . $year . '.xlsx'
+                            new ExpensesExport(
+                                (string) $year
+                            ),
+                            'Troskovi_'
+                                . $year
+                                . '.xlsx'
                         );
                     }),
             ])
@@ -424,12 +473,26 @@ class ExpenseResource extends BaseResource
             ]);
     }
 
-    public static function getPages(): array
+   public static function getPages(): array
     {
         return [
-            'index' => Pages\ListExpenses::route('/'),
-            'create' => Pages\CreateExpense::route('/create'),
-            'edit' => Pages\EditExpense::route('/{record}/edit'),
+            'index' =>
+                Pages\ListExpenses::route('/'),
+
+            'create' =>
+                Pages\CreateExpense::route(
+                    '/create'
+                ),
+
+            'reports' =>
+                Pages\ExpenseReports::route(
+                    '/reports'
+                ),
+
+            'edit' =>
+                Pages\EditExpense::route(
+                    '/{record}/edit'
+                ),
         ];
     }
 }
