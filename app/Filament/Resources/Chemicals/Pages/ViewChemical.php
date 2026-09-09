@@ -33,7 +33,8 @@ class ViewChemical extends ViewRecord
 
             EditAction::make()
                 ->label('Uredi')
-                ->color('warning'),
+                ->color('warning')
+                ->icon('heroicon-o-pencil-square'),
         ];
     }
 }

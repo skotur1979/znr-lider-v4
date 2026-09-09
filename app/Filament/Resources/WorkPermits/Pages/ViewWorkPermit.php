@@ -35,7 +35,9 @@ class ViewWorkPermit extends ViewRecord
                 }),
 
             Actions\EditAction::make()
-                ->label('Uredi'),
+                ->label('Uredi')
+                ->color('warning')
+                ->icon('heroicon-o-pencil-square'),
 
             Actions\DeleteAction::make()
                 ->label('Deaktiviraj')

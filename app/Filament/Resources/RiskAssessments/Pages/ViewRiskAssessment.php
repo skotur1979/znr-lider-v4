@@ -32,7 +32,8 @@ class ViewRiskAssessment extends ViewRecord
                 ->openUrlInNewTab(),
 
             EditAction::make()
-                ->label('Uredi'),
+                ->label('Uredi')
+                ->icon('heroicon-o-pencil-square'),
         ];
     }
 }

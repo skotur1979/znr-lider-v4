@@ -42,6 +42,8 @@ class ViewFire extends ViewRecord
 
             Actions\EditAction::make()
                 ->label('Uredi')
+                ->color('warning')
+                ->icon('heroicon-o-pencil-square')
                 ->visible(
                     fn (): bool =>
                         ! $this

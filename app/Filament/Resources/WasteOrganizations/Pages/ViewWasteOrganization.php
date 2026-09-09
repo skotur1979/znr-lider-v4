@@ -14,7 +14,9 @@ class ViewWasteOrganization extends ViewRecord
     {
         return [
             EditAction::make()
-                ->label('Uredi'),
+                ->label('Uredi')
+                ->color('warning')
+                ->icon('heroicon-o-pencil-square'),
         ];
     }
 }

@@ -39,6 +39,8 @@ class ViewLearningMaterial extends ViewRecord
 
             EditAction::make()
                 ->label('Uredi')
+                ->color('warning')
+                ->icon('heroicon-o-pencil-square')
                 ->visible(
                     fn (): bool =>
                         LearningMaterialResource::canEdit(

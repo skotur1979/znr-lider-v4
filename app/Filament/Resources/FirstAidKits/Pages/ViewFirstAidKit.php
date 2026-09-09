@@ -38,7 +38,9 @@ class ViewFirstAidKit extends ViewRecord
                 ->openUrlInNewTab(),
 
             EditAction::make()
-                ->label('Uredi'),
+                ->label('Uredi')
+                ->color('warning')
+                ->icon('heroicon-o-pencil-square'),
 
             DeleteAction::make()
                 ->label('Obriši')

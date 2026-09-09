@@ -15,6 +15,8 @@ class ViewIncident extends ViewRecord
         return [
             EditAction::make()
                 ->label('Uredi')
+                ->color('warning')
+                ->icon('heroicon-o-pencil-square')
                 ->visible(
                     fn (): bool =>
                         ! $this->record->trashed()
