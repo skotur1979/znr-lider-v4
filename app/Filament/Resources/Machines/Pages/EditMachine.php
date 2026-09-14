@@ -4,10 +4,13 @@ namespace App\Filament\Resources\Machines\Pages;
 
 use App\Filament\Resources\Machines\MachineResource;
 use App\Services\MachineReportOcrService;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class EditMachine extends EditRecord
@@ -21,23 +24,23 @@ class EditMachine extends EditRecord
     public bool $showOcrDiffs = false;
 
     public function mount(int|string $record): void
-{
-    /*
-     * Filament prvo mora pronaći zapis i pretvoriti
-     * vrijednost iz URL-a u Machine model.
-     */
-    parent::mount($record);
+    {
+        /*
+         * Filament prvo mora pronaći zapis i pretvoriti
+         * vrijednost iz URL-a u Machine model.
+         */
+        parent::mount($record);
 
-    /*
-     * Tek nakon toga provjeravamo dozvolu.
-     */
-    if (! MachineResource::ensureModulePermission('update')) {
-        $this->redirect(
-            MachineResource::getUrl('index'),
-            navigate: true
-        );
+        /*
+         * Tek nakon toga provjeravamo dozvolu.
+         */
+        if (! MachineResource::ensureModulePermission('update')) {
+            $this->redirect(
+                MachineResource::getUrl('index'),
+                navigate: true
+            );
+        }
     }
-}
 
     protected function getHeaderActions(): array
     {
@@ -46,7 +49,9 @@ class EditMachine extends EditRecord
                 ->label('Natrag')
                 ->icon('heroicon-o-arrow-left')
                 ->color('gray')
-                ->url(static::getResource()::getUrl('index')),
+                ->url(
+                    static::getResource()::getUrl('index')
+                ),
 
             Action::make('ocr_preview')
                 ->label('OCR analiza')
@@ -84,6 +89,12 @@ class EditMachine extends EditRecord
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | OCR PREVIEW
+    |--------------------------------------------------------------------------
+    */
+
     public function runOcrPreview(): void
     {
         if (! MachineResource::ensureModulePermission('update')) {
@@ -99,15 +110,48 @@ class EditMachine extends EditRecord
         $this->ocrDiffs = [];
 
         foreach ($this->getComparableFields() as $field => $label) {
-            $oldValue = data_get($this->data, $field);
+            $oldValue = data_get(
+                $this->data,
+                $field
+            );
+
             $newValue = $ocrData[$field] ?? null;
 
-            $oldString = $this->stringifyValue($oldValue);
-            $newString = $this->stringifyValue($newValue);
+            /*
+             * Datume normaliziramo prije usporedbe.
+             *
+             * Primjer:
+             *
+             * 2029-08-24 00:00:00
+             * i
+             * 2029-08-24
+             *
+             * predstavljaju isti datum.
+             */
+            if ($this->isDateField($field)) {
+                $oldValue = $this->normalizeDateValue(
+                    $oldValue
+                );
+
+                $newValue = $this->normalizeDateValue(
+                    $newValue
+                );
+            }
+
+            $oldString = $this->stringifyValue(
+                $oldValue,
+                $field
+            );
+
+            $newString = $this->stringifyValue(
+                $newValue,
+                $field
+            );
 
             $isSame = $this->valuesAreEqual(
                 $oldValue,
-                $newValue
+                $newValue,
+                $field
             );
 
             $hasNew = filled($newString);
@@ -119,11 +163,26 @@ class EditMachine extends EditRecord
 
             $this->ocrDiffs[$field] = [
                 'label' => $label,
+
+                /*
+                 * Vrijednosti samo za prikaz korisniku.
+                 */
                 'old' => $oldString,
                 'new' => $newString,
+
+                /*
+                 * Stvarna vrijednost koja se sprema.
+                 *
+                 * Ovo je posebno važno kod datuma jer ne želimo
+                 * spremati "24.08.2029." nego "2029-08-24".
+                 */
+                'new_raw' => $newValue,
+
                 'replace' => true,
                 'same' => false,
-                'type' => $hasOld ? 'changed' : 'new',
+                'type' => $hasOld
+                    ? 'changed'
+                    : 'new',
             ];
         }
 
@@ -150,16 +209,27 @@ class EditMachine extends EditRecord
             ->send();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | PRIMJENA OCR RAZLIKA
+    |--------------------------------------------------------------------------
+    */
+
     public function applyOcrDiffs(): void
     {
         if (! MachineResource::ensureModulePermission('update')) {
             return;
         }
 
-        if (! $this->showOcrDiffs || empty($this->ocrDiffs)) {
+        if (
+            ! $this->showOcrDiffs
+            || empty($this->ocrDiffs)
+        ) {
             Notification::make()
                 ->title('Nema OCR razlika')
-                ->body('Prvo pokreni OCR analizu.')
+                ->body(
+                    'Prvo pokreni OCR analizu.'
+                )
                 ->warning()
                 ->send();
 
@@ -170,13 +240,35 @@ class EditMachine extends EditRecord
         $skipped = 0;
 
         foreach ($this->ocrDiffs as $field => $diff) {
-            $newValue = $diff['new'] ?? null;
-            $replace = (bool) ($diff['replace'] ?? false);
+            /*
+             * Za spremanje koristimo originalnu vrijednost,
+             * a ne formatirani prikaz.
+             */
+            $newValue = array_key_exists(
+                'new_raw',
+                $diff
+            )
+                ? $diff['new_raw']
+                : ($diff['new'] ?? null);
 
-            if (blank($newValue) || ! $replace) {
+            $replace = (bool) (
+                $diff['replace']
+                ?? false
+            );
+
+            if (
+                blank($newValue)
+                || ! $replace
+            ) {
                 $skipped++;
 
                 continue;
+            }
+
+            if ($this->isDateField($field)) {
+                $newValue = $this->normalizeDateValue(
+                    $newValue
+                );
             }
 
             data_set(
@@ -188,29 +280,48 @@ class EditMachine extends EditRecord
             $replaced++;
         }
 
-        $this->form->fill($this->data);
-
-        $data = $this->form->getState();
-        $data = $this->mutateFormDataBeforeSave($data);
-
-        $this->record = $this->handleRecordUpdate(
-            $this->getRecord(),
-            $data
-        );
-
+        /*
+         * OCR upload više nije potreban.
+         */
         data_set(
             $this->data,
             'ocr_source',
             null
         );
 
-        $this->form->fill($this->data);
+        $this->form->fill(
+            $this->data
+        );
+
+        $data = $this->form->getState();
+
+        $data = $this->mutateFormDataBeforeSave(
+            $data
+        );
+
+        $this->record = $this->handleRecordUpdate(
+            $this->getRecord(),
+            $data
+        );
+
+        /*
+         * Ponovno napuni formu vrijednostima iz baze.
+         */
+        $this->data = $this->record
+            ->refresh()
+            ->attributesToArray();
+
+        $this->form->fill(
+            $this->data
+        );
 
         $this->ocrDiffs = [];
         $this->showOcrDiffs = false;
 
         Notification::make()
-            ->title('OCR razlike primijenjene i spremljene')
+            ->title(
+                'OCR razlike primijenjene i spremljene'
+            )
             ->body(
                 "Spremljeno zamjena: {$replaced}, preskočeno: {$skipped}."
             )
@@ -225,13 +336,25 @@ class EditMachine extends EditRecord
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | OCR ANALIZA
+    |--------------------------------------------------------------------------
+    */
+
     protected function runOcrAndGetData(): array
     {
-        $state = method_exists($this->form, 'getRawState')
+        $state = method_exists(
+            $this->form,
+            'getRawState'
+        )
             ? $this->form->getRawState()
             : $this->form->getState();
 
-        $file = data_get($state, 'ocr_source');
+        $file = data_get(
+            $state,
+            'ocr_source'
+        );
 
         if (is_array($file)) {
             $file = reset($file);
@@ -263,43 +386,161 @@ class EditMachine extends EditRecord
             return [];
         }
 
-        /** @var MachineReportOcrService $service */
-        $service = app(MachineReportOcrService::class);
+        try {
+            /** @var MachineReportOcrService $service */
+            $service = app(
+                MachineReportOcrService::class
+            );
 
-        $result = $service->extractFromStoredFile(
-            $storedPath,
-            'local'
+            $result = $service->extractFromStoredFile(
+                $storedPath,
+                'local'
+            );
+
+            if (! ($result['success'] ?? false)) {
+                Notification::make()
+                    ->title('OCR greška')
+                    ->body(
+                        $result['message']
+                            ?? 'Provjeri dokument ili OCR instalaciju.'
+                    )
+                    ->danger()
+                    ->send();
+
+                return [];
+            }
+
+            $ocrData = $result['data'] ?? [];
+
+            /*
+             * Sirovi OCR tekst nije polje modela i ne treba
+             * sudjelovati u daljnjem radu forme.
+             */
+            unset(
+                $ocrData['ocr_raw_text']
+            );
+
+            if (blank($ocrData)) {
+                Notification::make()
+                    ->title(
+                        'OCR nije pronašao podatke'
+                    )
+                    ->body(
+                        'Dokument je učitan, ali nisu pronađena prepoznatljiva polja.'
+                    )
+                    ->warning()
+                    ->send();
+
+                return [];
+            }
+
+            /*
+             * Datumi iz OCR-a uvijek se vraćaju
+             * u obliku Y-m-d.
+             */
+            foreach (
+                [
+                    'examination_valid_from',
+                    'examination_valid_until',
+                ] as $dateField
+            ) {
+                if (
+                    filled(
+                        $ocrData[$dateField]
+                            ?? null
+                    )
+                ) {
+                    $ocrData[$dateField] =
+                        $this->normalizeDateValue(
+                            $ocrData[$dateField]
+                        );
+                }
+            }
+
+            return $ocrData;
+        } finally {
+            /*
+             * OCR dokument služi isključivo za analizu.
+             *
+             * Nakon OCR-a ga odmah brišemo iz:
+             *
+             * storage/app/private/tmp/machine-ocr
+             *
+             * Ne brišu se trajni prilozi radne opreme.
+             */
+            $this->deleteTemporaryOcrFile(
+                $storedPath
+            );
+
+            /*
+             * Makni upload i iz Livewire forme.
+             */
+            data_set(
+                $this->data,
+                'ocr_source',
+                null
+            );
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PRIVREMENI OCR UPLOAD
+    |--------------------------------------------------------------------------
+    */
+
+    protected function deleteTemporaryOcrFile(
+        ?string $storedPath
+    ): void {
+        if (blank($storedPath)) {
+            return;
+        }
+
+        $normalizedPath = str_replace(
+            '\\',
+            '/',
+            ltrim(
+                $storedPath,
+                '/\\'
+            )
         );
 
-        if (! ($result['success'] ?? false)) {
-            Notification::make()
-                ->title('OCR greška')
-                ->body(
-                    $result['message']
-                        ?? 'Provjeri dokument ili OCR instalaciju.'
-                )
-                ->danger()
-                ->send();
-
-            return [];
+        /*
+         * Sigurnosna zaštita:
+         *
+         * brišemo samo datoteke iz OCR temp direktorija.
+         */
+        if (
+            ! str_starts_with(
+                $normalizedPath,
+                'tmp/machine-ocr/'
+            )
+        ) {
+            return;
         }
 
-        $ocrData = $result['data'] ?? [];
-
-        if (blank($ocrData)) {
-            Notification::make()
-                ->title('OCR nije pronašao podatke')
-                ->body(
-                    'Dokument je učitan, ali nisu pronađena prepoznatljiva polja.'
-                )
-                ->warning()
-                ->send();
-
-            return [];
+        try {
+            if (
+                Storage::disk('local')
+                    ->exists($normalizedPath)
+            ) {
+                Storage::disk('local')
+                    ->delete($normalizedPath);
+            }
+        } catch (\Throwable $e) {
+            /*
+             * Ne prekidamo OCR samo zato što eventualno
+             * nije uspjelo čišćenje privremene datoteke.
+             */
+            report($e);
         }
-
-        return $ocrData;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | POLJA ZA USPOREDBU
+    |--------------------------------------------------------------------------
+    */
 
     protected function getComparableFields(): array
     {
@@ -316,56 +557,288 @@ class EditMachine extends EditRecord
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | DATUMSKA POLJA
+    |--------------------------------------------------------------------------
+    */
+
+    protected function isDateField(
+        string $field
+    ): bool {
+        return in_array(
+            $field,
+            [
+                'examination_valid_from',
+                'examination_valid_until',
+            ],
+            true
+        );
+    }
+
+    /*
+     * Sve varijante:
+     *
+     * 2029-08-24
+     * 2029-08-24 00:00:00
+     * 24.08.2029.
+     * Carbon objekt
+     *
+     * pretvaramo u:
+     *
+     * 2029-08-24
+     */
+    protected function normalizeDateValue(
+        mixed $value
+    ): ?string {
+        if (blank($value)) {
+            return null;
+        }
+
+        if ($value instanceof CarbonInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        $value = trim(
+            (string) $value
+        );
+
+        if ($value === '') {
+            return null;
+        }
+
+        /*
+         * MySQL date/datetime.
+         */
+        if (
+            preg_match(
+                '/^(\d{4}-\d{2}-\d{2})(?:\s+\d{2}:\d{2}:\d{2})?$/',
+                $value,
+                $matches
+            )
+        ) {
+            return $matches[1];
+        }
+
+        /*
+         * Hrvatski format:
+         *
+         * 24.08.2029.
+         */
+        if (
+            preg_match(
+                '/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$/',
+                $value,
+                $matches
+            )
+        ) {
+            try {
+                return Carbon::create(
+                    (int) $matches[3],
+                    (int) $matches[2],
+                    (int) $matches[1]
+                )->format('Y-m-d');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        /*
+         * Zadnji fallback.
+         */
+        try {
+            return Carbon::parse(
+                $value
+            )->format('Y-m-d');
+        } catch (\Throwable) {
+            return $value;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | USPOREDBA
+    |--------------------------------------------------------------------------
+    */
+
     protected function valuesAreEqual(
         mixed $oldValue,
-        mixed $newValue
+        mixed $newValue,
+        ?string $field = null
     ): bool {
-        if ($oldValue === null && $newValue === null) {
+        if (
+            $oldValue === null
+            && $newValue === null
+        ) {
             return true;
         }
 
-        if ($oldValue === null || $newValue === null) {
+        if (
+            $oldValue === null
+            || $newValue === null
+        ) {
             return false;
         }
 
-        $old = trim((string) $oldValue);
-        $new = trim((string) $newValue);
+        /*
+         * Datume uspoređujemo samo po Y-m-d.
+         *
+         * Zato:
+         *
+         * 2026-08-24 00:00:00
+         *
+         * i
+         *
+         * 2026-08-24
+         *
+         * više nisu različiti.
+         */
+        if (
+            $field !== null
+            && $this->isDateField($field)
+        ) {
+            return $this->normalizeDateValue(
+                $oldValue
+            ) === $this->normalizeDateValue(
+                $newValue
+            );
+        }
+
+        $old = $this->normalizeComparableText(
+            $oldValue
+        );
+
+        $new = $this->normalizeComparableText(
+            $newValue
+        );
 
         return $old === $new;
     }
 
-    protected function stringifyValue(mixed $value): string
-    {
+    protected function normalizeComparableText(
+        mixed $value
+    ): string {
+        $value = trim(
+            (string) $value
+        );
+
+        /*
+         * Višestruke razmake pretvaramo u jedan.
+         */
+        $value = preg_replace(
+            '/\s+/u',
+            ' ',
+            $value
+        );
+
+        return mb_strtolower(
+            trim($value)
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PRIKAZ VRIJEDNOSTI U OCR DIFF-U
+    |--------------------------------------------------------------------------
+    */
+
+    protected function stringifyValue(
+        mixed $value,
+        ?string $field = null
+    ): string {
         if (blank($value)) {
             return '';
         }
 
-        if ($value instanceof \Carbon\CarbonInterface) {
-            return $value->format('d.m.Y.');
+        /*
+         * Datum u korisničkom sučelju uvijek:
+         *
+         * 24.08.2029.
+         */
+        if (
+            (
+                $field !== null
+                && $this->isDateField($field)
+            )
+            || $value instanceof CarbonInterface
+        ) {
+            $normalized =
+                $this->normalizeDateValue(
+                    $value
+                );
+
+            if (blank($normalized)) {
+                return '';
+            }
+
+            try {
+                return Carbon::createFromFormat(
+                    'Y-m-d',
+                    $normalized
+                )->format('d.m.Y.');
+            } catch (\Throwable) {
+                return $normalized;
+            }
         }
 
-        return trim((string) $value);
+        return trim(
+            (string) $value
+        );
     }
 
-    protected function mutateFormDataBeforeSave(
-    array $data
-): array {
-    unset($data['ocr_source']);
-    unset($data['ocr_original_name']);
-
     /*
-     * Ownership postojećeg zapisa nikada se
-     * ne mijenja uređivanjem.
-     *
-     * Ovo vrijedi i kada zapis uređuje superadmin.
-     */
-    $data['user_id'] = $this->record->user_id;
+    |--------------------------------------------------------------------------
+    | SPREMANJE
+    |--------------------------------------------------------------------------
+    */
 
-    return $data;
-}
+    protected function mutateFormDataBeforeSave(
+        array $data
+    ): array {
+        unset(
+            $data['ocr_source'],
+            $data['ocr_original_name'],
+            $data['ocr_raw_text']
+        );
+
+        /*
+         * Datume u model spremamo kao čisti datum Y-m-d.
+         */
+        foreach (
+            [
+                'examination_valid_from',
+                'examination_valid_until',
+            ] as $field
+        ) {
+            if (
+                array_key_exists(
+                    $field,
+                    $data
+                )
+            ) {
+                $data[$field] =
+                    $this->normalizeDateValue(
+                        $data[$field]
+                    );
+            }
+        }
+
+        /*
+         * Ownership postojećeg zapisa nikada se
+         * ne mijenja uređivanjem.
+         *
+         * Ovo vrijedi i kada zapis uređuje superadmin.
+         */
+        $data['user_id'] =
+            $this->record->user_id;
+
+        return $data;
+    }
 
     protected function getRedirectUrl(): string
     {
-        return static::getResource()::getUrl('index');
+        return static::getResource()::getUrl(
+            'index'
+        );
     }
 }

@@ -17,7 +17,9 @@ class CreateMachine extends CreateRecord
     public function mount(): void
     {
         if (! MachineResource::ensureModulePermission('create')) {
-            $this->redirect(MachineResource::getUrl('index'));
+            $this->redirect(
+                MachineResource::getUrl('index')
+            );
 
             return;
         }
@@ -45,17 +47,32 @@ class CreateMachine extends CreateRecord
             return;
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Trenutno stanje forme
+        |--------------------------------------------------------------------------
+        */
+
         $state = method_exists($this->form, 'getRawState')
             ? $this->form->getRawState()
             : $this->form->getState();
 
-        $file = data_get($state, 'ocr_source');
+        $file = data_get(
+            $state,
+            'ocr_source'
+        );
 
         if (is_array($file)) {
             $file = reset($file);
         }
 
         $storedPath = null;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Spremanje privremene OCR datoteke
+        |--------------------------------------------------------------------------
+        */
 
         if (
             $file instanceof TemporaryUploadedFile
@@ -81,8 +98,16 @@ class CreateMachine extends CreateRecord
             return;
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | OCR analiza
+        |--------------------------------------------------------------------------
+        */
+
         /** @var MachineReportOcrService $service */
-        $service = app(MachineReportOcrService::class);
+        $service = app(
+            MachineReportOcrService::class
+        );
 
         $result = $service->extractFromStoredFile(
             $storedPath,
@@ -116,7 +141,11 @@ class CreateMachine extends CreateRecord
             return;
         }
 
-        $filled = 0;
+        /*
+        |--------------------------------------------------------------------------
+        | Polja koja OCR smije mijenjati
+        |--------------------------------------------------------------------------
+        */
 
         $fields = [
             'name',
@@ -130,25 +159,79 @@ class CreateMachine extends CreateRecord
             'examined_by',
         ];
 
+        $filled = 0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | VAŽNO
+        |--------------------------------------------------------------------------
+        |
+        | Na CREATE stranici OCR rezultat predstavlja novi dokument.
+        |
+        | Zato:
+        |
+        | - prepoznata vrijednost zamjenjuje postojeću
+        | - neprepoznata vrijednost čisti eventualnu staru OCR vrijednost
+        |
+        | Time se sprječava miješanje podataka iz više PDF-ova tijekom
+        | testiranja ili promjene dokumenta prije spremanja zapisa.
+        |
+        */
+
         foreach ($fields as $field) {
             $newValue = $ocrData[$field] ?? null;
-            $oldValue = data_get(
-                $this->data,
-                $field
-            );
 
-            if (filled($newValue) && blank($oldValue)) {
+            if (filled($newValue)) {
                 data_set(
-                    $this->data,
+                    $state,
                     $field,
                     $newValue
                 );
 
                 $filled++;
+            } else {
+                data_set(
+                    $state,
+                    $field,
+                    null
+                );
             }
         }
 
-        $this->form->fill($this->data);
+        /*
+        |--------------------------------------------------------------------------
+        | Vrati OCR source u stanje forme
+        |--------------------------------------------------------------------------
+        |
+        | Kod ponovnog fill() želimo zadržati učitani dokument.
+        |
+        */
+
+        if (array_key_exists('ocr_source', $state)) {
+            data_set(
+                $state,
+                'ocr_source',
+                $file
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Popunjavanje forme
+        |--------------------------------------------------------------------------
+        */
+
+        $this->data = $state;
+
+        $this->form->fill(
+            $this->data
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Obavijest
+        |--------------------------------------------------------------------------
+        */
 
         Notification::make()
             ->title('OCR analiza završena')
@@ -169,14 +252,21 @@ class CreateMachine extends CreateRecord
     protected function mutateFormDataBeforeCreate(
         array $data
     ): array {
-        unset($data['ocr_source']);
-        unset($data['ocr_original_name']);
+        unset(
+            $data['ocr_source'],
+            $data['ocr_original_name'],
+            $data['ocr_raw_text']
+        );
 
-        return MachineResource::fillOwnershipData($data);
+        return MachineResource::fillOwnershipData(
+            $data
+        );
     }
 
     protected function getRedirectUrl(): string
     {
-        return static::getResource()::getUrl('index');
+        return static::getResource()::getUrl(
+            'index'
+        );
     }
 }
