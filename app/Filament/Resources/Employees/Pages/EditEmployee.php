@@ -17,10 +17,33 @@ class EditEmployee extends EditRecord
     protected static string $resource =
         EmployeeResource::class;
 
-    public function mount(int|string $record): void
-    {
+    public ?string $pregled = null;
+
+    public function mount(
+        int|string $record
+    ): void {
         /*
-         * Filament prvo mora pretvoriti ID iz URL-a
+         * Spremamo kontekst dashboard pregleda.
+         */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                [
+                    'medical_expired',
+                    'medical_expiring',
+                    'certificates_expired',
+                    'certificates_expiring',
+                ],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
+        /*
+         * Filament zatim pretvara ID iz URL-a
          * u stvarni Employee model.
          */
         parent::mount($record);
@@ -35,7 +58,34 @@ class EditEmployee extends EditRecord
         return [
             ViewAction::make()
                 ->label('Prikaži')
-                ->color('gray'),
+                ->color('gray')
+                ->url(function (): string {
+                    $parameters = [
+                        'record' =>
+                            $this->getRecord(),
+                    ];
+
+                    if (
+                        in_array(
+                            $this->pregled,
+                            [
+                                'medical_expired',
+                                'medical_expiring',
+                                'certificates_expired',
+                                'certificates_expiring',
+                            ],
+                            true
+                        )
+                    ) {
+                        $parameters['pregled'] =
+                            $this->pregled;
+                    }
+
+                    return EmployeeResource::getUrl(
+                        'view',
+                        $parameters
+                    );
+                }),
 
             DeleteAction::make()
                 ->label('Deaktiviraj')
@@ -74,12 +124,13 @@ class EditEmployee extends EditRecord
     }
 
     protected function mutateFormDataBeforeSave(
-    array $data
+        array $data
     ): array {
         /*
-        * Ownership zaposlenika nikada se ne mijenja
-        * kroz edit formu, uključujući superadmina.
-        */
+         * Ownership zaposlenika nikada se
+         * ne mijenja kroz edit formu,
+         * uključujući superadmina.
+         */
         unset($data['user_id']);
 
         return $data;
@@ -87,6 +138,36 @@ class EditEmployee extends EditRecord
 
     protected function getRedirectUrl(): string
     {
+        /*
+         * Ako smo zaposlenika otvorili iz
+         * dashboard pregleda, vraćamo se
+         * na isti pregled.
+         */
+        if (
+            in_array(
+                $this->pregled,
+                [
+                    'medical_expired',
+                    'medical_expiring',
+                    'certificates_expired',
+                    'certificates_expiring',
+                ],
+                true
+            )
+        ) {
+            return static::getResource()::getUrl(
+                'index',
+                [
+                    'pregled' =>
+                        $this->pregled,
+                ]
+            );
+        }
+
+        /*
+         * Kod normalnog ulaska u modul
+         * zadržavamo postojeće ponašanje.
+         */
         return $this->previousUrl
             ?? static::getResource()::getUrl(
                 'index'

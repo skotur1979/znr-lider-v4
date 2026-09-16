@@ -14,8 +14,32 @@ class ViewEmployee extends ViewRecord
     protected static string $resource =
         EmployeeResource::class;
 
-    public function mount(int|string $record): void
-    {
+    public ?string $pregled = null;
+
+    public function mount(
+        int|string $record
+    ): void {
+        /*
+         * Spremamo kontekst dashboard pregleda
+         * prije parent::mount().
+         */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                [
+                    'medical_expired',
+                    'medical_expiring',
+                    'certificates_expired',
+                    'certificates_expiring',
+                ],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
         parent::mount($record);
 
         $this->redirectIfMissingModulePermission(
@@ -28,7 +52,9 @@ class ViewEmployee extends ViewRecord
         return [
             Action::make('editEmployee')
                 ->label('Uredi')
-                ->icon('heroicon-o-pencil-square')
+                ->icon(
+                    'heroicon-o-pencil-square'
+                )
                 ->color('warning')
                 ->action(function () {
                     if (
@@ -39,13 +65,31 @@ class ViewEmployee extends ViewRecord
                         return;
                     }
 
+                    $parameters = [
+                        'record' =>
+                            $this->getRecord(),
+                    ];
+
+                    if (
+                        in_array(
+                            $this->pregled,
+                            [
+                                'medical_expired',
+                                'medical_expiring',
+                                'certificates_expired',
+                                'certificates_expiring',
+                            ],
+                            true
+                        )
+                    ) {
+                        $parameters['pregled'] =
+                            $this->pregled;
+                    }
+
                     return redirect(
                         EmployeeResource::getUrl(
                             'edit',
-                            [
-                                'record' =>
-                                    $this->getRecord(),
-                            ]
+                            $parameters
                         )
                     );
                 }),

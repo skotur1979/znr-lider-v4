@@ -15,8 +15,26 @@ class EditMiscellaneous extends EditRecord
     protected static string $resource =
         MiscellaneousResource::class;
 
-    public function mount(int|string $record): void
-    {
+    public ?string $pregled = null;
+
+    public function mount(
+        int|string $record
+    ): void {
+        /*
+         * Spremamo kontekst liste.
+         */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                ['isteklo', 'uskoro'],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
         parent::mount($record);
 
         $this->redirectIfMissingModulePermission(
@@ -43,18 +61,24 @@ class EditMiscellaneous extends EditRecord
         /*
          * Kategorija mora pripadati istom owneru
          * kao postojeći zapis.
-         *
-         * Ovo vrijedi i kada zapis administrira
-         * superadmin.
          */
-        $ownerId = (int) $this->record->user_id;
+        $ownerId =
+            (int) $this->record->user_id;
 
-        $categoryId = $data['category_id'] ?? null;
+        $categoryId =
+            $data['category_id']
+            ?? null;
 
-        $validCategory = Category::query()
-            ->whereKey($categoryId)
-            ->where('user_id', $ownerId)
-            ->exists();
+        $validCategory =
+            Category::query()
+                ->whereKey(
+                    $categoryId
+                )
+                ->where(
+                    'user_id',
+                    $ownerId
+                )
+                ->exists();
 
         if (! $validCategory) {
             throw ValidationException::withMessages([
@@ -68,6 +92,31 @@ class EditMiscellaneous extends EditRecord
 
     protected function getRedirectUrl(): string
     {
+        /*
+         * Ako smo uređivanje otvorili iz liste
+         * "Isteklo" ili "Uskoro", nakon spremanja
+         * vraćamo se direktno na tu listu.
+         */
+        if (
+            in_array(
+                $this->pregled,
+                ['isteklo', 'uskoro'],
+                true
+            )
+        ) {
+            return static::getResource()::getUrl(
+                'index',
+                [
+                    'pregled' =>
+                        $this->pregled,
+                ]
+            );
+        }
+
+        /*
+         * Kod običnog uređivanja zadržavamo
+         * standardno ponašanje.
+         */
         return $this->previousUrl
             ?? static::getResource()::getUrl(
                 'index'

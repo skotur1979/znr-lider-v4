@@ -10,9 +10,27 @@ class ViewMachine extends ViewRecord
 {
     protected static string $resource = MachineResource::class;
 
+    public ?string $pregled = null;
+
     public function mount(
         int|string $record
     ): void {
+        /*
+         * Spremamo kontekst PRIJE Livewire/Filament
+         * obrade stranice.
+         */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                ['isteklo', 'uskoro'],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
         parent::mount($record);
 
         if (
@@ -64,13 +82,30 @@ class ViewMachine extends ViewRecord
                         return;
                     }
 
+                    $parameters = [
+                        'record' =>
+                            $this->getRecord(),
+                    ];
+
+                    /*
+                     * Koristimo spremljeni Livewire property,
+                     * a ne request()->query().
+                     */
+                    if (
+                        in_array(
+                            $this->pregled,
+                            ['isteklo', 'uskoro'],
+                            true
+                        )
+                    ) {
+                        $parameters['pregled'] =
+                            $this->pregled;
+                    }
+
                     return redirect(
                         MachineResource::getUrl(
                             'edit',
-                            [
-                                'record' =>
-                                    $this->getRecord(),
-                            ]
+                            $parameters
                         )
                     );
                 }),

@@ -14,9 +14,27 @@ class ViewMiscellaneous extends ViewRecord
     protected static string $resource =
         MiscellaneousResource::class;
 
+    public ?string $pregled = null;
+
     public function mount(
         int|string $record
     ): void {
+        /*
+         * Spremamo kontekst PRIJE Livewire/Filament
+         * obrade stranice.
+         */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                ['isteklo', 'uskoro'],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
         parent::mount($record);
 
         $this->redirectIfMissingModulePermission(
@@ -27,9 +45,6 @@ class ViewMiscellaneous extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            /*
-             * QR kod aktivnog zapisa.
-             */
             Action::make('qrCode')
                 ->label('QR kod')
                 ->icon('heroicon-o-qr-code')
@@ -52,9 +67,7 @@ class ViewMiscellaneous extends ViewRecord
                 )
                 ->openUrlInNewTab(),
 
-            Action::make(
-                'editMiscellaneous'
-            )
+            Action::make('editMiscellaneous')
                 ->label('Uredi')
                 ->icon(
                     'heroicon-o-pencil-square'
@@ -66,30 +79,43 @@ class ViewMiscellaneous extends ViewRecord
                             ->getRecord()
                             ->trashed()
                 )
-                ->action(
-                    function () {
-                        if (
-                            ! MiscellaneousResource
-                                ::allowsModulePermission(
-                                    'update'
-                                )
-                        ) {
-                            return;
-                        }
-
-                        return redirect(
-                            MiscellaneousResource
-                                ::getUrl(
-                                    'edit',
-                                    [
-                                        'record' =>
-                                            $this
-                                                ->getRecord(),
-                                    ]
-                                )
-                        );
+                ->action(function () {
+                    if (
+                        ! MiscellaneousResource
+                            ::allowsModulePermission(
+                                'update'
+                            )
+                    ) {
+                        return;
                     }
-                ),
+
+                    $parameters = [
+                        'record' =>
+                            $this->getRecord(),
+                    ];
+
+                    /*
+                     * Koristimo spremljeni Livewire property,
+                     * a ne request()->query().
+                     */
+                    if (
+                        in_array(
+                            $this->pregled,
+                            ['isteklo', 'uskoro'],
+                            true
+                        )
+                    ) {
+                        $parameters['pregled'] =
+                            $this->pregled;
+                    }
+
+                    return redirect(
+                        MiscellaneousResource::getUrl(
+                            'edit',
+                            $parameters
+                        )
+                    );
+                }),
         ];
     }
 }

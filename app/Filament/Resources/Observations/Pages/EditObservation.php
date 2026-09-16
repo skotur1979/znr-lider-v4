@@ -18,6 +18,8 @@ class EditObservation extends EditRecord
     protected static string $resource =
         ObservationResource::class;
 
+    public ?string $pregled = null;
+
     protected array $oldData = [];
 
     protected array $oldNotificationEmails = [];
@@ -35,10 +37,28 @@ class EditObservation extends EditRecord
         int|string $record
     ): void {
         /*
-         * Kod EditRecord stranice parent::mount()
-         * mora biti prvi kako bi Filament ID iz URL-a
-         * pretvorio u Observation model.
-         */
+        * Spremamo kontekst dashboard pregleda
+        * prije parent::mount().
+        */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                [
+                    'isteklo',
+                    'uskoro',
+                ],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
+        /*
+        * Filament zatim učitava stvarni
+        * Observation model.
+        */
         parent::mount($record);
 
         $this->redirectIfMissingModulePermission(
@@ -333,6 +353,34 @@ class EditObservation extends EditRecord
 
     protected function getRedirectUrl(): string
     {
+        /*
+        * Ako smo došli iz dashboard pregleda
+        * Isteklo ili Uskoro, nakon spremanja
+        * vraćamo se na isti filtrirani popis.
+        */
+        if (
+            in_array(
+                $this->pregled,
+                [
+                    'isteklo',
+                    'uskoro',
+                ],
+                true
+            )
+        ) {
+            return static::getResource()::getUrl(
+                'index',
+                [
+                    'pregled' =>
+                        $this->pregled,
+                ]
+            );
+        }
+
+        /*
+        * Kod normalnog ulaska u modul
+        * zadržavamo postojeće ponašanje.
+        */
         return $this->previousUrl
             ?? static::getResource()::getUrl(
                 'index'

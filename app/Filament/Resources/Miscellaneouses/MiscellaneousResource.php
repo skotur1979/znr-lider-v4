@@ -10,6 +10,10 @@ use App\Models\Miscellaneous;
 use App\Support\SecureFilePreview;
 use App\Services\StorageQuotaService;
 use Carbon\Carbon;
+use Filament\Actions\BulkAction;
+use Filament\Notifications\Notification;
+use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -727,7 +731,29 @@ class MiscellaneousResource extends BaseResource
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Prikaži')
-                        ->color('gray'),
+                        ->color('gray')
+                        ->url(function ($record): string {
+                            $parameters = [
+                                'record' => $record,
+                            ];
+
+                            $pregled = request()->query('pregled');
+
+                            if (
+                                in_array(
+                                    $pregled,
+                                    ['isteklo', 'uskoro'],
+                                    true
+                                )
+                            ) {
+                                $parameters['pregled'] = $pregled;
+                            }
+
+                            return static::getUrl(
+                                'view',
+                                $parameters
+                            );
+                        }),
 
                     Action::make('qrCode')
                         ->label('QR kod')
@@ -931,6 +957,100 @@ class MiscellaneousResource extends BaseResource
                         )
                 )
                 ->deselectRecordsAfterCompletion(),
+
+            BulkAction::make('copyAndCreateNew')
+                ->label('Kopiraj i napravi novi')
+                ->icon(Heroicon::DocumentDuplicate)
+                ->visible(
+                    fn (): bool =>
+                        ! static::isSuperAdmin()
+                )
+                ->requiresConfirmation()
+                ->modalHeading('Kopiraj ispitivanje')
+                ->modalDescription(
+                    'Kopirat će se odabrano ispitivanje i otvoriti novi zapis za uređivanje.'
+                )
+                ->modalSubmitActionLabel('Kopiraj i otvori')
+                ->modalCancelActionLabel('Odustani')
+                ->before(
+                    static::beforeModulePermission(
+                        'create'
+                    )
+                )
+                ->action(
+                    function (
+                        EloquentCollection $records
+                    ) {
+                        if ($records->count() !== 1) {
+                            Notification::make()
+                                ->title(
+                                    'Odaberi samo jedno ispitivanje'
+                                )
+                                ->body(
+                                    'Za kopiranje može biti označeno samo jedno ispitivanje.'
+                                )
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        /** @var Miscellaneous $record */
+                        $record = $records->first();
+
+                        if ($record->trashed()) {
+                            Notification::make()
+                                ->title('Zapis je deaktiviran')
+                                ->body(
+                                    'Deaktivirano ispitivanje nije moguće kopirati. Prvo vratite zapis.'
+                                )
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
+
+                        $newRecord = $record->replicate([
+                            'created_at',
+                            'updated_at',
+                            'deleted_at',
+                        ]);
+
+                        /*
+                        * Prilozi se NE kopiraju.
+                        */
+                        $newRecord->pdf = [];
+
+                        $newRecord->report_number = null;
+                        /*
+                        * Novi zapis pripada organizaciji
+                        * trenutno prijavljenog korisnika.
+                        */
+                        $newRecord->user_id =
+                            static::defaultUserId();
+
+                        $newRecord->save();
+
+                        Notification::make()
+                            ->title(
+                                'Ispitivanje je kopirano'
+                            )
+                            ->body(
+                                'Otvara se novi kopirani zapis za uređivanje.'
+                            )
+                            ->success()
+                            ->send();
+
+                        return redirect(
+                            static::getUrl(
+                                'edit',
+                                [
+                                    'record' => $newRecord,
+                                ]
+                            )
+                        );
+                    }
+                ),
 
             ForceDeleteBulkAction::make()
                 ->label('Trajno obriši označeno')

@@ -861,7 +861,37 @@ protected static function priorityIcon(?string $state): ?string
             ->paginated([10, 25, 50, 100, 'all'])
             ->actions([
                 ActionGroup::make([
-                    ViewAction::make()->label('Prikaži'),
+                    ViewAction::make()
+                        ->label('Prikaži')
+                        ->url(function (
+                            Observation $record
+                        ): string {
+                            $parameters = [
+                                'record' => $record,
+                            ];
+
+                            $pregled =
+                                request()->query('pregled');
+
+                            if (
+                                in_array(
+                                    $pregled,
+                                    [
+                                        'isteklo',
+                                        'uskoro',
+                                    ],
+                                    true
+                                )
+                            ) {
+                                $parameters['pregled'] =
+                                    $pregled;
+                            }
+
+                            return static::getUrl(
+                                'view',
+                                $parameters
+                            );
+                        }),
 
                     Action::make('editObservation')
                         ->label('Uredi')
@@ -871,18 +901,44 @@ protected static function priorityIcon(?string $state): ?string
                                 ! $record->trashed()
                                 && static::canEdit($record)
                         )
-                        ->action(function (Observation $record) {
+                        ->action(function (
+                            Observation $record
+                        ) {
                             if (
                                 ! static::isSuperAdmin()
-                                && ! static::allowsModulePermission('update')
+                                && ! static::allowsModulePermission(
+                                    'update'
+                                )
                             ) {
                                 return;
                             }
 
+                            $parameters = [
+                                'record' => $record,
+                            ];
+
+                            $pregled =
+                                request()->query('pregled');
+
+                            if (
+                                in_array(
+                                    $pregled,
+                                    [
+                                        'isteklo',
+                                        'uskoro',
+                                    ],
+                                    true
+                                )
+                            ) {
+                                $parameters['pregled'] =
+                                    $pregled;
+                            }
+
                             return redirect(
-                                static::getUrl('edit', [
-                                    'record' => $record,
-                                ])
+                                static::getUrl(
+                                    'edit',
+                                    $parameters
+                                )
                             );
                         }),
 

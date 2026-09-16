@@ -14,15 +14,36 @@ class ViewObservation extends ViewRecord
     protected static string $resource =
         ObservationResource::class;
 
-    public function mount(int|string $record): void
-    {
+    public ?string $pregled = null;
+
+    public function mount(
+        int|string $record
+    ): void {
         /*
-         * Prvo učitaj stvarni Observation model.
+         * Spremamo kontekst dashboard pregleda.
+         */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                [
+                    'isteklo',
+                    'uskoro',
+                ],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
+        /*
+         * Učitavamo stvarni Observation model.
          */
         parent::mount($record);
 
         /*
-         * Zatim provjeri pravo pregleda.
+         * Provjera prava pregleda.
          */
         $this->redirectIfMissingModulePermission(
             'view'
@@ -34,24 +55,47 @@ class ViewObservation extends ViewRecord
         return [
             Action::make('editObservation')
                 ->label('Uredi')
-                ->icon('heroicon-o-pencil-square')
+                ->icon(
+                    'heroicon-o-pencil-square'
+                )
                 ->color('warning')
                 ->action(function () {
                     if (
-                        ! ObservationResource::allowsModulePermission(
-                            'update'
-                        )
+                        ! ObservationResource
+                            ::allowsModulePermission(
+                                'update'
+                            )
                     ) {
                         return;
+                    }
+
+                    $parameters = [
+                        'record' =>
+                            $this->getRecord(),
+                    ];
+
+                    /*
+                     * Prenosimo dashboard kontekst
+                     * na Edit stranicu.
+                     */
+                    if (
+                        in_array(
+                            $this->pregled,
+                            [
+                                'isteklo',
+                                'uskoro',
+                            ],
+                            true
+                        )
+                    ) {
+                        $parameters['pregled'] =
+                            $this->pregled;
                     }
 
                     return redirect(
                         ObservationResource::getUrl(
                             'edit',
-                            [
-                                'record' =>
-                                    $this->getRecord(),
-                            ]
+                            $parameters
                         )
                     );
                 }),

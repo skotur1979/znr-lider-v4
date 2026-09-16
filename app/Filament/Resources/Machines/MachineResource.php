@@ -599,7 +599,30 @@ class MachineResource extends BaseResource
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()
-                        ->label('Prikaži'),
+                        ->label('Prikaži')
+                        ->color('gray')
+                        ->url(function ($record): string {
+                            $parameters = [
+                                'record' => $record,
+                            ];
+
+                            $pregled = request()->query('pregled');
+
+                            if (
+                                in_array(
+                                    $pregled,
+                                    ['isteklo', 'uskoro'],
+                                    true
+                                )
+                            ) {
+                                $parameters['pregled'] = $pregled;
+                            }
+
+                            return static::getUrl(
+                                'view',
+                                $parameters
+                            );
+                        }),
 
                         Action::make('machine_qr')
                             ->label('QR kod')

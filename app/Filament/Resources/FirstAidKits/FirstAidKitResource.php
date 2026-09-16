@@ -316,7 +316,37 @@ class FirstAidKitResource extends BaseResource
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()
-                        ->label('Prikaz'),
+                        ->label('Prikaz')
+                        ->color('gray')
+                        ->url(function (
+                            FirstAidKit $record
+                        ): string {
+                            $parameters = [
+                                'record' => $record,
+                            ];
+
+                            $pregled =
+                                request()->query('pregled');
+
+                            if (
+                                in_array(
+                                    $pregled,
+                                    [
+                                        'isteklo',
+                                        'uskoro',
+                                    ],
+                                    true
+                                )
+                            ) {
+                                $parameters['pregled'] =
+                                    $pregled;
+                            }
+
+                            return FirstAidKitResource::getUrl(
+                                'view',
+                                $parameters
+                            );
+                        }),
 
                     Action::make('qrCode')
                         ->label('QR kod')
@@ -337,7 +367,36 @@ class FirstAidKitResource extends BaseResource
                         ->openUrlInNewTab(),
 
                     EditAction::make()
-                        ->label('Uredi'),
+                        ->label('Uredi')
+                        ->url(function (
+                            FirstAidKit $record
+                        ): string {
+                            $parameters = [
+                                'record' => $record,
+                            ];
+
+                            $pregled =
+                                request()->query('pregled');
+
+                            if (
+                                in_array(
+                                    $pregled,
+                                    [
+                                        'isteklo',
+                                        'uskoro',
+                                    ],
+                                    true
+                                )
+                            ) {
+                                $parameters['pregled'] =
+                                    $pregled;
+                            }
+
+                            return FirstAidKitResource::getUrl(
+                                'edit',
+                                $parameters
+                            );
+                        }),
 
                     DeleteAction::make()
                         ->label('Obriši')

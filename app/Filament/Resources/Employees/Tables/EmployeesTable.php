@@ -708,7 +708,38 @@ class EmployeesTable
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Prikaži')
-                        ->color('gray'),
+                        ->color('gray')
+                        ->url(function (
+                            Employee $record
+                        ): string {
+                            $parameters = [
+                                'record' => $record,
+                            ];
+
+                            $pregled =
+                                request()->query('pregled');
+
+                            if (
+                                in_array(
+                                    $pregled,
+                                    [
+                                        'medical_expired',
+                                        'medical_expiring',
+                                        'certificates_expired',
+                                        'certificates_expiring',
+                                    ],
+                                    true
+                                )
+                            ) {
+                                $parameters['pregled'] =
+                                    $pregled;
+                            }
+
+                            return EmployeeResource::getUrl(
+                                'view',
+                                $parameters
+                            );
+                        }),
 
                     Action::make('editEmployee')
                         ->label('Uredi')
@@ -735,75 +766,96 @@ class EmployeesTable
                                 return;
                             }
 
+                            $parameters = [
+                                'record' => $record,
+                            ];
+
+                            $pregled =
+                                request()->query('pregled');
+
+                            if (
+                                in_array(
+                                    $pregled,
+                                    [
+                                        'medical_expired',
+                                        'medical_expiring',
+                                        'certificates_expired',
+                                        'certificates_expiring',
+                                    ],
+                                    true
+                                )
+                            ) {
+                                $parameters['pregled'] =
+                                    $pregled;
+                            }
+
                             return redirect(
                                 EmployeeResource::getUrl(
                                     'edit',
-                                    [
-                                        'record' => $record,
-                                    ]
+                                    $parameters
                                 )
                             );
                         }),
 
                     DeleteAction::make()
-    ->label('Deaktiviraj')
-    ->requiresConfirmation()
-    ->modalHeading(
-        'Deaktiviraj zaposlenika'
-    )
-    ->modalDescription(
-        'Jesi li siguran/a da želiš deaktivirati ovog zaposlenika? Zapis ćeš kasnije moći vratiti.'
-    )
-    ->modalSubmitActionLabel(
-        'Deaktiviraj'
-    )
-    ->modalCancelActionLabel(
-        'Odustani'
-    )
-    ->before(
-        EmployeeResource::beforeModulePermission(
-            'delete'
-        )
-    )
-    ->visible(
-        fn (Employee $record): bool =>
-            ! (
-                method_exists(
-                    $record,
-                    'trashed'
-                )
-                && $record->trashed()
-            )
-    ),
+                        ->label('Deaktiviraj')
+                        ->requiresConfirmation()
+                        ->modalHeading(
+                            'Deaktiviraj zaposlenika'
+                        )
+                        ->modalDescription(
+                            'Jesi li siguran/a da želiš deaktivirati ovog zaposlenika? Zapis ćeš kasnije moći vratiti.'
+                        )
+                        ->modalSubmitActionLabel(
+                            'Deaktiviraj'
+                        )
+                        ->modalCancelActionLabel(
+                            'Odustani'
+                        )
+                        ->before(
+                            EmployeeResource::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (Employee $record): bool =>
+                                ! (
+                                    method_exists(
+                                        $record,
+                                        'trashed'
+                                    )
+                                    && $record->trashed()
+                                )
+                        ),
 
-RestoreAction::make()
-    ->label('Vrati')
-    ->requiresConfirmation()
-    ->modalHeading(
-        'Vrati zaposlenika'
-    )
-    ->modalDescription(
-        'Jesi li siguran/a da želiš vratiti ovog zaposlenika?'
-    )
-    ->modalSubmitActionLabel(
-        'Vrati'
-    )
-    ->modalCancelActionLabel(
-        'Odustani'
-    )
-    ->before(
-        EmployeeResource::beforeModulePermission(
-            'delete'
-        )
-    )
-    ->visible(
-        fn (Employee $record): bool =>
-            method_exists(
-                $record,
-                'trashed'
-            )
-            && $record->trashed()
-    ),
+                    RestoreAction::make()
+                        ->label('Vrati')
+                        ->requiresConfirmation()
+                        ->modalHeading(
+                            'Vrati zaposlenika'
+                        )
+                        ->modalDescription(
+                            'Jesi li siguran/a da želiš vratiti ovog zaposlenika?'
+                        )
+                        ->modalSubmitActionLabel(
+                            'Vrati'
+                        )
+                        ->modalCancelActionLabel(
+                            'Odustani'
+                        )
+                        ->before(
+                            EmployeeResource::beforeModulePermission(
+                                'delete'
+                            )
+                        )
+                        ->visible(
+                            fn (Employee $record): bool =>
+                                method_exists(
+                                    $record,
+                                    'trashed'
+                                )
+                                && $record->trashed()
+                        ),
 
                 ForceDeleteAction::make()
                     ->label('Trajno obriši')

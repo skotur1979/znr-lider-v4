@@ -23,22 +23,40 @@ class EditMachine extends EditRecord
 
     public bool $showOcrDiffs = false;
 
-    public function mount(int|string $record): void
-    {
+    public ?string $pregled = null;
+
+   public function mount(
+        int|string $record
+    ): void {
         /*
-         * Filament prvo mora pronaći zapis i pretvoriti
-         * vrijednost iz URL-a u Machine model.
-         */
+        * Spremamo kontekst liste PRIJE
+        * parent::mount().
+        */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                ['isteklo', 'uskoro'],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
         parent::mount($record);
 
-        /*
-         * Tek nakon toga provjeravamo dozvolu.
-         */
-        if (! MachineResource::ensureModulePermission('update')) {
+        if (
+            ! MachineResource::ensureModulePermission(
+                'update'
+            )
+        ) {
             $this->redirect(
                 MachineResource::getUrl('index'),
                 navigate: true
             );
+
+            return;
         }
     }
 
@@ -802,8 +820,8 @@ class EditMachine extends EditRecord
         );
 
         /*
-         * Datume u model spremamo kao čisti datum Y-m-d.
-         */
+        * Datume u model spremamo kao čisti datum Y-m-d.
+        */
         foreach (
             [
                 'examination_valid_from',
@@ -824,11 +842,11 @@ class EditMachine extends EditRecord
         }
 
         /*
-         * Ownership postojećeg zapisa nikada se
-         * ne mijenja uređivanjem.
-         *
-         * Ovo vrijedi i kada zapis uređuje superadmin.
-         */
+        * Ownership postojećeg zapisa nikada se
+        * ne mijenja uređivanjem.
+        *
+        * Ovo vrijedi i kada zapis uređuje superadmin.
+        */
         $data['user_id'] =
             $this->record->user_id;
 
@@ -837,8 +855,34 @@ class EditMachine extends EditRecord
 
     protected function getRedirectUrl(): string
     {
-        return static::getResource()::getUrl(
-            'index'
-        );
+        /*
+        * Ako smo uređivanje otvorili iz liste
+        * "Isteklo" ili "Uskoro", nakon spremanja
+        * vraćamo se direktno na tu listu.
+        */
+        if (
+            in_array(
+                $this->pregled,
+                ['isteklo', 'uskoro'],
+                true
+            )
+        ) {
+            return static::getResource()::getUrl(
+                'index',
+                [
+                    'pregled' =>
+                        $this->pregled,
+                ]
+            );
+        }
+
+        /*
+        * Kod običnog uređivanja zadržavamo
+        * standardno ponašanje.
+        */
+        return $this->previousUrl
+            ?? static::getResource()::getUrl(
+                'index'
+            );
     }
 }

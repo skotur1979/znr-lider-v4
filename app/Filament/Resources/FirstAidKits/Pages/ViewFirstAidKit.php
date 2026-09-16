@@ -5,13 +5,39 @@ namespace App\Filament\Resources\FirstAidKits\Pages;
 use App\Filament\Resources\FirstAidKits\FirstAidKitResource;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewFirstAidKit extends ViewRecord
 {
     protected static string $resource =
         FirstAidKitResource::class;
+
+    public ?string $pregled = null;
+
+    public function mount(
+        int|string $record
+    ): void {
+        /*
+         * Spremamo kontekst dashboard pregleda
+         * prije parent::mount().
+         */
+        $pregled = request()->query('pregled');
+
+        if (
+            in_array(
+                $pregled,
+                [
+                    'isteklo',
+                    'uskoro',
+                ],
+                true
+            )
+        ) {
+            $this->pregled = $pregled;
+        }
+
+        parent::mount($record);
+    }
 
     public function getTitle(): string
     {
@@ -37,10 +63,41 @@ class ViewFirstAidKit extends ViewRecord
                 )
                 ->openUrlInNewTab(),
 
-            EditAction::make()
+            Action::make('editFirstAidKit')
                 ->label('Uredi')
                 ->color('warning')
-                ->icon('heroicon-o-pencil-square'),
+                ->icon(
+                    'heroicon-o-pencil-square'
+                )
+                ->url(function (): string {
+                    $parameters = [
+                        'record' =>
+                            $this->getRecord(),
+                    ];
+
+                    /*
+                     * Prenosimo dashboard kontekst
+                     * na Edit stranicu.
+                     */
+                    if (
+                        in_array(
+                            $this->pregled,
+                            [
+                                'isteklo',
+                                'uskoro',
+                            ],
+                            true
+                        )
+                    ) {
+                        $parameters['pregled'] =
+                            $this->pregled;
+                    }
+
+                    return FirstAidKitResource::getUrl(
+                        'edit',
+                        $parameters
+                    );
+                }),
 
             DeleteAction::make()
                 ->label('Obriši')
