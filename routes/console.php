@@ -35,6 +35,25 @@ Schedule::command('kpi:generate')
     ->timezone('Europe/Zagreb')
     ->withoutOverlapping();
 
+
+/*
+|--------------------------------------------------------------------------
+| Individualni podsjetnici na rokove
+|--------------------------------------------------------------------------
+*/
+
+Schedule::command(
+    'emails:send-deadline-reminders'
+)
+    ->name(
+        'deadline-reminder-email'
+    )
+    ->weekdays()
+    ->at('07:30')
+    ->timezone(
+        'Europe/Zagreb'
+    )
+    ->withoutOverlapping();
 /*
 |--------------------------------------------------------------------------
 | Dnevni status e-mail

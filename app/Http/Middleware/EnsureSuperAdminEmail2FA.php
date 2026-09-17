@@ -9,24 +9,54 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureSuperAdminEmail2FA
 {
-    public function handle(Request $request, Closure $next): Response
-    {
-        $user = Filament::auth()->user() ?? $request->user();
+    public function handle(
+        Request $request,
+        Closure $next
+    ): Response {
+        $user =
+            Filament::auth()->user()
+            ?? $request->user();
 
         if (! $user) {
             return $next($request);
         }
 
-        if (! method_exists($user, 'isSuperAdmin') || ! $user->isSuperAdmin()) {
+        $requiresTwoFactor =
+            (
+                method_exists(
+                    $user,
+                    'isSuperAdmin'
+                )
+                && $user->isSuperAdmin()
+            )
+            || (bool) $user->email_2fa_enabled;
+
+        if (! $requiresTwoFactor) {
             return $next($request);
         }
 
-        if ($request->routeIs('email-2fa.*')) {
+        if (
+            $request->routeIs(
+                'email-2fa.*'
+            )
+        ) {
             return $next($request);
         }
 
-        if (! session()->get('superadmin_email_2fa_passed')) {
-            return redirect()->route('email-2fa.verify');
+        /*
+         * Potvrda 2FA vezana je uz konkretan
+         * korisnički račun.
+         */
+        if (
+            (int) session()->get(
+                'email_2fa_user_id'
+            )
+            !== (int) $user->id
+        ) {
+            return redirect()
+                ->route(
+                    'email-2fa.verify'
+                );
         }
 
         return $next($request);

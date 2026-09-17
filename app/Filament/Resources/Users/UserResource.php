@@ -399,6 +399,28 @@ class UserResource extends Resource
             Toggle::make('weekly_status_email_enabled')
                 ->label('Prima tjedni izvještaj na e-mail')
                 ->default(false),
+            
+            Toggle::make('reminder_30_days_enabled')
+                ->label('Podsjetnik 30 dana')
+                ->default(true),
+
+            Toggle::make('reminder_14_days_enabled')
+                ->label('Podsjetnik 14 dana')
+                ->default(false),
+
+            Toggle::make('reminder_7_days_enabled')
+                ->label('Podsjetnik 7 dana')
+                ->default(false),
+
+            Toggle::make('reminder_overdue_enabled')
+                ->label('Podsjetnik nakon isteka')
+                ->default(true),
+
+            Toggle::make('email_2fa_enabled')
+                ->label('2FA')
+                ->helperText(
+                    'Korisnik ovu postavku može sam promijeniti u svom profilu.'
+                ),
 
             Section::make('Prostor organizacije')
                 ->visible(fn () => Auth::user()?->isSuperAdmin())

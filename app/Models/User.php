@@ -82,6 +82,11 @@ class User extends Authenticatable implements FilamentUser
         'email_2fa_code_hash',
         'email_2fa_expires_at',
         'email_2fa_verified_at',
+        'email_2fa_enabled',
+        'reminder_30_days_enabled',
+        'reminder_14_days_enabled',
+        'reminder_7_days_enabled',
+        'reminder_overdue_enabled',
     ];
 
     protected $hidden = [
@@ -117,6 +122,11 @@ class User extends Authenticatable implements FilamentUser
             'last_activity_at' => 'datetime',
             'email_2fa_expires_at' => 'datetime',
             'email_2fa_verified_at' => 'datetime',
+            'email_2fa_enabled' => 'boolean',
+            'reminder_30_days_enabled' => 'boolean',
+            'reminder_14_days_enabled' => 'boolean',
+            'reminder_7_days_enabled' => 'boolean',
+            'reminder_overdue_enabled' => 'boolean',
         ];
     }
 
