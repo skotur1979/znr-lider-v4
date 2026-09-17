@@ -392,35 +392,43 @@ class UserResource extends Resource
                 ->default(true)
                 ->visible(fn () => Auth::user()?->isSuperAdmin()),
 
-            Toggle::make('daily_status_email_enabled')
-                ->label('Prima dnevni izvještaj na e-mail')
-                ->default(true),
+            Section::make('E-mail obavijesti i sigurnost')
+                ->description(
+                    'Postavke e-mail izvještaja, podsjetnika na rokove i dvofaktorske autentifikacije.'
+                )
+                ->schema([
+                    Toggle::make('daily_status_email_enabled')
+                        ->label('Prima dnevni izvještaj na e-mail')
+                        ->default(true),
 
-            Toggle::make('weekly_status_email_enabled')
-                ->label('Prima tjedni izvještaj na e-mail')
-                ->default(false),
-            
-            Toggle::make('reminder_30_days_enabled')
-                ->label('Podsjetnik 30 dana')
-                ->default(true),
+                    Toggle::make('weekly_status_email_enabled')
+                        ->label('Prima tjedni izvještaj na e-mail')
+                        ->default(false),
 
-            Toggle::make('reminder_14_days_enabled')
-                ->label('Podsjetnik 14 dana')
-                ->default(false),
+                    Toggle::make('reminder_30_days_enabled')
+                        ->label('Podsjetnik 30 dana')
+                        ->default(true),
 
-            Toggle::make('reminder_7_days_enabled')
-                ->label('Podsjetnik 7 dana')
-                ->default(false),
+                    Toggle::make('reminder_14_days_enabled')
+                        ->label('Podsjetnik 14 dana')
+                        ->default(false),
 
-            Toggle::make('reminder_overdue_enabled')
-                ->label('Podsjetnik nakon isteka')
-                ->default(true),
+                    Toggle::make('reminder_7_days_enabled')
+                        ->label('Podsjetnik 7 dana')
+                        ->default(false),
 
-            Toggle::make('email_2fa_enabled')
-                ->label('2FA')
-                ->helperText(
-                    'Korisnik ovu postavku može sam promijeniti u svom profilu.'
-                ),
+                    Toggle::make('reminder_overdue_enabled')
+                        ->label('Podsjetnik nakon isteka')
+                        ->default(true),
+
+                    Toggle::make('email_2fa_enabled')
+                        ->label('2FA')
+                        ->helperText(
+                            'Korisnik ovu postavku može sam promijeniti u svom profilu.'
+                        ),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
 
             Section::make('Prostor organizacije')
                 ->visible(fn () => Auth::user()?->isSuperAdmin())

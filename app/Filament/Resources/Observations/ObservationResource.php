@@ -518,7 +518,9 @@ protected static function priorityIcon(?string $state): ?string
 
                                     Textarea::make('comments')
                                         ->label('Komentar')
-                                        ->rows(4),
+                                        ->rows(4)
+                                        ->helperText('Kod zatvaranja zapažanja upišite kratki komentar o provedenoj radnji i načinu na koji je zapažanje riješeno.')
+                                        ->columnSpanFull(),
                                 ]),
                         ]),
                 ]),
