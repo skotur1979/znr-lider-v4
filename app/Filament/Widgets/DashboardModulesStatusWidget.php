@@ -133,7 +133,7 @@ class DashboardModulesStatusWidget extends Widget
                         'display_label' => 'Zapažanja',
                         'icon' => '👁️',
                         'total_label' => 'Ukupno',
-                        'total_count' => $this->countOpenObservations($user),
+                        'total_count' => $this->countSimpleModel(Observation::class, $user),
                         'total_url' => ObservationResource::getUrl('index'),
                         'expired_url' => $this->resolveObservationsExpiredUrl(),
                         'soon_url' => $this->resolveObservationsSoonUrl(),

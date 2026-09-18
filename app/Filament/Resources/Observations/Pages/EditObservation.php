@@ -4,11 +4,9 @@ namespace App\Filament\Resources\Observations\Pages;
 
 use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Observations\ObservationResource;
-use App\Mail\ObservationNotificationMail;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class EditObservation extends EditRecord
@@ -19,10 +17,6 @@ class EditObservation extends EditRecord
         ObservationResource::class;
 
     public ?string $pregled = null;
-
-    protected array $oldData = [];
-
-    protected array $oldNotificationEmails = [];
 
     /*
      * Put stare slike prije spremanja.
@@ -37,9 +31,9 @@ class EditObservation extends EditRecord
         int|string $record
     ): void {
         /*
-        * Spremamo kontekst dashboard pregleda
-        * prije parent::mount().
-        */
+         * Spremamo kontekst dashboard pregleda
+         * prije parent::mount().
+         */
         $pregled = request()->query('pregled');
 
         if (
@@ -56,9 +50,9 @@ class EditObservation extends EditRecord
         }
 
         /*
-        * Filament zatim učitava stvarni
-        * Observation model.
-        */
+         * Filament zatim učitava stvarni
+         * Observation model.
+         */
         parent::mount($record);
 
         $this->redirectIfMissingModulePermission(
@@ -109,33 +103,15 @@ class EditObservation extends EditRecord
     ): array {
         /*
         |--------------------------------------------------------------------------
-        | Stari podaci
+        | Stara fotografija
         |--------------------------------------------------------------------------
         |
-        | Koriste se za e-mail obavijest o izmjenama.
+        | Pamtimo put postojeće fotografije kako
+        | bismo je nakon spremanja mogli obrisati
+        | ako ju je korisnik zamijenio novom.
         |
         */
 
-        $this->oldData =
-            $this->record->only([
-                'incident_date',
-                'observation_type',
-                'priority',
-                'location',
-                'item',
-                'potential_incident_type',
-                'picture_path',
-                'action',
-                'responsible',
-                'notification_emails',
-                'target_date',
-                'status',
-                'comments',
-            ]);
-
-        /*
-         * Posebno pamtimo put stare slike.
-         */
         $this->oldPicturePath =
             filled(
                 $this->record->picture_path
@@ -143,23 +119,6 @@ class EditObservation extends EditRecord
                 ? (string)
                     $this->record->picture_path
                 : null;
-
-        $this->oldNotificationEmails =
-            collect(
-                $this->record
-                    ->notification_emails
-                    ?? []
-            )
-                ->map(
-                    fn ($email): string =>
-                        trim(
-                            (string) $email
-                        )
-                )
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
 
         /*
         |--------------------------------------------------------------------------
@@ -221,6 +180,15 @@ class EditObservation extends EditRecord
         |--------------------------------------------------------------------------
         | E-mail adrese
         |--------------------------------------------------------------------------
+        |
+        | Adrese se samo spremaju uz zapažanje.
+        |
+        | Uređivanje ili zatvaranje zapažanja više
+        | ne šalje automatsku e-mail obavijest.
+        |
+        | E-mail se šalje isključivo ručno kroz
+        | akciju "Pošalji zapažanje / podsjetnik".
+        |
         */
 
         $data['notification_emails'] =
@@ -292,72 +260,21 @@ class EditObservation extends EditRecord
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | E-mail obavijest
-        |--------------------------------------------------------------------------
-        */
-
-        $emails =
-            collect(
-                $this->record
-                    ->notification_emails
-                    ?? []
-            )
-                ->map(
-                    fn ($email): string =>
-                        trim(
-                            (string) $email
-                        )
-                )
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
-
-        /*
-         * Ako nema primatelja, mail se ne šalje.
+         * Namjerno nema automatskog slanja e-maila.
          *
-         * Brisanje stare slike iznad se ipak već
-         * izvršilo, što je važno.
+         * E-mail obavijest šalje se samo ručno
+         * kroz akciju "Pošalji zapažanje / podsjetnik"
+         * u ObservationResource.
          */
-        if (empty($emails)) {
-            return;
-        }
-
-        foreach (
-            $emails
-            as $email
-        ) {
-            Mail::to($email)->send(
-                new ObservationNotificationMail(
-                    observation:
-                        $this->record,
-
-                    mode:
-                        'updated',
-
-                    oldData:
-                        $this->oldData,
-                )
-            );
-        }
-
-        $this->record->updateQuietly([
-            'notification_emails' =>
-                $emails,
-
-            'sent_at' =>
-                now(),
-        ]);
     }
 
     protected function getRedirectUrl(): string
     {
         /*
-        * Ako smo došli iz dashboard pregleda
-        * Isteklo ili Uskoro, nakon spremanja
-        * vraćamo se na isti filtrirani popis.
-        */
+         * Ako smo došli iz dashboard pregleda
+         * Isteklo ili Uskoro, nakon spremanja
+         * vraćamo se na isti filtrirani popis.
+         */
         if (
             in_array(
                 $this->pregled,
@@ -378,9 +295,9 @@ class EditObservation extends EditRecord
         }
 
         /*
-        * Kod normalnog ulaska u modul
-        * zadržavamo postojeće ponašanje.
-        */
+         * Kod normalnog ulaska u modul
+         * zadržavamo postojeće ponašanje.
+         */
         return $this->previousUrl
             ?? static::getResource()::getUrl(
                 'index'
