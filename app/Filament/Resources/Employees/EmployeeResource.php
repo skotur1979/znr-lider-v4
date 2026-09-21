@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Employees;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Employees\Pages\CreateEmployee;
 use App\Filament\Resources\Employees\Pages\EditEmployee;
+use App\Filament\Resources\Employees\Pages\EmployeeDossier;
 use App\Filament\Resources\Employees\Pages\ListEmployees;
 use App\Filament\Resources\Employees\Pages\ViewEmployee;
 use App\Filament\Resources\Employees\Schemas\EmployeeForm;
@@ -70,9 +71,18 @@ class EmployeeResource extends BaseResource
     {
         return [
             'index' => ListEmployees::route('/'),
+
             'create' => CreateEmployee::route('/create'),
+
+            'dossier' => EmployeeDossier::route(
+                '/{record}/dossier'
+            ),
+
             'view' => ViewEmployee::route('/{record}'),
-            'edit' => EditEmployee::route('/{record}/edit'),
+
+            'edit' => EditEmployee::route(
+                '/{record}/edit'
+            ),
         ];
     }
 }

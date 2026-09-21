@@ -8,10 +8,14 @@ use App\Filament\Resources\Pages\BaseListRecords;
 use App\Imports\EmployeesImport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
+use App\Models\Employee;
+use App\Services\EmployeeDossierService;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
@@ -36,6 +40,208 @@ class ListEmployees extends BaseListRecords
                     EmployeeResource::beforeModulePermission(
                         'create'
                     )
+                ),
+
+                /*
+            |--------------------------------------------------------------------------
+            | ZNR DOSJE – PREGLED
+            |--------------------------------------------------------------------------
+            */
+
+            Actions\Action::make(
+                'employee_dossier'
+            )
+                ->label(
+                    'ZNR dosje / Izvještaj'
+                )
+                ->icon(
+                    'heroicon-o-identification'
+                )
+                ->color('info')
+                ->visible(
+                    fn (): bool =>
+                        EmployeeResource::allowsModulePermission(
+                            'view'
+                        )
+                )
+                ->form([
+                    Select::make(
+                        'employee_id'
+                    )
+                        ->label(
+                            'Odaberi zaposlenika'
+                        )
+                        ->options(
+                            fn (): array =>
+                                $this
+                                    ->employeeDossierOptions()
+                        )
+                        ->searchable()
+                        ->preload()
+                        ->required(),
+                ])
+                ->modalHeading(
+                    'ZNR dosje zaposlenika'
+                )
+                ->modalDescription(
+                    'Odaberi zaposlenika čiji ZNR dosje želiš otvoriti.'
+                )
+                ->modalSubmitActionLabel(
+                    'Otvori dosje'
+                )
+                ->action(
+                    function (
+                        array $data
+                    ) {
+                        if (
+                            ! EmployeeResource::allowsModulePermission(
+                                'view'
+                            )
+                        ) {
+                            return null;
+                        }
+
+                        $employee =
+                            $this
+                                ->findDossierEmployee(
+                                    $data[
+                                        'employee_id'
+                                    ]
+                                );
+
+                        return redirect(
+                            EmployeeResource::getUrl(
+                                'dossier',
+                                [
+                                    'record' =>
+                                        $employee,
+                                ]
+                            )
+                        );
+                    }
+                ),
+
+            /*
+            |--------------------------------------------------------------------------
+            | ZNR DOSJE – DIREKTNI PDF
+            |--------------------------------------------------------------------------
+            */
+
+            Actions\Action::make(
+                'employee_dossier_pdf'
+            )
+                ->label(
+                    'ZNR dosje PDF'
+                )
+                ->icon(
+                    'heroicon-o-document-arrow-down'
+                )
+                ->color('gray')
+                ->visible(
+                    fn (): bool =>
+                        EmployeeResource::allowsModulePermission(
+                            'view'
+                        )
+                )
+                ->form([
+                    Select::make(
+                        'employee_id'
+                    )
+                        ->label(
+                            'Odaberi zaposlenika'
+                        )
+                        ->options(
+                            fn (): array =>
+                                $this
+                                    ->employeeDossierOptions()
+                        )
+                        ->searchable()
+                        ->preload()
+                        ->required(),
+                ])
+                ->modalHeading(
+                    'Izvoz ZNR dosjea u PDF'
+                )
+                ->modalDescription(
+                    'Odaberi zaposlenika čiji ZNR dosje želiš izvesti.'
+                )
+                ->modalSubmitActionLabel(
+                    'Izvezi PDF'
+                )
+                ->action(
+                    function (
+                        array $data
+                    ) {
+                        if (
+                            ! EmployeeResource::allowsModulePermission(
+                                'view'
+                            )
+                        ) {
+                            return null;
+                        }
+
+                        $employee =
+                            $this
+                                ->findDossierEmployee(
+                                    $data[
+                                        'employee_id'
+                                    ]
+                                );
+
+                        $dossier =
+                            app(
+                                EmployeeDossierService::class
+                            )->build(
+                                $employee
+                            );
+
+                        $pdf =
+                            Pdf::loadView(
+                                'pdf.employee-dossier',
+                                $dossier
+                            )
+                                ->setPaper(
+                                    'a4',
+                                    'portrait'
+                                )
+                                ->setOptions([
+                                    'isHtml5ParserEnabled' =>
+                                        true,
+
+                                    'isRemoteEnabled' =>
+                                        false,
+
+                                    'isPhpEnabled' =>
+                                        true,
+
+                                    'dpi' =>
+                                        96,
+
+                                    'defaultFont' =>
+                                        'DejaVu Sans',
+                                ]);
+
+                        $fileName =
+                            'znr-dosje-'
+                            . Str::slug(
+                                (string)
+                                $employee->name
+                            )
+                            . '-'
+                            . now()->format(
+                                'Y-m-d'
+                            )
+                            . '.pdf';
+
+                        return response()
+                            ->streamDownload(
+                                fn () =>
+                                    print(
+                                        $pdf->output()
+                                    ),
+                                $fileName
+                            );
+                    }
                 ),
 
             Actions\Action::make('export_pdf')
@@ -534,5 +740,83 @@ class ListEmployees extends BaseListRecords
 
             default => $query,
         };
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | ZNR DOSJE ZAPOSLENIKA
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Zaposlenici dostupni trenutačnom
+     * korisniku.
+     *
+     * Koristimo EmployeeResource query
+     * kako bi ostao postojeći owner/tenant
+     * scope.
+     */
+    protected function dossierEmployeeQuery(): Builder
+    {
+        return EmployeeResource::getEloquentQuery()
+            ->whereNull(
+                'employees.deleted_at'
+            );
+    }
+
+    /**
+     * Opcije zaposlenika za Select.
+     */
+    protected function employeeDossierOptions(): array
+    {
+        return $this
+            ->dossierEmployeeQuery()
+            ->orderBy(
+                'employees.name'
+            )
+            ->get()
+            ->mapWithKeys(
+                function (
+                    Employee $employee
+                ): array {
+                    $label =
+                        (string)
+                        $employee->name;
+
+                    if (
+                        filled(
+                            $employee->OIB
+                        )
+                    ) {
+                        $label .=
+                            ' — OIB: '
+                            . $employee->OIB;
+                    }
+
+                    return [
+                        $employee->getKey()
+                            => $label,
+                    ];
+                }
+            )
+            ->all();
+    }
+
+    /**
+     * Dohvat zaposlenika uz postojeći
+     * organization / owner scope.
+     */
+    protected function findDossierEmployee(
+        int|string $employeeId
+    ): Employee {
+        /** @var Employee $employee */
+        $employee =
+            $this
+                ->dossierEmployeeQuery()
+                ->whereKey(
+                    $employeeId
+                )
+                ->firstOrFail();
+
+        return $employee;
     }
 }
