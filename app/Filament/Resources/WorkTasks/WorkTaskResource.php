@@ -32,6 +32,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Filament\Forms\Components\Toggle;
 
 class WorkTaskResource extends BaseResource
 {
