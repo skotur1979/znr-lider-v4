@@ -8,42 +8,77 @@ use Illuminate\Support\Facades\Auth;
 
 class CreateWorkTask extends CreateRecord
 {
-    protected static string $resource = WorkTaskResource::class;
+    protected static string $resource =
+        WorkTaskResource::class;
 
-    protected function mutateFormDataBeforeCreate(array $data): array
-    {
+    protected function mutateFormDataBeforeCreate(
+        array $data
+    ): array {
         $user = Auth::user();
 
-        abort_unless($user, 403);
+        abort_unless(
+            $user,
+            403
+        );
 
         /*
-        * Radni zadatak je poslovni zapis organizacije.
-        *
-        * Superadmin može pregledavati zadatke organizacija,
-        * ali ih ne kreira u njihovo ime.
-        */
-        abort_if($user->isSuperAdmin(), 403);
+         * Superadmin ne kreira zadatak
+         * u ime organizacije.
+         */
+        abort_if(
+            $user->isSuperAdmin(),
+            403
+        );
 
-        $ownerId = $user->ownerId();
+        $ownerId =
+            $user->ownerId();
 
-        abort_unless($ownerId, 403);
+        abort_unless(
+            $ownerId,
+            403
+        );
 
         /*
-        * Ownership uvijek određujemo serverski.
-        */
-        $data['user_id'] = $ownerId;
+         * Organizacija kojoj zadatak pripada.
+         */
+        $data['user_id'] =
+            $ownerId;
 
         /*
-        * Novi zadatak uvijek počinje kao otvoren.
-        */
-        $data['is_done'] = false;
-        $data['completed_at'] = null;
+         * Stvarni korisnik koji je
+         * napravio radni zadatak.
+         */
+        $data['created_by_user_id'] =
+            $user->id;
+
+        /*
+         * Ako toggle nije uključen,
+         * zadatak je osoban.
+         */
+        $data['is_shared_with_organization'] =
+            (bool) (
+                $data[
+                    'is_shared_with_organization'
+                ]
+                ?? false
+            );
+
+        /*
+         * Novi zadatak je otvoren.
+         */
+        $data['is_done'] =
+            false;
+
+        $data['completed_at'] =
+            null;
 
         return $data;
     }
 
     protected function getRedirectUrl(): string
     {
-        return static::getResource()::getUrl('index');
+        return static::getResource()::getUrl(
+            'index'
+        );
     }
 }

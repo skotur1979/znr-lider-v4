@@ -31,6 +31,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Filament\Forms\Components\Toggle;
 
 class OperationalLogResource extends BaseResource
 {
@@ -123,6 +124,20 @@ class OperationalLogResource extends BaseResource
                                 ->helperText(
                                     'Označi ako ova bilješka treba ići u Radne zadatke.'
                                 )
+                                ->columnSpanFull(),
+
+                            Toggle::make(
+                                'share_task_with_organization'
+                            )
+                                ->label(
+                                    'Vidljivo cijeloj organizaciji'
+                                )
+                                ->helperText(
+                                    'Primjenjuje se samo ako je bilješka označena kao Radni zadatak. '
+                                    . 'Ako je isključeno, zadatak će vidjeti samo korisnik koji ga je napravio.'
+                                )
+                                ->default(false)
+                                ->inline(false)
                                 ->columnSpanFull(),
                         ])
                         ->columns(1)

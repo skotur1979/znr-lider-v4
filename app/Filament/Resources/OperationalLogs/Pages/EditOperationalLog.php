@@ -20,27 +20,26 @@ class EditOperationalLog extends EditRecord
     protected static string $resource =
         OperationalLogResource::class;
 
-    protected Width|string|null $maxContentWidth = '7xl';
+    protected Width|string|null $maxContentWidth =
+        '7xl';
 
-    public function mount(int|string $record): void
-    {
+    public function mount(
+        int|string $record
+    ): void {
         parent::mount($record);
 
-        /*
-         * Superadmin može pregledavati osobne dnevnike,
-         * ali ih ne uređuje.
-         *
-         * Autor dnevnika može uređivati samo vlastiti zapis.
-         */
         if (
             Auth::user()?->isSuperAdmin()
-            || ! OperationalLogResource::canEdit($this->record)
+            || ! OperationalLogResource::canEdit(
+                $this->record
+            )
         ) {
             $this->redirect(
                 OperationalLogResource::getUrl(
                     'view',
                     [
-                        'record' => $this->record,
+                        'record' =>
+                            $this->record,
                     ]
                 ),
                 navigate: true
@@ -50,12 +49,145 @@ class EditOperationalLog extends EditRecord
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | POPUNJAVANJE FORME
+    |--------------------------------------------------------------------------
+    |
+    | Kod starih dnevnika JSON još nema
+    | share_task_with_organization.
+    |
+    | Zato stanje učitavamo iz stvarnog WorkTask zapisa.
+    |
+    */
+
+    protected function mutateFormDataBeforeFill(
+        array $data
+    ): array {
+        $this->record
+            ->loadMissing('user');
+
+        $author =
+            $this->record->user;
+
+        $taskOwnerId =
+            $author?->ownerId();
+
+        $items =
+            collect(
+                $data['items']
+                ?? []
+            );
+
+        if (
+            ! $author
+            || ! $taskOwnerId
+        ) {
+            $data['items'] =
+                $items
+                    ->map(
+                        function (
+                            array $item
+                        ): array {
+                            $item[
+                                'share_task_with_organization'
+                            ] =
+                                (bool) (
+                                    $item[
+                                        'share_task_with_organization'
+                                    ]
+                                    ?? false
+                                );
+
+                            return $item;
+                        }
+                    )
+                    ->values()
+                    ->toArray();
+
+            return $data;
+        }
+
+        $taskIds =
+            $items
+                ->pluck('task_id')
+                ->filter()
+                ->map(
+                    fn ($id): int =>
+                        (int) $id
+                )
+                ->unique()
+                ->values();
+
+        /*
+         * Namjerno uklanjamo visibility scope
+         * samo za ove već spremljene task_id vrijednosti,
+         * ali ownership organizacije i dalje provjeravamo.
+         */
+        $tasks =
+            WorkTask::query()
+                ->withoutGlobalScope(
+                    'work_task_visibility'
+                )
+                ->where(
+                    'user_id',
+                    $taskOwnerId
+                )
+                ->whereIn(
+                    'id',
+                    $taskIds
+                )
+                ->get()
+                ->keyBy('id');
+
+        $data['items'] =
+            $items
+                ->map(
+                    function (
+                        array $item
+                    ) use (
+                        $tasks
+                    ): array {
+                        $taskId =
+                            ! empty(
+                                $item['task_id']
+                            )
+                                ? (int)
+                                    $item['task_id']
+                                : null;
+
+                        $task =
+                            $taskId
+                                ? $tasks->get(
+                                    $taskId
+                                )
+                                : null;
+
+                        $item[
+                            'share_task_with_organization'
+                        ] =
+                            $task
+                                ? (bool)
+                                    $task
+                                        ->is_shared_with_organization
+                                : (bool) (
+                                    $item[
+                                        'share_task_with_organization'
+                                    ]
+                                    ?? false
+                                );
+
+                        return $item;
+                    }
+                )
+                ->values()
+                ->toArray();
+
+        return $data;
+    }
+
     protected function beforeSave(): void
     {
-        /*
-         * Dodatna serverska provjera neposredno
-         * prije spremanja.
-         */
         if (
             ! OperationalLogResource::canEdit(
                 $this->record
@@ -69,99 +201,126 @@ class EditOperationalLog extends EditRecord
         array $data
     ): array {
         /*
-         * Vlasnik osobnog dnevnika nikada se
-         * ne mijenja kroz edit formu.
+         * Autor dnevnika se ne mijenja.
          */
         $data['user_id'] =
             $this->record->user_id;
 
-        /*
-         * task_id prihvaćamo samo ako je već bio
-         * spremljen u ovom dnevniku.
-         *
-         * Time korisnik ne može kroz Livewire
-         * podmetnuti ID nekog drugog radnog zadatka.
-         */
-        $existingTaskIds = collect(
-            $this->record->items ?? []
-        )
-            ->pluck('task_id')
-            ->filter()
-            ->map(
-                fn ($id): int =>
-                    (int) $id
+        $existingTaskIds =
+            collect(
+                $this->record->items
+                ?? []
             )
-            ->unique()
-            ->values();
+                ->pluck('task_id')
+                ->filter()
+                ->map(
+                    fn ($id): int =>
+                        (int) $id
+                )
+                ->unique()
+                ->values();
 
-        $data['items'] = collect(
-            $data['items'] ?? []
-        )
-            ->filter(
-                fn (array $item): bool =>
-                    filled($item['note'] ?? null)
+        $data['items'] =
+            collect(
+                $data['items']
+                ?? []
             )
-            ->map(
-                function (array $item) use (
-                    $existingTaskIds
-                ): array {
-                    $taskId = null;
-
-                    if (
-                        isset($item['task_id'])
-                        && filled($item['task_id'])
-                        && $existingTaskIds->contains(
-                            (int) $item['task_id']
+                ->filter(
+                    fn (
+                        array $item
+                    ): bool =>
+                        filled(
+                            $item['note']
+                            ?? null
                         )
-                    ) {
-                        $taskId =
-                            (int) $item['task_id'];
-                    }
+                )
+                ->map(
+                    function (
+                        array $item
+                    ) use (
+                        $existingTaskIds
+                    ): array {
+                        $taskId = null;
 
-                    /*
-                     * Ako je radni zadatak već kreiran,
-                     * poveznica ostaje aktivna.
-                     *
-                     * Uklanjanjem kvačice ne brišemo
-                     * postojeći WorkTask niti gubimo vezu.
-                     */
-                    $createTask =
-                        $taskId !== null
-                        || (bool) (
-                            $item['create_task']
-                            ?? false
-                        );
-
-                    return [
-                        'note' => trim(
-                            (string) (
-                                $item['note']
-                                ?? ''
+                        if (
+                            isset(
+                                $item[
+                                    'task_id'
+                                ]
                             )
-                        ),
+                            && filled(
+                                $item[
+                                    'task_id'
+                                ]
+                            )
+                            && $existingTaskIds
+                                ->contains(
+                                    (int)
+                                    $item[
+                                        'task_id'
+                                    ]
+                                )
+                        ) {
+                            $taskId =
+                                (int)
+                                $item[
+                                    'task_id'
+                                ];
+                        }
 
-                        'create_task' =>
-                            $createTask,
+                        /*
+                         * Postojeći WorkTask ostaje
+                         * povezan i ako se checkbox
+                         * Radni zadatak naknadno makne.
+                         */
+                        $createTask =
+                            $taskId !== null
+                            || (bool) (
+                                $item[
+                                    'create_task'
+                                ]
+                                ?? false
+                            );
 
-                        'task_id' =>
-                            $taskId,
-                    ];
-                }
+                        return [
+                            'note' =>
+                                trim(
+                                    (string) (
+                                        $item[
+                                            'note'
+                                        ]
+                                        ?? ''
+                                    )
+                                ),
+
+                            'create_task' =>
+                                $createTask,
+
+                            'share_task_with_organization' =>
+                                (bool) (
+                                    $item[
+                                        'share_task_with_organization'
+                                    ]
+                                    ?? false
+                                ),
+
+                            'task_id' =>
+                                $taskId,
+                        ];
+                    }
+                )
+                ->values()
+                ->toArray();
+
+        $data['note'] =
+            collect(
+                $data['items']
             )
-            ->values()
-            ->toArray();
+                ->pluck('note')
+                ->implode("\n");
 
-        /*
-         * Glavno note polje ostaje sinkronizirano
-         * sa svim bilješkama iz repeatera.
-         */
-        $data['note'] = collect(
-            $data['items']
-        )
-            ->pluck('note')
-            ->implode("\n");
-
-        $data['type'] = 'note';
+        $data['type'] =
+            'note';
 
         return $data;
     }
@@ -169,99 +328,170 @@ class EditOperationalLog extends EditRecord
     protected function afterSave(): void
     {
         /** @var OperationalLog $record */
-        $record = $this->record;
+        $record =
+            $this->record;
 
-        $record->loadMissing('user');
+        $record
+            ->loadMissing('user');
 
-        $author = $record->user;
+        $author =
+            $record->user;
 
         if (! $author) {
             return;
         }
 
-        /*
-         * Radni zadaci pripadaju organizaciji autora.
-         */
-        $taskUserId =
+        $taskOwnerId =
             $author->ownerId();
 
-        if (! $taskUserId) {
+        if (! $taskOwnerId) {
             return;
         }
 
-        $items = collect(
-            $record->items ?? []
-        )
-            ->values()
-            ->toArray();
+        $items =
+            collect(
+                $record->items
+                ?? []
+            )
+                ->values()
+                ->toArray();
 
         $createdTasks = 0;
         $updatedTasks = 0;
 
-        foreach ($items as $index => $item) {
-            $note = trim(
-                (string) (
-                    $item['note']
-                    ?? ''
-                )
-            );
+        foreach (
+            $items
+            as $index => $item
+        ) {
+            $note =
+                trim(
+                    (string) (
+                        $item['note']
+                        ?? ''
+                    )
+                );
 
             if ($note === '') {
                 continue;
             }
 
             $taskId =
-                ! empty($item['task_id'])
-                    ? (int) $item['task_id']
+                ! empty(
+                    $item['task_id']
+                )
+                    ? (int)
+                        $item['task_id']
                     : null;
 
             /*
-             * POSTOJEĆI RADNI ZADATAK
-             *
-             * Ako bilješka već ima task_id,
-             * ne radimo novi WorkTask.
-             *
-             * Umjesto toga ažuriramo postojeći.
-             */
+            |--------------------------------------------------------------------------
+            | POSTOJEĆI RADNI ZADATAK
+            |--------------------------------------------------------------------------
+            */
+
             if ($taskId !== null) {
-                $task = WorkTask::query()
-                    ->where(
-                        'user_id',
-                        $taskUserId
-                    )
-                    ->whereKey($taskId)
-                    ->first();
+                $task =
+                    WorkTask::query()
+                        ->withoutGlobalScope(
+                            'work_task_visibility'
+                        )
+                        ->where(
+                            'user_id',
+                            $taskOwnerId
+                        )
+                        ->whereKey(
+                            $taskId
+                        )
+                        ->first();
 
                 if ($task) {
-                    $newTitle = Str::limit(
-                        $note,
-                        80
-                    );
+                    $newTitle =
+                        Str::limit(
+                            $note,
+                            80
+                        );
 
                     $newDueDate =
                         $record->log_date;
 
+                    $updateData = [
+                        'title' =>
+                            $newTitle,
+
+                        'description' =>
+                            $note,
+
+                        'due_date' =>
+                            $newDueDate,
+                    ];
+
+                    /*
+                     * Samo autor WorkTaska može
+                     * promijeniti vidljivost.
+                     *
+                     * Legacy zadaci imaju
+                     * created_by_user_id = null
+                     * i ostaju organizacijski.
+                     */
+                    if (
+                        (int) (
+                            $task
+                                ->created_by_user_id
+                            ?? 0
+                        )
+                        ===
+                        (int) $author->id
+                    ) {
+                        $updateData[
+                            'is_shared_with_organization'
+                        ] =
+                            (bool) (
+                                $item[
+                                    'share_task_with_organization'
+                                ]
+                                ?? false
+                            );
+                    }
+
                     $changed =
-                        $task->title !== $newTitle
-                        || $task->description !== $note
-                        || optional(
+                        $task->title
+                            !==
+                            $updateData['title']
+                        ||
+                        $task->description
+                            !==
+                            $updateData[
+                                'description'
+                            ]
+                        ||
+                        optional(
                             $task->due_date
                         )->toDateString()
-                            !== optional(
+                            !==
+                            optional(
                                 $newDueDate
-                            )->toDateString();
+                            )->toDateString()
+                        ||
+                        (
+                            array_key_exists(
+                                'is_shared_with_organization',
+                                $updateData
+                            )
+                            &&
+                            (bool)
+                            $task
+                                ->is_shared_with_organization
+                            !==
+                            (bool)
+                            $updateData[
+                                'is_shared_with_organization'
+                            ]
+                        );
 
                     if ($changed) {
-                        $task->update([
-                            'title' =>
-                                $newTitle,
-
-                            'description' =>
-                                $note,
-
-                            'due_date' =>
-                                $newDueDate,
-                        ]);
+                        $task->update(
+                            $updateData
+                        );
 
                         $updatedTasks++;
                     }
@@ -271,70 +501,75 @@ class EditOperationalLog extends EditRecord
             }
 
             /*
-             * NOVI RADNI ZADATAK
-             *
-             * Kreiramo ga samo ako:
-             *
-             * - bilješka je označena kao Radni zadatak
-             * - još nema task_id.
-             */
+            |--------------------------------------------------------------------------
+            | NOVI RADNI ZADATAK
+            |--------------------------------------------------------------------------
+            */
+
             if (
                 empty(
-                    $item['create_task']
+                    $item[
+                        'create_task'
+                    ]
                 )
             ) {
                 continue;
             }
 
-            $task = WorkTask::create([
-                'user_id' =>
-                    $taskUserId,
+            $task =
+                WorkTask::create([
+                    'user_id' =>
+                        $taskOwnerId,
 
-                'title' =>
-                    Str::limit(
+                    'created_by_user_id' =>
+                        $author->id,
+
+                    'is_shared_with_organization' =>
+                        (bool) (
+                            $item[
+                                'share_task_with_organization'
+                            ]
+                            ?? false
+                        ),
+
+                    'title' =>
+                        Str::limit(
+                            $note,
+                            80
+                        ),
+
+                    'description' =>
                         $note,
-                        80
-                    ),
 
-                'description' =>
-                    $note,
+                    'due_date' =>
+                        $record->log_date,
 
-                'due_date' =>
-                    $record->log_date,
+                    'is_done' =>
+                        false,
 
-                'is_done' =>
-                    false,
+                    'completed_at' =>
+                        null,
+                ]);
 
-                'completed_at' =>
-                    null,
-            ]);
-
-            /*
-             * Spremamo ID upravo napravljenog
-             * zadatka natrag u JSON dnevnika.
-             *
-             * Kod sljedećeg uređivanja taj ID će
-             * kroz Hidden::make('task_id') ponovno
-             * doći u formu.
-             */
-            $items[$index]['task_id'] =
+            $items[
+                $index
+            ]['task_id'] =
                 $task->id;
 
-            $items[$index]['create_task'] =
+            $items[
+                $index
+            ]['create_task'] =
                 true;
 
             $createdTasks++;
         }
 
-        $hasTasks = collect($items)
-            ->pluck('task_id')
-            ->filter()
-            ->isNotEmpty();
+        $hasTasks =
+            collect($items)
+                ->pluck('task_id')
+                ->filter()
+                ->isNotEmpty();
 
-        /*
-         * Quiet update kako ne bismo ponovno
-         * pokretali Filament save ciklus.
-         */
         $record->updateQuietly([
             'items' =>
                 $items,
@@ -358,10 +593,6 @@ class EditOperationalLog extends EditRecord
                     : 'recorded',
         ]);
 
-        /*
-         * Logiramo samo stvarno NOVO kreirane
-         * radne zadatke.
-         */
         if ($createdTasks > 0) {
             ActivityLogger::status(
                 module:
@@ -376,17 +607,15 @@ class EditOperationalLog extends EditRecord
                     . '. Datum dnevnika: '
                     . optional(
                         $record->log_date
-                    )->format('d.m.Y.'),
+                    )->format(
+                        'd.m.Y.'
+                    ),
 
                 record:
                     $record,
             );
         }
 
-        /*
-         * Obavijest prikazujemo samo ako je
-         * stvarno nastao novi zadatak.
-         */
         if ($createdTasks > 0) {
             Notification::make()
                 ->title(
@@ -399,12 +628,6 @@ class EditOperationalLog extends EditRecord
                 ->success()
                 ->send();
         }
-
-        /*
-         * Ako smo samo izmijenili postojeće
-         * zadatke, nije potrebna posebna poruka
-         * jer Filament već javlja da je zapis spremljen.
-         */
     }
 
     protected function getHeaderActions(): array
@@ -433,7 +656,9 @@ class EditOperationalLog extends EditRecord
                 ),
 
             ForceDeleteAction::make()
-                ->label('Trajno izbriši')
+                ->label(
+                    'Trajno izbriši'
+                )
                 ->requiresConfirmation()
                 ->visible(
                     fn (): bool =>

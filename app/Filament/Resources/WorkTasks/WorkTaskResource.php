@@ -79,24 +79,53 @@ class WorkTaskResource extends BaseResource
             return false;
         }
 
-        /*
-        * Superadmin smije administrirati
-        * sve postojeće radne zadatke.
-        *
-        * Ownership se time ne mijenja.
-        */
         if ($user->isSuperAdmin()) {
             return true;
         }
 
-        $ownerId = $user->ownerId();
+        $ownerId =
+            $user->ownerId();
 
         if (! $ownerId) {
             return false;
         }
 
-        return (int) $record->user_id ===
-            (int) $ownerId;
+        /*
+        * Druga organizacija nikada.
+        */
+        if (
+            (int) $record->user_id
+            !==
+            (int) $ownerId
+        ) {
+            return false;
+        }
+
+        /*
+        * Organizacijski zadatak:
+        * svi korisnici organizacije ga
+        * mogu obrađivati.
+        */
+        if (
+            (bool)
+            $record
+                ->is_shared_with_organization
+        ) {
+            return true;
+        }
+
+        /*
+        * Privatni zadatak:
+        * samo stvarni autor.
+        */
+        return
+            (int) (
+                $record
+                    ->created_by_user_id
+                ?? 0
+            )
+            ===
+            (int) $user->id;
     }
 
     /**
@@ -181,6 +210,50 @@ class WorkTaskResource extends BaseResource
                             ->rows(5)
                             ->maxLength(1000)
                             ->columnSpanFull(),
+
+                        Toggle::make(
+                            'is_shared_with_organization'
+                        )
+                            ->label(
+                                'Vidljivo cijeloj organizaciji'
+                            )
+                            ->helperText(
+                                'Uključi ako ovaj radni zadatak trebaju vidjeti svi korisnici organizacije. '
+                                . 'Ako je isključeno, zadatak vidi samo korisnik koji ga je kreirao.'
+                            )
+                            ->default(false)
+                            ->inline(false)
+                            ->columnSpanFull()
+                            ->disabled(
+                                function (
+                                    ?WorkTask $record
+                                ): bool {
+                                    /*
+                                    * Kod kreiranja toggle je aktivan.
+                                    */
+                                    if (! $record) {
+                                        return false;
+                                    }
+
+                                    /*
+                                    * Kod postojećeg zadatka
+                                    * vidljivost može mijenjati
+                                    * samo njegov autor.
+                                    *
+                                    * Legacy zadaci nemaju autora
+                                    * i ostaju organizacijski.
+                                    */
+                                    return
+                                        (int) (
+                                            $record
+                                                ->created_by_user_id
+                                            ?? 0
+                                        )
+                                        !==
+                                        (int) Auth::id();
+                                }
+                            )
+                            ->dehydrated(true),
                     ]),
             ])
             ->columns(1);
@@ -511,6 +584,23 @@ class WorkTaskResource extends BaseResource
                     ->boolean()
                     ->toggleable()
                     ->visibleFrom('md'),
+
+                    IconColumn::make(
+                        'is_shared_with_organization'
+                    )
+                        ->label('Organizacija')
+                        ->boolean()
+                        ->tooltip(
+                            fn (WorkTask $record): string =>
+                                $record
+                                    ->is_shared_with_organization
+                                        ? 'Vidljivo cijeloj organizaciji'
+                                        : 'Privatni radni zadatak'
+                        )
+                        ->toggleable(
+                            isToggledHiddenByDefault: true
+                        )
+                        ->visibleFrom('md'),
 
                 TextColumn::make('completed_at')
                     ->label('Zatvoreno')

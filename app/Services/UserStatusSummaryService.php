@@ -582,10 +582,36 @@ class UserStatusSummaryService
             ->where('user_id', $this->ownerId($user));
     }
 
-    protected function workTaskQuery(User $user): Builder
-    {
+    protected function workTaskQuery(
+        User $user
+    ): Builder {
         return WorkTask::query()
-            ->where('user_id', $this->ownerId($user));
+            ->withoutGlobalScope(
+                'work_task_visibility'
+            )
+            ->where(
+                'user_id',
+                $this->ownerId(
+                    $user
+                )
+            )
+            ->where(
+                function (
+                    Builder $query
+                ) use (
+                    $user
+                ): void {
+                    $query
+                        ->where(
+                            'is_shared_with_organization',
+                            true
+                        )
+                        ->orWhere(
+                            'created_by_user_id',
+                            $user->id
+                        );
+                }
+            );
     }
 
     protected function workPermitQuery(User $user): Builder

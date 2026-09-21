@@ -16,12 +16,15 @@ use Illuminate\Support\Str;
 
 class CreateOperationalLog extends CreateRecord
 {
-    protected static string $resource = OperationalLogResource::class;
+    protected static string $resource =
+        OperationalLogResource::class;
 
-    protected Width|string|null $maxContentWidth = '7xl';
+    protected Width|string|null $maxContentWidth =
+        '7xl';
 
-    protected function handleRecordCreation(array $data): Model
-    {
+    protected function handleRecordCreation(
+        array $data
+    ): Model {
         $user = Auth::user();
 
         if (! $user) {
@@ -29,114 +32,195 @@ class CreateOperationalLog extends CreateRecord
         }
 
         /*
-         * Operativni dnevnik je OSOBNI zapis.
-         * Superadmin ne izrađuje dnevnik u ime korisnika.
+         * Operativni dnevnik je osobni zapis.
          */
         if ($user->isSuperAdmin()) {
             abort(403);
         }
 
-        $logUserId = $user->id;
-        $taskUserId = $user->ownerId();
+        $logUserId =
+            $user->id;
 
-        if (! $taskUserId) {
+        $taskOwnerId =
+            $user->ownerId();
+
+        if (! $taskOwnerId) {
             abort(403);
         }
 
-        $logDate = $data['log_date']
+        $logDate =
+            $data['log_date']
             ?? now()->toDateString();
 
-        $items = collect($data['items'] ?? [])
+        $items = collect(
+            $data['items']
+            ?? []
+        )
             ->filter(
                 fn (array $item): bool =>
-                    filled($item['note'] ?? null)
+                    filled(
+                        $item['note']
+                        ?? null
+                    )
             )
-            ->map(function (array $item): array {
-                return [
-                    'note' => trim(
-                        (string) ($item['note'] ?? '')
-                    ),
+            ->map(
+                function (
+                    array $item
+                ): array {
+                    return [
+                        'note' =>
+                            trim(
+                                (string) (
+                                    $item['note']
+                                    ?? ''
+                                )
+                            ),
 
-                    'create_task' => (bool) (
-                        $item['create_task'] ?? false
-                    ),
+                        'create_task' =>
+                            (bool) (
+                                $item[
+                                    'create_task'
+                                ]
+                                ?? false
+                            ),
 
-                    'task_id' => null,
-                ];
-            })
+                        /*
+                         * Vidljivost budućeg zadatka.
+                         */
+                        'share_task_with_organization' =>
+                            (bool) (
+                                $item[
+                                    'share_task_with_organization'
+                                ]
+                                ?? false
+                            ),
+
+                        'task_id' =>
+                            null,
+                    ];
+                }
+            )
             ->values()
             ->toArray();
 
-        $log = OperationalLog::create([
-            /*
-             * Dnevnik pripada točno prijavljenom korisniku.
-             */
-            'user_id' => $logUserId,
+        $log =
+            OperationalLog::create([
+                'user_id' =>
+                    $logUserId,
 
-            'log_date' => $logDate,
+                'log_date' =>
+                    $logDate,
 
-            'title' =>
-                'Operativni dnevnik - '
-                . Carbon::parse($logDate)->format('d.m.Y.'),
+                'title' =>
+                    'Operativni dnevnik - '
+                    . Carbon::parse(
+                        $logDate
+                    )->format(
+                        'd.m.Y.'
+                    ),
 
-            'note' => collect($items)
-                ->pluck('note')
-                ->implode("\n"),
+                'note' =>
+                    collect($items)
+                        ->pluck('note')
+                        ->implode("\n"),
 
-            'items' => $items,
+                'items' =>
+                    $items,
 
-            'type' => 'note',
+                'type' =>
+                    'note',
 
-            'status' => 'recorded',
-        ]);
+                'status' =>
+                    'recorded',
+            ]);
 
         $createdTasks = 0;
-        $updatedItems = $items;
 
-        foreach ($updatedItems as $index => $item) {
-            if (empty($item['create_task'])) {
+        $updatedItems =
+            $items;
+
+        foreach (
+            $updatedItems
+            as $index => $item
+        ) {
+            if (
+                empty(
+                    $item['create_task']
+                )
+            ) {
                 continue;
             }
 
-            /*
-             * Radni zadatak nije osoban.
-             * On pripada organizaciji autora dnevnika.
-             */
-            $task = WorkTask::create([
-                'user_id' => $taskUserId,
+            $task =
+                WorkTask::create([
+                    /*
+                     * Organizacija.
+                     */
+                    'user_id' =>
+                        $taskOwnerId,
 
-                'title' => Str::limit(
-                    $item['note'],
-                    80
-                ),
+                    /*
+                     * Stvarni autor.
+                     */
+                    'created_by_user_id' =>
+                        $logUserId,
 
-                'description' => $item['note'],
+                    /*
+                     * Privatno / organizacija.
+                     */
+                    'is_shared_with_organization' =>
+                        (bool) (
+                            $item[
+                                'share_task_with_organization'
+                            ]
+                            ?? false
+                        ),
 
-                'due_date' => $logDate,
+                    'title' =>
+                        Str::limit(
+                            $item['note'],
+                            80
+                        ),
 
-                'is_done' => false,
+                    'description' =>
+                        $item['note'],
 
-                'completed_at' => null,
-            ]);
+                    'due_date' =>
+                        $logDate,
 
-            $updatedItems[$index]['task_id'] = $task->id;
+                    'is_done' =>
+                        false,
+
+                    'completed_at' =>
+                        null,
+                ]);
+
+            $updatedItems[
+                $index
+            ]['task_id'] =
+                $task->id;
 
             $createdTasks++;
         }
 
         $log->update([
-            'items' => $updatedItems,
+            'items' =>
+                $updatedItems,
 
-            'note' => collect($updatedItems)
-                ->pluck('note')
-                ->implode("\n"),
+            'note' =>
+                collect(
+                    $updatedItems
+                )
+                    ->pluck('note')
+                    ->implode("\n"),
 
             'converted_type' =>
                 $createdTasks > 0
                     ? WorkTask::class
                     : null,
 
-            'converted_id' => null,
+            'converted_id' =>
+                null,
 
             'status' =>
                 $createdTasks > 0
@@ -146,7 +230,8 @@ class CreateOperationalLog extends CreateRecord
 
         if ($createdTasks > 0) {
             ActivityLogger::status(
-                module: 'Operativni dnevnik',
+                module:
+                    'Operativni dnevnik',
 
                 title:
                     'Kreirani radni zadaci iz operativnog dnevnika',
@@ -155,17 +240,26 @@ class CreateOperationalLog extends CreateRecord
                     'Iz operativnog dnevnika kreirano radnih zadataka: '
                     . $createdTasks
                     . '. Datum dnevnika: '
-                    . Carbon::parse($logDate)->format('d.m.Y.'),
+                    . Carbon::parse(
+                        $logDate
+                    )->format(
+                        'd.m.Y.'
+                    ),
 
-                record: $log,
+                record:
+                    $log,
             );
         }
 
         Notification::make()
-            ->title('Operativni dnevnik je spremljen.')
+            ->title(
+                'Operativni dnevnik je spremljen.'
+            )
             ->body(
                 'Bilješki: '
-                . count($updatedItems)
+                . count(
+                    $updatedItems
+                )
                 . ' | Radnih zadataka: '
                 . $createdTasks
             )
@@ -180,7 +274,8 @@ class CreateOperationalLog extends CreateRecord
         return static::getResource()::getUrl(
             'view',
             [
-                'record' => $this->record,
+                'record' =>
+                    $this->record,
             ]
         );
     }

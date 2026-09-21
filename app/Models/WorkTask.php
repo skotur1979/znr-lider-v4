@@ -12,10 +12,13 @@ class WorkTask extends Model
 {
     use LogsActivity;
 
-    protected static string $activityModule = 'Radni zadaci';
+    protected static string $activityModule =
+        'Radni zadaci';
 
     protected $fillable = [
         'user_id',
+        'created_by_user_id',
+        'is_shared_with_organization',
         'title',
         'description',
         'due_date',
@@ -24,58 +27,252 @@ class WorkTask extends Model
     ];
 
     protected $casts = [
-        'due_date' => 'date',
-        'is_done' => 'boolean',
-        'completed_at' => 'datetime',
+        'due_date' =>
+            'date',
+
+        'is_done' =>
+            'boolean',
+
+        'completed_at' =>
+            'datetime',
+
+        'is_shared_with_organization' =>
+            'boolean',
     ];
 
-    public function user(): BelongsTo
+    /*
+    |--------------------------------------------------------------------------
+    | GLOBALNA VIDLJIVOST RADNIH ZADATAKA
+    |--------------------------------------------------------------------------
+    |
+    | user_id
+    | = vlasnik organizacije / ownerId
+    |
+    | created_by_user_id
+    | = stvarni korisnik koji je napravio zadatak
+    |
+    | is_shared_with_organization = true
+    | = zadatak vide svi korisnici iste organizacije
+    |
+    | is_shared_with_organization = false
+    | = zadatak vidi samo korisnik koji ga je napravio
+    |
+    | Superadmin vidi sve.
+    |
+    | U CLI / cron kontekstu nema Auth korisnika pa se ovaj
+    | scope ne primjenjuje. Servisi koji rade iz crona moraju
+    | tada sami primijeniti odgovarajući korisnički scope.
+    |
+    */
+
+    protected static function booted(): void
     {
-        return $this->belongsTo(User::class);
-    }
+        static::addGlobalScope(
+            'work_task_visibility',
+            function (
+                Builder $query
+            ): void {
+                $user =
+                    Auth::user();
 
-    /**
-     * Radni zadaci su organizacijski zapisi.
-     *
-     * Superadmin vidi sve.
-     *
-     * Glavni korisnik i podkorisnici vide
-     * zadatke svoje organizacije.
-     */
-    public function scopeMine(Builder $query): Builder
-    {
-        $user = Auth::user();
+                /*
+                 * Console / scheduler / queue.
+                 */
+                if (! $user) {
+                    return;
+                }
 
-        if (! $user) {
-            return $query->whereRaw('1 = 0');
-        }
+                /*
+                 * Superadmin vidi sve zadatke.
+                 */
+                if (
+                    $user->isSuperAdmin()
+                ) {
+                    return;
+                }
 
-        if ($user->isSuperAdmin()) {
-            return $query;
-        }
+                $ownerId =
+                    $user->ownerId();
 
-        $ownerId = $user->ownerId();
+                if (! $ownerId) {
+                    $query->whereRaw(
+                        '1 = 0'
+                    );
 
-        if (! $ownerId) {
-            return $query->whereRaw('1 = 0');
-        }
+                    return;
+                }
 
-        return $query->where(
-            'user_id',
-            $ownerId
+                $table =
+                    $query
+                        ->getModel()
+                        ->getTable();
+
+                /*
+                 * Prvo ograničavamo zadatke
+                 * na korisnikovu organizaciju.
+                 */
+                $query->where(
+                    $table . '.user_id',
+                    $ownerId
+                );
+
+                /*
+                 * Zatim:
+                 *
+                 * - organizacijski zadatak vide svi
+                 *   korisnici organizacije
+                 *
+                 * - privatni zadatak vidi samo autor
+                 */
+                $query->where(
+                    function (
+                        Builder $visibilityQuery
+                    ) use (
+                        $table,
+                        $user
+                    ): void {
+                        $visibilityQuery
+                            ->where(
+                                $table
+                                    . '.is_shared_with_organization',
+                                true
+                            )
+                            ->orWhere(
+                                $table
+                                    . '.created_by_user_id',
+                                $user->id
+                            );
+                    }
+                );
+            }
         );
     }
 
-    public function scopeOpen(Builder $query): Builder
+    /*
+    |--------------------------------------------------------------------------
+    | RELACIJE
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Organizacija / glavni korisnik kojem
+     * radni zadatak pripada.
+     */
+    public function user(): BelongsTo
     {
+        return $this->belongsTo(
+            User::class
+        );
+    }
+
+    /**
+     * Stvarni korisnik koji je
+     * kreirao radni zadatak.
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'created_by_user_id'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | QUERY SCOPES
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Zadaci dostupni trenutnom korisniku.
+     *
+     * Ovaj scope zadržavamo jer ga možda
+     * postojeći dijelovi aplikacije koriste.
+     *
+     * Pravilo je isto kao kod globalnog scopea:
+     *
+     * - superadmin sve
+     * - ista organizacija
+     * - shared zadaci
+     * - vlastiti privatni zadaci
+     */
+    public function scopeMine(
+        Builder $query
+    ): Builder {
+        $user =
+            Auth::user();
+
+        if (! $user) {
+            return $query->whereRaw(
+                '1 = 0'
+            );
+        }
+
+        if (
+            $user->isSuperAdmin()
+        ) {
+            return $query;
+        }
+
+        $ownerId =
+            $user->ownerId();
+
+        if (! $ownerId) {
+            return $query->whereRaw(
+                '1 = 0'
+            );
+        }
+
+        $table =
+            $query
+                ->getModel()
+                ->getTable();
+
+        return $query
+            ->where(
+                $table . '.user_id',
+                $ownerId
+            )
+            ->where(
+                function (
+                    Builder $visibilityQuery
+                ) use (
+                    $table,
+                    $user
+                ): void {
+                    $visibilityQuery
+                        ->where(
+                            $table
+                                . '.is_shared_with_organization',
+                            true
+                        )
+                        ->orWhere(
+                            $table
+                                . '.created_by_user_id',
+                            $user->id
+                        );
+                }
+            );
+    }
+
+    /**
+     * Samo otvoreni radni zadaci.
+     */
+    public function scopeOpen(
+        Builder $query
+    ): Builder {
         return $query->where(
             'is_done',
             false
         );
     }
 
-    public function scopeClosed(Builder $query): Builder
-    {
+    /**
+     * Samo završeni radni zadaci.
+     */
+    public function scopeClosed(
+        Builder $query
+    ): Builder {
         return $query->where(
             'is_done',
             true

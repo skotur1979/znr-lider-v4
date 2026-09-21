@@ -5,6 +5,7 @@ namespace App\Filament\Resources\WorkTasks\Pages;
 use App\Filament\Resources\WorkTasks\WorkTaskResource;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Facades\Auth;
 
 class EditWorkTask extends EditRecord
 {
@@ -15,23 +16,13 @@ class EditWorkTask extends EditRecord
         int|string $record
     ): void {
         /*
-         * Filament prvo mora učitati zapis kroz
-         * Resource query.
+         * Resource query već primjenjuje:
          *
-         * Time organizacijski korisnik već ne može
-         * učitati zapis druge organizacije.
+         * - organizaciju
+         * - privatnu / organizacijsku vidljivost
          */
         parent::mount($record);
 
-        /*
-         * Dodatna poslovna zaštita:
-         *
-         * - superadmin ne uređuje organizacijske
-         *   radne zadatke
-         *
-         * - organizacijski korisnik može uređivati
-         *   samo zadatak svoje organizacije.
-         */
         if (
             ! WorkTaskResource::canManageTask(
                 $this->getRecord()
@@ -43,10 +34,6 @@ class EditWorkTask extends EditRecord
 
     protected function beforeSave(): void
     {
-        /*
-         * Ponovna serverska provjera neposredno
-         * prije spremanja.
-         */
         if (
             ! WorkTaskResource::canManageTask(
                 $this->getRecord()
@@ -62,14 +49,55 @@ class EditWorkTask extends EditRecord
         array $data
     ): array {
         /*
-         * Ownership postojećeg radnog zadatka
-         * nikada se ne mijenja kroz edit formu.
-         *
-         * Ne vjerujemo user_id vrijednosti
-         * poslanoj iz browsera.
+         * Organizacija se nikada ne mijenja.
          */
         $data['user_id'] =
             $this->record->user_id;
+
+        /*
+         * Autor zadatka se nikada ne mijenja.
+         */
+        $data['created_by_user_id'] =
+            $this->record
+                ->created_by_user_id;
+
+        /*
+         * Samo stvarni autor zadatka
+         * smije mijenjati:
+         *
+         * privatno <-> cijela organizacija.
+         *
+         * Drugi korisnik organizacije može
+         * uređivati/zatvoriti shared zadatak,
+         * ali ne može promijeniti njegovu
+         * vidljivost.
+         */
+        if (
+            (int) (
+                $this->record
+                    ->created_by_user_id
+                ?? 0
+            )
+            !==
+            (int) Auth::id()
+        ) {
+            $data[
+                'is_shared_with_organization'
+            ] =
+                (bool)
+                $this->record
+                    ->is_shared_with_organization;
+        } else {
+            $data[
+                'is_shared_with_organization'
+            ] =
+                (bool) (
+                    $data[
+                        'is_shared_with_organization'
+                    ]
+                    ?? false
+                );
+        }
 
         return $data;
     }
