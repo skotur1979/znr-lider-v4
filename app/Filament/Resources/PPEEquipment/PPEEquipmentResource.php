@@ -297,15 +297,69 @@ class PPEEquipmentResource extends BaseResource
                     ->toggleable(),
 
                 TextColumn::make(
-                    'standard'
+                'standard'
+            )
+                ->label(
+                    'HRN EN / Norma'
                 )
-                    ->label(
-                        'HRN EN / Norma'
-                    )
-                    ->searchable()
-                    ->sortable()
-                    ->wrap()
-                    ->toggleable(),
+                ->searchable()
+                ->sortable()
+                ->html()
+                ->formatStateUsing(
+                    function ($state): string {
+                        if (blank($state)) {
+                            return '—';
+                        }
+
+                        $text =
+                            preg_replace(
+                                '/\s+/',
+                                ' ',
+                                trim(
+                                    (string) $state
+                                )
+                            );
+
+                        return
+                            '<div style="
+                                width:210px;
+                                max-width:210px;
+                                white-space:normal;
+                                word-break:break-word;
+                                line-height:1.25em;
+                                max-height:2.5em;
+                                overflow:hidden;
+                                display:-webkit-box;
+                                -webkit-box-orient:vertical;
+                                -webkit-line-clamp:2;
+                            ">'
+                            . e($text)
+                            . '</div>';
+                    }
+                )
+                ->tooltip(
+                    function (
+                        PPEEquipment $record
+                    ): ?string {
+                        if (
+                            blank(
+                                $record->standard
+                            )
+                        ) {
+                            return null;
+                        }
+
+                        return preg_replace(
+                            '/\s+/',
+                            ' ',
+                            trim(
+                                (string)
+                                $record->standard
+                            )
+                        );
+                    }
+                )
+                ->toggleable(),
 
                 TextColumn::make(
                     'duration_months'

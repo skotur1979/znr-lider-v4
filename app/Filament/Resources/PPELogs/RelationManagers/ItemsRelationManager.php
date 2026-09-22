@@ -119,15 +119,15 @@ class ItemsRelationManager extends RelationManager
      */
     protected function equipmentQuery(): Builder
     {
-        $query = PPEEquipment::query()
-            ->where(
-                'is_active',
-                true
-            );
+        $query =
+            PPEEquipment::query()
+                ->where(
+                    'is_active',
+                    true
+                );
 
-
-        $user = Auth::user();
-
+        $user =
+            Auth::user();
 
         if (! $user) {
             return $query->whereRaw(
@@ -135,19 +135,23 @@ class ItemsRelationManager extends RelationManager
             );
         }
 
-
         /*
-         * Kod superadmina vlasnika određuje
-         * postojeći Upisnik OZO.
-         */
+        * Kod superadmina organizaciju određuje
+        * konkretni Upisnik OZO.
+        *
+        * Kod org_admin / org_user koristimo ownerId.
+        */
         if ($user->isSuperAdmin()) {
             $ownerId =
-                (int) $this->getOwnerRecord()->user_id;
+                (int)
+                $this
+                    ->getOwnerRecord()
+                    ->user_id;
         } else {
             $ownerId =
-                (int) $user->ownerId();
+                (int)
+                $user->ownerId();
         }
-
 
         if ($ownerId <= 0) {
             return $query->whereRaw(
@@ -155,20 +159,13 @@ class ItemsRelationManager extends RelationManager
             );
         }
 
-
+        /*
+        * Registar OZO više nema globalne zapise.
+        * Prikazujemo samo OZO konkretne organizacije.
+        */
         return $query->where(
-            function (
-                Builder $query
-            ) use ($ownerId): void {
-                $query
-                    ->whereNull(
-                        'user_id'
-                    )
-                    ->orWhere(
-                        'user_id',
-                        $ownerId
-                    );
-            }
+            'user_id',
+            $ownerId
         );
     }
 
@@ -323,18 +320,24 @@ class ItemsRelationManager extends RelationManager
 
                 TextInput::make(
                     'equipment_name'
+                                )
+                                    ->label('Naziv OZO')
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->helperText(
+                                        'Možeš promijeniti naziv ili ručno upisati OZO ako nije u registru.'
+                                    ),
+
+
+                                TextInput::make(
+                    'standard'
                 )
-                    ->label('Naziv OZO')
-                    ->required()
-                    ->maxLength(255)
-                    ->helperText(
-                        'Možeš promijeniti naziv ili ručno upisati OZO ako nije u registru.'
-                    ),
-
-
-                TextInput::make('standard')
-                    ->label('HRN EN')
-                    ->maxLength(64)
+                    ->label(
+                        'HRN EN'
+                    )
+                    ->maxLength(
+                        255
+                    )
                     ->helperText(
                         'Automatski se povlači iz registra, ali ga možeš ručno promijeniti.'
                     ),
@@ -624,13 +627,76 @@ class ItemsRelationManager extends RelationManager
                     ),
 
 
-                TextColumn::make(
+               TextColumn::make(
                     'standard'
                 )
-                    ->label('HRN EN')
+                    ->label(
+                        'HRN EN'
+                    )
                     ->toggleable()
-                    ->wrap(),
+                    ->html()
+                    ->formatStateUsing(
+                        function ($state): string {
+                            if (blank($state)) {
+                                return '—';
+                            }
 
+                            /*
+                            * Uklanjamo višestruke razmake
+                            * i eventualne prijelome redova.
+                            */
+                            $text =
+                                preg_replace(
+                                    '/\s+/',
+                                    ' ',
+                                    trim(
+                                        (string) $state
+                                    )
+                                );
+
+                            /*
+                            * Namjerno koristimo vlastiti
+                            * CSS clamp jer Filamentov
+                            * lineClamp u ovoj uskoj tablici
+                            * nije pouzdano držao dva reda.
+                            */
+                            return
+                                '<div style="
+                                    width:180px;
+                                    max-width:180px;
+                                    white-space:normal;
+                                    word-break:break-word;
+                                    line-height:1.25em;
+                                    max-height:2.5em;
+                                    overflow:hidden;
+                                    display:-webkit-box;
+                                    -webkit-box-orient:vertical;
+                                    -webkit-line-clamp:2;
+                                ">'
+                                . e($text)
+                                . '</div>';
+                        }
+                    )
+                    ->tooltip(
+                        function ($record): ?string {
+                            if (
+                                blank(
+                                    $record->standard
+                                )
+                            ) {
+                                return null;
+                            }
+
+                            return preg_replace(
+                                '/\s+/',
+                                ' ',
+                                trim(
+                                    (string)
+                                    $record->standard
+                                )
+                            );
+                        }
+                    ),
 
                 TextColumn::make('size')
                     ->label('Veličina')
