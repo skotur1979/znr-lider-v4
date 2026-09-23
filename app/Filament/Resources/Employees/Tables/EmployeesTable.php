@@ -743,7 +743,7 @@ class EmployeesTable
 
                     Action::make('editEmployee')
                         ->label('Uredi')
-                        ->icon('heroicon-o-pencil-square')
+                        ->icon('heroicon-m-pencil-square')
                         ->color('warning')
                         ->visible(
                             fn (Employee $record): bool =>

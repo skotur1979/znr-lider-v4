@@ -608,9 +608,6 @@ class PPELogResource extends BaseResource
                     DeleteAction::make()
                         ->label('Deaktiviraj')
                         ->requiresConfirmation()
-                        ->icon(
-                            'heroicon-o-trash'
-                        )
                         ->color('danger')
                         ->visible(
                         fn ($record): bool =>

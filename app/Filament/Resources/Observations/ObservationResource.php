@@ -898,6 +898,7 @@ protected static function priorityIcon(?string $state): ?string
                     Action::make('editObservation')
                         ->label('Uredi')
                         ->icon(Heroicon::PencilSquare)
+                        ->color('warning')
                         ->visible(
                             fn (Observation $record): bool =>
                                 ! $record->trashed()

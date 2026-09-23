@@ -394,9 +394,6 @@ class ChemicalResource extends BaseResource
 
                     DeleteAction::make()
                         ->label('Deaktiviraj')
-                        ->icon(
-                            'heroicon-o-trash'
-                        )
                         ->color('danger')
                         ->requiresConfirmation()
                         ->visible(
