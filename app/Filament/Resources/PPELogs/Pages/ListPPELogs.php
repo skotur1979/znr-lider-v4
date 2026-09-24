@@ -6,12 +6,10 @@ use App\Exports\PpeItemsAllExport;
 use App\Filament\Resources\Pages\BaseListRecords;
 use App\Filament\Resources\PPELogs\PPELogResource;
 use App\Imports\PPELogsImport;
-use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
@@ -20,6 +18,52 @@ class ListPPELogs extends BaseListRecords
 {
     protected static string $resource =
         PPELogResource::class;
+
+    public function mount(): void
+    {
+        parent::mount();
+
+        /*
+        |--------------------------------------------------------------------------
+        | DASHBOARD -> FILAMENT FILTER
+        |--------------------------------------------------------------------------
+        |
+        | Dashboard koristi:
+        |
+        | ?pregled=isteklo
+        | ?pregled=uskoro
+        |
+        | Filament filter u PPELogResource trenutno koristi:
+        |
+        | isteklo
+        | istek
+        |
+        | Ovdje ih povezujemo kako bi dashboard
+        | i ručni filter koristili potpuno istu logiku.
+        |
+        */
+
+        $pregled =
+            request()->query(
+                'pregled'
+            );
+
+        if ($pregled === 'isteklo') {
+            $this->tableFilters[
+                'pregled'
+            ][
+                'value'
+            ] = 'isteklo';
+        }
+
+        if ($pregled === 'uskoro') {
+            $this->tableFilters[
+                'pregled'
+            ][
+                'value'
+            ] = 'istek';
+        }
+    }
 
     protected function getHeaderActions(): array
     {
@@ -102,7 +146,9 @@ class ListPPELogs extends BaseListRecords
                             'Excel datoteka'
                         )
                         ->helperText(
-                            'Obavezno: OIB, Naziv OZO, Datum izdavanja. '
+                            'Obavezno: OIB i Naziv OZO. '
+                            . 'Ime i prezime služi samo kao pomoć i import ga ne koristi. '
+                            . 'Za novo zaduženje potreban je Datum izdavanja. '
                             . 'Opcionalno: HRN EN / Norma, Veličina, '
                             . 'Rok uporabe (mjeseci), Datum vraćanja.'
                         )
@@ -139,7 +185,7 @@ class ListPPELogs extends BaseListRecords
 
                         $ownerId =
                             (int)
-                            $user->ownerId();
+                                $user->ownerId();
 
                         if ($ownerId <= 0) {
                             abort(403);
@@ -244,9 +290,7 @@ class ListPPELogs extends BaseListRecords
                                 ->send();
                         } finally {
                             if (
-                                filled(
-                                    $path
-                                )
+                                filled($path)
                                 && Storage::disk(
                                     'local'
                                 )->exists(
@@ -263,88 +307,5 @@ class ListPPELogs extends BaseListRecords
                     }
                 ),
         ];
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | DASHBOARD FILTERI
-    |--------------------------------------------------------------------------
-    */
-
-    protected function getTableQuery(): Builder
-    {
-        $query =
-            parent::getTableQuery();
-
-        $pregled =
-            request()->query(
-                'pregled'
-            )
-            ?? data_get(
-                request()->query(),
-                'tableFilters.pregled.value'
-            )
-            ?? data_get(
-                request()->query(),
-                'filters.pregled.value'
-            );
-
-        return match ($pregled) {
-            'uskoro' =>
-                $query->whereHas(
-                    'items',
-                    function (
-                        Builder $q
-                    ): void {
-                        $q
-                            ->whereNull(
-                                'return_date'
-                            )
-                            ->whereNotNull(
-                                'end_date'
-                            )
-                            ->where(
-                                'end_date',
-                                '>=',
-                                Carbon::today()
-                                    ->startOfDay()
-                            )
-                            ->where(
-                                'end_date',
-                                '<=',
-                                Carbon::today()
-                                    ->addDays(
-                                        30
-                                    )
-                                    ->endOfDay()
-                            );
-                    }
-                ),
-
-            'isteklo' =>
-                $query->whereHas(
-                    'items',
-                    function (
-                        Builder $q
-                    ): void {
-                        $q
-                            ->whereNull(
-                                'return_date'
-                            )
-                            ->whereNotNull(
-                                'end_date'
-                            )
-                            ->where(
-                                'end_date',
-                                '<',
-                                Carbon::today()
-                                    ->startOfDay()
-                            );
-                    }
-                ),
-
-            default =>
-                $query,
-        };
     }
 }

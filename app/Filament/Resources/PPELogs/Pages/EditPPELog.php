@@ -15,9 +15,6 @@ class EditPPELog extends EditRecord
     public function mount(
         int|string $record
     ): void {
-        /*
-         * Spremamo dashboard kontekst.
-         */
         $pregled =
             request()->query(
                 'pregled'
@@ -46,26 +43,28 @@ class EditPPELog extends EditRecord
         array $data
     ): array {
         /*
-         * Ownership Upisnika OZO ne može
-         * se promijeniti uređivanjem.
+         * Ownership Upisnika OZO
+         * se ne mijenja kroz edit.
          */
         $data['user_id'] =
-            $this->record->user_id;
+            $this
+                ->record
+                ->user_id;
 
         return $data;
     }
 
-    /*
-     * PDF i Excel su namjerno uklonjeni
-     * s Edit stranice.
-     *
-     * Nalaze se na Pregled OZO.
-     */
-
     protected function getRedirectUrl(): string
     {
         /*
-         * Povratak na dashboard pregled.
+         * Ako smo došli iz:
+         *
+         * Isteklo
+         * ili
+         * Uskoro
+         *
+         * vraćamo se upravo na taj
+         * filtrirani pregled.
          */
         if (
             in_array(
@@ -82,6 +81,9 @@ class EditPPELog extends EditRecord
                 [
                     'pregled' =>
                         $this->pregled,
+
+                    'tableRecordsPerPage' =>
+                        'all',
                 ]
             );
         }

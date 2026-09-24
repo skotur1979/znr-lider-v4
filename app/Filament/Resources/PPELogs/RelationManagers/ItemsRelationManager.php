@@ -6,6 +6,7 @@ use App\Models\PPEEquipment;
 use App\Support\ExpiryBadge;
 use App\Support\SecureFilePreview;
 use App\Support\SignatureStorage;
+use App\Filament\Resources\PPELogs\PPELogResource;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -591,6 +592,89 @@ class ItemsRelationManager extends RelationManager
         return $data;
     }
 
+    protected function deadlinePregled(): ?string
+    {
+        /*
+        * Kod običnog GET zahtjeva.
+        */
+        $pregled =
+            request()->query(
+                'pregled'
+            );
+
+        /*
+        * Kod Livewire akcije zahtjev ide
+        * preko /livewire/update pa pregled
+        * čitamo iz URL-a stranice s koje
+        * je akcija pozvana.
+        */
+        if (blank($pregled)) {
+            $referer =
+                request()
+                    ->headers
+                    ->get(
+                        'referer'
+                    );
+
+            if ($referer) {
+                $queryString =
+                    parse_url(
+                        $referer,
+                        PHP_URL_QUERY
+                    );
+
+                $query = [];
+
+                if ($queryString) {
+                    parse_str(
+                        $queryString,
+                        $query
+                    );
+                }
+
+                $pregled =
+                    $query[
+                        'pregled'
+                    ]
+                    ?? null;
+            }
+        }
+
+        return in_array(
+            $pregled,
+            [
+                'isteklo',
+                'uskoro',
+            ],
+            true
+        )
+            ? $pregled
+            : null;
+    }
+
+    protected function redirectToDeadlineListIfNeeded(): void
+    {
+        $pregled =
+            $this->deadlinePregled();
+
+        if (! $pregled) {
+            return;
+        }
+
+        $this->redirect(
+            PPELogResource::getUrl(
+                'index',
+                [
+                    'pregled' =>
+                        $pregled,
+
+                    'tableRecordsPerPage' =>
+                        'all',
+                ]
+            )
+        );
+    }
+
 
     public function table(Table $table): Table
     {
@@ -899,11 +983,12 @@ class ItemsRelationManager extends RelationManager
                 EditAction::make()
                     ->label('Uredi')
                     ->modalHeading('Uredi OZO')
-                    ->modalSubmitActionLabel('Spremi promjene')
+                    ->modalSubmitActionLabel(
+                        'Spremi promjene'
+                    )
                     ->visible(
                         fn (): bool =>
-                            $this
-                                ->canManageItems()
+                            $this->canManageItems()
                     )
                     ->mutateFormDataUsing(
                         fn (
@@ -912,6 +997,11 @@ class ItemsRelationManager extends RelationManager
                             static::prepareFormData(
                                 $data
                             )
+                    )
+                    ->after(
+                        fn () =>
+                            $this
+                                ->redirectToDeadlineListIfNeeded()
                     ),
 
                 Action::make('extend3')
@@ -975,6 +1065,7 @@ class ItemsRelationManager extends RelationManager
 
 
                             $record->save();
+                            $this->redirectToDeadlineListIfNeeded();
                         }
                     ),
 
@@ -1042,6 +1133,8 @@ class ItemsRelationManager extends RelationManager
                                 'end_date' =>
                                     null,
                             ]);
+                            $this
+                                ->redirectToDeadlineListIfNeeded();
                         }
                     ),
 

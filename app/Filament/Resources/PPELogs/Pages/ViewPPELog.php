@@ -19,9 +19,6 @@ class ViewPPELog extends ViewRecord
     public function mount(
         int|string $record
     ): void {
-        /*
-         * Spremamo dashboard kontekst.
-         */
         $pregled =
             request()->query(
                 'pregled'
@@ -49,12 +46,6 @@ class ViewPPELog extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            /*
-            |--------------------------------------------------------------------------
-            | PDF
-            |--------------------------------------------------------------------------
-            */
-
             Action::make(
                 'export_pdf'
             )
@@ -130,12 +121,6 @@ class ViewPPELog extends ViewRecord
                     }
                 ),
 
-            /*
-            |--------------------------------------------------------------------------
-            | EXCEL
-            |--------------------------------------------------------------------------
-            */
-
             Action::make(
                 'export_excel'
             )
@@ -180,12 +165,6 @@ class ViewPPELog extends ViewRecord
                     }
                 ),
 
-            /*
-            |--------------------------------------------------------------------------
-            | UREDI
-            |--------------------------------------------------------------------------
-            */
-
             Action::make(
                 'editPPELog'
             )
@@ -215,11 +194,6 @@ class ViewPPELog extends ViewRecord
                                     ->getRecord(),
                         ];
 
-                        /*
-                         * Ako je View otvoren iz
-                         * dashboard pregleda,
-                         * kontekst prenosimo dalje.
-                         */
                         if (
                             in_array(
                                 $this->pregled,

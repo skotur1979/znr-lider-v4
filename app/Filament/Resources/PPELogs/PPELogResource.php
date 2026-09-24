@@ -593,16 +593,109 @@ class PPELogResource extends BaseResource
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()
-                        ->label('Prikaži'),
+                        ->label('Prikaži')
+                        ->url(
+                            function (
+                                PPELog $record,
+                                $livewire
+                            ): string {
+                                $filter =
+                                    $livewire
+                                        ->tableFilters[
+                                            'pregled'
+                                        ][
+                                            'value'
+                                        ]
+                                    ?? null;
+
+                                $pregled =
+                                    match ($filter) {
+                                        'isteklo' =>
+                                            'isteklo',
+
+                                        'istek',
+                                        'uskoro' =>
+                                            'uskoro',
+
+                                        default =>
+                                            null,
+                                    };
+
+                                $parameters = [
+                                    'record' =>
+                                        $record,
+                                ];
+
+                                if ($pregled) {
+                                    $parameters[
+                                        'pregled'
+                                    ] =
+                                        $pregled;
+                                }
+
+                                return static::getUrl(
+                                    'view',
+                                    $parameters
+                                );
+                            }
+                        ),
 
                     EditAction::make()
                         ->label('Uredi')
+                        ->url(
+                            function (
+                                PPELog $record,
+                                $livewire
+                            ): string {
+                                $filter =
+                                    $livewire
+                                        ->tableFilters[
+                                            'pregled'
+                                        ][
+                                            'value'
+                                        ]
+                                    ?? null;
+
+                                $pregled =
+                                    match ($filter) {
+                                        'isteklo' =>
+                                            'isteklo',
+
+                                        'istek',
+                                        'uskoro' =>
+                                            'uskoro',
+
+                                        default =>
+                                            null,
+                                    };
+
+                                $parameters = [
+                                    'record' =>
+                                        $record,
+                                ];
+
+                                if ($pregled) {
+                                    $parameters[
+                                        'pregled'
+                                    ] =
+                                        $pregled;
+                                }
+
+                                return static::getUrl(
+                                    'edit',
+                                    $parameters
+                                );
+                            }
+                        )
                         ->visible(
-                        fn (
-                            PPELog $record
-                        ): bool =>
-                            static::canEdit($record)
-                            && ! $record->trashed()
+                            fn (
+                                PPELog $record
+                            ): bool =>
+                                static::canEdit(
+                                    $record
+                                )
+                                && ! $record
+                                    ->trashed()
                         ),
 
                     DeleteAction::make()

@@ -13,104 +13,224 @@
     |
     */
 
-    $items = collect(
-        $getRecord()->items ?? []
-    )->sort(function ($a, $b) {
-        $aHasEnd =
-            ! blank($a->end_date);
+        $pregled =
+        data_get(
+            $this->tableFilters ?? [],
+            'pregled.value'
+        );
 
-        $bHasEnd =
-            ! blank($b->end_date);
+    if (blank($pregled)) {
+        $pregled =
+            match (
+                request()->query(
+                    'pregled'
+                )
+            ) {
+                'isteklo' =>
+                    'isteklo',
 
-        if (
-            $aHasEnd
-            && ! $bHasEnd
-        ) {
-            return -1;
-        }
+                'uskoro' =>
+                    'istek',
 
-        if (
-            ! $aHasEnd
-            && $bHasEnd
-        ) {
-            return 1;
-        }
+                default =>
+                    null,
+            };
+    }
 
-        if (
-            ! $aHasEnd
-            && ! $bHasEnd
-        ) {
-            $aIssue =
-                $a->issue_date
-                    ? Carbon::parse(
+    $today =
+        Carbon::today()
+            ->startOfDay();
+
+    $soonUntil =
+        Carbon::today()
+            ->addDays(30)
+            ->endOfDay();
+
+    $items =
+        collect(
+            $getRecord()->items
+            ?? []
+        )
+            ->filter(
+                function (
+                    $item
+                ) use (
+                    $pregled,
+                    $today,
+                    $soonUntil
+                ): bool {
+                    if (
+                        ! blank(
+                            $item->return_date
+                        )
+                    ) {
+                        return false;
+                    }
+
+                    if (
+                        blank($pregled)
+                        || $pregled === 'svi'
+                        || $pregled === 'deaktivirani'
+                    ) {
+                        return true;
+                    }
+
+                    if (
+                        blank(
+                            $item->end_date
+                        )
+                    ) {
+                        return false;
+                    }
+
+                    $endDate =
+                        Carbon::parse(
+                            $item->end_date
+                        )->startOfDay();
+
+                    if (
+                        $pregled ===
+                        'isteklo'
+                    ) {
+                        return $endDate
+                            ->lt(
+                                $today
+                            );
+                    }
+
+                    if (
+                        in_array(
+                            $pregled,
+                            [
+                                'istek',
+                                'uskoro',
+                            ],
+                            true
+                        )
+                    ) {
+                        return $endDate
+                            ->gte(
+                                $today
+                            )
+                            && $endDate
+                                ->lte(
+                                    $soonUntil
+                                );
+                    }
+
+                    return true;
+                }
+            )
+            ->sort(
+                function (
+                    $a,
+                    $b
+                ) {
+                    $aHasEnd =
+                        ! blank(
+                            $a->end_date
+                        );
+
+                    $bHasEnd =
+                        ! blank(
+                            $b->end_date
+                        );
+
+                    if (
+                        $aHasEnd
+                        && ! $bHasEnd
+                    ) {
+                        return -1;
+                    }
+
+                    if (
+                        ! $aHasEnd
+                        && $bHasEnd
+                    ) {
+                        return 1;
+                    }
+
+                    if (
+                        ! $aHasEnd
+                        && ! $bHasEnd
+                    ) {
+                        $aIssue =
+                            $a->issue_date
+                                ? Carbon::parse(
+                                    $a->issue_date
+                                )->timestamp
+                                : 0;
+
+                        $bIssue =
+                            $b->issue_date
+                                ? Carbon::parse(
+                                    $b->issue_date
+                                )->timestamp
+                                : 0;
+
+                        return
+                            $bIssue
+                            <=>
+                            $aIssue;
+                    }
+
+                    $aEnd =
+                        Carbon::parse(
+                            $a->end_date
+                        )->timestamp;
+
+                    $bEnd =
+                        Carbon::parse(
+                            $b->end_date
+                        )->timestamp;
+
+                    if (
+                        $aEnd !==
+                        $bEnd
+                    ) {
+                        return
+                            $bEnd
+                            <=>
+                            $aEnd;
+                    }
+
+                    $aIssue =
                         $a->issue_date
-                    )->timestamp
-                    : 0;
+                            ? Carbon::parse(
+                                $a->issue_date
+                            )->timestamp
+                            : 0;
 
-            $bIssue =
-                $b->issue_date
-                    ? Carbon::parse(
+                    $bIssue =
                         $b->issue_date
-                    )->timestamp
-                    : 0;
+                            ? Carbon::parse(
+                                $b->issue_date
+                            )->timestamp
+                            : 0;
 
-            return $bIssue <=> $aIssue;
-        }
+                    if (
+                        $aIssue !==
+                        $bIssue
+                    ) {
+                        return
+                            $bIssue
+                            <=>
+                            $aIssue;
+                    }
 
-        $aEnd =
-            Carbon::parse(
-                $a->end_date
-            )->timestamp;
-
-        $bEnd =
-            Carbon::parse(
-                $b->end_date
-            )->timestamp;
-
-        if ($aEnd !== $bEnd) {
-            /*
-             * Najduži / najkasniji rok gore.
-             */
-            return $bEnd <=> $aEnd;
-        }
-
-        $aIssue =
-            $a->issue_date
-                ? Carbon::parse(
-                    $a->issue_date
-                )->timestamp
-                : 0;
-
-        $bIssue =
-            $b->issue_date
-                ? Carbon::parse(
-                    $b->issue_date
-                )->timestamp
-                : 0;
-
-        if ($aIssue !== $bIssue) {
-            /*
-             * Novije izdano gore.
-             */
-            return $bIssue <=> $aIssue;
-        }
-
-        $aDuration =
-            (int) (
-                $a->duration_months
-                ?? 0
-            );
-
-        $bDuration =
-            (int) (
-                $b->duration_months
-                ?? 0
-            );
-
-        return
-            $bDuration
-            <=> $aDuration;
-    })->values();
+                    return
+                        (int) (
+                            $b->duration_months
+                            ?? 0
+                        )
+                        <=>
+                        (int) (
+                            $a->duration_months
+                            ?? 0
+                        );
+                }
+            )
+            ->values();
 
     /*
     |--------------------------------------------------------------------------
