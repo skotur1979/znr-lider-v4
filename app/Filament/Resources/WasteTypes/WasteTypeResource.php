@@ -468,10 +468,11 @@ class WasteTypeResource extends BaseResource
                             WasteType $record
                         ): HtmlString {
                             /*
-                            * Ključni broj otpada
-                            * spremamo bez razmaka,
-                            * a u prikazu ga formatiramo.
+                            |--------------------------------------------------------------------------
+                            | KLJUČNI BROJ OTPADA
+                            |--------------------------------------------------------------------------
                             */
+
                             $rawCode = trim(
                                 (string) $record->waste_code
                             );
@@ -520,19 +521,24 @@ class WasteTypeResource extends BaseResource
                             }
 
                             $name = e(
-                                (string) $record->name
+                                trim(
+                                    (string) $record->name
+                                )
                             );
 
                             /*
-                            * Status opasnog otpada.
+                            |--------------------------------------------------------------------------
+                            | OPASAN / NEOPASAN OTPAD
+                            |--------------------------------------------------------------------------
                             */
+
                             if (
                                 (bool) $record->is_hazardous
                             ) {
                                 $hazardBadge = '
                                     <span class="
-                                        znr-waste-mobile-badge
-                                        znr-waste-mobile-badge-danger
+                                        znr-waste-status
+                                        znr-waste-status-danger
                                     ">
                                         ⓧ Opasan otpad
                                     </span>
@@ -540,52 +546,98 @@ class WasteTypeResource extends BaseResource
                             } else {
                                 $hazardBadge = '
                                     <span class="
-                                        znr-waste-mobile-badge
-                                        znr-waste-mobile-badge-success
+                                        znr-waste-status
+                                        znr-waste-status-success
                                     ">
                                         ✓ Neopasan otpad
                                     </span>
                                 ';
                             }
 
+                            /*
+                            |--------------------------------------------------------------------------
+                            | MOBILNI PRIKAZ
+                            |--------------------------------------------------------------------------
+                            */
+
                             return new HtmlString(
                                 '
                                 <style>
-                                    .znr-waste-mobile-card {
+                                    .znr-waste-mobile {
                                         width:100%;
-                                        min-width:230px;
+                                        max-width:100%;
+                                        min-width:0;
                                         box-sizing:border-box;
 
-                                        padding:13px 14px;
+                                        padding:7px 2px 9px;
+                                    }
 
-                                        border-radius:14px;
-                                        border:1px solid #e5e7eb;
+                                    .znr-waste-mobile-top {
+                                        display:flex;
+                                        align-items:center;
+                                        justify-content:space-between;
 
-                                        background:#ffffff;
+                                        width:100%;
+                                        max-width:100%;
+                                        min-width:0;
+
+                                        gap:8px;
+                                        margin-bottom:7px;
                                     }
 
                                     .znr-waste-mobile-code {
-                                        margin-bottom:7px;
+                                        display:inline-flex;
+                                        align-items:center;
 
-                                        font-size:1rem;
+                                        flex-shrink:0;
+
+                                        min-height:28px;
+
+                                        padding:3px 9px;
+
+                                        border-radius:8px;
+
+                                        border:1px solid
+                                            rgba(
+                                                59,
+                                                130,
+                                                246,
+                                                .20
+                                            );
+
+                                        background:
+                                            rgba(
+                                                59,
+                                                130,
+                                                246,
+                                                .08
+                                            );
+
+                                        color:#2563eb;
+
+                                        font-size:.82rem;
                                         line-height:1.2;
                                         font-weight:800;
-
-                                        color:#111827;
 
                                         white-space:nowrap;
                                     }
 
                                     .znr-waste-mobile-name {
+                                        width:100%;
+                                        max-width:100%;
+                                        min-width:0;
+
+                                        color:#111827;
+
                                         font-size:.94rem;
                                         line-height:1.45;
-                                        font-weight:600;
+                                        font-weight:650;
 
-                                        color:#374151;
+                                        white-space:normal !important;
 
-                                        white-space:normal;
+                                        overflow-wrap:anywhere;
                                         word-break:normal;
-                                        overflow-wrap:break-word;
+                                        hyphens:auto;
                                     }
 
                                     .znr-waste-mobile-footer {
@@ -593,39 +645,70 @@ class WasteTypeResource extends BaseResource
                                         align-items:center;
                                         flex-wrap:wrap;
 
-                                        gap:7px;
+                                        width:100%;
+                                        min-width:0;
 
-                                        margin-top:11px;
+                                        gap:6px;
+
+                                        margin-top:9px;
                                     }
 
-                                    .znr-waste-mobile-badge {
+                                    .znr-waste-status {
                                         display:inline-flex;
                                         align-items:center;
 
-                                        min-height:25px;
+                                        min-height:26px;
 
                                         padding:3px 9px;
 
                                         border-radius:9999px;
                                         border:1px solid;
 
-                                        font-size:.76rem;
+                                        font-size:.75rem;
                                         line-height:1.2;
-                                        font-weight:750;
+                                        font-weight:800;
 
                                         white-space:nowrap;
                                     }
 
-                                    .znr-waste-mobile-badge-success {
+                                    .znr-waste-status-success {
                                         color:#166534;
-                                        background:#dcfce7;
-                                        border-color:#86efac;
+
+                                        background:
+                                            rgba(
+                                                34,
+                                                197,
+                                                94,
+                                                .12
+                                            );
+
+                                        border-color:
+                                            rgba(
+                                                34,
+                                                197,
+                                                94,
+                                                .35
+                                            );
                                     }
 
-                                    .znr-waste-mobile-badge-danger {
+                                    .znr-waste-status-danger {
                                         color:#991b1b;
-                                        background:#fee2e2;
-                                        border-color:#fca5a5;
+
+                                        background:
+                                            rgba(
+                                                239,
+                                                68,
+                                                68,
+                                                .12
+                                            );
+
+                                        border-color:
+                                            rgba(
+                                                239,
+                                                68,
+                                                68,
+                                                .35
+                                            );
                                     }
 
                                     /*
@@ -634,65 +717,133 @@ class WasteTypeResource extends BaseResource
                                     |--------------------------------------------------------------------------
                                     */
 
-                                    .dark .znr-waste-mobile-card {
-                                        background:#18181b;
-                                        border-color:#3f3f46;
-                                    }
-
                                     .dark .znr-waste-mobile-code {
-                                        color:#f9fafb;
+                                        color:#93c5fd;
+
+                                        background:
+                                            rgba(
+                                                59,
+                                                130,
+                                                246,
+                                                .12
+                                            );
+
+                                        border-color:
+                                            rgba(
+                                                96,
+                                                165,
+                                                250,
+                                                .28
+                                            );
                                     }
 
                                     .dark .znr-waste-mobile-name {
-                                        color:#e5e7eb;
+                                        color:#f9fafb;
                                     }
 
-                                    .dark .znr-waste-mobile-badge-success {
-                                        color:#bbf7d0;
-                                        background:rgba(
-                                            34,
-                                            197,
-                                            94,
-                                            .17
-                                        );
-                                        border-color:rgba(
-                                            34,
-                                            197,
-                                            94,
-                                            .65
-                                        );
+                                    .dark .znr-waste-status-success {
+                                        color:#86efac;
+
+                                        background:
+                                            rgba(
+                                                34,
+                                                197,
+                                                94,
+                                                .12
+                                            );
+
+                                        border-color:
+                                            rgba(
+                                                34,
+                                                197,
+                                                94,
+                                                .30
+                                            );
                                     }
 
-                                    .dark .znr-waste-mobile-badge-danger {
-                                        color:#fecaca;
-                                        background:rgba(
-                                            239,
-                                            68,
-                                            68,
-                                            .17
-                                        );
-                                        border-color:rgba(
-                                            239,
-                                            68,
-                                            68,
-                                            .65
-                                        );
+                                    .dark .znr-waste-status-danger {
+                                        color:#fca5a5;
+
+                                        background:
+                                            rgba(
+                                                239,
+                                                68,
+                                                68,
+                                                .12
+                                            );
+
+                                        border-color:
+                                            rgba(
+                                                239,
+                                                68,
+                                                68,
+                                                .30
+                                            );
+                                    }
+
+                                    /*
+                                    |--------------------------------------------------------------------------
+                                    | MOBITEL
+                                    |--------------------------------------------------------------------------
+                                    */
+
+                                    @media (
+                                        max-width: 767px
+                                    ) {
+                                        .znr-waste-mobile {
+                                            /*
+                                            * Ne koristimo min-width.
+                                            * Kartica se mora prilagoditi
+                                            * stvarnoj širini tablice.
+                                            */
+                                            width:100%;
+                                            max-width:
+                                                calc(
+                                                    100vw - 105px
+                                                );
+                                        }
+
+                                        .znr-waste-mobile-name {
+                                            /*
+                                            * Posebno važno kod
+                                            * vrlo dugih kataloških
+                                            * naziva otpada.
+                                            */
+                                            overflow-wrap:anywhere;
+                                        }
                                     }
                                 </style>
 
-                                <div class="znr-waste-mobile-card">
+                                <div class="
+                                    znr-waste-mobile
+                                ">
 
-                                    <div class="znr-waste-mobile-code">'
-                                        . e($code)
-                                        . '
+                                    <div class="
+                                        znr-waste-mobile-top
+                                    ">
+
+                                        <span class="
+                                            znr-waste-mobile-code
+                                        ">
+                                            '
+                                            . e($code)
+                                            . '
+                                        </span>
+
                                     </div>
 
-                                    <div class="znr-waste-mobile-name">'
+                                    <div class="
+                                        znr-waste-mobile-name
+                                    ">
+                                        '
                                         . $name
                                         . '
                                     </div>
 
-                                    <div class="znr-waste-mobile-footer">'
+                                    <div class="
+                                        znr-waste-mobile-footer
+                                    ">
+                                        '
                                         . $hazardBadge
                                         . '
                                     </div>

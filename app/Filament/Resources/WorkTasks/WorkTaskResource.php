@@ -300,7 +300,9 @@ class WorkTaskResource extends BaseResource
                             WorkTask $record
                         ): HtmlString {
                             $title = e(
-                                (string) $record->title
+                                trim(
+                                    (string) $record->title
+                                )
                             );
 
                             $description = trim(
@@ -314,107 +316,11 @@ class WorkTaskResource extends BaseResource
 
                             /*
                             |--------------------------------------------------------------------------
-                            | STATUS I DATUM
-                            |--------------------------------------------------------------------------
-                            */
-
-                            if ($record->is_done) {
-                                $dateStyle =
-                                    'color:#166534;'
-                                    . 'background:#f0fdf4;'
-                                    . 'border-color:#bbf7d0;';
-
-                                $status =
-                                    '<span style="
-                                        display:inline-flex;
-                                        align-items:center;
-                                        border-radius:999px;
-                                        padding:4px 9px;
-                                        font-size:.72rem;
-                                        font-weight:800;
-                                        color:#166534;
-                                        background:#f0fdf4;
-                                        border:1px solid #bbf7d0;
-                                        white-space:nowrap;
-                                    ">
-                                        ✓ Završeno
-                                    </span>';
-                            } elseif (
-                                $record->due_date?->isPast()
-                            ) {
-                                $dateStyle =
-                                    'color:#b91c1c;'
-                                    . 'background:#fef2f2;'
-                                    . 'border-color:#fecaca;';
-
-                                $status =
-                                    '<span style="
-                                        display:inline-flex;
-                                        align-items:center;
-                                        border-radius:999px;
-                                        padding:4px 9px;
-                                        font-size:.72rem;
-                                        font-weight:800;
-                                        color:#b91c1c;
-                                        background:#fef2f2;
-                                        border:1px solid #fecaca;
-                                        white-space:nowrap;
-                                    ">
-                                        Otvoreno
-                                    </span>';
-                            } elseif (
-                                $record->due_date?->isToday()
-                            ) {
-                                $dateStyle =
-                                    'color:#92400e;'
-                                    . 'background:#fffbeb;'
-                                    . 'border-color:#fde68a;';
-
-                                $status =
-                                    '<span style="
-                                        display:inline-flex;
-                                        align-items:center;
-                                        border-radius:999px;
-                                        padding:4px 9px;
-                                        font-size:.72rem;
-                                        font-weight:800;
-                                        color:#92400e;
-                                        background:#fffbeb;
-                                        border:1px solid #fde68a;
-                                        white-space:nowrap;
-                                    ">
-                                        Danas
-                                    </span>';
-                            } else {
-                                $dateStyle =
-                                    'color:#2563eb;'
-                                    . 'background:#eff6ff;'
-                                    . 'border-color:#bfdbfe;';
-
-                                $status =
-                                    '<span style="
-                                        display:inline-flex;
-                                        align-items:center;
-                                        border-radius:999px;
-                                        padding:4px 9px;
-                                        font-size:.72rem;
-                                        font-weight:800;
-                                        color:#475569;
-                                        background:#f8fafc;
-                                        border:1px solid #e2e8f0;
-                                        white-space:nowrap;
-                                    ">
-                                        Otvoreno
-                                    </span>';
-                            }
-
-                            /*
-                            |--------------------------------------------------------------------------
                             | OPIS
                             |--------------------------------------------------------------------------
                             |
-                            | Ako je opis jednak naslovu,
-                            | ne prikazujemo isti tekst dvaput.
+                            | Ako je opis jednak nazivu zadatka,
+                            | nema potrebe isti tekst prikazivati dvaput.
                             |
                             */
 
@@ -422,180 +328,278 @@ class WorkTaskResource extends BaseResource
 
                             if (
                                 $description !== ''
-                                && mb_strtolower(
-                                    trim($description)
-                                ) !== mb_strtolower(
-                                    trim(
-                                        (string) $record->title
+                                && mb_strtolower($description)
+                                    !== mb_strtolower(
+                                        trim(
+                                            (string) $record->title
+                                        )
                                     )
-                                )
                             ) {
-                                $descriptionHtml =
-                                    '<div class="znr-work-task-mobile-description">'
-                                    . nl2br(
-                                        e($description)
-                                    )
-                                    . '</div>';
+                                $descriptionHtml = '
+                                    <div style="
+                                        margin-top:7px;
+                                        font-size:13px;
+                                        line-height:1.45;
+                                        opacity:.78;
+                                        white-space:normal;
+                                        overflow-wrap:anywhere;
+                                    ">
+                                        '
+                                        . nl2br(
+                                            e($description)
+                                        )
+                                        . '
+                                    </div>
+                                ';
                             }
 
                             /*
                             |--------------------------------------------------------------------------
-                            | MOBILNA KARTICA
+                            | STATUS
+                            |--------------------------------------------------------------------------
+                            */
+
+                            if ($record->is_done) {
+                                $statusHtml = '
+                                    <span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        min-height:28px;
+                                        padding:0 9px;
+                                        border-radius:8px;
+                                        border:1px solid rgba(34,197,94,.28);
+                                        background:rgba(34,197,94,.12);
+                                        color:#22c55e;
+                                        font-size:12px;
+                                        font-weight:800;
+                                        white-space:nowrap;
+                                    ">
+                                        ✓ Završeno
+                                    </span>
+                                ';
+                            } elseif (
+                                $record->due_date?->isPast()
+                            ) {
+                                $statusHtml = '
+                                    <span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        min-height:28px;
+                                        padding:0 9px;
+                                        border-radius:8px;
+                                        border:1px solid rgba(239,68,68,.30);
+                                        background:rgba(239,68,68,.12);
+                                        color:#ef4444;
+                                        font-size:12px;
+                                        font-weight:800;
+                                        white-space:nowrap;
+                                    ">
+                                        Otvoreno
+                                    </span>
+                                ';
+                            } elseif (
+                                $record->due_date?->isToday()
+                            ) {
+                                $statusHtml = '
+                                    <span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        min-height:28px;
+                                        padding:0 9px;
+                                        border-radius:8px;
+                                        border:1px solid rgba(245,158,11,.30);
+                                        background:rgba(245,158,11,.12);
+                                        color:#f59e0b;
+                                        font-size:12px;
+                                        font-weight:800;
+                                        white-space:nowrap;
+                                    ">
+                                        Danas
+                                    </span>
+                                ';
+                            } else {
+                                $statusHtml = '
+                                    <span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        min-height:28px;
+                                        padding:0 9px;
+                                        border-radius:8px;
+                                        border:1px solid rgba(59,130,246,.28);
+                                        background:rgba(59,130,246,.10);
+                                        color:#3b82f6;
+                                        font-size:12px;
+                                        font-weight:800;
+                                        white-space:nowrap;
+                                    ">
+                                        Otvoreno
+                                    </span>
+                                ';
+                            }
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | VIDLJIVOST
+                            |--------------------------------------------------------------------------
+                            */
+
+                            $visibilityHtml =
+                                $record->is_shared_with_organization
+                                    ? '
+                                        <span style="
+                                            display:inline-flex;
+                                            align-items:center;
+                                            min-height:28px;
+                                            padding:0 9px;
+                                            border-radius:8px;
+                                            border:1px solid rgba(59,130,246,.22);
+                                            background:rgba(59,130,246,.08);
+                                            color:#3b82f6;
+                                            font-size:12px;
+                                            font-weight:800;
+                                            white-space:nowrap;
+                                        ">
+                                            👥 Organizacija
+                                        </span>
+                                    '
+                                    : '
+                                        <span style="
+                                            display:inline-flex;
+                                            align-items:center;
+                                            min-height:28px;
+                                            padding:0 9px;
+                                            border-radius:8px;
+                                            border:1px solid rgba(148,163,184,.20);
+                                            background:rgba(148,163,184,.08);
+                                            color:#94a3b8;
+                                            font-size:12px;
+                                            font-weight:800;
+                                            white-space:nowrap;
+                                        ">
+                                            👤 Privatno
+                                        </span>
+                                    ';
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | MOBILNI PRIKAZ
                             |--------------------------------------------------------------------------
                             |
-                            | Light mode ostaje kao do sada.
+                            | Stil namjerno prati Operativni dnevnik:
                             |
-                            | Dark mode:
-                            |
-                            | - bijeli naslov
-                            | - svijetlosivi opis
-                            | - izraženija narančasta kartica
+                            | - bez fiksne bijele/crne boje teksta
+                            | - tekst nasljeđuje Filament light/dark boju
+                            | - narančasta kartica označava radni zadatak
+                            | - datum i status su kompaktni badgevi
                             |
                             */
 
                             return new HtmlString(
                                 '
-                                <style>
-                                    .znr-work-task-mobile-card {
-                                        width:100%;
-                                        min-width:240px;
-                                        max-width:100%;
-                                        padding:12px 12px;
-
-                                        border-radius:15px;
-                                        border:1px solid rgba(245,158,11,.28);
-
-                                        background:rgba(245,158,11,.08);
-
-                                        box-sizing:border-box;
-                                    }
-
-                                    .znr-work-task-mobile-label {
-                                        margin-bottom:7px;
-
-                                        color:#c66a05;
-
-                                        font-size:.73rem;
-                                        line-height:1.2;
-                                        font-weight:850;
-
-                                        text-transform:uppercase;
-                                        white-space:nowrap;
-                                    }
-
-                                    .znr-work-task-mobile-title {
-                                        color:#111827;
-
-                                        font-size:1rem;
-                                        line-height:1.4;
-                                        font-weight:700;
-
-                                        white-space:normal;
-                                        overflow-wrap:normal;
-                                        word-break:normal;
-                                        hyphens:none;
-                                    }
-
-                                    .znr-work-task-mobile-description {
-                                        margin-top:7px;
-
-                                        color:#475569;
-
-                                        font-size:.88rem;
-                                        line-height:1.4;
-
-                                        white-space:normal;
-                                        overflow-wrap:normal;
-                                        word-break:normal;
-                                        hyphens:none;
-                                    }
-
-                                    /*
-                                    |--------------------------------------------------------------------------
-                                    | DARK MODE
-                                    |--------------------------------------------------------------------------
-                                    */
-
-                                    .dark .znr-work-task-mobile-card {
-                                        background:rgba(
-                                            245,
-                                            158,
-                                            11,
-                                            .13
-                                        );
-
-                                        border-color:rgba(
-                                            245,
-                                            158,
-                                            11,
-                                            .48
-                                        );
-                                    }
-
-                                    .dark .znr-work-task-mobile-label {
-                                        color:#f59e0b;
-                                    }
-
-                                    .dark .znr-work-task-mobile-title {
-                                        color:#f9fafb;
-                                    }
-
-                                    .dark .znr-work-task-mobile-description {
-                                        color:#d1d5db;
-                                    }
-                                </style>
-
-                                <div class="znr-work-task-mobile-card">
-
-                                    <div class="znr-work-task-mobile-label">
-                                        ✓ RADNI ZADATAK
-                                    </div>
-
-                                    <div class="znr-work-task-mobile-title">'
-                                        . $title
-                                        . '
-                                    </div>
-
-                                    '
-                                    . $descriptionHtml
-                                    . '
+                                <div style="
+                                    width:100%;
+                                    min-width:0;
+                                    padding:3px 0 6px;
+                                    box-sizing:border-box;
+                                ">
 
                                     <div style="
                                         display:flex;
                                         align-items:center;
-                                        flex-wrap:wrap;
-                                        gap:7px;
-                                        margin-top:11px;
+                                        justify-content:space-between;
+                                        gap:10px;
+                                        width:100%;
+                                        margin-bottom:8px;
                                     ">
 
-                                        <span style="
-                                            display:inline-flex;
-                                            align-items:center;
-
-                                            border-radius:999px;
-                                            padding:4px 9px;
-
-                                            font-size:.72rem;
+                                        <div style="
+                                            font-size:16px;
                                             line-height:1.2;
                                             font-weight:800;
-
-                                            border:1px solid;
                                             white-space:nowrap;
-
-                                            '
-                                            . $dateStyle
-                                            . '
                                         ">
-                                            📅 '
+                                            '
                                             . e($date)
                                             . '
-                                        </span>
+                                        </div>
 
-                                        '
-                                        . $status
-                                        . '
+                                        <div style="
+                                            display:flex;
+                                            align-items:center;
+                                            gap:6px;
+                                            flex-wrap:wrap;
+                                            justify-content:flex-end;
+                                        ">
+                                            '
+                                            . $statusHtml
+                                            . '
+                                        </div>
 
                                     </div>
+
+                                    <div style="
+                                        width:100%;
+                                        min-width:0;
+                                        padding:11px 12px;
+                                        box-sizing:border-box;
+
+                                        border-radius:12px;
+
+                                        background:rgba(
+                                            245,
+                                            158,
+                                            11,
+                                            .10
+                                        );
+
+                                        border:1px solid rgba(
+                                            245,
+                                            158,
+                                            11,
+                                            .28
+                                        );
+                                    ">
+
+                                        <div style="
+                                            margin-bottom:5px;
+                                            color:#d97706;
+                                            font-size:11px;
+                                            line-height:1.2;
+                                            font-weight:800;
+                                        ">
+                                            ✓ RADNI ZADATAK
+                                        </div>
+
+                                        <div style="
+                                            font-size:15px;
+                                            line-height:1.5;
+                                            font-weight:650;
+                                            white-space:normal;
+                                            overflow-wrap:anywhere;
+                                        ">
+                                            '
+                                            . $title
+                                            . '
+                                        </div>
+
+                                        '
+                                        . $descriptionHtml
+                                        . '
+
+                                        <div style="
+                                            margin-top:10px;
+                                            display:flex;
+                                            align-items:center;
+                                            flex-wrap:wrap;
+                                            gap:6px;
+                                        ">
+                                            '
+                                            . $visibilityHtml
+                                            . '
+                                        </div>
+
+                                    </div>
+
                                 </div>
                                 '
                             );
