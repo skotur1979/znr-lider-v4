@@ -313,8 +313,11 @@ class WorkTaskResource extends BaseResource
                                 ?? '—';
 
                             /*
-                            * STATUS I DATUM
+                            |--------------------------------------------------------------------------
+                            | STATUS I DATUM
+                            |--------------------------------------------------------------------------
                             */
+
                             if ($record->is_done) {
                                 $dateStyle =
                                     'color:#166534;'
@@ -406,11 +409,15 @@ class WorkTaskResource extends BaseResource
                             }
 
                             /*
-                            * OPIS
-                            *
-                            * Ako je opis jednak naslovu,
-                            * ne prikazujemo isti tekst dvaput.
+                            |--------------------------------------------------------------------------
+                            | OPIS
+                            |--------------------------------------------------------------------------
+                            |
+                            | Ako je opis jednak naslovu,
+                            | ne prikazujemo isti tekst dvaput.
+                            |
                             */
+
                             $descriptionHtml = '';
 
                             if (
@@ -424,58 +431,127 @@ class WorkTaskResource extends BaseResource
                                 )
                             ) {
                                 $descriptionHtml =
-                                    '<div style="
-                                        margin-top:7px;
-                                        color:#475569;
-                                        font-size:.88rem;
-                                        line-height:1.4;
-                                        white-space:normal;
-                                        overflow-wrap:normal;
-                                        word-break:normal;
-                                        hyphens:none;
-                                    ">'
+                                    '<div class="znr-work-task-mobile-description">'
                                     . nl2br(
                                         e($description)
                                     )
                                     . '</div>';
                             }
 
+                            /*
+                            |--------------------------------------------------------------------------
+                            | MOBILNA KARTICA
+                            |--------------------------------------------------------------------------
+                            |
+                            | Light mode ostaje kao do sada.
+                            |
+                            | Dark mode:
+                            |
+                            | - bijeli naslov
+                            | - svijetlosivi opis
+                            | - izraženija narančasta kartica
+                            |
+                            */
+
                             return new HtmlString(
                                 '
-                                <div style="
-                                    width:100%;
-                                    min-width:240px;
-                                    max-width:100%;
-                                    padding:12px 12px;
-                                    border-radius:15px;
-                                    border:1px solid rgba(245,158,11,.28);
-                                    background:rgba(245,158,11,.08);
-                                    box-sizing:border-box;
-                                ">
+                                <style>
+                                    .znr-work-task-mobile-card {
+                                        width:100%;
+                                        min-width:240px;
+                                        max-width:100%;
+                                        padding:12px 12px;
 
-                                    <div style="
+                                        border-radius:15px;
+                                        border:1px solid rgba(245,158,11,.28);
+
+                                        background:rgba(245,158,11,.08);
+
+                                        box-sizing:border-box;
+                                    }
+
+                                    .znr-work-task-mobile-label {
                                         margin-bottom:7px;
+
                                         color:#c66a05;
+
                                         font-size:.73rem;
                                         line-height:1.2;
                                         font-weight:850;
+
                                         text-transform:uppercase;
                                         white-space:nowrap;
-                                    ">
-                                        ✓ RADNI ZADATAK
-                                    </div>
+                                    }
 
-                                    <div style="
+                                    .znr-work-task-mobile-title {
                                         color:#111827;
+
                                         font-size:1rem;
                                         line-height:1.4;
-                                        font-weight:650;
+                                        font-weight:700;
+
                                         white-space:normal;
                                         overflow-wrap:normal;
                                         word-break:normal;
                                         hyphens:none;
-                                    ">
-                                        '
+                                    }
+
+                                    .znr-work-task-mobile-description {
+                                        margin-top:7px;
+
+                                        color:#475569;
+
+                                        font-size:.88rem;
+                                        line-height:1.4;
+
+                                        white-space:normal;
+                                        overflow-wrap:normal;
+                                        word-break:normal;
+                                        hyphens:none;
+                                    }
+
+                                    /*
+                                    |--------------------------------------------------------------------------
+                                    | DARK MODE
+                                    |--------------------------------------------------------------------------
+                                    */
+
+                                    .dark .znr-work-task-mobile-card {
+                                        background:rgba(
+                                            245,
+                                            158,
+                                            11,
+                                            .13
+                                        );
+
+                                        border-color:rgba(
+                                            245,
+                                            158,
+                                            11,
+                                            .48
+                                        );
+                                    }
+
+                                    .dark .znr-work-task-mobile-label {
+                                        color:#f59e0b;
+                                    }
+
+                                    .dark .znr-work-task-mobile-title {
+                                        color:#f9fafb;
+                                    }
+
+                                    .dark .znr-work-task-mobile-description {
+                                        color:#d1d5db;
+                                    }
+                                </style>
+
+                                <div class="znr-work-task-mobile-card">
+
+                                    <div class="znr-work-task-mobile-label">
+                                        ✓ RADNI ZADATAK
+                                    </div>
+
+                                    <div class="znr-work-task-mobile-title">'
                                         . $title
                                         . '
                                     </div>
@@ -495,13 +571,17 @@ class WorkTaskResource extends BaseResource
                                         <span style="
                                             display:inline-flex;
                                             align-items:center;
+
                                             border-radius:999px;
                                             padding:4px 9px;
+
                                             font-size:.72rem;
                                             line-height:1.2;
                                             font-weight:800;
+
                                             border:1px solid;
                                             white-space:nowrap;
+
                                             '
                                             . $dateStyle
                                             . '

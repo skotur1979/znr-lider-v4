@@ -719,6 +719,150 @@ protected static function priorityIcon(?string $state): ?string
         ->formatStateUsing(fn (?string $state) => static::statusOptions()[$state] ?? $state)
         ->toggleable(),
 
+    TextColumn::make('closing_days')
+        ->label('Broj dana')
+        ->alignment(Alignment::Center)
+        ->getStateUsing(function (Observation $record): string {
+            $today = Carbon::today();
+
+            $incidentDate = $record->incident_date
+                ? Carbon::parse($record->incident_date)->startOfDay()
+                : null;
+
+            $targetDate = $record->target_date
+                ? Carbon::parse($record->target_date)->startOfDay()
+                : null;
+
+            $completedAt = $record->completed_at
+                ? Carbon::parse($record->completed_at)->startOfDay()
+                : null;
+
+            /*
+            * Ako je zapažanje završeno,
+            * prikazujemo koliko je dana prošlo
+            * od datuma zapažanja do zatvaranja.
+            */
+            if (
+                $record->status === 'Complete'
+                && $incidentDate
+                && $completedAt
+            ) {
+                $days = $incidentDate->diffInDays($completedAt);
+
+                return match ($days) {
+                    0 => '0 dana',
+                    1 => '1 dan',
+                    default => $days . ' dana',
+                };
+            }
+
+            /*
+            * Ako zapažanje nije završeno,
+            * a rok postoji i još nije istekao,
+            * odbrojava dane do roka.
+            */
+            if (
+                $record->status !== 'Complete'
+                && $targetDate
+                && $today->lte($targetDate)
+            ) {
+                $daysLeft = $today->diffInDays($targetDate);
+
+                return match ($daysLeft) {
+                    0 => 'Danas',
+                    1 => 'Još 1 dan',
+                    default => 'Još ' . $daysLeft . ' dana',
+                };
+            }
+
+            /*
+            * Ako zapažanje nije završeno,
+            * a rok je prošao,
+            * prikazujemo koliko dana kasni.
+            */
+            if (
+                $record->status !== 'Complete'
+                && $targetDate
+                && $today->gt($targetDate)
+            ) {
+                $daysLate = $targetDate->diffInDays($today);
+
+                return match ($daysLate) {
+                    1 => 'Kasni 1 dan',
+                    default => 'Kasni ' . $daysLate . ' dana',
+                };
+            }
+
+            return '—';
+        })
+        ->badge()
+        ->color(function (Observation $record): string {
+            $today = Carbon::today();
+
+            $targetDate = $record->target_date
+                ? Carbon::parse($record->target_date)->startOfDay()
+                : null;
+
+            if (
+                $record->status === 'Complete'
+                && $record->completed_at
+            ) {
+                return 'success';
+            }
+
+            if (! $targetDate) {
+                return 'gray';
+            }
+
+            if ($today->lte($targetDate)) {
+                return 'warning';
+            }
+
+            return 'danger';
+        })
+        ->tooltip(function (Observation $record): string {
+            $today = Carbon::today();
+
+            $incidentDate = $record->incident_date
+                ? Carbon::parse($record->incident_date)->startOfDay()
+                : null;
+
+            $targetDate = $record->target_date
+                ? Carbon::parse($record->target_date)->startOfDay()
+                : null;
+
+            $completedAt = $record->completed_at
+                ? Carbon::parse($record->completed_at)->startOfDay()
+                : null;
+
+            if (
+                $record->status === 'Complete'
+                && $incidentDate
+                && $completedAt
+            ) {
+                return 'Broj kalendarskih dana od zapažanja do zatvaranja';
+            }
+
+            if (
+                $record->status !== 'Complete'
+                && $targetDate
+                && $today->lte($targetDate)
+            ) {
+                return 'Preostali broj dana do roka za zatvaranje';
+            }
+
+            if (
+                $record->status !== 'Complete'
+                && $targetDate
+                && $today->gt($targetDate)
+            ) {
+                return 'Broj dana kašnjenja nakon isteka roka';
+            }
+
+            return 'Rok za zatvaranje nije definiran';
+        })
+        ->toggleable(),
+
     TextColumn::make('sent_at')
         ->label('Poslano')
         ->dateTime('d.m.Y. H:i')

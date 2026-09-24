@@ -30,6 +30,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\Rule;
 
 class WasteTypeResource extends BaseResource
@@ -456,6 +457,251 @@ class WasteTypeResource extends BaseResource
             ])
             ->defaultSort('waste_code')
             ->columns([
+
+                TextColumn::make('mobile_card')
+                    ->label('Vrsta otpada')
+                    ->hiddenFrom('md')
+                    ->html()
+                    ->grow()
+                    ->state(
+                        function (
+                            WasteType $record
+                        ): HtmlString {
+                            /*
+                            * Ključni broj otpada
+                            * spremamo bez razmaka,
+                            * a u prikazu ga formatiramo.
+                            */
+                            $rawCode = trim(
+                                (string) $record->waste_code
+                            );
+
+                            $hasStar = str_ends_with(
+                                $rawCode,
+                                '*'
+                            );
+
+                            $code = rtrim(
+                                $rawCode,
+                                '*'
+                            );
+
+                            $digits = preg_replace(
+                                '/\D+/',
+                                '',
+                                $code
+                            );
+
+                            if (
+                                strlen($digits) === 6
+                            ) {
+                                $code =
+                                    substr(
+                                        $digits,
+                                        0,
+                                        2
+                                    )
+                                    . ' '
+                                    . substr(
+                                        $digits,
+                                        2,
+                                        2
+                                    )
+                                    . ' '
+                                    . substr(
+                                        $digits,
+                                        4,
+                                        2
+                                    );
+                            }
+
+                            if ($hasStar) {
+                                $code .= '*';
+                            }
+
+                            $name = e(
+                                (string) $record->name
+                            );
+
+                            /*
+                            * Status opasnog otpada.
+                            */
+                            if (
+                                (bool) $record->is_hazardous
+                            ) {
+                                $hazardBadge = '
+                                    <span class="
+                                        znr-waste-mobile-badge
+                                        znr-waste-mobile-badge-danger
+                                    ">
+                                        ⓧ Opasan otpad
+                                    </span>
+                                ';
+                            } else {
+                                $hazardBadge = '
+                                    <span class="
+                                        znr-waste-mobile-badge
+                                        znr-waste-mobile-badge-success
+                                    ">
+                                        ✓ Neopasan otpad
+                                    </span>
+                                ';
+                            }
+
+                            return new HtmlString(
+                                '
+                                <style>
+                                    .znr-waste-mobile-card {
+                                        width:100%;
+                                        min-width:230px;
+                                        box-sizing:border-box;
+
+                                        padding:13px 14px;
+
+                                        border-radius:14px;
+                                        border:1px solid #e5e7eb;
+
+                                        background:#ffffff;
+                                    }
+
+                                    .znr-waste-mobile-code {
+                                        margin-bottom:7px;
+
+                                        font-size:1rem;
+                                        line-height:1.2;
+                                        font-weight:800;
+
+                                        color:#111827;
+
+                                        white-space:nowrap;
+                                    }
+
+                                    .znr-waste-mobile-name {
+                                        font-size:.94rem;
+                                        line-height:1.45;
+                                        font-weight:600;
+
+                                        color:#374151;
+
+                                        white-space:normal;
+                                        word-break:normal;
+                                        overflow-wrap:break-word;
+                                    }
+
+                                    .znr-waste-mobile-footer {
+                                        display:flex;
+                                        align-items:center;
+                                        flex-wrap:wrap;
+
+                                        gap:7px;
+
+                                        margin-top:11px;
+                                    }
+
+                                    .znr-waste-mobile-badge {
+                                        display:inline-flex;
+                                        align-items:center;
+
+                                        min-height:25px;
+
+                                        padding:3px 9px;
+
+                                        border-radius:9999px;
+                                        border:1px solid;
+
+                                        font-size:.76rem;
+                                        line-height:1.2;
+                                        font-weight:750;
+
+                                        white-space:nowrap;
+                                    }
+
+                                    .znr-waste-mobile-badge-success {
+                                        color:#166534;
+                                        background:#dcfce7;
+                                        border-color:#86efac;
+                                    }
+
+                                    .znr-waste-mobile-badge-danger {
+                                        color:#991b1b;
+                                        background:#fee2e2;
+                                        border-color:#fca5a5;
+                                    }
+
+                                    /*
+                                    |--------------------------------------------------------------------------
+                                    | DARK MODE
+                                    |--------------------------------------------------------------------------
+                                    */
+
+                                    .dark .znr-waste-mobile-card {
+                                        background:#18181b;
+                                        border-color:#3f3f46;
+                                    }
+
+                                    .dark .znr-waste-mobile-code {
+                                        color:#f9fafb;
+                                    }
+
+                                    .dark .znr-waste-mobile-name {
+                                        color:#e5e7eb;
+                                    }
+
+                                    .dark .znr-waste-mobile-badge-success {
+                                        color:#bbf7d0;
+                                        background:rgba(
+                                            34,
+                                            197,
+                                            94,
+                                            .17
+                                        );
+                                        border-color:rgba(
+                                            34,
+                                            197,
+                                            94,
+                                            .65
+                                        );
+                                    }
+
+                                    .dark .znr-waste-mobile-badge-danger {
+                                        color:#fecaca;
+                                        background:rgba(
+                                            239,
+                                            68,
+                                            68,
+                                            .17
+                                        );
+                                        border-color:rgba(
+                                            239,
+                                            68,
+                                            68,
+                                            .65
+                                        );
+                                    }
+                                </style>
+
+                                <div class="znr-waste-mobile-card">
+
+                                    <div class="znr-waste-mobile-code">'
+                                        . e($code)
+                                        . '
+                                    </div>
+
+                                    <div class="znr-waste-mobile-name">'
+                                        . $name
+                                        . '
+                                    </div>
+
+                                    <div class="znr-waste-mobile-footer">'
+                                        . $hazardBadge
+                                        . '
+                                    </div>
+
+                                </div>
+                                '
+                            );
+                        }
+                    ),
                 TextColumn::make(
                     'waste_code'
                 )
@@ -511,17 +757,20 @@ class WasteTypeResource extends BaseResource
                                 : $code;
                         }
                     )
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('name')
                     ->label('Naziv')
                     ->searchable()
                     ->sortable()
                     ->wrap()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 static::userTableColumn()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 IconColumn::make(
                     'is_hazardous'
@@ -529,7 +778,8 @@ class WasteTypeResource extends BaseResource
                     ->label('Opasan')
                     ->boolean()
                     ->sortable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make(
                     'created_at'
@@ -540,7 +790,8 @@ class WasteTypeResource extends BaseResource
                     ->toggleable(
                         isToggledHiddenByDefault:
                             true
-                    ),
+                    )
+                    ->visibleFrom('md'),
 
                 TextColumn::make(
                     'deleted_at'
@@ -555,7 +806,8 @@ class WasteTypeResource extends BaseResource
                     ->toggleable(
                         isToggledHiddenByDefault:
                             true
-                    ),
+                    )
+                    ->visibleFrom('md'),
             ])
             ->filters([
                 SelectFilter::make(
