@@ -9,12 +9,15 @@ use App\Filament\Resources\WasteTypes\Pages\ListWasteTypes;
 use App\Filament\Resources\WasteTypes\Pages\ViewWasteType;
 use App\Models\WasteCatalogItem;
 use App\Models\WasteType;
+use App\Models\OntoRecord;
+use Filament\Actions\BulkAction;
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Collection;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
-use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
@@ -170,7 +173,32 @@ class WasteTypeResource extends BaseResource
     public static function canForceDelete(Model $record): bool
     {
         return parent::canForceDelete($record)
-            && static::canManageRecord($record);
+            && static::canManageRecord($record)
+            && ! static::isUsedInOnto($record);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PROVJERA KORIŠTENJA VRSTE OTPADA
+    |--------------------------------------------------------------------------
+    |
+    | Vrsta otpada ne smije se trajno izbrisati ako postoji
+    | barem jedan ONTO obrazac koji koristi taj waste_type_id.
+    |
+    | Provjeravamo i deaktivirane ONTO zapise jer povijesna
+    | evidencija također mora ostati sačuvana.
+    |
+    */
+    protected static function isUsedInOnto(
+        Model $record
+    ): bool {
+        return OntoRecord::query()
+            ->withTrashed()
+            ->where(
+                'waste_type_id',
+                $record->getKey()
+            )
+            ->exists();
     }
 
     /*
@@ -462,6 +490,7 @@ class WasteTypeResource extends BaseResource
                     ->label('Vrsta otpada')
                     ->hiddenFrom('md')
                     ->html()
+                    ->wrap()
                     ->grow()
                     ->state(
                         function (
@@ -520,6 +549,12 @@ class WasteTypeResource extends BaseResource
                                 $code .= '*';
                             }
 
+                            /*
+                            |--------------------------------------------------------------------------
+                            | NAZIV
+                            |--------------------------------------------------------------------------
+                            */
+
                             $name = e(
                                 trim(
                                     (string) $record->name
@@ -528,26 +563,56 @@ class WasteTypeResource extends BaseResource
 
                             /*
                             |--------------------------------------------------------------------------
-                            | OPASAN / NEOPASAN OTPAD
+                            | STATUS
                             |--------------------------------------------------------------------------
                             */
 
                             if (
                                 (bool) $record->is_hazardous
                             ) {
-                                $hazardBadge = '
-                                    <span class="
-                                        znr-waste-status
-                                        znr-waste-status-danger
+                                $status = '
+                                    <span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        gap:5px;
+
+                                        padding:4px 9px;
+
+                                        border-radius:999px;
+                                        border:1px solid rgba(239,68,68,.45);
+
+                                        background:rgba(239,68,68,.12);
+                                        color:#ef4444;
+
+                                        font-size:12px;
+                                        line-height:1.2;
+                                        font-weight:800;
+
+                                        white-space:nowrap;
                                     ">
                                         ⓧ Opasan otpad
                                     </span>
                                 ';
                             } else {
-                                $hazardBadge = '
-                                    <span class="
-                                        znr-waste-status
-                                        znr-waste-status-success
+                                $status = '
+                                    <span style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        gap:5px;
+
+                                        padding:4px 9px;
+
+                                        border-radius:999px;
+                                        border:1px solid rgba(34,197,94,.45);
+
+                                        background:rgba(34,197,94,.12);
+                                        color:#22c55e;
+
+                                        font-size:12px;
+                                        line-height:1.2;
+                                        font-weight:800;
+
+                                        white-space:nowrap;
                                     ">
                                         ✓ Neopasan otpad
                                     </span>
@@ -558,272 +623,64 @@ class WasteTypeResource extends BaseResource
                             |--------------------------------------------------------------------------
                             | MOBILNI PRIKAZ
                             |--------------------------------------------------------------------------
+                            |
+                            | Važno:
+                            |
+                            | width: calc(100vw - 125px)
+                            |
+                            | sprječava da TextColumn razvuče tablicu
+                            | izvan ekrana.
+                            |
+                            | white-space:normal !important
+                            |
+                            | nadjačava Filament nowrap ponašanje.
+                            |
                             */
 
                             return new HtmlString(
                                 '
-                                <style>
-                                    .znr-waste-mobile {
-                                        width:100%;
-                                        max-width:100%;
-                                        min-width:0;
-                                        box-sizing:border-box;
+                                <div style="
+                                    display:block;
 
-                                        padding:7px 2px 9px;
-                                    }
+                                    width:calc(100vw - 125px);
+                                    max-width:100%;
+                                    min-width:0;
 
-                                    .znr-waste-mobile-top {
-                                        display:flex;
-                                        align-items:center;
-                                        justify-content:space-between;
+                                    box-sizing:border-box;
 
-                                        width:100%;
-                                        max-width:100%;
-                                        min-width:0;
+                                    padding:5px 0 8px;
 
-                                        gap:8px;
-                                        margin-bottom:7px;
-                                    }
-
-                                    .znr-waste-mobile-code {
-                                        display:inline-flex;
-                                        align-items:center;
-
-                                        flex-shrink:0;
-
-                                        min-height:28px;
-
-                                        padding:3px 9px;
-
-                                        border-radius:8px;
-
-                                        border:1px solid
-                                            rgba(
-                                                59,
-                                                130,
-                                                246,
-                                                .20
-                                            );
-
-                                        background:
-                                            rgba(
-                                                59,
-                                                130,
-                                                246,
-                                                .08
-                                            );
-
-                                        color:#2563eb;
-
-                                        font-size:.82rem;
-                                        line-height:1.2;
-                                        font-weight:800;
-
-                                        white-space:nowrap;
-                                    }
-
-                                    .znr-waste-mobile-name {
-                                        width:100%;
-                                        max-width:100%;
-                                        min-width:0;
-
-                                        color:#111827;
-
-                                        font-size:.94rem;
-                                        line-height:1.45;
-                                        font-weight:650;
-
-                                        white-space:normal !important;
-
-                                        overflow-wrap:anywhere;
-                                        word-break:normal;
-                                        hyphens:auto;
-                                    }
-
-                                    .znr-waste-mobile-footer {
-                                        display:flex;
-                                        align-items:center;
-                                        flex-wrap:wrap;
-
-                                        width:100%;
-                                        min-width:0;
-
-                                        gap:6px;
-
-                                        margin-top:9px;
-                                    }
-
-                                    .znr-waste-status {
-                                        display:inline-flex;
-                                        align-items:center;
-
-                                        min-height:26px;
-
-                                        padding:3px 9px;
-
-                                        border-radius:9999px;
-                                        border:1px solid;
-
-                                        font-size:.75rem;
-                                        line-height:1.2;
-                                        font-weight:800;
-
-                                        white-space:nowrap;
-                                    }
-
-                                    .znr-waste-status-success {
-                                        color:#166534;
-
-                                        background:
-                                            rgba(
-                                                34,
-                                                197,
-                                                94,
-                                                .12
-                                            );
-
-                                        border-color:
-                                            rgba(
-                                                34,
-                                                197,
-                                                94,
-                                                .35
-                                            );
-                                    }
-
-                                    .znr-waste-status-danger {
-                                        color:#991b1b;
-
-                                        background:
-                                            rgba(
-                                                239,
-                                                68,
-                                                68,
-                                                .12
-                                            );
-
-                                        border-color:
-                                            rgba(
-                                                239,
-                                                68,
-                                                68,
-                                                .35
-                                            );
-                                    }
-
-                                    /*
-                                    |--------------------------------------------------------------------------
-                                    | DARK MODE
-                                    |--------------------------------------------------------------------------
-                                    */
-
-                                    .dark .znr-waste-mobile-code {
-                                        color:#93c5fd;
-
-                                        background:
-                                            rgba(
-                                                59,
-                                                130,
-                                                246,
-                                                .12
-                                            );
-
-                                        border-color:
-                                            rgba(
-                                                96,
-                                                165,
-                                                250,
-                                                .28
-                                            );
-                                    }
-
-                                    .dark .znr-waste-mobile-name {
-                                        color:#f9fafb;
-                                    }
-
-                                    .dark .znr-waste-status-success {
-                                        color:#86efac;
-
-                                        background:
-                                            rgba(
-                                                34,
-                                                197,
-                                                94,
-                                                .12
-                                            );
-
-                                        border-color:
-                                            rgba(
-                                                34,
-                                                197,
-                                                94,
-                                                .30
-                                            );
-                                    }
-
-                                    .dark .znr-waste-status-danger {
-                                        color:#fca5a5;
-
-                                        background:
-                                            rgba(
-                                                239,
-                                                68,
-                                                68,
-                                                .12
-                                            );
-
-                                        border-color:
-                                            rgba(
-                                                239,
-                                                68,
-                                                68,
-                                                .30
-                                            );
-                                    }
-
-                                    /*
-                                    |--------------------------------------------------------------------------
-                                    | MOBITEL
-                                    |--------------------------------------------------------------------------
-                                    */
-
-                                    @media (
-                                        max-width: 767px
-                                    ) {
-                                        .znr-waste-mobile {
-                                            /*
-                                            * Ne koristimo min-width.
-                                            * Kartica se mora prilagoditi
-                                            * stvarnoj širini tablice.
-                                            */
-                                            width:100%;
-                                            max-width:
-                                                calc(
-                                                    100vw - 105px
-                                                );
-                                        }
-
-                                        .znr-waste-mobile-name {
-                                            /*
-                                            * Posebno važno kod
-                                            * vrlo dugih kataloških
-                                            * naziva otpada.
-                                            */
-                                            overflow-wrap:anywhere;
-                                        }
-                                    }
-                                </style>
-
-                                <div class="
-                                    znr-waste-mobile
+                                    white-space:normal !important;
+                                    overflow:hidden;
                                 ">
 
-                                    <div class="
-                                        znr-waste-mobile-top
+                                    <div style="
+                                        display:flex;
+                                        align-items:center;
+
+                                        margin-bottom:8px;
+
+                                        white-space:normal !important;
                                     ">
 
-                                        <span class="
-                                            znr-waste-mobile-code
+                                        <span style="
+                                            display:inline-flex;
+                                            align-items:center;
+
+                                            padding:4px 9px;
+
+                                            border-radius:8px;
+
+                                            border:1px solid rgba(59,130,246,.30);
+                                            background:rgba(59,130,246,.10);
+
+                                            color:#60a5fa;
+
+                                            font-size:13px;
+                                            line-height:1.2;
+                                            font-weight:800;
+
+                                            white-space:nowrap;
                                         ">
                                             '
                                             . e($code)
@@ -832,19 +689,42 @@ class WasteTypeResource extends BaseResource
 
                                     </div>
 
-                                    <div class="
-                                        znr-waste-mobile-name
+                                    <div style="
+                                        display:block;
+
+                                        width:100%;
+                                        max-width:100%;
+                                        min-width:0;
+
+                                        font-size:14px;
+                                        line-height:1.45;
+                                        font-weight:600;
+
+                                        white-space:normal !important;
+
+                                        overflow-wrap:anywhere !important;
+                                        word-break:normal !important;
+
+                                        box-sizing:border-box;
                                     ">
                                         '
                                         . $name
                                         . '
                                     </div>
 
-                                    <div class="
-                                        znr-waste-mobile-footer
+                                    <div style="
+                                        display:flex;
+                                        align-items:center;
+                                        flex-wrap:wrap;
+
+                                        width:100%;
+
+                                        margin-top:9px;
+
+                                        white-space:normal !important;
                                     ">
                                         '
-                                        . $hazardBadge
+                                        . $status
                                         . '
                                     </div>
 
@@ -852,7 +732,16 @@ class WasteTypeResource extends BaseResource
                                 '
                             );
                         }
-                    ),
+                    )
+                    ->extraAttributes([
+                        'style' =>
+                            'width:100%;'
+                            . 'max-width:100%;'
+                            . 'min-width:0;'
+                            . 'white-space:normal !important;'
+                            . 'overflow:hidden;',
+                    ]),
+
                 TextColumn::make(
                     'waste_code'
                 )
@@ -1094,27 +983,29 @@ class WasteTypeResource extends BaseResource
                         ),
 
                     ForceDeleteAction::make()
-                        ->label(
-                            'Trajno izbriši'
-                        )
-                        ->requiresConfirmation()
-                        ->visible(
-                            fn (
-                                WasteType $record
-                            ): bool =>
+                    ->label('Trajno izbriši')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(
+                        fn (
+                            WasteType $record
+                        ): bool =>
+                            $record->trashed()
+                            && static::canForceDelete(
                                 $record
-                                    ->trashed()
-                                && static::canForceDelete(
-                                    $record
-                                )
-                        )
-                        ->modalHeading(
-                            'Trajno izbriši vrstu otpada'
-                        )
-                        ->modalDescription(
-                            'Jesi li siguran/a? '
-                            . 'Ova radnja je nepovratna.'
-                        ),
+                            )
+                    )
+                    ->modalHeading(
+                        'Trajno izbriši vrstu otpada'
+                    )
+                    ->modalDescription(
+                        'Ova vrsta otpada nije korištena u ONTO evidenciji. '
+                        . 'Trajno brisanje je nepovratno.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno izbriši'
+                    ),
                 ]),
             ])
             ->bulkActions([
@@ -1122,18 +1013,28 @@ class WasteTypeResource extends BaseResource
                     ->label(
                         'Deaktiviraj označeno'
                     )
+                    ->icon(
+                        'heroicon-o-trash'
+                    )
+                    ->color(
+                        'danger'
+                    )
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Deaktiviraj odabrano'
+                        'Deaktiviraj odabrane vrste otpada'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš to učiniti?'
+                        'Odabrane vrste otpada bit će deaktivirane. '
+                        . 'ONTO i prateći listovi ostaju sačuvani.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Deaktiviraj'
                     )
                     ->visible(
                         fn (
                             HasTable $livewire
                         ): bool =>
-                            static::isOnlyTrashed(
+                            ! static::isOnlyTrashed(
                                 $livewire
                             )
                     ),
@@ -1152,17 +1053,29 @@ class WasteTypeResource extends BaseResource
                             )
                     ),
 
-                ForceDeleteBulkAction::make()
+                BulkAction::make(
+                    'force_delete_unused'
+                )
                     ->label(
                         'Trajno izbriši označeno'
                     )
+                    ->icon(
+                        'heroicon-o-trash'
+                    )
+                    ->color(
+                        'danger'
+                    )
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Trajno izbriši odabrano'
+                        'Trajno izbriši odabrane vrste otpada'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a? '
-                        . 'Ova radnja je nepovratna.'
+                        'Trajno će se izbrisati samo vrste otpada '
+                        . 'koje nikada nisu korištene u ONTO evidenciji. '
+                        . 'Korišteni ključni brojevi bit će automatski preskočeni.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Trajno izbriši'
                     )
                     ->visible(
                         fn (
@@ -1171,6 +1084,72 @@ class WasteTypeResource extends BaseResource
                             static::isOnlyTrashed(
                                 $livewire
                             )
+                    )
+                    ->action(
+                        function (
+                            Collection $records
+                        ): void {
+                            $deleted = 0;
+                            $skipped = 0;
+
+                            foreach ($records as $record) {
+                                /*
+                                * Još jednom provjeravamo:
+                                *
+                                * - prava korisnika
+                                * - pripadnost organizaciji
+                                * - postoji li ONTO zapis
+                                */
+                                if (
+                                    ! static::canForceDelete(
+                                        $record
+                                    )
+                                ) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+
+                                $record->forceDelete();
+
+                                $deleted++;
+                            }
+
+                            /*
+                            * Ako je nešto obrisano.
+                            */
+                            if ($deleted > 0) {
+                                Notification::make()
+                                    ->title(
+                                        'Trajno brisanje završeno'
+                                    )
+                                    ->body(
+                                        'Trajno izbrisano: '
+                                        . $deleted
+                                        . '. Preskočeno: '
+                                        . $skipped
+                                        . '.'
+                                    )
+                                    ->success()
+                                    ->send();
+
+                                return;
+                            }
+
+                            /*
+                            * Ako ništa nije moguće obrisati.
+                            */
+                            Notification::make()
+                                ->title(
+                                    'Nije moguće trajno brisanje'
+                                )
+                                ->body(
+                                    'Sve označene vrste otpada koriste se '
+                                    . 'u ONTO evidenciji i moraju ostati sačuvane.'
+                                )
+                                ->warning()
+                                ->send();
+                        }
                     ),
             ]);
     }
