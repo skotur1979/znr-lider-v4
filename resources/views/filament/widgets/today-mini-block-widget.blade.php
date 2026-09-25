@@ -61,7 +61,7 @@
             @else
 
                 <span class="today-line-empty">
-                    Nema zadataka ni rokova za {{ $dayDateLabel }}.
+                    Nema zadataka ni rokova za {{ $dayDateLabel }}
                 </span>
 
             @endif
