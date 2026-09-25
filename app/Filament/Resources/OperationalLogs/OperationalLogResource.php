@@ -183,7 +183,7 @@ class OperationalLogResource extends BaseResource
                 TextColumn::make('mobile_summary')
                     ->label('Operativni dnevnik')
                     ->html()
-                    ->hiddenFrom('md')
+                    ->hiddenFrom('lg')
                     ->state(function (OperationalLog $record): string {
                         $items = collect($record->items ?? [])
                             ->filter(
@@ -370,8 +370,12 @@ class OperationalLogResource extends BaseResource
 
                 /*
                 |--------------------------------------------------------------------------
-                | DESKTOP / TABLET PRIKAZ
+                | DESKTOP PRIKAZ
                 |--------------------------------------------------------------------------
+                |
+                | Mobitel i tablet koriste kompaktni prikaz.
+                | Klasični stupci prikazuju se od lg širine.
+                |
                 */
 
                 TextColumn::make('log_date')
@@ -379,11 +383,11 @@ class OperationalLogResource extends BaseResource
                     ->date('d.m.Y.')
                     ->sortable()
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 static::userTableColumn()
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('items_count')
                     ->label('Bilješke')
@@ -400,7 +404,7 @@ class OperationalLogResource extends BaseResource
                     )
                     ->alignCenter()
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('items_preview')
                     ->label('Sažetak')
@@ -490,7 +494,7 @@ class OperationalLogResource extends BaseResource
                     )
                     ->grow()
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('tasks_count')
                     ->label('Broj zadataka')
@@ -512,7 +516,7 @@ class OperationalLogResource extends BaseResource
                     )
                     ->alignCenter()
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('created_at')
                     ->label('Uneseno')
@@ -521,7 +525,7 @@ class OperationalLogResource extends BaseResource
                     ->toggleable(
                         isToggledHiddenByDefault: true
                     )
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
             ])
             ->filters([
                 Filter::make('log_date')

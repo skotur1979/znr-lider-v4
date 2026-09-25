@@ -292,7 +292,7 @@ class WorkTaskResource extends BaseResource
 
                 TextColumn::make('mobile_card')
                     ->label('Radni zadatak')
-                    ->hiddenFrom('md')
+                    ->hiddenFrom('lg')
                     ->html()
                     ->grow()
                     ->state(
@@ -607,11 +607,11 @@ class WorkTaskResource extends BaseResource
                     ),
                 /*
                 |--------------------------------------------------------------------------
-                | DESKTOP / TABLET
+                | DESKTOP PRIKAZ
                 |--------------------------------------------------------------------------
                 |
-                | Od md širine naviše ostaje tvoj postojeći
-                | tablični prikaz.
+                | Mobitel i tablet koriste kompaktni card prikaz.
+                | Klasična tablica uključuje se tek od lg širine.
                 |
                 */
 
@@ -621,18 +621,18 @@ class WorkTaskResource extends BaseResource
                     ->wrap()
                     ->weight('bold')
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 static::userTableColumn()
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('description')
                     ->label('Opis')
                     ->limit(80)
                     ->wrap()
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('due_date')
                     ->label('Datum')
@@ -662,13 +662,13 @@ class WorkTaskResource extends BaseResource
                         }
                     )
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                 IconColumn::make('is_done')
                     ->label('Riješeno')
                     ->boolean()
                     ->toggleable()
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
 
                     IconColumn::make(
                         'is_shared_with_organization'
@@ -685,7 +685,7 @@ class WorkTaskResource extends BaseResource
                         ->toggleable(
                             isToggledHiddenByDefault: true
                         )
-                        ->visibleFrom('md'),
+                        ->visibleFrom('lg'),
 
                 TextColumn::make('completed_at')
                     ->label('Zatvoreno')
@@ -694,7 +694,7 @@ class WorkTaskResource extends BaseResource
                     ->toggleable(
                         isToggledHiddenByDefault: true
                     )
-                    ->visibleFrom('md'),
+                    ->visibleFrom('lg'),
             ])
 
             ->filters([
