@@ -35,7 +35,23 @@ Schedule::command('kpi:generate')
     ->timezone('Europe/Zagreb')
     ->withoutOverlapping();
 
+/*
+|--------------------------------------------------------------------------
+| Zvonce - zapažanja / dodijeljene radnje
+|--------------------------------------------------------------------------
+*/
 
+Schedule::command(
+    'notifications:observations'
+)
+    ->name(
+        'observation-database-notifications'
+    )
+    ->dailyAt('06:45')
+    ->timezone(
+        'Europe/Zagreb'
+    )
+    ->withoutOverlapping();
 /*
 |--------------------------------------------------------------------------
 | Individualni podsjetnici na rokove

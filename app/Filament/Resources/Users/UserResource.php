@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Users;
 
 use App\Filament\Resources\Users\Pages;
 use App\Models\User;
+use App\Services\AppNotificationService;
 use App\Services\StorageQuotaService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -13,6 +14,7 @@ use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -607,6 +609,207 @@ class UserResource extends Resource
         ]);
     }
 
+    protected static function systemNotificationOrganizationOptions(): array
+    {
+        return User::query()
+            ->where(
+                'role',
+                'org_admin'
+            )
+            ->where(
+                'is_active',
+                true
+            )
+            ->withoutTrashed()
+            ->orderBy(
+                'organization_name'
+            )
+            ->orderBy('name')
+            ->get()
+            ->mapWithKeys(
+                function (User $user): array {
+
+                    $label = trim(
+                        (string)
+                        $user->organization_name
+                    );
+
+                    if ($label === '') {
+                        $label =
+                            $user->name;
+                    }
+
+                    return [
+                        $user->id =>
+                            $label
+                            . ' — '
+                            . $user->email,
+                    ];
+                }
+            )
+            ->all();
+    }
+
+    protected static function systemNotificationUserOptions(): array
+    {
+        return User::query()
+            ->where(
+                'is_active',
+                true
+            )
+            ->withoutTrashed()
+            ->orderBy('name')
+            ->get()
+            ->mapWithKeys(
+                function (User $user): array {
+
+                    $organization = trim(
+                        (string)
+                        $user->organization_name
+                    );
+
+                    if (
+                        $organization === ''
+                        && $user->parent_user_id
+                    ) {
+                        $organization = trim(
+                            (string)
+                            $user
+                                ->owner()
+                                ->organization_name
+                        );
+                    }
+
+                    $suffix =
+                        $organization !== ''
+                            ? ' — '
+                                . $organization
+                            : '';
+
+                    return [
+                        $user->id =>
+                            $user->name
+                            . ' — '
+                            . $user->email
+                            . $suffix,
+                    ];
+                }
+            )
+            ->all();
+    }
+
+    protected static function systemNotificationRecipients(
+        array $data
+    ) {
+        $audience =
+            $data['audience']
+            ?? null;
+
+        /*
+        * Svi aktivni korisnici.
+        */
+        if ($audience === 'all') {
+            return User::query()
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->withoutTrashed()
+                ->get();
+        }
+
+        /*
+        * Jedna organizacija.
+        */
+        if (
+            $audience ===
+            'organization'
+        ) {
+            $ownerId = (int) (
+                $data[
+                    'organization_owner_id'
+                ]
+                ?? 0
+            );
+
+            $owner = User::query()
+                ->whereKey($ownerId)
+                ->where(
+                    'role',
+                    'org_admin'
+                )
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->withoutTrashed()
+                ->first();
+
+            if (! $owner) {
+                return collect();
+            }
+
+            return User::query()
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->withoutTrashed()
+                ->where(
+                    function (
+                        Builder $query
+                    ) use ($ownerId): void {
+                        $query
+                            ->where(
+                                'id',
+                                $ownerId
+                            )
+                            ->orWhere(
+                                'parent_user_id',
+                                $ownerId
+                            );
+                    }
+                )
+                ->get();
+        }
+
+        /*
+        * Ručno odabrani korisnici.
+        */
+        if ($audience === 'users') {
+            $userIds = collect(
+                $data['user_ids']
+                ?? []
+            )
+                ->map(
+                    fn ($id): int =>
+                        (int) $id
+                )
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            if (empty($userIds)) {
+                return collect();
+            }
+
+            return User::query()
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->withoutTrashed()
+                ->whereIn(
+                    'id',
+                    $userIds
+                )
+                ->get();
+        }
+
+        return collect();
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -851,6 +1054,180 @@ class UserResource extends Resource
                     ->toggleable()
                     ->visible(fn () => Auth::user()?->isSuperAdmin()),
             ])
+            ->headerActions([
+                Action::make(
+                    'send_system_notification'
+                )
+                    ->label(
+                        'Sistemska obavijest'
+                    )
+                    ->icon(
+                        'heroicon-o-bell-alert'
+                    )
+                    ->color('info')
+                    ->visible(
+                        fn (): bool =>
+                            Auth::user()
+                                ?->isSuperAdmin()
+                                === true
+                    )
+                    ->modalHeading(
+                        'Pošalji sistemsku obavijest'
+                    )
+                    ->modalDescription(
+                        'Obavijest će se prikazati u zvoncu odabranim aktivnim korisnicima. E-mail se ne šalje.'
+                    )
+                    ->modalSubmitActionLabel(
+                        'Pošalji obavijest'
+                    )
+                    ->modalCancelActionLabel(
+                        'Odustani'
+                    )
+                    ->schema([
+                        TextInput::make(
+                            'notification_title'
+                        )
+                            ->label('Naslov')
+                            ->required()
+                            ->maxLength(120),
+
+                        Textarea::make(
+                            'notification_body'
+                        )
+                            ->label('Poruka')
+                            ->required()
+                            ->rows(5)
+                            ->maxLength(1000),
+
+                        Select::make('audience')
+                            ->label('Primatelji')
+                            ->options([
+                                'all' =>
+                                    'Svi aktivni korisnici',
+
+                                'organization' =>
+                                    'Jedna organizacija',
+
+                                'users' =>
+                                    'Odabrani korisnici',
+                            ])
+                            ->required()
+                            ->native(false)
+                            ->live(),
+
+                        Select::make(
+                            'organization_owner_id'
+                        )
+                            ->label(
+                                'Organizacija'
+                            )
+                            ->options(
+                                fn (): array =>
+                                    static::
+                                    systemNotificationOrganizationOptions()
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->native(false)
+                            ->visible(
+                                fn (
+                                    callable $get
+                                ): bool =>
+                                    $get('audience')
+                                    === 'organization'
+                            )
+                            ->required(
+                                fn (
+                                    callable $get
+                                ): bool =>
+                                    $get('audience')
+                                    === 'organization'
+                            ),
+
+                        Select::make('user_ids')
+                            ->label('Korisnici')
+                            ->options(
+                                fn (): array =>
+                                    static::
+                                    systemNotificationUserOptions()
+                            )
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->native(false)
+                            ->visible(
+                                fn (
+                                    callable $get
+                                ): bool =>
+                                    $get('audience')
+                                    === 'users'
+                            )
+                            ->required(
+                                fn (
+                                    callable $get
+                                ): bool =>
+                                    $get('audience')
+                                    === 'users'
+                            ),
+                    ])
+                    ->action(
+                        function (
+                            array $data
+                        ): void {
+
+                            if (
+                                Auth::user()
+                                    ?->isSuperAdmin()
+                                !== true
+                            ) {
+                                return;
+                            }
+
+                            $recipients =
+                                static::
+                                systemNotificationRecipients(
+                                    $data
+                                );
+
+                            $sent =
+                                app(
+                                    AppNotificationService::class
+                                )
+                                ->sendSystemNotification(
+                                    recipients:
+                                        $recipients,
+
+                                    title:
+                                        trim(
+                                            (string)
+                                            $data[
+                                                'notification_title'
+                                            ]
+                                        ),
+
+                                    body:
+                                        trim(
+                                            (string)
+                                            $data[
+                                                'notification_body'
+                                            ]
+                                        ),
+                                );
+
+                            Notification::make()
+                                ->title(
+                                    'Sistemska obavijest je poslana.'
+                                )
+                                ->body(
+                                    'Broj primatelja: '
+                                    . $sent
+                                    . '.'
+                                )
+                                ->success()
+                                ->send();
+                        }
+                    ),
+])
             ->filters([
                 TernaryFilter::make('deleted_at')
                     ->label('Arhivirani korisnici')

@@ -588,6 +588,14 @@ class User extends Authenticatable implements FilamentUser
         );
     }
 
+    public function assignedObservations(): HasMany
+    {
+        return $this->hasMany(
+            Observation::class,
+            'responsible_user_id'
+        );
+    }
+
     public function legalAcceptances(): HasMany
     {
         return $this->hasMany(

@@ -27,26 +27,57 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
-    public function panel(Panel $panel): Panel
-    {
+    public function panel(
+        Panel $panel
+    ): Panel {
         return $panel
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login(\App\Filament\Pages\Auth\Login::class)
+            ->login(
+                \App\Filament\Pages\Auth\Login::class
+            )
             ->passwordReset()
-            ->profile(\App\Filament\Pages\Auth\EditProfile::class)
+            ->profile(
+                \App\Filament\Pages\Auth\EditProfile::class
+            )
             ->colors([
                 'primary' => Color::Amber,
             ])
-            ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
-            ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
+
+            /*
+            |--------------------------------------------------------------------------
+            | Notification zvonce
+            |--------------------------------------------------------------------------
+            */
+
+            ->databaseNotifications(
+                isLazy: false,
+            )
+            ->databaseNotificationsPolling('60s')
+
+            ->discoverResources(
+                in: app_path(
+                    'Filament/Resources'
+                ),
+                for:
+                    'App\\Filament\\Resources'
+            )
+            ->discoverPages(
+                in: app_path(
+                    'Filament/Pages'
+                ),
+                for:
+                    'App\\Filament\\Pages'
+            )
             ->widgets([
                 TopSystemStatusBarWidget::class,
                 DashboardModulesStatusWidget::class,
                 QuickActionsWidget::class,
+
                 // SystemStatusWidget::class,
                 // DashboardDeadlinesGrid::class,
+
                 TodayMiniBlockWidget::class,
                 DashboardCalendarWidget::class,
             ])

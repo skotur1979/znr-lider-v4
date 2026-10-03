@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Employee;
 use App\Models\Observation;
+use App\Models\User;
 use App\Services\StorageQuotaService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -213,6 +214,83 @@ protected static function priorityIcon(?string $state): ?string
             ->all();
     }
 
+    protected static function responsibleUserOptions(
+        ?Observation $record = null
+    ): array {
+        $authUser = Auth::user();
+
+        /*
+        * Kod uređivanja koristimo organizaciju
+        * kojoj zapis pripada.
+        */
+        $ownerId =
+            $record?->user?->ownerId()
+            ?? $record?->user_id;
+
+        /*
+        * Kod kreiranja koristimo organizaciju
+        * prijavljenog korisnika.
+        */
+        if (
+            ! $ownerId
+            && $authUser
+            && ! $authUser->isSuperAdmin()
+        ) {
+            $ownerId =
+                $authUser->ownerId();
+        }
+
+        if (! $ownerId) {
+            return [];
+        }
+
+        return User::query()
+            ->where(
+                'is_active',
+                true
+            )
+            ->whereIn(
+                'role',
+                [
+                    'org_admin',
+                    'org_user',
+                ]
+            )
+            ->where(
+                function (
+                    Builder $query
+                ) use ($ownerId): void {
+                    $query
+                        ->where(
+                            'id',
+                            $ownerId
+                        )
+                        ->orWhere(
+                            'parent_user_id',
+                            $ownerId
+                        );
+                }
+            )
+            ->orderBy('name')
+            ->get()
+            ->filter(
+                fn (User $user): bool =>
+                    $user
+                        ->canViewModuleRecords(
+                            'observations'
+                        )
+            )
+            ->mapWithKeys(
+                fn (User $user): array => [
+                    $user->id =>
+                        $user->name
+                        . ' — '
+                        . $user->email,
+                ]
+            )
+            ->all();
+    }
+
     public static function form(Schema $schema): Schema
 {
     return $schema
@@ -280,9 +358,53 @@ protected static function priorityIcon(?string $state): ?string
                                         ->schema([
                                             TextInput::make('responsible')
                                                 ->label('Odgovorna osoba')
-                                                ->datalist(fn () => static::responsiblePersonOptions())
+                                                ->datalist(
+                                                    fn () =>
+                                                        static::responsiblePersonOptions()
+                                                )
                                                 ->placeholder('Upiši ime')
                                                 ->maxLength(255),
+
+                                            Select::make('responsible_user_id')
+                                                ->label(
+                                                    'Dodijeli korisniku aplikacije'
+                                                )
+                                                ->options(
+                                                    fn (?Observation $record): array =>
+                                                        static::responsibleUserOptions(
+                                                            $record
+                                                        )
+                                                )
+                                                ->searchable()
+                                                ->preload()
+                                                ->native(false)
+                                                ->live()
+                                                ->afterStateUpdated(
+                                                    function (
+                                                        $state,
+                                                        Set $set
+                                                    ): void {
+
+                                                        if (! filled($state)) {
+                                                            return;
+                                                        }
+
+                                                        $user = User::query()->find(
+                                                            $state
+                                                        );
+
+                                                        if ($user) {
+                                                            $set(
+                                                                'responsible',
+                                                                $user->name
+                                                            );
+                                                        }
+                                                    }
+                                                )
+                                                ->helperText(
+                                                    'Ako odgovorna osoba ima ZNR LIDER račun, odaberi ga ovdje. '
+                                                    . 'Taj korisnik će primati obavijesti u zvoncu.'
+                                                ),
 
                                             DatePicker::make('target_date')
                                                 ->label('Rok za provedbu')
