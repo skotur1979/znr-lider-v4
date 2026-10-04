@@ -31,6 +31,7 @@ use App\Http\Controllers\FirstAidKitQrAdminController;
 use App\Http\Controllers\PublicQr\FirstAidKitQrController;
 use App\Http\Controllers\ChemicalQrAdminController;
 use App\Http\Controllers\PublicQr\ChemicalQrController;
+use App\Http\Controllers\QrProblemReportController;
 
 
 /*
@@ -371,6 +372,21 @@ Route::prefix('qr')
         ->whereNumber('index')
         ->name(
             'public.chemical.attachment'
+        );
+
+    Route::get(
+        '/qr/report-problem/{token}',
+        QrProblemReportController::class
+    )
+        ->where(
+            'token',
+            '[A-Za-z0-9]{64}'
+        )
+        ->middleware(
+            'throttle:30,1'
+        )
+        ->name(
+            'qr.problem-report'
         );
 
 /*

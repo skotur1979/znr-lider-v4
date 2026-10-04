@@ -366,7 +366,16 @@
         </div>
 
     @endif
+    @include(
+        'public.qr.partials.problem-report',
+        [
+            'qrCode' =>
+                $qrCode,
 
+            'contextLabel' =>
+                'ovom radnom opremom',
+        ]
+    )
     <div class="notice">
         Podaci su dostupni samo za ovu radnu opremu.
         <br>

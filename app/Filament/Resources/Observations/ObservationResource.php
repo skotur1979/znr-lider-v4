@@ -477,10 +477,29 @@ protected static function priorityIcon(?string $state): ?string
                                             )
                                                 ->label('Izvor prijave')
                                                 ->content(
-                                                    fn (?Observation $record): string =>
-                                                        $record?->source === 'qr_public'
-                                                            ? 'QR javna prijava'
-                                                            : 'Interni unos'
+                                                    function (
+                                                        ?Observation $record
+                                                    ): string {
+
+                                                        if (
+                                                            $record?->source
+                                                            === 'qr_public'
+                                                        ) {
+                                                            return 'QR prijava';
+                                                        }
+
+                                                        if (
+                                                            filled(
+                                                                request()->query(
+                                                                    'qr_problem_token'
+                                                                )
+                                                            )
+                                                        ) {
+                                                            return 'QR prijava';
+                                                        }
+
+                                                        return 'Interni unos';
+                                                    }
                                                 ),
 
                                             TextInput::make(

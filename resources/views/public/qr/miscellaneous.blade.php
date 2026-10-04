@@ -553,7 +553,16 @@
         @endforelse
 
     </div>
+    @include(
+        'public.qr.partials.problem-report',
+        [
+            'qrCode' =>
+                $qrCode,
 
+            'contextLabel' =>
+                'ovim ispitivanjem',
+        ]
+    )
 
     <div class="footer">
         Podaci su dostupni samo za ovo ispitivanje.

@@ -7,6 +7,9 @@ use App\Filament\Resources\Inspections\InspectionResource;
 use App\Filament\Resources\Observations\ObservationResource;
 use App\Mail\ObservationNotificationMail;
 use App\Models\InspectionFinding;
+use App\Models\Machine;
+use App\Models\Miscellaneous;
+use App\Models\QrCode;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Mail;
 
@@ -20,6 +23,8 @@ class CreateObservation extends CreateRecord
     protected ?string $returnInspectionEditUrl = null;
 
     protected ?int $validatedInspectionFindingId = null;
+
+    public ?string $qrProblemToken = null;
 
     protected function getFormContentGrid(): ?array
     {
@@ -51,6 +56,24 @@ class CreateObservation extends CreateRecord
         }
 
         parent::mount();
+
+        $this->qrProblemToken =
+            filled(
+                request()->query(
+                    'qr_problem_token'
+                )
+            )
+                ? (string)
+                    request()->query(
+                        'qr_problem_token'
+                    )
+                : null;
+
+        $qrContext =
+            $this->qrProblemToken
+                ? $this
+                    ->resolveQrProblemContextOrFail()
+                : null;
 
         /*
         |--------------------------------------------------------------------------
@@ -111,11 +134,21 @@ class CreateObservation extends CreateRecord
             'incident_date' =>
                 request()->query(
                     'incident_date'
+                )
+                ?? (
+                    $qrContext
+                        ? now()->toDateString()
+                        : null
                 ),
 
             'observation_type' =>
                 request()->query(
                     'observation_type'
+                )
+                ?? (
+                    $qrContext
+                        ? 'Negative Observation'
+                        : null
                 ),
 
             'priority' =>
@@ -126,6 +159,12 @@ class CreateObservation extends CreateRecord
             'location' =>
                 request()->query(
                     'location'
+                )
+                ?? (
+                    $qrContext[
+                        'location'
+                    ]
+                    ?? null
                 ),
 
             'item' =>
@@ -246,6 +285,41 @@ class CreateObservation extends CreateRecord
             ObservationResource::fillOwnershipData(
                 $data
             );
+
+        /*
+        |--------------------------------------------------------------------------
+        | QR izvor prijave
+        |--------------------------------------------------------------------------
+        |
+        | Token se ponovno provjerava neposredno
+        | prije spremanja.
+        |
+        | Ne vjerujemo ID-u ili source vrijednosti
+        | iz browsera.
+        |
+        */
+
+        if (
+            filled(
+                $this->qrProblemToken
+            )
+        ) {
+            $qrContext =
+                $this
+                    ->resolveQrProblemContextOrFail();
+
+            $data[
+                'source'
+            ] =
+                'qr_public';
+
+            $data[
+                'source_qr_code_id'
+            ] =
+                $qrContext[
+                    'qr_code_id'
+                ];
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -406,5 +480,134 @@ class CreateObservation extends CreateRecord
             ->getResource()::getUrl(
                 'index'
             );
+    }
+    protected function resolveQrProblemContextOrFail(): array
+    {
+        $user =
+            auth()->user();
+
+        abort_unless(
+            $user,
+            403
+        );
+
+        abort_if(
+            $user->isSuperAdmin(),
+            403,
+            'Superadministrator ne kreira zapažanja u ime organizacije.'
+        );
+
+        abort_unless(
+            filled(
+                $this->qrProblemToken
+            ),
+            404
+        );
+
+        $qrCode =
+            QrCode::query()
+                ->where(
+                    'token',
+                    $this->qrProblemToken
+                )
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->whereIn(
+                    'type',
+                    [
+                        'machine',
+                        'miscellaneous',
+                    ]
+                )
+                ->firstOrFail();
+
+        abort_unless(
+            (int) $qrCode->owner_id
+                ===
+            (int) $user->ownerId(),
+            403,
+            'QR kod ne pripada vašoj organizaciji.'
+        );
+
+        if (
+            $qrCode->type
+            === 'machine'
+        ) {
+            abort_unless(
+                $qrCode->qrable_type
+                    === Machine::class,
+                404
+            );
+
+            $machine =
+                Machine::query()
+                    ->whereKey(
+                        $qrCode->qrable_id
+                    )
+                    ->where(
+                        'user_id',
+                        $qrCode->owner_id
+                    )
+                    ->whereNull(
+                        'deleted_at'
+                    )
+                    ->firstOrFail();
+
+            return [
+                'qr_code_id' =>
+                    (int) $qrCode->id,
+
+                'type' =>
+                    'machine',
+
+                'name' =>
+                    $machine->name,
+
+                'location' =>
+                    $machine->location,
+            ];
+        }
+
+        abort_unless(
+            $qrCode->type
+                === 'miscellaneous',
+            404
+        );
+
+        abort_unless(
+            $qrCode->qrable_type
+                === Miscellaneous::class,
+            404
+        );
+
+        $miscellaneous =
+            Miscellaneous::query()
+                ->whereKey(
+                    $qrCode->qrable_id
+                )
+                ->where(
+                    'user_id',
+                    $qrCode->owner_id
+                )
+                ->whereNull(
+                    'deleted_at'
+                )
+                ->firstOrFail();
+
+        return [
+            'qr_code_id' =>
+                (int) $qrCode->id,
+
+            'type' =>
+                'miscellaneous',
+
+            'name' =>
+                $miscellaneous->name,
+
+            'location' =>
+                null,
+        ];
     }
 }
