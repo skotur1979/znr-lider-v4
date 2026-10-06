@@ -1,15 +1,27 @@
 <?php
 
+
+
 namespace App\Services;
 
+
+
 use App\Models\Observation;
+
 use Illuminate\Database\Eloquent\Builder;
+
 use Illuminate\Support\Carbon;
+
 use Illuminate\Support\Collection;
+
 use Illuminate\Support\Facades\Auth;
 
+
+
 class ObservationReportService
+
 {
+
     public function report(array $filters = []): array
     {
         $query = $this->baseQuery($filters);
@@ -18,9 +30,14 @@ class ObservationReportService
             ->orderBy('incident_date')
             ->get();
 
+        /*
+         * Pozitivna zapažanja ostaju u ukupnim statistikama,
+         * ali nisu dio workflowa korektivnih radnji.
+         */
+        $workflowRecords = $this->workflowRecords($records);
+
         return [
             'summary' => $this->summary($records),
-
             'monthly' => $this->monthly($records),
 
             'types' => $this->groupCount(
@@ -28,19 +45,21 @@ class ObservationReportService
                 'observation_type'
             ),
 
+            /*
+             * Prioritet i status pripadaju samo NM / negativnim
+             * zapažanjima koja prolaze kroz obradu radnje.
+             */
             'priorities' => $this->groupCount(
-                $records,
+                $workflowRecords,
                 'priority'
             ),
 
             'statuses' => $this->groupCount(
-                $records,
+                $workflowRecords,
                 'status'
             ),
 
-            'sources' => $this->sourceCounts(
-                $records
-            ),
+            'sources' => $this->sourceCounts($records),
 
             'topHazards' => $this->topValues(
                 $records,
@@ -52,124 +71,81 @@ class ObservationReportService
                 'location'
             ),
 
-            'topResponsibleOpen' =>
-                $this->topResponsibleOpen(
-                    $records
-                ),
+            'topResponsibleOpen' => $this->topResponsibleOpen(
+                $workflowRecords
+            ),
 
-            'averageClosingByMonth' =>
-                $this->averageClosingByMonth(
-                    $records
-                ),
+            'averageClosingByMonth' => $this->averageClosingByMonth(
+                $workflowRecords
+            ),
 
-            'availableYears' =>
-                $this->availableYears(),
-
-            'availableLocations' =>
-                $this->availableOptions(
-                    'location'
-                ),
-
-            'availableResponsible' =>
-                $this->availableOptions(
-                    'responsible'
-                ),
-
-            'availableHazards' =>
-                $this->availableOptions(
-                    'potential_incident_type'
-                ),
+            'availableYears' => $this->availableYears(),
+            'availableLocations' => $this->availableOptions('location'),
+            'availableResponsible' => $this->availableOptions('responsible'),
+            'availableHazards' => $this->availableOptions(
+                'potential_incident_type'
+            ),
 
             'availableSources' => [
-                'internal' =>
-                    'Interni unos',
-
-                'qr_public' =>
-                    'QR prijava',
+                'internal' => 'Interni unos',
+                'qr_public' => 'QR prijava',
             ],
         ];
     }
 
-    protected function baseQuery(
-        array $filters
-    ): Builder {
+    protected function baseQuery(array $filters): Builder
+    {
         $query = Observation::query()
             ->withoutTrashed();
 
         $user = Auth::user();
 
         if (! $user) {
-            return $query->whereRaw(
-                '1 = 0'
-            );
+            return $query->whereRaw('1 = 0');
         }
 
         if (! $user->isSuperAdmin()) {
-            $ownerId =
-                $user->ownerId();
+            $ownerId = $user->ownerId();
 
             if (! $ownerId) {
-                return $query->whereRaw(
-                    '1 = 0'
-                );
+                return $query->whereRaw('1 = 0');
             }
 
-            $query->where(
-                'user_id',
-                $ownerId
-            );
+            $query->where('user_id', $ownerId);
         }
 
-        $year =
-            $filters['year']
-            ?? null;
+        $year = $filters['year'] ?? null;
+        $month = $filters['month'] ?? null;
+        $location = $filters['location'] ?? null;
+        $responsible = $filters['responsible'] ?? null;
+        $priority = $filters['priority'] ?? null;
+        $status = $filters['status'] ?? null;
+        $type = $filters['type'] ?? null;
+        $hazard = $filters['hazard'] ?? null;
+        $source = $filters['source'] ?? null;
 
-        $month =
-            $filters['month']
-            ?? null;
-
-        $location =
-            $filters['location']
-            ?? null;
-
-        $responsible =
-            $filters['responsible']
-            ?? null;
-
-        $priority =
-            $filters['priority']
-            ?? null;
-
-        $status =
-            $filters['status']
-            ?? null;
-
-        $type =
-            $filters['type']
-            ?? null;
-
-        $hazard =
-            $filters['hazard']
-            ?? null;
-
-        $source =
-            $filters['source']
-            ?? null;
-
+        /*
+         * Ako korisnik filtrira po workflow polju, pozitivna
+         * zapažanja moraju ostati izvan rezultata čak i ako neki
+         * stariji zapis još ima spremljen status, prioritet ili
+         * odgovornu osobu.
+         */
         if (
-            filled($year)
-            && $year !== 'all'
+            filled($responsible)
+            || filled($priority)
+            || filled($status)
         ) {
+            $this->excludePositiveObservations($query);
+        }
+
+        if (filled($year) && $year !== 'all') {
             $query->whereYear(
                 'incident_date',
                 (int) $year
             );
         }
 
-        if (
-            filled($month)
-            && $month !== 'all'
-        ) {
+        if (filled($month) && $month !== 'all') {
             $query->whereMonth(
                 'incident_date',
                 (int) $month
@@ -177,38 +153,23 @@ class ObservationReportService
         }
 
         if (filled($location)) {
-            $query->where(
-                'location',
-                $location
-            );
+            $query->where('location', $location);
         }
 
         if (filled($responsible)) {
-            $query->where(
-                'responsible',
-                $responsible
-            );
+            $query->where('responsible', $responsible);
         }
 
         if (filled($priority)) {
-            $query->where(
-                'priority',
-                $priority
-            );
+            $query->where('priority', $priority);
         }
 
         if (filled($status)) {
-            $query->where(
-                'status',
-                $status
-            );
+            $query->where('status', $status);
         }
 
         if (filled($type)) {
-            $query->where(
-                'observation_type',
-                $type
-            );
+            $query->where('observation_type', $type);
         }
 
         if (filled($hazard)) {
@@ -218,364 +179,271 @@ class ObservationReportService
             );
         }
 
-        if (
-            filled($source)
-            && $source !== 'all'
-        ) {
+        if (filled($source) && $source !== 'all') {
             if ($source === 'internal') {
                 /*
-                 * Null uzimamo kao interni unos radi
-                 * kompatibilnosti sa starim zapisima.
+                 * Null i prazan string uzimamo kao interni unos
+                 * radi kompatibilnosti sa starim zapisima.
                  */
                 $query->where(
-                    function (
-                        Builder $query
-                    ): void {
+                    function (Builder $query): void {
                         $query
-                            ->where(
-                                'source',
-                                'internal'
-                            )
-                            ->orWhereNull(
-                                'source'
-                            )
-                            ->orWhere(
-                                'source',
-                                ''
-                            );
+                            ->where('source', 'internal')
+                            ->orWhereNull('source')
+                            ->orWhere('source', '');
                     }
                 );
             } else {
-                $query->where(
-                    'source',
-                    $source
-                );
+                $query->where('source', $source);
             }
         }
 
         return $query;
     }
 
-    protected function summary(
+    /**
+     * Vraća samo zapažanja koja imaju workflow obrade.
+     * Pozitivno zapažanje je evidencija dobre prakse / prijedloga
+     * i ne ulazi u statuse, rokove ni vrijeme zatvaranja.
+     */
+    protected function workflowRecords(
         Collection $records
-    ): array {
-        $today =
-            Carbon::today();
+    ): Collection {
+        return $records
+            ->filter(
+                fn (Observation $record): bool =>
+                    $record->observation_type
+                        !== 'Positive Observation'
+            )
+            ->values();
+    }
 
-        $open =
-            $records->whereIn(
-                'status',
-                [
-                    'Not started',
-                    'In progress',
-                ]
-            );
+    /**
+     * SQL varijanta istog pravila za filtre i dostupne opcije.
+     * Null zadržavamo radi kompatibilnosti sa starijim zapisima.
+     */
+    protected function excludePositiveObservations(
+        Builder $query
+    ): void {
+        $query->where(
+            function (Builder $query): void {
+                $query
+                    ->whereNull('observation_type')
+                    ->orWhere(
+                        'observation_type',
+                        '<>',
+                        'Positive Observation'
+                    );
+            }
+        );
+    }
 
-        $expired =
-            $open->filter(
-                function (
-                    Observation $record
-                ) use ($today) {
-                    if (
-                        blank(
-                            $record
-                                ->target_date
-                        )
-                    ) {
-                        return false;
-                    }
+    protected function summary(Collection $records): array
+    {
+        $today = Carbon::today();
 
-                    return Carbon::parse(
-                        $record
-                            ->target_date
-                    )
-                        ->startOfDay()
-                        ->lt($today);
+        $workflowRecords = $this->workflowRecords($records);
+
+        $open = $workflowRecords->whereIn(
+            'status',
+            [
+                'Not started',
+                'In progress',
+            ]
+        );
+
+        $expired = $open->filter(
+            function (Observation $record) use ($today): bool {
+                if (blank($record->target_date)) {
+                    return false;
                 }
-            );
 
-        $expiring =
-            $open->filter(
-                function (
-                    Observation $record
-                ) use ($today) {
+                return Carbon::parse($record->target_date)
+                    ->startOfDay()
+                    ->lt($today);
+            }
+        );
+
+        $expiring = $open->filter(
+            function (Observation $record) use ($today): bool {
+                if (blank($record->target_date)) {
+                    return false;
+                }
+
+                $date = Carbon::parse($record->target_date)
+                    ->startOfDay();
+
+                return $date->gte($today)
+                    && $date->lte(
+                        $today->copy()->addDays(30)
+                    );
+            }
+        );
+
+        $completed = $workflowRecords->where(
+            'status',
+            'Complete'
+        );
+
+        $averageClosingDays = $completed
+            ->map(
+                function (Observation $record): ?int {
                     if (
-                        blank(
-                            $record
-                                ->target_date
-                        )
+                        ! $record->incident_date
+                        || ! $record->completed_at
                     ) {
-                        return false;
+                        return null;
                     }
 
-                    $date =
-                        Carbon::parse(
-                            $record
-                                ->target_date
-                        )
-                            ->startOfDay();
-
-                    return $date
-                        ->gte($today)
-                        && $date->lte(
-                            $today
+                    return Carbon::parse($record->incident_date)
+                        ->copy()
+                        ->startOfDay()
+                        ->diffInDays(
+                            $record->completed_at
                                 ->copy()
-                                ->addDays(30)
+                                ->startOfDay()
                         );
                 }
-            );
+            )
+            ->filter(fn ($value) => $value !== null)
+            ->avg();
 
-        $completed =
-            $records->where(
-                'status',
-                'Complete'
-            );
+        $qrPublic = $records->filter(
+            fn (Observation $record): bool =>
+                $record->source === 'qr_public'
+        );
 
-        $averageClosingDays =
-            $completed
-                ->map(
-                    function (
-                        Observation $record
-                    ): ?int {
-                        if (
-                            ! $record
-                                ->incident_date
-                            || ! $record
-                                ->completed_at
-                        ) {
-                            return null;
-                        }
-
-                        return Carbon::parse(
-                            $record
-                                ->incident_date
-                        )
-                            ->copy()
-                            ->startOfDay()
-                            ->diffInDays(
-                                $record
-                                    ->completed_at
-                                    ->copy()
-                                    ->startOfDay()
-                            );
-                    }
-                )
-                ->filter(
-                    fn ($value) =>
-                        $value !== null
-                )
-                ->avg();
-
-        $qrPublic =
-            $records->filter(
-                fn (Observation $record): bool =>
-                    $record->source
-                    === 'qr_public'
-            );
-
-        $internal =
-            $records->filter(
-                fn (Observation $record): bool =>
-                    $record->source
-                        !== 'qr_public'
-            );
+        $internal = $records->filter(
+            fn (Observation $record): bool =>
+                $record->source !== 'qr_public'
+        );
 
         return [
-            'total' =>
-                $records->count(),
+            'total' => $records->count(),
 
-            'nearMiss' =>
-                $records
+            'nearMiss' => $records
+                ->where(
+                    'observation_type',
+                    'Near Miss'
+                )
+                ->count(),
+
+            'negative' => $records
+                ->where(
+                    'observation_type',
+                    'Negative Observation'
+                )
+                ->count(),
+
+            'positive' => $records
+                ->where(
+                    'observation_type',
+                    'Positive Observation'
+                )
+                ->count(),
+
+            /*
+             * Workflow brojila ne smiju uključiti pozitivna
+             * zapažanja, čak ni stare zapise sa statusom Complete.
+             */
+            'notStarted' => $workflowRecords
+                ->where('status', 'Not started')
+                ->count(),
+
+            'inProgress' => $workflowRecords
+                ->where('status', 'In progress')
+                ->count(),
+
+            'completed' => $completed->count(),
+            'expired' => $expired->count(),
+            'expiring' => $expiring->count(),
+
+            'withoutDeadline' => $open
+                ->filter(
+                    fn (Observation $record): bool =>
+                        blank($record->target_date)
+                )
+                ->count(),
+
+            'averageClosingDays' =>
+                $averageClosingDays !== null
+                    ? round(
+                        (float) $averageClosingDays,
+                        1
+                    )
+                    : null,
+
+            'qrPublic' => $qrPublic->count(),
+            'internal' => $internal->count(),
+        ];
+    }
+
+    protected function monthly(Collection $records): array
+    {
+        $months = [];
+
+        for ($month = 1; $month <= 12; $month++) {
+            $monthRecords = $records->filter(
+                function (Observation $record) use ($month): bool {
+                    return filled($record->incident_date)
+                        && Carbon::parse(
+                            $record->incident_date
+                        )->month === $month;
+                }
+            );
+
+            $workflowMonthRecords =
+                $this->workflowRecords($monthRecords);
+
+            $months[$month] = [
+                'month' => $month,
+                'label' => $this->monthLabel($month),
+
+                'total' => $monthRecords->count(),
+
+                'near_miss' => $monthRecords
                     ->where(
                         'observation_type',
                         'Near Miss'
                     )
                     ->count(),
 
-            'negative' =>
-                $records
+                'negative' => $monthRecords
                     ->where(
                         'observation_type',
                         'Negative Observation'
                     )
                     ->count(),
 
-            'positive' =>
-                $records
+                'positive' => $monthRecords
                     ->where(
                         'observation_type',
                         'Positive Observation'
                     )
                     ->count(),
 
-            'notStarted' =>
-                $records
-                    ->where(
-                        'status',
-                        'Not started'
-                    )
+                'not_started' => $workflowMonthRecords
+                    ->where('status', 'Not started')
                     ->count(),
 
-            'inProgress' =>
-                $records
-                    ->where(
-                        'status',
-                        'In progress'
-                    )
+                'in_progress' => $workflowMonthRecords
+                    ->where('status', 'In progress')
                     ->count(),
 
-            'completed' =>
-                $completed->count(),
+                'completed' => $workflowMonthRecords
+                    ->where('status', 'Complete')
+                    ->count(),
 
-            'expired' =>
-                $expired->count(),
+                'qr_public' => $monthRecords
+                    ->where('source', 'qr_public')
+                    ->count(),
 
-            'expiring' =>
-                $expiring->count(),
-
-            'withoutDeadline' =>
-                $open
+                'internal' => $monthRecords
                     ->filter(
-                        fn (
-                            Observation $record
-                        ): bool =>
-                            blank(
-                                $record
-                                    ->target_date
-                            )
+                        fn (Observation $record): bool =>
+                            $record->source !== 'qr_public'
                     )
                     ->count(),
-
-            'averageClosingDays' =>
-                $averageClosingDays
-                    !== null
-                    ? round(
-                        (float)
-                        $averageClosingDays,
-                        1
-                    )
-                    : null,
-
-            /*
-             * NOVO - izvor prijave.
-             */
-            'qrPublic' =>
-                $qrPublic->count(),
-
-            'internal' =>
-                $internal->count(),
-        ];
-    }
-
-    protected function monthly(
-        Collection $records
-    ): array {
-        $months = [];
-
-        for (
-            $month = 1;
-            $month <= 12;
-            $month++
-        ) {
-            $monthRecords =
-                $records->filter(
-                    function (
-                        Observation $record
-                    ) use ($month) {
-                        return filled(
-                            $record
-                                ->incident_date
-                        )
-                            && Carbon::parse(
-                                $record
-                                    ->incident_date
-                            )->month
-                                === $month;
-                    }
-                );
-
-            $months[$month] = [
-                'month' =>
-                    $month,
-
-                'label' =>
-                    $this->monthLabel(
-                        $month
-                    ),
-
-                'total' =>
-                    $monthRecords
-                        ->count(),
-
-                'near_miss' =>
-                    $monthRecords
-                        ->where(
-                            'observation_type',
-                            'Near Miss'
-                        )
-                        ->count(),
-
-                'negative' =>
-                    $monthRecords
-                        ->where(
-                            'observation_type',
-                            'Negative Observation'
-                        )
-                        ->count(),
-
-                'positive' =>
-                    $monthRecords
-                        ->where(
-                            'observation_type',
-                            'Positive Observation'
-                        )
-                        ->count(),
-
-                'not_started' =>
-                    $monthRecords
-                        ->where(
-                            'status',
-                            'Not started'
-                        )
-                        ->count(),
-
-                'in_progress' =>
-                    $monthRecords
-                        ->where(
-                            'status',
-                            'In progress'
-                        )
-                        ->count(),
-
-                'completed' =>
-                    $monthRecords
-                        ->where(
-                            'status',
-                            'Complete'
-                        )
-                        ->count(),
-
-                /*
-                 * NOVO.
-                 */
-                'qr_public' =>
-                    $monthRecords
-                        ->where(
-                            'source',
-                            'qr_public'
-                        )
-                        ->count(),
-
-                'internal' =>
-                    $monthRecords
-                        ->filter(
-                            fn (
-                                Observation $record
-                            ): bool =>
-                                $record->source
-                                    !== 'qr_public'
-                        )
-                        ->count(),
             ];
         }
 
@@ -583,473 +451,926 @@ class ObservationReportService
     }
 
     protected function sourceCounts(
+
         Collection $records
+
     ): array {
+
         return [
+
             [
+
                 'key' =>
+
                     'internal',
 
+
+
                 'label' =>
+
                     'Interni unos',
 
+
+
                 'count' =>
+
                     $records
+
                         ->filter(
+
                             fn (
+
                                 Observation $record
+
                             ): bool =>
+
                                 $record->source
+
                                     !== 'qr_public'
+
                         )
+
                         ->count(),
+
             ],
+
             [
+
                 'key' =>
+
                     'qr_public',
 
+
+
                 'label' =>
+
                     'QR prijava',
 
+
+
                 'count' =>
+
                     $records
+
                         ->where(
+
                             'source',
+
                             'qr_public'
+
                         )
+
                         ->count(),
+
             ],
+
         ];
+
     }
+
+
 
     protected function groupCount(
+
         Collection $records,
+
         string $column
+
     ): array {
+
         return $records
+
             ->filter(
+
                 fn (
+
                     Observation $record
+
                 ) =>
+
                     filled(
+
                         $record->{$column}
+
                     )
+
             )
+
             ->groupBy($column)
+
             ->map(
+
                 fn (
+
                     Collection $rows,
+
                     string $key
+
                 ) => [
+
                     'key' =>
+
                         $key,
 
+
+
                     'label' =>
+
                         $this
+
                             ->translateValue(
+
                                 $column,
+
                                 $key
+
                             ),
 
+
+
                     'count' =>
+
                         $rows->count(),
+
                 ]
+
             )
+
             ->sortByDesc(
+
                 'count'
+
             )
+
             ->values()
+
             ->all();
+
     }
+
+
 
     protected function topValues(
+
         Collection $records,
+
         string $column,
+
         int $limit = 10
+
     ): array {
+
         return $records
+
             ->filter(
+
                 fn (
+
                     Observation $record
+
                 ) =>
+
                     filled(
+
                         $record->{$column}
+
                     )
+
             )
+
             ->groupBy($column)
+
             ->map(
+
                 fn (
+
                     Collection $rows,
+
                     string $key
+
                 ) => [
+
                     'label' =>
+
                         $key,
 
+
+
                     'count' =>
+
                         $rows->count(),
+
                 ]
+
             )
+
             ->sortByDesc(
+
                 'count'
+
             )
+
             ->take($limit)
+
             ->values()
+
             ->all();
+
     }
+
+
 
     protected function topResponsibleOpen(
+
         Collection $records
+
     ): array {
+
         return $records
+
             ->filter(
+
                 function (
+
                     Observation $record
+
                 ) {
+
                     return filled(
+
                         $record
+
                             ->responsible
+
                     )
+
                         && in_array(
+
                             $record->status,
+
                             [
+
                                 'Not started',
+
                                 'In progress',
+
                             ],
+
                             true
+
                         );
+
                 }
+
             )
+
             ->groupBy(
+
                 'responsible'
+
             )
+
             ->map(
+
                 function (
+
                     Collection $rows,
+
                     string $responsible
+
                 ) {
+
                     $today =
+
                         Carbon::today();
 
+
+
                     $expired =
+
                         $rows->filter(
+
                             function (
+
                                 Observation $record
+
                             ) use ($today) {
+
                                 return filled(
+
                                     $record
+
                                         ->target_date
+
                                 )
+
                                     && Carbon::parse(
+
                                         $record
+
                                             ->target_date
+
                                     )
+
                                         ->startOfDay()
+
                                         ->lt(
+
                                             $today
+
                                         );
+
                             }
+
                         )->count();
 
+
+
                     return [
+
                         'responsible' =>
+
                             $responsible,
 
+
+
                         'open' =>
+
                             $rows->count(),
 
+
+
                         'not_started' =>
+
                             $rows
+
                                 ->where(
+
                                     'status',
+
                                     'Not started'
+
                                 )
+
                                 ->count(),
+
+
 
                         'in_progress' =>
+
                             $rows
+
                                 ->where(
+
                                     'status',
+
                                     'In progress'
+
                                 )
+
                                 ->count(),
 
+
+
                         'expired' =>
+
                             $expired,
+
                     ];
+
                 }
+
             )
+
             ->sortByDesc(
+
                 'open'
+
             )
+
             ->take(10)
+
             ->values()
+
             ->all();
+
     }
+
+
 
     protected function averageClosingByMonth(
+
         Collection $records
+
     ): array {
+
         $rows = [];
 
+
+
         for (
+
             $month = 1;
+
             $month <= 12;
+
             $month++
+
         ) {
+
             $completed =
+
                 $records
+
                     ->filter(
+
                         function (
+
                             Observation $record
+
                         ) use ($month) {
+
                             return $record
+
                                 ->status
+
                                     === 'Complete'
+
                                 && filled(
+
                                     $record
+
                                         ->incident_date
+
                                 )
+
                                 && Carbon::parse(
+
                                     $record
+
                                         ->incident_date
+
                                 )->month
+
                                     === $month;
+
                         }
+
                     );
 
+
+
             $average =
+
                 $completed
+
                     ->map(
+
                         function (
+
                             Observation $record
+
                         ): ?int {
+
                             if (
+
                                 ! $record
+
                                     ->incident_date
+
                                 || ! $record
+
                                     ->completed_at
+
                             ) {
+
                                 return null;
+
                             }
 
+
+
                             return Carbon::parse(
+
                                 $record
+
                                     ->incident_date
+
                             )
+
                                 ->copy()
+
                                 ->startOfDay()
+
                                 ->diffInDays(
+
                                     $record
+
                                         ->completed_at
+
                                         ->copy()
+
                                         ->startOfDay()
+
                                 );
+
                         }
+
                     )
+
                     ->filter(
+
                         fn ($value) =>
+
                             $value !== null
+
                     )
+
                     ->avg();
 
+
+
             $rows[$month] = [
+
                 'month' =>
+
                     $month,
 
+
+
                 'label' =>
+
                     $this->monthLabel(
+
                         $month
+
                     ),
 
+
+
                 'completed' =>
+
                     $completed->count(),
 
+
+
                 'average_days' =>
+
                     $average !== null
+
                         ? round(
+
                             (float) $average,
+
                             1
+
                         )
+
                         : null,
+
             ];
+
         }
 
+
+
         return $rows;
+
     }
+
+
 
     protected function availableYears(): array
+
     {
+
         $query =
+
             $this->scopeOptionsQuery();
 
+
+
         return $query
+
             ->whereNotNull(
+
                 'incident_date'
+
             )
+
             ->selectRaw(
+
                 'YEAR(incident_date) as year'
+
             )
+
             ->distinct()
+
             ->orderByDesc(
+
                 'year'
+
             )
+
             ->pluck(
+
                 'year',
+
                 'year'
+
             )
+
             ->mapWithKeys(
+
                 fn ($year) => [
+
                     (string) $year =>
+
                         (string) $year,
+
                 ]
+
             )
+
             ->toArray();
+
     }
 
-    protected function availableOptions(
-        string $column
-    ): array {
-        return $this
-            ->scopeOptionsQuery()
-            ->whereNotNull(
-                $column
-            )
-            ->where(
+
+
+    protected function availableOptions(string $column): array
+    {
+        $query = $this->scopeOptionsQuery();
+
+        /*
+         * Workflow opcije ne smiju se puniti iz pozitivnih
+         * zapažanja koja eventualno imaju stare spremljene vrijednosti.
+         */
+        if (
+            in_array(
                 $column,
-                '<>',
-                ''
+                [
+                    'responsible',
+                    'priority',
+                    'status',
+                ],
+                true
             )
+        ) {
+            $this->excludePositiveObservations($query);
+        }
+
+        return $query
+            ->whereNotNull($column)
+            ->where($column, '<>', '')
             ->distinct()
-            ->orderBy(
-                $column
-            )
-            ->pluck(
-                $column,
-                $column
-            )
+            ->orderBy($column)
+            ->pluck($column, $column)
             ->toArray();
     }
 
     protected function scopeOptionsQuery(): Builder
+
     {
+
         $query =
+
             Observation::query()
+
                 ->withoutTrashed();
 
+
+
         $user =
+
             Auth::user();
 
+
+
         if (! $user) {
+
             return $query->whereRaw(
+
                 '1 = 0'
+
             );
+
         }
+
+
 
         if (! $user->isSuperAdmin()) {
+
             $ownerId =
+
                 $user->ownerId();
 
+
+
             if (! $ownerId) {
+
                 return $query->whereRaw(
+
                     '1 = 0'
+
                 );
+
             }
 
+
+
             $query->where(
+
                 'user_id',
+
                 $ownerId
+
             );
+
         }
 
+
+
         return $query;
+
     }
+
+
 
     protected function translateValue(
+
         string $column,
+
         string $value
+
     ): string {
+
         return match ($column) {
+
             'observation_type' =>
+
                 match ($value) {
+
                     'Near Miss' =>
+
                         'NM – Skoro nezgoda',
 
+
+
                     'Negative Observation' =>
+
                         'Negativno zapažanje',
 
+
+
                     'Positive Observation' =>
+
                         'Pozitivno zapažanje',
 
+
+
                     default =>
+
                         $value,
+
                 },
+
+
 
             'priority' =>
+
                 match ($value) {
+
                     'low' =>
+
                         'Nisko',
 
+
+
                     'medium' =>
+
                         'Srednje',
 
+
+
                     'high' =>
+
                         'Visoko',
 
+
+
                     'critical' =>
+
                         'Kritično',
 
+
+
                     default =>
+
                         $value,
+
                 },
+
+
 
             'status' =>
+
                 match ($value) {
+
                     'Not started' =>
+
                         'Nije započeto',
 
+
+
                     'In progress' =>
+
                         'U tijeku',
 
+
+
                     'Complete' =>
+
                         'Završeno',
 
+
+
                     default =>
+
                         $value,
+
                 },
+
+
 
             'source' =>
+
                 match ($value) {
+
                     'qr_public' =>
+
                         'QR prijava',
 
+
+
                     'internal' =>
+
                         'Interni unos',
 
+
+
                     default =>
+
                         $value,
+
                 },
 
+
+
             default =>
+
                 $value,
+
         };
+
     }
 
+
+
     protected function monthLabel(
+
         int $month
+
     ): string {
+
         return match ($month) {
+
             1 => 'Siječanj',
+
             2 => 'Veljača',
+
             3 => 'Ožujak',
+
             4 => 'Travanj',
+
             5 => 'Svibanj',
+
             6 => 'Lipanj',
+
             7 => 'Srpanj',
+
             8 => 'Kolovoz',
+
             9 => 'Rujan',
+
             10 => 'Listopad',
+
             11 => 'Studeni',
+
             12 => 'Prosinac',
+
         };
+
     }
+
 }

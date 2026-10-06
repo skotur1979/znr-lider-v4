@@ -90,8 +90,80 @@ class Observation extends Model
 
                 /*
                 |--------------------------------------------------------------------------
+                | Pozitivno zapažanje
+                |--------------------------------------------------------------------------
+                |
+                | Pozitivno zapažanje nije korektivna radnja.
+                |
+                | Zato nema:
+                |
+                | - prioriteta
+                | - vrste opasnosti
+                | - odgovorne osobe
+                | - dodijeljenog korisnika aplikacije
+                | - roka za provedbu
+                | - komentara o zatvaranju
+                |
+                | Interno ga označavamo kao završeno kako se ne bi
+                | pojavljivalo među otvorenim radnjama, rokovima,
+                | podsjetnicima i zakašnjelim zapažanjima.
+                |
+                */
+
+                if (
+                    $observation->observation_type
+                    === 'Positive Observation'
+                ) {
+                    $observation->priority = null;
+
+                    $observation->potential_incident_type = null;
+
+                    $observation->responsible = null;
+
+                    $observation->responsible_user_id = null;
+
+                    $observation->target_date = null;
+
+                    $observation->status = 'Complete';
+
+                    /*
+                     * Kao datum zatvaranja koristimo datum
+                     * samog pozitivnog zapažanja.
+                     *
+                     * Tako pozitivno zapažanje nema umjetno
+                     * trajanje niti otvorenu korektivnu radnju.
+                     */
+                    $observation->completed_at =
+                        $observation->incident_date
+                            ? $observation
+                                ->incident_date
+                                ->copy()
+                                ->startOfDay()
+                            : now()
+                                ->startOfDay();
+
+                    /*
+                     * comments je namijenjen prvenstveno
+                     * komentaru kod zatvaranja korektivne radnje.
+                     *
+                     * Za pozitivno zapažanje korisnik eventualnu
+                     * napomenu / prijedlog upisuje u action.
+                     */
+                    $observation->comments = null;
+                }
+
+                /*
+                |--------------------------------------------------------------------------
                 | Datum zatvaranja
                 |--------------------------------------------------------------------------
+                |
+                | Za Near Miss i negativna zapažanja datum
+                | zatvaranja smije postojati samo kada je
+                | status Complete.
+                |
+                | Pozitivno zapažanje smo iznad automatski
+                | postavili na Complete.
+                |
                 */
 
                 if (
@@ -115,7 +187,9 @@ class Observation extends Model
                 */
 
                 if (
-                    $observation->isDirty('responsible_user_id')
+                    $observation->isDirty(
+                        'responsible_user_id'
+                    )
                     && $observation->responsible_user_id
                 ) {
                     $recipient = User::query()->find(
@@ -126,7 +200,8 @@ class Observation extends Model
                         $observation->user_id
                     );
 
-                    $ownerId = $owner?->ownerId()
+                    $ownerId =
+                        $owner?->ownerId()
                         ?? (int) $observation->user_id;
 
                     $validRecipient =
@@ -140,7 +215,8 @@ class Observation extends Model
                         );
 
                     if (! $validRecipient) {
-                        $observation->responsible_user_id = null;
+                        $observation->responsible_user_id =
+                            null;
                     }
                 }
 
@@ -152,14 +228,25 @@ class Observation extends Model
                 | Ako promijenimo korisnika ili rok, novi rok ponovno
                 | mora moći generirati odgovarajuću obavijest.
                 |
+                | Ovo vrijedi i kada se postojeće negativno zapažanje
+                | promijeni u pozitivno - odgovorna osoba i rok tada
+                | postaju NULL pa se stare oznake podsjetnika brišu.
+                |
                 */
 
                 if (
-                    $observation->isDirty('responsible_user_id')
-                    || $observation->isDirty('target_date')
+                    $observation->isDirty(
+                        'responsible_user_id'
+                    )
+                    || $observation->isDirty(
+                        'target_date'
+                    )
                 ) {
-                    $observation->due_soon_notified_for = null;
-                    $observation->overdue_notified_for = null;
+                    $observation->due_soon_notified_for =
+                        null;
+
+                    $observation->overdue_notified_for =
+                        null;
                 }
             }
         );

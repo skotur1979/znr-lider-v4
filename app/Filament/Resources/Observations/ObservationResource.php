@@ -292,382 +292,957 @@ protected static function priorityIcon(?string $state): ?string
     }
 
     public static function form(Schema $schema): Schema
-{
-    return $schema
-        ->schema([
-            Hidden::make('user_id')
-                ->default(fn () => static::defaultUserId())
-                ->dehydrated(),
+    {
+        return $schema
+            ->schema([
+                Hidden::make('user_id')
+                    ->default(
+                        fn () =>
+                            static::defaultUserId()
+                    )
+                    ->dehydrated(),
 
-            Tabs::make('ObservationTabs')
-                ->columnSpanFull()
-                ->tabs([
-                    Tab::make('Zapažanje')
-                        ->schema([
-                            Grid::make(2)
-                                ->schema([
-                                    Section::make('Osnovni podatci')
-                                        ->columns(2)
-                                        ->columnSpan(1)
-                                        ->schema([
-                                            DatePicker::make('incident_date')
-                                                ->label('Datum')
-                                                ->required()
-                                                ->displayFormat('d.m.Y.')
-                                                ->weekStartsOnMonday()
-                                                ->timezone('Europe/Zagreb'),
+                Tabs::make('ObservationTabs')
+                    ->columnSpanFull()
+                    ->tabs([
+                        Tab::make('Zapažanje')
+                            ->schema([
 
-                                            Select::make('observation_type')
-                                                ->label('Vrsta zapažanja')
-                                                ->options(static::observationTypeOptions())
-                                                ->required(),
+                                /*
+                                |--------------------------------------------------------------------------
+                                | GORNJI DIO
+                                |--------------------------------------------------------------------------
+                                */
 
-                                            Select::make('priority')
-                                                ->label('Prioritet')
-                                                ->options(static::priorityOptions())
-                                                ->default('medium')
-                                                ->required()
-                                                ->native(false)
-                                                ->helperText('Kritično označi samo za zapažanja koja zahtijevaju hitnu reakciju.')
-                                                ->extraAttributes(fn ($state) => [
-                                                    'style' => match ($state) {
-                                                        'critical' => 'border:2px solid #ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.20); border-radius:10px;',
-                                                        'high' => 'border:2px solid #f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.18); border-radius:10px;',
-                                                        'medium' => 'border:2px solid #0ea5e9; box-shadow:0 0 0 3px rgba(14,165,233,.14); border-radius:10px;',
-                                                        'low' => 'border:2px solid #6b7280; border-radius:10px;',
-                                                        default => '',
-                                                    },
-                                                ]),
+                                Grid::make(2)
+                                    ->schema([
 
-                                            TextInput::make('location')
-                                                ->label('Lokacija')
-                                                ->required()
-                                                ->maxLength(255),
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | OSNOVNI PODATCI
+                                        |--------------------------------------------------------------------------
+                                        */
 
-                                            TextInput::make('potential_incident_type')
-                                                ->label('Vrsta opasnosti')
-                                                ->datalist(static::potentialIncidentTypes())
-                                                ->required()
-                                                ->maxLength(255)
-                                                ->columnSpanFull(),
-                                        ]),
+                                        Section::make(
+                                            'Osnovni podatci'
+                                        )
+                                            ->columns(2)
+                                            ->schema([
 
-                                    Section::make('Odgovornost i rok')
-                                        ->columns(2)
-                                        ->columnSpan(1)
-                                        ->schema([
-                                            TextInput::make('responsible')
-                                                ->label('Odgovorna osoba')
-                                                ->datalist(
-                                                    fn () =>
-                                                        static::responsiblePersonOptions()
+                                                DatePicker::make(
+                                                    'incident_date'
                                                 )
-                                                ->placeholder('Upiši ime')
-                                                ->maxLength(255),
+                                                    ->label('Datum')
+                                                    ->required()
+                                                    ->displayFormat(
+                                                        'd.m.Y.'
+                                                    )
+                                                    ->weekStartsOnMonday()
+                                                    ->timezone(
+                                                        'Europe/Zagreb'
+                                                    ),
 
-                                            Select::make('responsible_user_id')
-                                                ->label(
-                                                    'Dodijeli korisniku aplikacije'
+                                                Select::make(
+                                                    'observation_type'
                                                 )
-                                                ->options(
-                                                    fn (?Observation $record): array =>
-                                                        static::responsibleUserOptions(
-                                                            $record
-                                                        )
-                                                )
-                                                ->searchable()
-                                                ->preload()
-                                                ->native(false)
-                                                ->live()
-                                                ->afterStateUpdated(
-                                                    function (
-                                                        $state,
-                                                        Set $set
-                                                    ): void {
+                                                    ->label(
+                                                        'Vrsta zapažanja'
+                                                    )
+                                                    ->options(
+                                                        static::observationTypeOptions()
+                                                    )
+                                                    ->required()
+                                                    ->live()
+                                                    ->afterStateUpdated(
+                                                        function (
+                                                            $state,
+                                                            callable $get,
+                                                            Set $set
+                                                        ): void {
 
-                                                        if (! filled($state)) {
-                                                            return;
+                                                            /*
+                                                            * Kod pozitivnog
+                                                            * odmah čistimo
+                                                            * workflow polja
+                                                            * u formi.
+                                                            */
+                                                            if (
+                                                                $state
+                                                                ===
+                                                                'Positive Observation'
+                                                            ) {
+                                                                $set(
+                                                                    'priority',
+                                                                    null
+                                                                );
+
+                                                                $set(
+                                                                    'potential_incident_type',
+                                                                    null
+                                                                );
+
+                                                                $set(
+                                                                    'responsible',
+                                                                    null
+                                                                );
+
+                                                                $set(
+                                                                    'responsible_user_id',
+                                                                    null
+                                                                );
+
+                                                                $set(
+                                                                    'target_date',
+                                                                    null
+                                                                );
+
+                                                                $set(
+                                                                    'status',
+                                                                    'Complete'
+                                                                );
+
+                                                                $set(
+                                                                    'completed_at',
+                                                                    null
+                                                                );
+
+                                                                $set(
+                                                                    'comments',
+                                                                    null
+                                                                );
+
+                                                                return;
+                                                            }
+
+                                                            /*
+                                                            * Ako korisnik iz
+                                                            * pozitivnog prijeđe
+                                                            * ponovno na negativno
+                                                            * ili Near Miss,
+                                                            * vratimo razumne
+                                                            * početne vrijednosti.
+                                                            */
+                                                            if (
+                                                                blank(
+                                                                    $get(
+                                                                        'priority'
+                                                                    )
+                                                                )
+                                                            ) {
+                                                                $set(
+                                                                    'priority',
+                                                                    'medium'
+                                                                );
+                                                            }
+
+                                                            if (
+                                                                blank(
+                                                                    $get(
+                                                                        'status'
+                                                                    )
+                                                                )
+                                                                ||
+                                                                $get(
+                                                                    'status'
+                                                                )
+                                                                === 'Complete'
+                                                            ) {
+                                                                $set(
+                                                                    'status',
+                                                                    'Not started'
+                                                                );
+
+                                                                $set(
+                                                                    'completed_at',
+                                                                    null
+                                                                );
+                                                            }
                                                         }
+                                                    ),
 
-                                                        $user = User::query()->find(
+                                                Select::make(
+                                                    'priority'
+                                                )
+                                                    ->label(
+                                                        'Prioritet'
+                                                    )
+                                                    ->options(
+                                                        static::priorityOptions()
+                                                    )
+                                                    ->default(
+                                                        'medium'
+                                                    )
+                                                    ->required(
+                                                        fn (
+                                                            callable $get
+                                                        ): bool =>
+                                                            $get(
+                                                                'observation_type'
+                                                            )
+                                                            !==
+                                                            'Positive Observation'
+                                                    )
+                                                    ->visible(
+                                                        fn (
+                                                            callable $get
+                                                        ): bool =>
+                                                            $get(
+                                                                'observation_type'
+                                                            )
+                                                            !==
+                                                            'Positive Observation'
+                                                    )
+                                                    ->native(false)
+                                                    ->helperText(
+                                                        'Kritično označi samo za zapažanja koja zahtijevaju hitnu reakciju.'
+                                                    )
+                                                    ->extraAttributes(
+                                                        fn (
                                                             $state
-                                                        );
+                                                        ) => [
+                                                            'style' =>
+                                                                match (
+                                                                    $state
+                                                                ) {
+                                                                    'critical' =>
+                                                                        'border:2px solid #ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.20); border-radius:10px;',
 
-                                                        if ($user) {
-                                                            $set(
-                                                                'responsible',
-                                                                $user->name
-                                                            );
+                                                                    'high' =>
+                                                                        'border:2px solid #f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.18); border-radius:10px;',
+
+                                                                    'medium' =>
+                                                                        'border:2px solid #0ea5e9; box-shadow:0 0 0 3px rgba(14,165,233,.14); border-radius:10px;',
+
+                                                                    'low' =>
+                                                                        'border:2px solid #6b7280; border-radius:10px;',
+
+                                                                    default =>
+                                                                        '',
+                                                                },
+                                                        ]
+                                                    ),
+
+                                                TextInput::make(
+                                                    'location'
+                                                )
+                                                    ->label(
+                                                        'Lokacija'
+                                                    )
+                                                    ->required()
+                                                    ->maxLength(
+                                                        255
+                                                    ),
+
+                                                TextInput::make(
+                                                    'potential_incident_type'
+                                                )
+                                                    ->label(
+                                                        'Vrsta opasnosti'
+                                                    )
+                                                    ->datalist(
+                                                        static::potentialIncidentTypes()
+                                                    )
+                                                    ->required(
+                                                        fn (
+                                                            callable $get
+                                                        ): bool =>
+                                                            $get(
+                                                                'observation_type'
+                                                            )
+                                                            !==
+                                                            'Positive Observation'
+                                                    )
+                                                    ->visible(
+                                                        fn (
+                                                            callable $get
+                                                        ): bool =>
+                                                            $get(
+                                                                'observation_type'
+                                                            )
+                                                            !==
+                                                            'Positive Observation'
+                                                    )
+                                                    ->maxLength(
+                                                        255
+                                                    )
+                                                    ->columnSpanFull(),
+
+                                                Placeholder::make(
+                                                    'positive_info'
+                                                )
+                                                    ->label('')
+                                                    ->content(
+                                                        '✓ Za pozitivno zapažanje nije potrebno unositi prioritet, vrstu opasnosti, odgovornu osobu niti rok.'
+                                                    )
+                                                    ->visible(
+                                                        fn (
+                                                            callable $get
+                                                        ): bool =>
+                                                            $get(
+                                                                'observation_type'
+                                                            )
+                                                            ===
+                                                            'Positive Observation'
+                                                    )
+                                                    ->columnSpanFull(),
+                                            ]),
+
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | IZVOR I OBAVIJESTI
+                                        |--------------------------------------------------------------------------
+                                        |
+                                        | Ovo ostaje dostupno za SVE vrste
+                                        | zapažanja.
+                                        |
+                                        */
+
+                                        Section::make(
+                                            'Izvor i obavijesti'
+                                        )
+                                            ->columns(2)
+                                            ->schema([
+
+                                                Placeholder::make(
+                                                    'public_source_info'
+                                                )
+                                                    ->label(
+                                                        'Izvor prijave'
+                                                    )
+                                                    ->content(
+                                                        function (
+                                                            ?Observation $record
+                                                        ): string {
+
+                                                            if (
+                                                                $record?->source
+                                                                ===
+                                                                'qr_public'
+                                                            ) {
+                                                                return
+                                                                    'QR prijava';
+                                                            }
+
+                                                            if (
+                                                                filled(
+                                                                    request()
+                                                                        ->query(
+                                                                            'qr_problem_token'
+                                                                        )
+                                                                )
+                                                            ) {
+                                                                return
+                                                                    'QR prijava';
+                                                            }
+
+                                                            return
+                                                                'Interni unos';
                                                         }
+                                                    ),
+
+                                                TextInput::make(
+                                                    'reporter_contact'
+                                                )
+                                                    ->label(
+                                                        'Kontakt / ime prijavitelja'
+                                                    )
+                                                    ->maxLength(
+                                                        255
+                                                    )
+                                                    ->placeholder(
+                                                        'Nije navedeno'
+                                                    )
+                                                    ->helperText(
+                                                        'Opcionalno – upiši kontakt ili ime prijavitelja ako je poznato.'
+                                                    ),
+
+                                                TagsInput::make(
+                                                    'notification_emails'
+                                                )
+                                                    ->label(
+                                                        'E-mail primatelji'
+                                                    )
+                                                    ->placeholder(
+                                                        'Upiši e-mail i pritisni Enter'
+                                                    )
+                                                    ->helperText(
+                                                        'Možeš upisati više adresa za obavijest o zapažanju.'
+                                                    )
+                                                    ->columnSpanFull(),
+                                            ]),
+                                    ]),
+
+                                /*
+                                |--------------------------------------------------------------------------
+                                | ODGOVORNOST I ROK
+                                |--------------------------------------------------------------------------
+                                |
+                                | Pozitivno zapažanje nema korektivnu radnju.
+                                |
+                                */
+
+                                Section::make(
+                                    'Odgovornost i rok'
+                                )
+                                    ->columns(2)
+                                    ->visible(
+                                        fn (
+                                            callable $get
+                                        ): bool =>
+                                            $get(
+                                                'observation_type'
+                                            )
+                                            !==
+                                            'Positive Observation'
+                                    )
+                                    ->schema([
+
+                                        TextInput::make(
+                                            'responsible'
+                                        )
+                                            ->label(
+                                                'Odgovorna osoba'
+                                            )
+                                            ->datalist(
+                                                fn () =>
+                                                    static::responsiblePersonOptions()
+                                            )
+                                            ->placeholder(
+                                                'Upiši ime'
+                                            )
+                                            ->maxLength(
+                                                255
+                                            ),
+
+                                        Select::make(
+                                            'responsible_user_id'
+                                        )
+                                            ->label(
+                                                'Dodijeli korisniku aplikacije'
+                                            )
+                                            ->options(
+                                                fn (
+                                                    ?Observation $record
+                                                ): array =>
+                                                    static::responsibleUserOptions(
+                                                        $record
+                                                    )
+                                            )
+                                            ->searchable()
+                                            ->preload()
+                                            ->native(false)
+                                            ->live()
+                                            ->afterStateUpdated(
+                                                function (
+                                                    $state,
+                                                    Set $set
+                                                ): void {
+
+                                                    if (
+                                                        ! filled(
+                                                            $state
+                                                        )
+                                                    ) {
+                                                        return;
                                                     }
-                                                )
-                                                ->helperText(
-                                                    'Ako odgovorna osoba ima ZNR LIDER račun, odaberi ga ovdje. '
-                                                    . 'Taj korisnik će primati obavijesti u zvoncu.'
-                                                ),
 
-                                            DatePicker::make('target_date')
-                                                ->label('Rok za provedbu')
-                                                ->displayFormat('d.m.Y.')
-                                                ->weekStartsOnMonday()
-                                                ->timezone('Europe/Zagreb'),
+                                                    $user =
+                                                        User::query()
+                                                            ->find(
+                                                                $state
+                                                            );
 
-                                            Select::make('status')
-                                                ->label('Status')
-                                                ->options(static::statusOptions())
-                                                ->default('Not started')
-                                                ->required()
-                                                ->live()
-                                                ->columnSpanFull(),
+                                                    if (
+                                                        $user
+                                                    ) {
+                                                        $set(
+                                                            'responsible',
+                                                            $user->name
+                                                        );
+                                                    }
+                                                }
+                                            )
+                                            ->helperText(
+                                                'Ako odgovorna osoba ima ZNR LIDER račun, odaberi ga ovdje. Taj korisnik će primati obavijesti u zvoncu.'
+                                            ),
 
-                                            DatePicker::make('completed_at')
-                                                ->label('Datum zatvaranja')
-                                                ->displayFormat('d.m.Y.')
-                                                ->weekStartsOnMonday()
-                                                ->timezone('Europe/Zagreb')
-                                                ->native(false)
-                                                ->required(fn (callable $get): bool =>
-                                                    $get('status') === 'Complete'
-                                                )
-                                                ->visible(fn (callable $get): bool =>
-                                                    $get('status') === 'Complete'
-                                                )
-                                                ->rules([
-                                                    'nullable',
-                                                    'date',
-                                                    'after_or_equal:incident_date',
-                                                    'before_or_equal:today',
-                                                ])
-                                                ->helperText(
-                                                    'Upiši stvarni datum kada je radnja završena.'
-                                                ),
+                                        DatePicker::make(
+                                            'target_date'
+                                        )
+                                            ->label(
+                                                'Rok za provedbu'
+                                            )
+                                            ->displayFormat(
+                                                'd.m.Y.'
+                                            )
+                                            ->weekStartsOnMonday()
+                                            ->timezone(
+                                                'Europe/Zagreb'
+                                            ),
 
-                                            TextInput::make('closing_days')
-                                                ->label('Broj dana do zatvaranja')
-                                                ->disabled()
-                                                ->dehydrated(false)
-                                                ->visible(fn (callable $get): bool =>
-                                                    $get('status') === 'Complete'
-                                                )
-                                                ->formatStateUsing(function ($state, ?Observation $record): string {
-                                                    if (! $record?->incident_date || ! $record?->completed_at) {
+                                        Select::make(
+                                            'status'
+                                        )
+                                            ->label(
+                                                'Status'
+                                            )
+                                            ->options(
+                                                static::statusOptions()
+                                            )
+                                            ->default(
+                                                'Not started'
+                                            )
+                                            ->required(
+                                                fn (
+                                                    callable $get
+                                                ): bool =>
+                                                    $get(
+                                                        'observation_type'
+                                                    )
+                                                    !==
+                                                    'Positive Observation'
+                                            )
+                                            ->live()
+                                            ->columns(2),
+
+                                        DatePicker::make(
+                                            'completed_at'
+                                        )
+                                            ->label(
+                                                'Datum zatvaranja'
+                                            )
+                                            ->displayFormat(
+                                                'd.m.Y.'
+                                            )
+                                            ->weekStartsOnMonday()
+                                            ->timezone(
+                                                'Europe/Zagreb'
+                                            )
+                                            ->native(false)
+                                            ->required(
+                                                fn (
+                                                    callable $get
+                                                ): bool =>
+                                                    $get(
+                                                        'observation_type'
+                                                    )
+                                                    !==
+                                                    'Positive Observation'
+                                                    &&
+                                                    $get(
+                                                        'status'
+                                                    )
+                                                    ===
+                                                    'Complete'
+                                            )
+                                            ->visible(
+                                                fn (
+                                                    callable $get
+                                                ): bool =>
+                                                    $get(
+                                                        'observation_type'
+                                                    )
+                                                    !==
+                                                    'Positive Observation'
+                                                    &&
+                                                    $get(
+                                                        'status'
+                                                    )
+                                                    ===
+                                                    'Complete'
+                                            )
+                                            ->rules([
+                                                'nullable',
+                                                'date',
+                                                'after_or_equal:incident_date',
+                                                'before_or_equal:today',
+                                            ])
+                                            ->helperText(
+                                                'Upiši stvarni datum kada je radnja završena.'
+                                            ),
+
+                                        TextInput::make(
+                                            'closing_days'
+                                        )
+                                            ->label(
+                                                'Broj dana do zatvaranja'
+                                            )
+                                            ->disabled()
+                                            ->dehydrated(
+                                                false
+                                            )
+                                            ->visible(
+                                                fn (
+                                                    callable $get
+                                                ): bool =>
+                                                    $get(
+                                                        'observation_type'
+                                                    )
+                                                    !==
+                                                    'Positive Observation'
+                                                    &&
+                                                    $get(
+                                                        'status'
+                                                    )
+                                                    ===
+                                                    'Complete'
+                                            )
+                                            ->formatStateUsing(
+                                                function (
+                                                    $state,
+                                                    ?Observation $record
+                                                ): string {
+
+                                                    if (
+                                                        ! $record?->incident_date
+                                                        ||
+                                                        ! $record?->completed_at
+                                                    ) {
                                                         return '-';
                                                     }
 
-                                                    $days = $record->incident_date
-                                                        ->copy()
-                                                        ->startOfDay()
-                                                        ->diffInDays(
-                                                            $record->completed_at
-                                                                ->copy()
-                                                                ->startOfDay()
-                                                        );
+                                                    $days =
+                                                        $record
+                                                            ->incident_date
+                                                            ->copy()
+                                                            ->startOfDay()
+                                                            ->diffInDays(
+                                                                $record
+                                                                    ->completed_at
+                                                                    ->copy()
+                                                                    ->startOfDay()
+                                                            );
 
-                                                    return match ($days) {
-                                                        0 => '0 dana',
-                                                        1 => '1 dan',
-                                                        default => $days . ' dana',
-                                                    };
-                                                })
-                                                ->helperText(
-                                                    'Broj kalendarskih dana od datuma zapažanja do datuma zatvaranja.'
-                                                ),
-                                            Placeholder::make(
-                                                'public_source_info'
-                                            )
-                                                ->label('Izvor prijave')
-                                                ->content(
-                                                    function (
-                                                        ?Observation $record
-                                                    ): string {
-
-                                                        if (
-                                                            $record?->source
-                                                            === 'qr_public'
+                                                    return
+                                                        match (
+                                                            $days
                                                         ) {
-                                                            return 'QR prijava';
-                                                        }
+                                                            0 =>
+                                                                '0 dana',
 
-                                                        if (
-                                                            filled(
-                                                                request()->query(
-                                                                    'qr_problem_token'
-                                                                )
-                                                            )
-                                                        ) {
-                                                            return 'QR prijava';
-                                                        }
+                                                            1 =>
+                                                                '1 dan',
 
-                                                        return 'Interni unos';
-                                                    }
-                                                ),
-
-                                            TextInput::make(
-                                                'reporter_contact'
+                                                            default =>
+                                                                $days
+                                                                . ' dana',
+                                                        };
+                                                }
                                             )
-                                                ->label(
-                                                    'Kontakt / ime prijavitelja'
-                                                )
-                                                ->maxLength(255)
-                                                ->placeholder(
-                                                    'Nije navedeno'
-                                                )
-                                                ->helperText(
-                                                    'Polje se popunjava samo ako je prijavitelj dobrovoljno ostavio kontakt.'
-                                                ),
-                                            TagsInput::make('notification_emails')
-                                                ->label('E-mail primatelji')
-                                                ->placeholder('Upiši e-mail i pritisni Enter')
-                                                ->helperText('Možeš upisati više adresa: direktor, voditelj, odgovorna osoba...')
-                                                ->columnSpanFull(),
-                                        ]),
-                                ]),
+                                            ->helperText(
+                                                'Broj kalendarskih dana od datuma zapažanja do datuma zatvaranja.'
+                                            ),
+                                    ]),
 
-                            Section::make('Opis i potrebna radnja')
-                                ->columns(2)
-                                ->schema([
-                                    Textarea::make('item')
-                                        ->label('Opis zapažanja')
-                                        ->required()
-                                        ->rows(4)
-                                        ->maxLength(2000)
-                                        ->extraAttributes([
-                                            'data-voice-target' => 'observation-item',
-                                        ]),
+                                /*
+                                |--------------------------------------------------------------------------
+                                | OPIS
+                                |--------------------------------------------------------------------------
+                                */
 
-                                    Textarea::make('action')
-                                        ->label('Potrebna radnja')
-                                        ->rows(4)
-                                        ->extraAttributes([
-                                            'data-voice-target' => 'observation-action',
-                                        ]),
-
-                                    View::make('filament.components.observation-voice-button')
-                                        ->viewData([
-                                            'target' => 'observation-item',
-                                            'label' => 'Govori opis zapažanja',
-                                        ]),
-
-                                    View::make('filament.components.observation-voice-button')
-                                        ->viewData([
-                                            'target' => 'observation-action',
-                                            'label' => 'Govori potrebnu radnju',
-                                        ]),
-                                ]),
-
-                            Section::make('Slika i komentar')
-                                ->columns(2)
-                                ->schema([
-                            Placeholder::make('picture_info')
-                                ->label('')
-                                ->content(
-                                    '📷 Odaberite jedan način dodavanja fotografije: '
-                                    . 'fotografirajte novu fotografiju ili odaberite postojeću iz galerije. '
-                                    . 'Moguće je spremiti samo jednu fotografiju po zapažanju.'
+                                Section::make(
+                                    'Opis zapažanja'
                                 )
-                                ->columnSpanFull(),
+                                    ->columns(2)
+                                    ->schema([
 
-                            FileUpload::make('camera_picture')
-                                ->label('📷 Fotografiraj')
-                                ->image()
-                                ->disk('public')
-                                ->directory('observations')
-                                ->visibility('public')
-                                ->preserveFilenames()
-                                ->maxSize(30720)
-                                ->extraInputAttributes([
-                                    'accept' => 'image/*',
-                                    'capture' => 'environment',
-                                ])
-                                ->live()
-                                ->afterStateUpdated(
-                                    function ($state, Set $set): void {
-                                        if (filled($state)) {
-                                            $set('picture_path', null);
-                                        }
-                                    }
-                                )
-                                ->helperText(
-                                    '📷 Odaberi fotoaparat i snimi novu fotografiju.'
-                                ),
-
-                            FileUpload::make('picture_path')
-                                ->label('🖼️ Odaberi iz galerije')
-                                ->image()
-                                ->disk('public')
-                                ->directory('observations')
-                                ->visibility('public')
-                                ->preserveFilenames()
-                                ->openable()
-                                ->downloadable()
-                                ->maxSize(30720)
-                                ->extraInputAttributes([
-                                    'accept' => 'image/*',
-                                ])
-                                ->live()
-                                ->afterStateUpdated(
-                                    function ($state, Set $set): void {
-                                        if (filled($state)) {
-                                            $set('camera_picture', null);
-                                        }
-                                    }
-                                )
-                                ->helperText(function () {
-                                    $ownerId = auth()->user()?->ownerId();
-
-                                    $text =
-                                        '🖼️ Odaberi ranije spremljenu fotografiju iz galerije.';
-
-                                    if (! $ownerId) {
-                                        return $text;
-                                    }
-
-                                    return $text
-                                        . ' Iskorištenost prostora organizacije: '
-                                        . app(StorageQuotaService::class)
-                                            ->usageText($ownerId);
-                                })
-                                ->rules([
-                                    function () {
-                                        return function (
-                                            string $attribute,
-                                            mixed $value,
-                                            \Closure $fail
-                                        ) {
-                                            $ownerId =
-                                                auth()->user()?->ownerId();
-
-                                            if (! $ownerId) {
-                                                return;
-                                            }
-
-                                            if (
-                                                ! app(StorageQuotaService::class)
-                                                    ->canUpload(
-                                                        $value,
-                                                        $ownerId
+                                        Textarea::make(
+                                            'item'
+                                        )
+                                            ->label(
+                                                'Opis zapažanja'
+                                            )
+                                            ->required()
+                                            ->rows(4)
+                                            ->maxLength(
+                                                2000
+                                            )
+                                            ->helperText(
+                                                fn (
+                                                    callable $get
+                                                ): string =>
+                                                    $get(
+                                                        'observation_type'
                                                     )
-                                            ) {
-                                                $fail(
-                                                    'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
-                                                    . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
-                                                );
-                                            }
-                                        };
-                                    },
-                                ]),
+                                                    ===
+                                                    'Positive Observation'
+                                                        ? 'Opiši što je dobro napravljeno, uočenu dobru praksu ili pozitivno ponašanje.'
+                                                        : 'Opiši zapažanje što jasnije i konkretnije.'
+                                            )
+                                            ->extraAttributes([
+                                                'data-voice-target' =>
+                                                    'observation-item',
+                                            ]),
 
-                                    Textarea::make('comments')
-                                        ->label('Komentar')
-                                        ->rows(4)
-                                        ->helperText('Kod zatvaranja zapažanja upišite kratki komentar o provedenoj radnji i načinu na koji je zapažanje riješeno.')
-                                        ->columnSpanFull(),
-                                ]),
-                        ]),
-                ]),
-        ])
-        ->columns(1);
-}
+                                        Textarea::make(
+                                            'action'
+                                        )
+                                            ->label(
+                                                fn (
+                                                    callable $get
+                                                ): string =>
+                                                    $get(
+                                                        'observation_type'
+                                                    )
+                                                    ===
+                                                    'Positive Observation'
+                                                        ? 'Napomena / prijedlog'
+                                                        : 'Potrebna radnja'
+                                            )
+                                            ->rows(4)
+                                            ->maxLength(
+                                                2000
+                                            )
+                                            ->helperText(
+                                                fn (
+                                                    callable $get
+                                                ): string =>
+                                                    $get(
+                                                        'observation_type'
+                                                    )
+                                                    ===
+                                                    'Positive Observation'
+                                                        ? 'Opcionalno – npr. preporuka da se dobra praksa primijeni i na drugim lokacijama.'
+                                                        : 'Upiši radnju potrebnu za uklanjanje problema ili smanjenje rizika.'
+                                            )
+                                            ->extraAttributes([
+                                                'data-voice-target' =>
+                                                    'observation-action',
+                                            ]),
+
+                                        View::make(
+                                            'filament.components.observation-voice-button'
+                                        )
+                                            ->viewData([
+                                                'target' =>
+                                                    'observation-item',
+
+                                                'label' =>
+                                                    'Govori opis zapažanja',
+                                            ]),
+
+                                        View::make(
+                                            'filament.components.observation-voice-button'
+                                        )
+                                            ->viewData([
+                                                'target' =>
+                                                    'observation-action',
+
+                                                'label' =>
+                                                    'Govori radnju / napomenu',
+                                            ]),
+                                    ]),
+
+                                /*
+                                |--------------------------------------------------------------------------
+                                | FOTOGRAFIJA I KOMENTAR
+                                |--------------------------------------------------------------------------
+                                */
+
+                                Section::make(
+                                    'Fotografija i komentar'
+                                )
+                                    ->columns(2)
+                                    ->schema([
+
+                                        Placeholder::make(
+                                            'picture_info'
+                                        )
+                                            ->label('')
+                                            ->content(
+                                                '📷 Odaberite jedan način dodavanja fotografije: '
+                                                . 'fotografirajte novu fotografiju ili odaberite postojeću iz galerije. '
+                                                . 'Moguće je spremiti samo jednu fotografiju po zapažanju.'
+                                            )
+                                            ->columnSpanFull(),
+
+                                        FileUpload::make(
+                                            'camera_picture'
+                                        )
+                                            ->label(
+                                                '📷 Fotografiraj'
+                                            )
+                                            ->image()
+                                            ->disk(
+                                                'public'
+                                            )
+                                            ->directory(
+                                                'observations'
+                                            )
+                                            ->visibility(
+                                                'public'
+                                            )
+                                            ->preserveFilenames()
+                                            ->maxSize(
+                                                30720
+                                            )
+                                            ->extraInputAttributes([
+                                                'accept' =>
+                                                    'image/*',
+
+                                                'capture' =>
+                                                    'environment',
+                                            ])
+                                            ->live()
+                                            ->afterStateUpdated(
+                                                function (
+                                                    $state,
+                                                    Set $set
+                                                ): void {
+
+                                                    if (
+                                                        filled(
+                                                            $state
+                                                        )
+                                                    ) {
+                                                        $set(
+                                                            'picture_path',
+                                                            null
+                                                        );
+                                                    }
+                                                }
+                                            )
+                                            ->helperText(
+                                                '📷 Odaberi fotoaparat i snimi novu fotografiju.'
+                                            ),
+
+                                        FileUpload::make(
+                                            'picture_path'
+                                        )
+                                            ->label(
+                                                '🖼️ Odaberi iz galerije'
+                                            )
+                                            ->image()
+                                            ->disk(
+                                                'public'
+                                            )
+                                            ->directory(
+                                                'observations'
+                                            )
+                                            ->visibility(
+                                                'public'
+                                            )
+                                            ->preserveFilenames()
+                                            ->openable()
+                                            ->downloadable()
+                                            ->maxSize(
+                                                30720
+                                            )
+                                            ->extraInputAttributes([
+                                                'accept' =>
+                                                    'image/*',
+                                            ])
+                                            ->live()
+                                            ->afterStateUpdated(
+                                                function (
+                                                    $state,
+                                                    Set $set
+                                                ): void {
+
+                                                    if (
+                                                        filled(
+                                                            $state
+                                                        )
+                                                    ) {
+                                                        $set(
+                                                            'camera_picture',
+                                                            null
+                                                        );
+                                                    }
+                                                }
+                                            )
+                                            ->helperText(
+                                                function () {
+                                                    $ownerId =
+                                                        auth()
+                                                            ->user()
+                                                            ?->ownerId();
+
+                                                    $text =
+                                                        '🖼️ Odaberi ranije spremljenu fotografiju iz galerije.';
+
+                                                    if (
+                                                        ! $ownerId
+                                                    ) {
+                                                        return
+                                                            $text;
+                                                    }
+
+                                                    return
+                                                        $text
+                                                        . ' Iskorištenost prostora organizacije: '
+                                                        . app(
+                                                            StorageQuotaService::class
+                                                        )
+                                                            ->usageText(
+                                                                $ownerId
+                                                            );
+                                                }
+                                            )
+                                            ->rules([
+                                                function () {
+                                                    return function (
+                                                        string $attribute,
+                                                        mixed $value,
+                                                        \Closure $fail
+                                                    ): void {
+
+                                                        $ownerId =
+                                                            auth()
+                                                                ->user()
+                                                                ?->ownerId();
+
+                                                        if (
+                                                            ! $ownerId
+                                                        ) {
+                                                            return;
+                                                        }
+
+                                                        if (
+                                                            ! app(
+                                                                StorageQuotaService::class
+                                                            )
+                                                                ->canUpload(
+                                                                    $value,
+                                                                    $ownerId
+                                                                )
+                                                        ) {
+                                                            $fail(
+                                                                'Dosegnut je maksimalni prostor za pohranu dokumenata organizacije. '
+                                                                . 'Obrišite nepotrebne priloge ili kontaktirajte administratora.'
+                                                            );
+                                                        }
+                                                    };
+                                                },
+                                            ]),
+
+                                        Textarea::make(
+                                            'comments'
+                                        )
+                                            ->label(
+                                                'Komentar pri zatvaranju'
+                                            )
+                                            ->rows(4)
+                                            ->visible(
+                                                fn (
+                                                    callable $get
+                                                ): bool =>
+                                                    $get(
+                                                        'observation_type'
+                                                    )
+                                                    !==
+                                                    'Positive Observation'
+                                            )
+                                            ->helperText(
+                                                'Kod zatvaranja zapažanja upišite kratki komentar o provedenoj radnji i načinu na koji je zapažanje riješeno.'
+                                            )
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
+                    ]),
+            ])
+            ->columns(1);
+    }
 
     public static function table(Table $table): Table
     {
@@ -723,16 +1298,64 @@ protected static function priorityIcon(?string $state): ?string
     TextColumn::make('priority')
         ->label('Prioritet')
         ->badge()
-        ->icon(fn (?string $state) => static::priorityIcon($state))
-        ->alignment(Alignment::Center)
-        ->color(fn (?string $state) => static::priorityColor($state))
-        ->formatStateUsing(fn (?string $state) => static::priorityOptions()[$state] ?? $state)
+        ->icon(
+            fn (
+                ?string $state,
+                Observation $record
+            ): ?string =>
+                $record->observation_type
+                    === 'Positive Observation'
+                        ? null
+                        : static::priorityIcon(
+                            $state
+                        )
+        )
+        ->alignment(
+            Alignment::Center
+        )
+        ->color(
+            fn (
+                ?string $state,
+                Observation $record
+            ): string =>
+                $record->observation_type
+                    === 'Positive Observation'
+                        ? 'gray'
+                        : static::priorityColor(
+                            $state
+                        )
+        )
+        ->formatStateUsing(
+            fn (
+                ?string $state,
+                Observation $record
+            ): string =>
+                $record->observation_type
+                    === 'Positive Observation'
+                        ? '—'
+                        : (
+                            static::priorityOptions()[
+                                $state
+                            ]
+                            ?? (
+                                filled($state)
+                                    ? $state
+                                    : '—'
+                            )
+                        )
+        )
         ->sortable()
-        ->extraAttributes(fn (Observation $record) => [
-            'style' => $record->priority === 'critical'
-                ? 'font-weight:900; text-transform:uppercase;'
-                : '',
-        ])
+        ->extraAttributes(
+            fn (
+                Observation $record
+            ) => [
+                'style' =>
+                    $record->priority
+                        === 'critical'
+                            ? 'font-weight:900; text-transform:uppercase;'
+                            : '',
+            ]
+        )
         ->toggleable(),
 
     TextColumn::make('location')
@@ -758,10 +1381,30 @@ protected static function priorityIcon(?string $state): ?string
         ->alignment(Alignment::Center)
         ->toggleable(),
 
-    TextColumn::make('potential_incident_type')
-        ->label('Vrsta opasnosti')
-        ->alignment(Alignment::Center)
+    TextColumn::make(
+        'potential_incident_type'
+    )
+        ->label(
+            'Vrsta opasnosti'
+        )
+        ->alignment(
+            Alignment::Center
+        )
         ->wrap()
+        ->formatStateUsing(
+            fn (
+                ?string $state,
+                Observation $record
+            ): string =>
+                $record->observation_type
+                    === 'Positive Observation'
+                        ? '—'
+                        : (
+                            filled($state)
+                                ? $state
+                                : '—'
+                        )
+        )
         ->toggleable(),
 
     ImageColumn::make('picture_path')
@@ -807,7 +1450,7 @@ protected static function priorityIcon(?string $state): ?string
         ->toggleable(),
 
     TextColumn::make('action')
-        ->label('Potrebna radnja')
+        ->label('Radnja / Napomena')
         ->searchable()
         ->html()
         ->formatStateUsing(function (?string $state) {
@@ -864,144 +1507,259 @@ protected static function priorityIcon(?string $state): ?string
         ->label('Broj dana')
         ->alignment(Alignment::Center)
         ->getStateUsing(function (Observation $record): string {
-            $today = Carbon::today();
-
-            $incidentDate = $record->incident_date
-                ? Carbon::parse($record->incident_date)->startOfDay()
-                : null;
-
-            $targetDate = $record->target_date
-                ? Carbon::parse($record->target_date)->startOfDay()
-                : null;
-
-            $completedAt = $record->completed_at
-                ? Carbon::parse($record->completed_at)->startOfDay()
-                : null;
 
             /*
-            * Ako je zapažanje završeno,
-            * prikazujemo koliko je dana prošlo
-            * od datuma zapažanja do zatvaranja.
+            |--------------------------------------------------------------------------
+            | Pozitivno zapažanje
+            |--------------------------------------------------------------------------
+            |
+            | Pozitivno zapažanje nema korektivnu radnju,
+            | rok niti vrijeme potrebno za zatvaranje.
+            |
             */
+
+            if (
+                $record->observation_type
+                === 'Positive Observation'
+            ) {
+                return '—';
+            }
+
+            $today = Carbon::today();
+
+            $incidentDate =
+                $record->incident_date
+                    ? Carbon::parse(
+                        $record->incident_date
+                    )->startOfDay()
+                    : null;
+
+            $targetDate =
+                $record->target_date
+                    ? Carbon::parse(
+                        $record->target_date
+                    )->startOfDay()
+                    : null;
+
+            $completedAt =
+                $record->completed_at
+                    ? Carbon::parse(
+                        $record->completed_at
+                    )->startOfDay()
+                    : null;
+
+            /*
+            |--------------------------------------------------------------------------
+            | Završeno zapažanje
+            |--------------------------------------------------------------------------
+            |
+            | Prikazujemo koliko je kalendarskih dana
+            | prošlo od nastanka do zatvaranja.
+            |
+            */
+
             if (
                 $record->status === 'Complete'
                 && $incidentDate
                 && $completedAt
             ) {
-                $days = $incidentDate->diffInDays($completedAt);
+                $days =
+                    $incidentDate
+                        ->diffInDays(
+                            $completedAt
+                        );
 
                 return match ($days) {
                     0 => '0 dana',
                     1 => '1 dan',
-                    default => $days . ' dana',
+                    default =>
+                        $days . ' dana',
                 };
             }
 
             /*
-            * Ako zapažanje nije završeno,
-            * a rok postoji i još nije istekao,
-            * odbrojava dane do roka.
+            |--------------------------------------------------------------------------
+            | Rok još nije istekao
+            |--------------------------------------------------------------------------
             */
+
             if (
                 $record->status !== 'Complete'
                 && $targetDate
-                && $today->lte($targetDate)
+                && $today->lte(
+                    $targetDate
+                )
             ) {
-                $daysLeft = $today->diffInDays($targetDate);
+                $daysLeft =
+                    $today->diffInDays(
+                        $targetDate
+                    );
 
                 return match ($daysLeft) {
                     0 => 'Danas',
                     1 => 'Još 1 dan',
-                    default => 'Još ' . $daysLeft . ' dana',
+                    default =>
+                        'Još '
+                        . $daysLeft
+                        . ' dana',
                 };
             }
 
             /*
-            * Ako zapažanje nije završeno,
-            * a rok je prošao,
-            * prikazujemo koliko dana kasni.
+            |--------------------------------------------------------------------------
+            | Rok je istekao
+            |--------------------------------------------------------------------------
             */
+
             if (
                 $record->status !== 'Complete'
                 && $targetDate
-                && $today->gt($targetDate)
+                && $today->gt(
+                    $targetDate
+                )
             ) {
-                $daysLate = $targetDate->diffInDays($today);
+                $daysLate =
+                    $targetDate
+                        ->diffInDays(
+                            $today
+                        );
 
                 return match ($daysLate) {
                     1 => 'Kasni 1 dan',
-                    default => 'Kasni ' . $daysLate . ' dana',
+                    default =>
+                        'Kasni '
+                        . $daysLate
+                        . ' dana',
                 };
             }
 
             return '—';
         })
         ->badge()
-        ->color(function (Observation $record): string {
-            $today = Carbon::today();
+        ->color(
+            function (
+                Observation $record
+            ): string {
 
-            $targetDate = $record->target_date
-                ? Carbon::parse($record->target_date)->startOfDay()
-                : null;
+                /*
+                * Pozitivna zapažanja nemaju
+                * rok ni vrijeme zatvaranja.
+                */
+                if (
+                    $record->observation_type
+                    === 'Positive Observation'
+                ) {
+                    return 'gray';
+                }
 
-            if (
-                $record->status === 'Complete'
-                && $record->completed_at
-            ) {
-                return 'success';
+                $today =
+                    Carbon::today();
+
+                $targetDate =
+                    $record->target_date
+                        ? Carbon::parse(
+                            $record->target_date
+                        )->startOfDay()
+                        : null;
+
+                if (
+                    $record->status === 'Complete'
+                    && $record->completed_at
+                ) {
+                    return 'success';
+                }
+
+                if (! $targetDate) {
+                    return 'gray';
+                }
+
+                if (
+                    $today->lte(
+                        $targetDate
+                    )
+                ) {
+                    return 'warning';
+                }
+
+                return 'danger';
             }
+        )
+        ->tooltip(
+            function (
+                Observation $record
+            ): string {
 
-            if (! $targetDate) {
-                return 'gray';
+                /*
+                * Pozitivno zapažanje nema
+                * workflow korektivne radnje.
+                */
+                if (
+                    $record->observation_type
+                    === 'Positive Observation'
+                ) {
+                    return
+                        'Pozitivno zapažanje nema rok za provedbu.';
+                }
+
+                $today =
+                    Carbon::today();
+
+                $incidentDate =
+                    $record->incident_date
+                        ? Carbon::parse(
+                            $record->incident_date
+                        )->startOfDay()
+                        : null;
+
+                $targetDate =
+                    $record->target_date
+                        ? Carbon::parse(
+                            $record->target_date
+                        )->startOfDay()
+                        : null;
+
+                $completedAt =
+                    $record->completed_at
+                        ? Carbon::parse(
+                            $record->completed_at
+                        )->startOfDay()
+                        : null;
+
+                if (
+                    $record->status === 'Complete'
+                    && $incidentDate
+                    && $completedAt
+                ) {
+                    return
+                        'Broj kalendarskih dana od zapažanja do zatvaranja';
+                }
+
+                if (
+                    $record->status !== 'Complete'
+                    && $targetDate
+                    && $today->lte(
+                        $targetDate
+                    )
+                ) {
+                    return
+                        'Preostali broj dana do roka za zatvaranje';
+                }
+
+                if (
+                    $record->status !== 'Complete'
+                    && $targetDate
+                    && $today->gt(
+                        $targetDate
+                    )
+                ) {
+                    return
+                        'Broj dana kašnjenja nakon isteka roka';
+                }
+
+                return
+                    'Rok za zatvaranje nije definiran';
             }
-
-            if ($today->lte($targetDate)) {
-                return 'warning';
-            }
-
-            return 'danger';
-        })
-        ->tooltip(function (Observation $record): string {
-            $today = Carbon::today();
-
-            $incidentDate = $record->incident_date
-                ? Carbon::parse($record->incident_date)->startOfDay()
-                : null;
-
-            $targetDate = $record->target_date
-                ? Carbon::parse($record->target_date)->startOfDay()
-                : null;
-
-            $completedAt = $record->completed_at
-                ? Carbon::parse($record->completed_at)->startOfDay()
-                : null;
-
-            if (
-                $record->status === 'Complete'
-                && $incidentDate
-                && $completedAt
-            ) {
-                return 'Broj kalendarskih dana od zapažanja do zatvaranja';
-            }
-
-            if (
-                $record->status !== 'Complete'
-                && $targetDate
-                && $today->lte($targetDate)
-            ) {
-                return 'Preostali broj dana do roka za zatvaranje';
-            }
-
-            if (
-                $record->status !== 'Complete'
-                && $targetDate
-                && $today->gt($targetDate)
-            ) {
-                return 'Broj dana kašnjenja nakon isteka roka';
-            }
-
-            return 'Rok za zatvaranje nije definiran';
-        })
+        )
         ->toggleable(),
 
     TextColumn::make('sent_at')

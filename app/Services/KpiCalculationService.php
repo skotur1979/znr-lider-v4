@@ -1637,6 +1637,54 @@ class KpiCalculationService
         Builder $query,
         string $table
     ): void {
+        /*
+        |--------------------------------------------------------------------------
+        | Pozitivna zapažanja nisu korektivne radnje
+        |--------------------------------------------------------------------------
+        |
+        | Polje "action" kod pozitivnog zapažanja koristimo kao
+        | "Napomena / prijedlog".
+        |
+        | Zbog toga pozitivno zapažanje nikada ne smije ući u KPI:
+        | - otvorene korektivne radnje
+        | - zatvorene korektivne radnje
+        | - korektivne radnje u tijeku
+        | - dane otvorenih korektivnih radnji
+        |
+        */
+
+        $typeColumn = $this->firstExistingColumn(
+            $table,
+            [
+                'observation_type',
+                'type',
+            ]
+        );
+
+        if ($typeColumn) {
+            $query->where(
+                function (Builder $subQuery) use (
+                    $typeColumn
+                ): void {
+                    $subQuery
+                        ->whereNull(
+                            $typeColumn
+                        )
+                        ->orWhere(
+                            $typeColumn,
+                            '<>',
+                            'Positive Observation'
+                        );
+                }
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Mora postojati stvarna potrebna / korektivna radnja
+        |--------------------------------------------------------------------------
+        */
+
         $actionColumn = $this->firstExistingColumn(
             $table,
             [
@@ -1648,17 +1696,15 @@ class KpiCalculationService
             ]
         );
 
-        /*
-         * Ako postoji stupac za radnju, isključujemo prazne zapise.
-         * Ako ne postoji, ne nagađamo drugi stupac.
-         */
         if ($actionColumn) {
             $query
                 ->whereNotNull(
                     $actionColumn
                 )
                 ->whereRaw(
-                    'TRIM(' . $actionColumn . ") <> ''"
+                    'TRIM('
+                    . $actionColumn
+                    . ") <> ''"
                 );
         }
     }
