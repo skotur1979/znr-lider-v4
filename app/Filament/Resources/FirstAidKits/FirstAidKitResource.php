@@ -6,6 +6,8 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\FirstAidKits\Pages;
 use App\Models\FirstAidKit;
 use BackedEnum;
+use App\Support\ExpiryBadge;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
@@ -191,6 +193,12 @@ class FirstAidKitResource extends BaseResource
                                                         255
                                                     ),
 
+                                                /*
+                                                |--------------------------------------------------------------------------
+                                                | VRIJEDI DO - CREATE / EDIT
+                                                |--------------------------------------------------------------------------
+                                                */
+
                                                 DatePicker::make(
                                                     'valid_until'
                                                 )
@@ -202,6 +210,44 @@ class FirstAidKitResource extends BaseResource
                                                     )
                                                     ->native(
                                                         false
+                                                    )
+                                                    ->visible(
+                                                        fn (
+                                                            string $operation
+                                                        ): bool =>
+                                                            $operation !== 'view'
+                                                    ),
+
+                                                /*
+                                                |--------------------------------------------------------------------------
+                                                | VRIJEDI DO - VIEW
+                                                |--------------------------------------------------------------------------
+                                                |
+                                                | Isti Filament badge kao u modulu Zaposlenici.
+                                                |
+                                                */
+
+                                                TextEntry::make(
+                                                    'valid_until'
+                                                )
+                                                    ->label(
+                                                        'Vrijedi do'
+                                                    )
+                                                    ->date(
+                                                        'd.m.Y.'
+                                                    )
+                                                    ->badge()
+                                                    ->color(
+                                                        fn ($state): string =>
+                                                            ExpiryBadge::color(
+                                                                $state
+                                                            )
+                                                    )
+                                                    ->visible(
+                                                        fn (
+                                                            string $operation
+                                                        ): bool =>
+                                                            $operation === 'view'
                                                     ),
                                             ]),
                                     ]),

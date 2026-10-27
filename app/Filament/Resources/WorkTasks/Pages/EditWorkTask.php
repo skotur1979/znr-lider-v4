@@ -48,46 +48,93 @@ class EditWorkTask extends EditRecord
     protected function mutateFormDataBeforeSave(
         array $data
     ): array {
+        $user =
+            Auth::user();
+
+        abort_unless(
+            $user,
+            403
+        );
+
         /*
-         * Organizacija se nikada ne mijenja.
-         */
+        * Organizacija se nikada ne mijenja.
+        */
         $data['user_id'] =
-            $this->record->user_id;
-
-        /*
-         * Autor zadatka se nikada ne mijenja.
-         */
-        $data['created_by_user_id'] =
             $this->record
-                ->created_by_user_id;
+                ->user_id;
 
-        /*
-         * Samo stvarni autor zadatka
-         * smije mijenjati:
-         *
-         * privatno <-> cijela organizacija.
-         *
-         * Drugi korisnik organizacije može
-         * uređivati/zatvoriti shared zadatak,
-         * ali ne može promijeniti njegovu
-         * vidljivost.
-         */
-        if (
+        $createdBy =
             (int) (
                 $this->record
                     ->created_by_user_id
                 ?? 0
-            )
-            !==
-            (int) Auth::id()
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | POSTOJEĆI AUTOR
+        |--------------------------------------------------------------------------
+        */
+
+        if ($createdBy > 0) {
+            $data[
+                'created_by_user_id'
+            ] =
+                $createdBy;
+
+            /*
+            * Samo autor smije promijeniti
+            * privatno / organizacija.
+            */
+            if (
+                $createdBy
+                !==
+                (int) $user->id
+            ) {
+                $data[
+                    'is_shared_with_organization'
+                ] =
+                    (bool)
+                    $this->record
+                        ->is_shared_with_organization;
+            } else {
+                $data[
+                    'is_shared_with_organization'
+                ] =
+                    (bool) (
+                        $data[
+                            'is_shared_with_organization'
+                        ]
+                        ?? false
+                    );
+            }
+
+            return $data;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | LEGACY ZADATAK BEZ AUTORA
+        |--------------------------------------------------------------------------
+        |
+        | Stari zadaci napravljeni kroz kalendar
+        | nemaju created_by_user_id.
+        |
+        | Glavni korisnik organizacije može ga
+        | preuzeti i definirati vidljivost.
+        |
+        */
+
+        if (
+            (int) $user->id
+            ===
+            (int) $user->ownerId()
         ) {
             $data[
-                'is_shared_with_organization'
+                'created_by_user_id'
             ] =
-                (bool)
-                $this->record
-                    ->is_shared_with_organization;
-        } else {
+                $user->id;
+
             $data[
                 'is_shared_with_organization'
             ] =
@@ -97,7 +144,25 @@ class EditWorkTask extends EditRecord
                     ]
                     ?? false
                 );
+
+            return $data;
         }
+
+        /*
+        * Podkorisnik ne može preuzeti
+        * stari legacy zadatak.
+        */
+        $data[
+            'created_by_user_id'
+        ] =
+            null;
+
+        $data[
+            'is_shared_with_organization'
+        ] =
+            (bool)
+            $this->record
+                ->is_shared_with_organization;
 
         return $data;
     }

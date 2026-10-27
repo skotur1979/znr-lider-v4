@@ -1285,6 +1285,7 @@
     @if ($showTaskModal)
         <div class="znr-task-modal">
             <div class="znr-task-modal-box">
+
                 <div class="znr-task-modal-head">
                     <h3 class="znr-task-modal-title">
                         {{ $editingTaskId ? 'Uredi radni zadatak' : 'Novi radni zadatak' }}
@@ -1296,8 +1297,13 @@
                 </div>
 
                 <div class="znr-task-modal-body">
+
+                    {{-- NAZIV ZADATKA --}}
                     <div class="znr-task-field">
-                        <label>Naziv zadatka</label>
+                        <label>
+                            Naziv zadatka
+                        </label>
+
                         <input
                             type="text"
                             wire:model.defer="taskTitle"
@@ -1305,38 +1311,248 @@
                             class="znr-task-input"
                             placeholder="Npr. Pošalji uputnicu dr. medicine rada"
                         >
+
                         @error('taskTitle')
-                            <div class="znr-task-error">{{ $message }}</div>
+                            <div class="znr-task-error">
+                                {{ $message }}
+                            </div>
                         @enderror
                     </div>
 
+                    {{-- OPIS --}}
                     <div class="znr-task-field">
-                        <label>Opis</label>
+                        <label>
+                            Opis
+                        </label>
+
                         <textarea
                             wire:model.defer="taskDescription"
                             maxlength="1000"
                             class="znr-task-textarea"
                             placeholder="Dodatna napomena..."
                         ></textarea>
+
                         @error('taskDescription')
-                            <div class="znr-task-error">{{ $message }}</div>
+                            <div class="znr-task-error">
+                                {{ $message }}
+                            </div>
                         @enderror
                     </div>
 
+                    {{-- DATUM --}}
                     <div class="znr-task-field">
-                        <label>Datum</label>
+                        <label>
+                            Datum
+                        </label>
+
                         <input
                             type="date"
                             wire:model.defer="taskDate"
                             class="znr-task-input"
                         >
+
                         @error('taskDate')
-                            <div class="znr-task-error">{{ $message }}</div>
+                            <div class="znr-task-error">
+                                {{ $message }}
+                            </div>
                         @enderror
                     </div>
+
+                    {{-- VIDLJIVOST ZADATKA --}}
+                    <div
+                        class="znr-task-field"
+                        style="
+                            padding: 13px 14px;
+                            border-radius: 12px;
+                            border: 1px solid rgba(148, 163, 184, .20);
+                            background: rgba(148, 163, 184, .05);
+                        "
+                    >
+                        <div
+                            style="
+                                display:flex;
+                                align-items:flex-start;
+                                justify-content:space-between;
+                                gap:18px;
+                            "
+                        >
+                            <div
+                                style="
+                                    min-width:0;
+                                    flex:1;
+                                "
+                            >
+                                <label
+                                    style="
+                                        margin:0 0 4px 0;
+                                        font-size:.86rem;
+                                        font-weight:800;
+                                    "
+                                >
+                                    Vidljivo cijeloj organizaciji
+                                </label>
+
+                                <div
+                                    style="
+                                        font-size:.78rem;
+                                        line-height:1.45;
+                                        opacity:.72;
+                                    "
+                                >
+                                    Uključi ako ovaj radni zadatak trebaju
+                                    vidjeti svi korisnici organizacije.
+                                    Ako je isključeno, zadatak vidi samo
+                                    korisnik koji ga je kreirao.
+                                </div>
+                            </div>
+
+                            <label
+                                style="
+                                    position:relative;
+                                    display:inline-flex;
+                                    align-items:center;
+                                    flex-shrink:0;
+                                    width:46px;
+                                    height:26px;
+                                    margin:2px 0 0 0;
+                                    cursor:
+                                        {{ $taskCanChangeVisibility
+                                            ? 'pointer'
+                                            : 'not-allowed' }};
+                                "
+                                title="{{
+                                    $taskCanChangeVisibility
+                                        ? 'Promijeni vidljivost zadatka'
+                                        : 'Vidljivost može promijeniti samo autor zadatka'
+                                }}"
+                            >
+                                <input
+                                    type="checkbox"
+                                    wire:model.defer="taskSharedWithOrganization"
+                                    @disabled(! $taskCanChangeVisibility)
+                                    style="
+                                        position:absolute;
+                                        opacity:0;
+                                        width:0;
+                                        height:0;
+                                    "
+                                >
+
+                                <span
+                                    style="
+                                        position:absolute;
+                                        inset:0;
+                                        border-radius:999px;
+                                        border:1px solid
+                                            {{ $taskSharedWithOrganization
+                                                ? 'rgba(34,197,94,.55)'
+                                                : 'rgba(148,163,184,.35)' }};
+                                        background:
+                                            {{ $taskSharedWithOrganization
+                                                ? 'rgba(34,197,94,.85)'
+                                                : 'rgba(100,116,139,.35)' }};
+                                        transition:all .18s ease;
+                                        opacity:
+                                            {{ $taskCanChangeVisibility
+                                                ? '1'
+                                                : '.55' }};
+                                    "
+                                ></span>
+
+                                <span
+                                    style="
+                                        position:absolute;
+                                        top:4px;
+                                        left:
+                                            {{ $taskSharedWithOrganization
+                                                ? '24px'
+                                                : '4px' }};
+                                        width:18px;
+                                        height:18px;
+                                        border-radius:999px;
+                                        background:#ffffff;
+                                        box-shadow:
+                                            0 1px 4px
+                                            rgba(15,23,42,.30);
+                                        transition:left .18s ease;
+                                    "
+                                ></span>
+                            </label>
+                        </div>
+
+                        <div
+                            style="
+                                margin-top:10px;
+                                display:flex;
+                                align-items:center;
+                                gap:7px;
+                                font-size:.76rem;
+                                font-weight:700;
+                            "
+                        >
+                            @if ($taskSharedWithOrganization)
+                                <span
+                                    style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        padding:4px 8px;
+                                        border-radius:999px;
+                                        color:#22c55e;
+                                        background:rgba(34,197,94,.10);
+                                        border:1px solid rgba(34,197,94,.22);
+                                    "
+                                >
+                                    👥 Organizacija
+                                </span>
+                            @else
+                                <span
+                                    style="
+                                        display:inline-flex;
+                                        align-items:center;
+                                        padding:4px 8px;
+                                        border-radius:999px;
+                                        color:#94a3b8;
+                                        background:rgba(148,163,184,.08);
+                                        border:1px solid rgba(148,163,184,.18);
+                                    "
+                                >
+                                    👤 Privatno
+                                </span>
+                            @endif
+                        </div>
+
+                        @if (
+                            $editingTaskId
+                            && ! $taskCanChangeVisibility
+                        )
+                            <div
+                                style="
+                                    margin-top:9px;
+                                    padding:7px 9px;
+                                    border-radius:8px;
+                                    color:#f59e0b;
+                                    background:rgba(245,158,11,.08);
+                                    border:1px solid rgba(245,158,11,.18);
+                                    font-size:.75rem;
+                                    line-height:1.4;
+                                "
+                            >
+                                Vidljivost ovog zadatka može promijeniti
+                                samo korisnik koji ga je kreirao.
+                            </div>
+                        @endif
+
+                        @error('taskSharedWithOrganization')
+                            <div class="znr-task-error">
+                                {{ $message }}
+                            </div>
+                        @enderror
+                    </div>
+
                 </div>
 
                 <div class="znr-task-modal-footer">
+
                     <div>
                         @if ($editingTaskId)
                             <button
@@ -1351,15 +1567,27 @@
                     </div>
 
                     <div class="znr-task-btns-right">
-                        <button type="button" class="znr-btn znr-btn-secondary" wire:click="closeTaskModal">
+
+                        <button
+                            type="button"
+                            class="znr-btn znr-btn-secondary"
+                            wire:click="closeTaskModal"
+                        >
                             Odustani
                         </button>
 
-                        <button type="button" class="znr-btn znr-btn-primary" wire:click="saveTask">
+                        <button
+                            type="button"
+                            class="znr-btn znr-btn-primary"
+                            wire:click="saveTask"
+                        >
                             Spremi
                         </button>
+
                     </div>
+
                 </div>
+
             </div>
         </div>
     @endif

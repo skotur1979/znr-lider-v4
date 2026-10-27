@@ -45,6 +45,10 @@ class DashboardCalendarWidget extends Widget
     public string $taskTitle = '';
     public ?string $taskDescription = null;
 
+    public bool $taskSharedWithOrganization = false;
+
+    public bool $taskCanChangeVisibility = true;
+
     protected function cacheKey(): string
     {
         return 'dashboard-calendar-' . (auth()->id() ?? 'guest')
@@ -122,78 +126,351 @@ class DashboardCalendarWidget extends Widget
         $this->selected_date = null;
     }
 
-    public function openTaskCreateModal(?string $date = null): void
-    {
-        $this->editingTaskId = null;
-        $this->taskDate = $date ?: now()->toDateString();
-        $this->taskTitle = '';
-        $this->taskDescription = null;
-        $this->showTaskModal = true;
+    public function openTaskCreateModal(
+        ?string $date = null
+    ): void {
+        $this->editingTaskId =
+            null;
+
+        $this->taskDate =
+            $date
+            ?: now()->toDateString();
+
+        $this->taskTitle =
+            '';
+
+        $this->taskDescription =
+            null;
+
+        /*
+        * Novi radni zadatak je po defaultu privatan.
+        */
+        $this->taskSharedWithOrganization =
+            false;
+
+        /*
+        * Kod kreiranja korisnik uvijek
+        * smije odabrati vidljivost.
+        */
+        $this->taskCanChangeVisibility =
+            true;
+
+        $this->showTaskModal =
+            true;
     }
 
-    public function openTaskEditModal(int $taskId): void
-    {
-        $query = WorkTask::query()->whereKey($taskId);
-        $this->applyOwnerScope($query);
+    public function openTaskEditModal(
+        int $taskId
+    ): void {
+        $query =
+            WorkTask::query()
+                ->whereKey(
+                    $taskId
+                );
 
-        $task = $query->first();
+        $this->applyOwnerScope(
+            $query
+        );
+
+        $task =
+            $query->first();
 
         if (! $task) {
             return;
         }
 
-        $this->editingTaskId = $task->id;
-        $this->taskDate = $task->due_date?->toDateString();
-        $this->taskTitle = $task->title;
-        $this->taskDescription = $task->description;
-        $this->showTaskModal = true;
+        /*
+        * Privatni zadatak drugog korisnika
+        * ne smije se uređivati.
+        */
+        if (
+            ! \App\Filament\Resources\WorkTasks\WorkTaskResource
+                ::canManageTask(
+                    $task
+                )
+        ) {
+            return;
+        }
+
+        $this->editingTaskId =
+            $task->id;
+
+        $this->taskDate =
+            $task->due_date
+                ?->toDateString();
+
+        $this->taskTitle =
+            $task->title;
+
+        $this->taskDescription =
+            $task->description;
+
+        $this->taskSharedWithOrganization =
+            (bool)
+            $task->is_shared_with_organization;
+
+        $user =
+            Auth::user();
+
+        /*
+        * Autor može mijenjati:
+        *
+        * privatno <-> organizacija.
+        *
+        * Kod starih zadataka bez autora
+        * dopuštamo glavnom korisniku organizacije
+        * da preuzme zapis i odredi vidljivost.
+        */
+        $this->taskCanChangeVisibility =
+            $user
+            && (
+                (
+                    $task->created_by_user_id
+                    && (int)
+                        $task->created_by_user_id
+                        === (int) $user->id
+                )
+                ||
+                (
+                    ! $task->created_by_user_id
+                    && (int) $user->id
+                        === (int) $user->ownerId()
+                )
+            );
+
+        $this->showTaskModal =
+            true;
     }
 
     public function closeTaskModal(): void
     {
-        $this->editingTaskId = null;
-        $this->taskDate = null;
-        $this->taskTitle = '';
-        $this->taskDescription = null;
-        $this->showTaskModal = false;
+        $this->editingTaskId =
+            null;
+
+        $this->taskDate =
+            null;
+
+        $this->taskTitle =
+            '';
+
+        $this->taskDescription =
+            null;
+
+        $this->taskSharedWithOrganization =
+            false;
+
+        $this->taskCanChangeVisibility =
+            true;
+
+        $this->showTaskModal =
+            false;
+
         $this->resetValidation();
     }
 
     public function saveTask(): void
     {
-        $data = $this->validate([
-            'taskTitle' => ['required', 'string', 'max:120'],
-            'taskDescription' => ['nullable', 'string', 'max:1000'],
-            'taskDate' => ['required', 'date'],
-        ]);
+        $user =
+            Auth::user();
+
+        abort_unless(
+            $user,
+            403
+        );
+
+        /*
+        * Superadmin ne kreira niti uređuje
+        * organizacijske radne zadatke.
+        */
+        abort_if(
+            $user->isSuperAdmin(),
+            403
+        );
+
+        $ownerId =
+            $user->ownerId();
+
+        abort_unless(
+            $ownerId,
+            403
+        );
+
+        $data =
+            $this->validate([
+                'taskTitle' => [
+                    'required',
+                    'string',
+                    'max:120',
+                ],
+
+                'taskDescription' => [
+                    'nullable',
+                    'string',
+                    'max:1000',
+                ],
+
+                'taskDate' => [
+                    'required',
+                    'date',
+                ],
+
+                'taskSharedWithOrganization' => [
+                    'boolean',
+                ],
+            ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | UREĐIVANJE
+        |--------------------------------------------------------------------------
+        */
 
         if ($this->editingTaskId) {
-            $query = WorkTask::query()->whereKey($this->editingTaskId);
-            $this->applyOwnerScope($query);
+            $query =
+                WorkTask::query()
+                    ->whereKey(
+                        $this->editingTaskId
+                    );
 
-            $task = $query->first();
+            $this->applyOwnerScope(
+                $query
+            );
 
-            if ($task) {
-                $task->update([
-                    'title' => $data['taskTitle'],
-                    'description' => $data['taskDescription'],
-                    'due_date' => $data['taskDate'],
-                ]);
+            $task =
+                $query->first();
+
+            if (! $task) {
+                return;
             }
-        } else {
+
+            abort_unless(
+                \App\Filament\Resources\WorkTasks\WorkTaskResource
+                    ::canManageTask(
+                        $task
+                    ),
+                403
+            );
+
+            $updateData = [
+                'title' =>
+                    $data['taskTitle'],
+
+                'description' =>
+                    $data[
+                        'taskDescription'
+                    ],
+
+                'due_date' =>
+                    $data['taskDate'],
+            ];
+
+            /*
+            * Autor smije mijenjati vidljivost.
+            */
+            if (
+                (int) (
+                    $task
+                        ->created_by_user_id
+                    ?? 0
+                )
+                ===
+                (int) $user->id
+            ) {
+                $updateData[
+                    'is_shared_with_organization'
+                ] =
+                    (bool)
+                    $data[
+                        'taskSharedWithOrganization'
+                    ];
+            }
+
+            /*
+            * Stari zadatak napravljen kroz
+            * kalendar nema created_by_user_id.
+            *
+            * Glavni korisnik organizacije
+            * može ga preuzeti.
+            */
+            if (
+                ! $task->created_by_user_id
+                && (int) $user->id
+                    === (int) $ownerId
+            ) {
+                $updateData[
+                    'created_by_user_id'
+                ] =
+                    $user->id;
+
+                $updateData[
+                    'is_shared_with_organization'
+                ] =
+                    (bool)
+                    $data[
+                        'taskSharedWithOrganization'
+                    ];
+            }
+
+            $task->update(
+                $updateData
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | NOVI ZADATAK
+        |--------------------------------------------------------------------------
+        */
+
+        else {
             WorkTask::create([
-                'user_id' => $this->ownerId(),
-                'title' => $data['taskTitle'],
-                'description' => $data['taskDescription'],
-                'due_date' => $data['taskDate'],
-                'is_done' => false,
-                'completed_at' => null,
+                /*
+                * Organizacija.
+                */
+                'user_id' =>
+                    $ownerId,
+
+                /*
+                * Stvarni korisnik koji
+                * je napravio zadatak.
+                */
+                'created_by_user_id' =>
+                    $user->id,
+
+                'title' =>
+                    $data['taskTitle'],
+
+                'description' =>
+                    $data[
+                        'taskDescription'
+                    ],
+
+                'due_date' =>
+                    $data['taskDate'],
+
+                /*
+                * Privatno / organizacija.
+                */
+                'is_shared_with_organization' =>
+                    (bool)
+                    $data[
+                        'taskSharedWithOrganization'
+                    ],
+
+                'is_done' =>
+                    false,
+
+                'completed_at' =>
+                    null,
             ]);
         }
 
         $this->clearCalendarCache();
 
-        $this->dispatch('work-task-updated');
+        $this->dispatch(
+            'work-task-updated'
+        );
+
         $this->closeTaskModal();
     }
 
@@ -263,18 +540,24 @@ class DashboardCalendarWidget extends Widget
 
     public function getOpenWorkTasksCountProperty(): int
     {
-        $query = WorkTask::query()->where('is_done', false);
-        $this->applyOwnerScope($query);
-
-        return $query->count();
+        return $this
+            ->workTaskBaseQuery()
+            ->where(
+                'is_done',
+                false
+            )
+            ->count();
     }
 
     public function getClosedWorkTasksCountProperty(): int
     {
-        $query = WorkTask::query()->where('is_done', true);
-        $this->applyOwnerScope($query);
-
-        return $query->count();
+        return $this
+            ->workTaskBaseQuery()
+            ->where(
+                'is_done',
+                true
+            )
+            ->count();
     }
 
     public function getViewData(): array
@@ -376,10 +659,60 @@ class DashboardCalendarWidget extends Widget
 
     protected function workTaskBaseQuery(): Builder
     {
-        return $this->applyActiveScope(
-            $this->applyOwnerScope(WorkTask::query()),
-            (new WorkTask())->getTable()
-        );
+        $query =
+            $this->applyActiveScope(
+                $this->applyOwnerScope(
+                    WorkTask::query()
+                ),
+                (
+                    new WorkTask()
+                )->getTable()
+            );
+
+        $user =
+            Auth::user();
+
+        if (! $user) {
+            return $query
+                ->whereRaw(
+                    '1 = 0'
+                );
+        }
+
+        if (
+            $user->isSuperAdmin()
+        ) {
+            return $query;
+        }
+
+        /*
+        * Korisnik vidi:
+        *
+        * - zadatke cijele organizacije
+        * - svoje privatne zadatke
+        * - stare legacy zadatke bez autora
+        */
+        return $query
+            ->where(
+                function (
+                    Builder $query
+                ) use (
+                    $user
+                ): void {
+                    $query
+                        ->where(
+                            'is_shared_with_organization',
+                            true
+                        )
+                        ->orWhere(
+                            'created_by_user_id',
+                            $user->id
+                        )
+                        ->orWhereNull(
+                            'created_by_user_id'
+                        );
+                }
+            );
     }
 
     protected function employeeMedicalItems(Carbon $start, Carbon $end): Collection

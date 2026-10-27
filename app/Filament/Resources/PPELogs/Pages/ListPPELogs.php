@@ -33,13 +33,10 @@ class ListPPELogs extends BaseListRecords
         | ?pregled=isteklo
         | ?pregled=uskoro
         |
-        | Filament filter u PPELogResource trenutno koristi:
+        | Filament filter koristi:
         |
         | isteklo
         | istek
-        |
-        | Ovdje ih povezujemo kako bi dashboard
-        | i ručni filter koristili potpuno istu logiku.
         |
         */
 
@@ -79,8 +76,19 @@ class ListPPELogs extends BaseListRecords
 
             /*
             |--------------------------------------------------------------------------
-            | IZVOZ SVIH OZO ZADUŽENJA
+            | IZVOZ U EXCEL
             |--------------------------------------------------------------------------
+            |
+            | Izvoz sada poštuje:
+            |
+            | - trenutno odabrani Filament filter
+            | - pretragu tablice
+            | - tenant / organization scope
+            |
+            | Osim filtriranja PPELog zapisa, vrijednost filtera
+            | prosljeđujemo i PpeItemsAllExport klasi kako bi
+            | filtrirala i pojedinačne OZO stavke.
+            |
             */
 
             Action::make(
@@ -96,15 +104,88 @@ class ListPPELogs extends BaseListRecords
                     'success'
                 )
                 ->action(
-                    fn () =>
-                        Excel::download(
-                            new PpeItemsAllExport(),
-                            'OZO-SVI-'
+                    function () {
+                        /*
+                         * Trenutno odabrani Filament filter.
+                         */
+                        $pregled =
+                            $this->tableFilters[
+                                'pregled'
+                            ][
+                                'value'
+                            ]
+                            ?? request()->query(
+                                'pregled'
+                            )
+                            ?? 'svi';
+
+                        /*
+                         * Dashboard koristi "uskoro",
+                         * Filament filter koristi "istek".
+                         */
+                        $pregled =
+                            match ($pregled) {
+                                'uskoro' =>
+                                    'istek',
+
+                                'isteklo',
+                                'istek',
+                                'deaktivirani' =>
+                                    $pregled,
+
+                                default =>
+                                    'svi',
+                            };
+
+                        /*
+                         * Uzimamo samo zapise koji su prošli
+                         * trenutni Filament filter, pretragu
+                         * i korisnički scope.
+                         */
+                        $logIds =
+                            $this
+                                ->getFilteredSortedTableQuery()
+                                ->pluck(
+                                    'id'
+                                )
+                                ->map(
+                                    fn ($id): int =>
+                                        (int) $id
+                                )
+                                ->values()
+                                ->all();
+
+                        /*
+                         * Naziv datoteke prema filteru.
+                         */
+                        $prefix =
+                            match ($pregled) {
+                                'isteklo' =>
+                                    'OZO-ISTEKLO',
+
+                                'istek' =>
+                                    'OZO-USKORO',
+
+                                'deaktivirani' =>
+                                    'OZO-DEAKTIVIRANI',
+
+                                default =>
+                                    'OZO-SVI',
+                            };
+
+                        return Excel::download(
+                            new PpeItemsAllExport(
+                                $logIds,
+                                $pregled
+                            ),
+                            $prefix
+                            . '-'
                             . now()->format(
                                 'd-m-Y'
                             )
                             . '.xlsx'
-                        )
+                        );
+                    }
                 ),
 
             /*
@@ -185,7 +266,7 @@ class ListPPELogs extends BaseListRecords
 
                         $ownerId =
                             (int)
-                                $user->ownerId();
+                            $user->ownerId();
 
                         if ($ownerId <= 0) {
                             abort(403);

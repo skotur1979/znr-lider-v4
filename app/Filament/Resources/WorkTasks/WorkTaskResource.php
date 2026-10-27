@@ -107,6 +107,18 @@ class WorkTaskResource extends BaseResource
         * svi korisnici organizacije ga
         * mogu obrađivati.
         */
+        /*
+        * Legacy zadatak napravljen prije
+        * uvođenja created_by_user_id.
+        *
+        * Takav zadatak tretiramo kao
+        * organizacijski radi kompatibilnosti.
+        */
+        if (
+            ! $record->created_by_user_id
+        ) {
+            return true;
+        }
         if (
             (bool)
             $record
@@ -226,35 +238,51 @@ class WorkTaskResource extends BaseResource
                             ->inline(false)
                             ->columnSpanFull()
                             ->disabled(
-                                function (
-                                    ?WorkTask $record
-                                ): bool {
-                                    /*
-                                    * Kod kreiranja toggle je aktivan.
-                                    */
-                                    if (! $record) {
-                                        return false;
-                                    }
-
-                                    /*
-                                    * Kod postojećeg zadatka
-                                    * vidljivost može mijenjati
-                                    * samo njegov autor.
-                                    *
-                                    * Legacy zadaci nemaju autora
-                                    * i ostaju organizacijski.
-                                    */
-                                    return
-                                        (int) (
-                                            $record
-                                                ->created_by_user_id
-                                            ?? 0
-                                        )
-                                        !==
-                                        (int) Auth::id();
+                            function (
+                                ?WorkTask $record
+                            ): bool {
+                                /*
+                                * Novi zadatak.
+                                */
+                                if (! $record) {
+                                    return false;
                                 }
-                            )
-                            ->dehydrated(true),
+
+                                $user =
+                                    Auth::user();
+
+                                if (! $user) {
+                                    return true;
+                                }
+
+                                /*
+                                * Autor smije mijenjati vidljivost.
+                                */
+                                if (
+                                    $record
+                                        ->created_by_user_id
+                                ) {
+                                    return
+                                        (int)
+                                        $record
+                                            ->created_by_user_id
+                                        !==
+                                        (int)
+                                        $user->id;
+                                }
+
+                                /*
+                                * Legacy zadatak bez autora:
+                                * glavni korisnik organizacije
+                                * smije odrediti vidljivost.
+                                */
+                                return
+                                    (int) $user->id
+                                    !==
+                                    (int) $user->ownerId();
+                            }
+                        )
+                        ->dehydrated(true),
                     ]),
             ])
             ->columns(1);
@@ -1080,8 +1108,54 @@ class WorkTaskResource extends BaseResource
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->with('user');
+        $query =
+            parent::getEloquentQuery()
+                ->with('user');
+
+        $user =
+            Auth::user();
+
+        if (! $user) {
+            return $query
+                ->whereRaw(
+                    '1 = 0'
+                );
+        }
+
+        if (
+            $user->isSuperAdmin()
+        ) {
+            return $query;
+        }
+
+        /*
+        * Korisnik organizacije vidi:
+        *
+        * - organizacijske zadatke
+        * - svoje privatne zadatke
+        * - stare zadatke bez autora
+        */
+        return $query
+            ->where(
+                function (
+                    Builder $query
+                ) use (
+                    $user
+                ): void {
+                    $query
+                        ->where(
+                            'is_shared_with_organization',
+                            true
+                        )
+                        ->orWhere(
+                            'created_by_user_id',
+                            $user->id
+                        )
+                        ->orWhereNull(
+                            'created_by_user_id'
+                        );
+                }
+            );
     }
 
     public static function getNavigationBadge(): ?string
