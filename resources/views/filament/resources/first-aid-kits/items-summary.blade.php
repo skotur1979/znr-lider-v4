@@ -156,9 +156,11 @@
 <div
     style="
         width:100%;
+        min-width:100%;
         display:flex;
         align-items:center;
         justify-content:center;
+        text-align:center;
     "
 >
     <a
@@ -167,11 +169,13 @@
         x-on:click.stop
         style="
             width:100%;
+            min-width:100%;
             display:flex;
             flex-direction:column;
             align-items:center;
             justify-content:center;
             gap:4px;
+            text-align:center;
             text-decoration:none;
         "
     >
@@ -179,26 +183,53 @@
             $soon === 0
             && $expired === 0
         )
-            <x-filament::badge
-                color="success"
+            <div
+                style="
+                    width:100%;
+                    display:flex;
+                    justify-content:center;
+                    align-items:center;
+                "
             >
-                Sve stavke važeće
-            </x-filament::badge>
+                <x-filament::badge
+                    color="success"
+                >
+                    Sve stavke važeće
+                </x-filament::badge>
+            </div>
         @else
             @if ($soon > 0)
-                <x-filament::badge
-                    color="warning"
+                <div
+                    style="
+                        width:100%;
+                        display:flex;
+                        justify-content:center;
+                        align-items:center;
+                    "
                 >
-                    {{ $soon }} uskoro
-                </x-filament::badge>
+                    <x-filament::badge
+                        color="warning"
+                    >
+                        {{ $soon }} uskoro
+                    </x-filament::badge>
+                </div>
             @endif
 
             @if ($expired > 0)
-                <x-filament::badge
-                    color="danger"
+                <div
+                    style="
+                        width:100%;
+                        display:flex;
+                        justify-content:center;
+                        align-items:center;
+                    "
                 >
-                    {{ $expired }} isteklo
-                </x-filament::badge>
+                    <x-filament::badge
+                        color="danger"
+                    >
+                        {{ $expired }} isteklo
+                    </x-filament::badge>
+                </div>
             @endif
         @endif
     </a>

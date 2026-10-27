@@ -233,15 +233,53 @@ class FirstAidKitResource extends BaseResource
                                                     ->label(
                                                         'Vrijedi do'
                                                     )
-                                                    ->date(
-                                                        'd.m.Y.'
+                                                    ->default(
+                                                        'Nema roka'
+                                                    )
+                                                    ->formatStateUsing(
+                                                        function ($state): string {
+                                                            if (
+                                                                blank($state)
+                                                                || $state === 'Nema roka'
+                                                            ) {
+                                                                return 'Nema roka';
+                                                            }
+
+                                                            return \Illuminate\Support\Carbon::parse(
+                                                                $state
+                                                            )->format(
+                                                                'd.m.Y.'
+                                                            );
+                                                        }
                                                     )
                                                     ->badge()
                                                     ->color(
-                                                        fn ($state): string =>
-                                                            ExpiryBadge::color(
+                                                        function ($state): string {
+                                                            if (
+                                                                blank($state)
+                                                                || $state === 'Nema roka'
+                                                            ) {
+                                                                return 'gray';
+                                                            }
+
+                                                            return ExpiryBadge::color(
                                                                 $state
-                                                            )
+                                                            );
+                                                        }
+                                                    )
+                                                    ->tooltip(
+                                                        function ($state): string {
+                                                            if (
+                                                                blank($state)
+                                                                || $state === 'Nema roka'
+                                                            ) {
+                                                                return 'Rok uporabe nije definiran';
+                                                            }
+
+                                                            return ExpiryBadge::tooltip(
+                                                                $state
+                                                            );
+                                                        }
                                                     )
                                                     ->visible(
                                                         fn (
