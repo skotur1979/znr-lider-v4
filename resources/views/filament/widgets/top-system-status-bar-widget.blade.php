@@ -133,14 +133,236 @@
                     </div>
                 </div>
 
-                <a href="{{ route('znr.general-report.pdf') }}" target="_blank" class="tsb-report-card">
-                    <x-filament::icon icon="heroicon-o-document-chart-bar" class="tsb-report-icon" />
+                <x-filament::modal
+                    id="management-hse-report"
+                    width="sm"
+                >
+                    <x-slot name="trigger">
+                        <button
+                            type="button"
+                            class="tsb-report-card"
+                        >
+                            <x-filament::icon
+                                icon="heroicon-o-document-chart-bar"
+                                class="tsb-report-icon"
+                            />
 
-                    <div class="tsb-report-text">
-                        <span class="tsb-report-label">PDF</span>
-                        <span class="tsb-report-title">Izvještaj</span>
-                    </div>
-                </a>
+                            <div class="tsb-report-text">
+                                <span class="tsb-report-label">
+                                    PDF
+                                </span>
+
+                                <span class="tsb-report-title">
+                                    HSE izvještaj
+                                </span>
+                            </div>
+                        </button>
+                    </x-slot>
+
+                    <x-slot name="heading">
+                        Upravljački HSE izvještaj
+                    </x-slot>
+
+                    <x-slot name="description">
+                        Odaberi mjesec i godinu za izvještaj.
+                    </x-slot>
+
+                    <form
+                        method="GET"
+                        action="{{ route('znr.general-report.pdf') }}"
+                        target="_blank"
+
+                        x-data="{
+                            month: {{ now()->month }},
+                            year: {{ now()->year }},
+                            monthOpen: false,
+                            yearOpen: false,
+
+                            monthLabels: {
+                                1: 'Siječanj',
+                                2: 'Veljača',
+                                3: 'Ožujak',
+                                4: 'Travanj',
+                                5: 'Svibanj',
+                                6: 'Lipanj',
+                                7: 'Srpanj',
+                                8: 'Kolovoz',
+                                9: 'Rujan',
+                                10: 'Listopad',
+                                11: 'Studeni',
+                                12: 'Prosinac'
+                            }
+                        }"
+
+                        class="hse-report-form"
+                    >
+                        {{-- stvarne vrijednosti koje se šalju controlleru --}}
+                        <input
+                            type="hidden"
+                            name="month"
+                            x-bind:value="month"
+                        >
+
+                        <input
+                            type="hidden"
+                            name="year"
+                            x-bind:value="year"
+                        >
+
+                        <div class="hse-report-grid">
+
+                            {{-- MJESEC --}}
+                            <div
+                                class="hse-report-field"
+                                x-on:click.outside="monthOpen = false"
+                            >
+                                <label class="hse-report-label">
+                                    Mjesec
+                                </label>
+
+                                <button
+                                    type="button"
+                                    class="hse-report-picker"
+                                    x-on:click="
+                                        monthOpen = ! monthOpen;
+                                        yearOpen = false;
+                                    "
+                                >
+                                    <span
+                                        x-text="monthLabels[month]"
+                                    ></span>
+
+                                    <x-filament::icon
+                                        icon="heroicon-m-chevron-down"
+                                        class="hse-report-picker-icon"
+                                    />
+                                </button>
+
+                                <div
+                                    x-cloak
+                                    x-show="monthOpen"
+                                    x-transition
+                                    class="hse-report-menu"
+                                >
+                                    @foreach ([
+                                        1 => 'Siječanj',
+                                        2 => 'Veljača',
+                                        3 => 'Ožujak',
+                                        4 => 'Travanj',
+                                        5 => 'Svibanj',
+                                        6 => 'Lipanj',
+                                        7 => 'Srpanj',
+                                        8 => 'Kolovoz',
+                                        9 => 'Rujan',
+                                        10 => 'Listopad',
+                                        11 => 'Studeni',
+                                        12 => 'Prosinac',
+                                    ] as $monthNumber => $monthLabel)
+
+                                        <button
+                                            type="button"
+                                            class="hse-report-option"
+                                            x-bind:class="{
+                                                'is-selected':
+                                                    month === {{ $monthNumber }}
+                                            }"
+                                            x-on:click="
+                                                month = {{ $monthNumber }};
+                                                monthOpen = false;
+                                            "
+                                        >
+                                            <span>
+                                                {{ $monthLabel }}
+                                            </span>
+
+                                            <x-filament::icon
+                                                icon="heroicon-m-check"
+                                                class="hse-report-check"
+                                                x-show="month === {{ $monthNumber }}"
+                                            />
+                                        </button>
+
+                                    @endforeach
+                                </div>
+                            </div>
+
+                            {{-- GODINA --}}
+                            <div
+                                class="hse-report-field"
+                                x-on:click.outside="yearOpen = false"
+                            >
+                                <label class="hse-report-label">
+                                    Godina
+                                </label>
+
+                                <button
+                                    type="button"
+                                    class="hse-report-picker"
+                                    x-on:click="
+                                        yearOpen = ! yearOpen;
+                                        monthOpen = false;
+                                    "
+                                >
+                                    <span
+                                        x-text="year"
+                                    ></span>
+
+                                    <x-filament::icon
+                                        icon="heroicon-m-chevron-down"
+                                        class="hse-report-picker-icon"
+                                    />
+                                </button>
+
+                                <div
+                                    x-cloak
+                                    x-show="yearOpen"
+                                    x-transition
+                                    class="hse-report-menu"
+                                >
+                                    @for (
+                                        $yearOption = now()->year;
+                                        $yearOption >= now()->year - 5;
+                                        $yearOption--
+                                    )
+                                        <button
+                                            type="button"
+                                            class="hse-report-option"
+                                            x-bind:class="{
+                                                'is-selected':
+                                                    year === {{ $yearOption }}
+                                            }"
+                                            x-on:click="
+                                                year = {{ $yearOption }};
+                                                yearOpen = false;
+                                            "
+                                        >
+                                            <span>
+                                                {{ $yearOption }}
+                                            </span>
+
+                                            <x-filament::icon
+                                                icon="heroicon-m-check"
+                                                class="hse-report-check"
+                                                x-show="year === {{ $yearOption }}"
+                                            />
+                                        </button>
+                                    @endfor
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div class="hse-report-actions">
+                            <x-filament::button
+                                type="submit"
+                                icon="heroicon-o-document-arrow-down"
+                                color="warning"
+                            >
+                                Generiraj PDF
+                            </x-filament::button>
+                        </div>
+                    </form>
+                </x-filament::modal>
 
                 <div class="tsb-score-card tsb-score-lta">
                     <div class="tsb-score-icon">
@@ -215,8 +437,23 @@
         .tsb-alert-icon{width:52px;height:52px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:18px;font-size:1.8rem;line-height:1;font-weight:1000;color:#ef4444;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.28);box-shadow:0 0 24px rgba(239,68,68,.16);}
         .dark .tsb-alert-icon{color:#fca5a5;background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.30);box-shadow:0 0 28px rgba(239,68,68,.18);}
 
-        .tsb-summary-copy{min-width:0;}
-        .tsb-summary-title{font-size:1.24rem;line-height:1.12;font-weight:950;color:#0f172a;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:760px;}
+        .tsb-summary-copy{
+            min-width:0;
+            flex:1;
+        }
+        .tsb-summary-title{
+        font-size:1.18rem;
+        line-height:1.22;
+        font-weight:950;
+        color:#0f172a;
+        letter-spacing:-.02em;
+
+        white-space:normal;
+        overflow:visible;
+        text-overflow:clip;
+
+        max-width:620px;
+    }
         .dark .tsb-summary-title{color:#ffffff;}
         .tsb-summary-title strong{color:#ef4444;font-weight:1000;}
         .tsb-summary-desc{margin-top:5px;max-width:520px;font-size:.82rem;line-height:1.35;color:#64748b;}
@@ -238,6 +475,8 @@
             color:#1d4ed8;
             text-decoration:none;
             transition:all .15s ease;
+            cursor:pointer;
+            font:inherit;
         }
 
         .tsb-report-card:hover{transform:translateY(-2px);border-color:rgba(37,99,235,.70);background:rgba(37,99,235,.22);box-shadow:0 12px 22px rgba(37,99,235,.18);}
@@ -393,47 +632,280 @@
         }
 
         @media (max-width:700px){
-        .tsb-wrap{padding:18px 16px;}
+            .tsb-wrap{
+                padding:18px 16px;
+            }
 
-        .tsb-right{
-            width:100%;
+            .tsb-right{
+                width:100%;
+            }
+
+            .tsb-score-card{
+                min-width:0;
+                flex:1;
+            }
+
+            .tsb-report-card{
+                min-width:100%;
+                width:100%;
+                justify-content:center;
+                text-align:center;
+            }
+
+            .tsb-report-text{
+                align-items:center;
+                text-align:center;
+            }
+
+            .tsb-summary-row{
+                align-items:flex-start;
+            }
+
+            .tsb-alert-icon{
+                width:48px;
+                height:48px;
+                font-size:1.6rem;
+            }
+
+            .tsb-summary-title{
+                white-space:normal;
+            }
+
+            .tsb-modules{
+                grid-template-columns:1fr;
+            }
         }
 
-        .tsb-score-card{
+
+        /*
+        |--------------------------------------------------------------------------
+        | HSE REPORT MODAL
+        |--------------------------------------------------------------------------
+        */
+
+        [x-cloak]{
+            display:none !important;
+        }
+
+        .hse-report-form{
+            margin-top:8px;
+        }
+
+        .hse-report-grid{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:14px;
+        }
+
+        .hse-report-field{
+            position:relative;
             min-width:0;
-            flex:1;
         }
 
-        .tsb-report-card{
-            min-width:100%;
+        .hse-report-label{
+            display:block;
+            margin-bottom:6px;
+
+            color:#374151;
+
+            font-size:.78rem;
+            font-weight:800;
+        }
+
+        .dark .hse-report-label{
+            color:#f3f4f6;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | PICKER
+        |--------------------------------------------------------------------------
+        */
+
+        .hse-report-picker{
             width:100%;
-            justify-content:center;
-            text-align:center;
-        }
+            min-height:40px;
 
-        .tsb-report-text{
+            display:flex;
             align-items:center;
-            text-align:center;
+            justify-content:space-between;
+            gap:10px;
+
+            padding:0 11px;
+
+            border:1px solid #d1d5db;
+            border-radius:9px;
+
+            background:#ffffff;
+            color:#111827;
+
+            font-size:.84rem;
+            font-weight:650;
+            text-align:left;
+
+            cursor:pointer;
         }
 
-        .tsb-summary-row{
-            align-items:flex-start;
+        .dark .hse-report-picker{
+            border-color:rgba(255,255,255,.12);
+            background:#111827;
+            color:#f9fafb;
         }
 
-        .tsb-alert-icon{
-            width:48px;
-            height:48px;
-            font-size:1.6rem;
+        .hse-report-picker:hover{
+            border-color:#f59e0b;
         }
 
-        .tsb-summary-title{
-            white-space:normal;
+        .hse-report-picker:focus{
+            outline:none;
+
+            border-color:#f59e0b;
+
+            box-shadow:
+                0 0 0 2px
+                rgba(245,158,11,.14);
         }
 
-        .tsb-modules{
-            grid-template-columns:1fr;
+        .hse-report-picker-icon{
+            width:16px;
+            height:16px;
+
+            flex:none;
+
+            color:#6b7280;
         }
-    }
+
+        .dark .hse-report-picker-icon{
+            color:#9ca3af;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DROPDOWN
+        |--------------------------------------------------------------------------
+        */
+
+        .hse-report-menu{
+            position:absolute;
+
+            z-index:1000;
+
+            top:calc(100% + 6px);
+            left:0;
+            right:0;
+
+            max-height:260px;
+            overflow-y:auto;
+
+            padding:5px;
+
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+
+            background:#ffffff;
+
+            box-shadow:
+                0 12px 30px
+                rgba(15,23,42,.18);
+        }
+
+        .dark .hse-report-menu{
+            border-color:rgba(255,255,255,.10);
+
+            background:#18181b;
+
+            box-shadow:
+                0 14px 34px
+                rgba(0,0,0,.45);
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DROPDOWN OPTION
+        |--------------------------------------------------------------------------
+        */
+
+        .hse-report-option{
+            width:100%;
+
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+
+            padding:8px 9px;
+
+            border:0;
+            border-radius:7px;
+
+            background:transparent;
+            color:#374151;
+
+            font-size:.82rem;
+            font-weight:600;
+            text-align:left;
+
+            cursor:pointer;
+        }
+
+        .dark .hse-report-option{
+            color:#e5e7eb;
+        }
+
+        .hse-report-option:hover{
+            background:#f3f4f6;
+        }
+
+        .dark .hse-report-option:hover{
+            background:rgba(255,255,255,.07);
+        }
+
+        .hse-report-option.is-selected{
+            background:rgba(245,158,11,.12);
+            color:#d97706;
+        }
+
+        .dark .hse-report-option.is-selected{
+            background:rgba(245,158,11,.14);
+            color:#fbbf24;
+        }
+
+        .hse-report-check{
+            width:15px;
+            height:15px;
+
+            flex:none;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | ACTIONS
+        |--------------------------------------------------------------------------
+        */
+
+        .hse-report-actions{
+            display:flex;
+            justify-content:flex-end;
+
+            margin-top:18px;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | MOBILE HSE MODAL
+        |--------------------------------------------------------------------------
+        */
+
+        @media (max-width:640px){
+            .hse-report-grid{
+                grid-template-columns:1fr;
+            }
+        }
 
         @media (prefers-reduced-motion:reduce){
             .tsb-expired-blink,

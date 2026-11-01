@@ -14,6 +14,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Inspection;
+use App\Models\InspectionFinding;
+use App\Services\KpiCalculationService;
+use App\Services\ObservationReportService;
 
 class ZnrGeneralReportController extends Controller
 {
@@ -27,6 +31,85 @@ class ZnrGeneralReportController extends Controller
 
         abort_if($ownerId <= 0, 403);
 
+        /*
+        |--------------------------------------------------------------------------
+        | RAZDOBLJE IZVJEŠTAJA
+        |--------------------------------------------------------------------------
+        */
+
+        $validated =
+            $request->validate([
+                'month' => [
+                    'nullable',
+                    'integer',
+                    'between:1,12',
+                ],
+
+                'year' => [
+                    'nullable',
+                    'integer',
+                    'between:2020,2100',
+                ],
+            ]);
+
+        $reportMonth =
+            (int) (
+                $validated['month']
+                ?? now()->month
+            );
+
+        $reportYear =
+            (int) (
+                $validated['year']
+                ?? now()->year
+            );
+
+        $monthNames = [
+            1 => 'Siječanj',
+            2 => 'Veljača',
+            3 => 'Ožujak',
+            4 => 'Travanj',
+            5 => 'Svibanj',
+            6 => 'Lipanj',
+            7 => 'Srpanj',
+            8 => 'Kolovoz',
+            9 => 'Rujan',
+            10 => 'Listopad',
+            11 => 'Studeni',
+            12 => 'Prosinac',
+        ];
+
+        $reportPeriodLabel =
+            $monthNames[$reportMonth]
+            . ' '
+            . $reportYear
+            . '.';
+
+        $periodFrom =
+            Carbon::create(
+                $reportYear,
+                $reportMonth,
+                1
+            )
+                ->startOfMonth()
+                ->startOfDay();
+
+        $periodTo =
+            $periodFrom
+                ->copy()
+                ->endOfMonth()
+                ->endOfDay();
+
+        $previousPeriod =
+            $periodFrom
+                ->copy()
+                ->subMonth();
+
+        $compareMonth =
+            (int) $previousPeriod->month;
+
+        $compareYear =
+            (int) $previousPeriod->year;
         /*
         |--------------------------------------------------------------------------
         | PRAVA PRISTUPA MODULIMA
@@ -61,6 +144,8 @@ class ZnrGeneralReportController extends Controller
             'work_tasks' => $canView('work_tasks'),
             'expenses' => $canView('expenses'),
             'budgets' => $canView('budgets'),
+            'kpis' => $canView('kpis'),
+            'onto_records' => $canView('onto_records'),
         ];
 
         /*
@@ -342,29 +427,415 @@ class ZnrGeneralReportController extends Controller
             ? (int) ($safetyMetrics['faa_count'] ?? 0)
             : 0;
 
+            /*
+            |--------------------------------------------------------------------------
+            | MJESEČNI MANAGEMENT / HSE POKAZATELJI
+            |--------------------------------------------------------------------------
+            */
+
+            $managementMetrics =
+                app(
+                    KpiCalculationService::class
+                )->managementMetrics(
+                    $reportMonth,
+                    $reportYear
+                );
+
+            /*
+            |--------------------------------------------------------------------------
+            | INCIDENTI - ODABRANI MJESEC
+            |--------------------------------------------------------------------------
+            */
+
+            $periodLta = 0;
+            $periodMta = 0;
+            $periodFaa = 0;
+            $periodLostDays = 0;
+
+            if (
+                $access['incidents']
+            ) {
+                $incidentBase =
+                    Incident::query()
+                        ->withoutTrashed()
+                        ->where(
+                            'user_id',
+                            $ownerId
+                        )
+                        ->whereBetween(
+                            'date_occurred',
+                            [
+                                $periodFrom,
+                                $periodTo,
+                            ]
+                        );
+
+                $periodLta =
+                    (int)
+                    (clone $incidentBase)
+                        ->whereRaw(
+                            'UPPER(TRIM(type_of_incident)) = ?',
+                            ['LTA']
+                        )
+                        ->count();
+
+                $periodMta =
+                    (int)
+                    (clone $incidentBase)
+                        ->whereRaw(
+                            'UPPER(TRIM(type_of_incident)) = ?',
+                            ['MTA']
+                        )
+                        ->count();
+
+                $periodFaa =
+                    (int)
+                    (clone $incidentBase)
+                        ->whereRaw(
+                            'UPPER(TRIM(type_of_incident)) = ?',
+                            ['FAA']
+                        )
+                        ->count();
+
+                $periodLostDays =
+                    (int)
+                    (clone $incidentBase)
+                        ->whereRaw(
+                            'UPPER(TRIM(type_of_incident)) = ?',
+                            ['LTA']
+                        )
+                        ->sum(
+                            'working_days_lost'
+                        );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | ZAPAŽANJA - ODABRANI MJESEC
+            |--------------------------------------------------------------------------
+            */
+
+            $observationSummary = [];
+
+            if (
+                $access['observations']
+            ) {
+                $observationReport =
+                    app(
+                        ObservationReportService::class
+                    )->report([
+                        'owner_id' =>
+                            $ownerId,
+
+                        'year' =>
+                            (string)
+                            $reportYear,
+
+                        'month' =>
+                            (string)
+                            $reportMonth,
+                    ]);
+
+                $observationSummary =
+                    $observationReport[
+                        'summary'
+                    ]
+                    ?? [];
+            }
+
+            $periodNearMiss =
+                $access['observations']
+                    ? (int) (
+                        $observationSummary[
+                            'nearMiss'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            $periodNegative =
+                $access['observations']
+                    ? (int) (
+                        $observationSummary[
+                            'negative'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            $periodPositive =
+                $access['observations']
+                    ? (int) (
+                        $observationSummary[
+                            'positive'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            $periodObservationTotal =
+                $access['observations']
+                    ? (int) (
+                        $observationSummary[
+                            'total'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            /*
+            |--------------------------------------------------------------------------
+            | KOREKTIVNE RADNJE IZ ZAPAŽANJA
+            |--------------------------------------------------------------------------
+            */
+
+            $periodCorrectiveOpen =
+                $access['observations']
+                    ? (int) (
+                        $managementMetrics[
+                            'corrective_actions_open'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            $periodCorrectiveClosed =
+                $access['observations']
+                    ? (int) (
+                        $managementMetrics[
+                            'corrective_actions_closed'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            $periodCorrectiveInProgress =
+                $access['observations']
+                    ? (int) (
+                        $managementMetrics[
+                            'corrective_actions_in_progress'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            $periodCorrectiveDelayDays =
+                $access['observations']
+                    ? (int) (
+                        $managementMetrics[
+                            'corrective_actions_delay_days'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            /*
+            |--------------------------------------------------------------------------
+            | NADZORI - ODABRANI MJESEC
+            |--------------------------------------------------------------------------
+            */
+
+            $periodInspections = 0;
+            $periodFindingsTotal = 0;
+            $periodFindingsOpen = 0;
+            $periodFindingsInProgress = 0;
+            $periodFindingsClosed = 0;
+            $periodFindingsOverdue = 0;
+
+            if (
+                $access['inspections']
+            ) {
+                $inspectionIds =
+                    Inspection::query()
+                        ->where(
+                            'user_id',
+                            $ownerId
+                        )
+                        ->whereBetween(
+                            'performed_at',
+                            [
+                                $periodFrom,
+                                $periodTo,
+                            ]
+                        )
+                        ->pluck(
+                            'id'
+                        );
+
+                $periodInspections =
+                    $inspectionIds->count();
+
+                if (
+                    $inspectionIds
+                        ->isNotEmpty()
+                ) {
+                    $findingBase =
+                        InspectionFinding::query()
+                            ->whereIn(
+                                'inspection_id',
+                                $inspectionIds
+                            );
+
+                    $periodFindingsTotal =
+                        (clone $findingBase)
+                            ->count();
+
+                    $periodFindingsOpen =
+                        (clone $findingBase)
+                            ->where(
+                                'action_required',
+                                true
+                            )
+                            ->where(
+                                'workflow_status',
+                                'open'
+                            )
+                            ->count();
+
+                    $periodFindingsInProgress =
+                        (clone $findingBase)
+                            ->where(
+                                'action_required',
+                                true
+                            )
+                            ->where(
+                                'workflow_status',
+                                'in_progress'
+                            )
+                            ->count();
+
+                    $periodFindingsClosed =
+                        (clone $findingBase)
+                            ->where(
+                                'action_required',
+                                true
+                            )
+                            ->whereIn(
+                                'workflow_status',
+                                [
+                                    'closed',
+                                    'resolved_no_action',
+                                    'converted_to_observation',
+                                ]
+                            )
+                            ->count();
+
+                    $periodFindingsOverdue =
+                        (clone $findingBase)
+                            ->where(
+                                'action_required',
+                                true
+                            )
+                            ->whereIn(
+                                'workflow_status',
+                                [
+                                    'open',
+                                    'in_progress',
+                                ]
+                            )
+                            ->whereNotNull(
+                                'due_date'
+                            )
+                            ->whereDate(
+                                'due_date',
+                                '<',
+                                Carbon::today()
+                            )
+                            ->count();
+                }
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | OTPAD / OKOLIŠ
+            |--------------------------------------------------------------------------
+            */
+
+            $nonHazardousWasteKg =
+                $access['onto_records']
+                    ? (float) (
+                        $managementMetrics[
+                            'non_hazardous_waste_kg'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            $hazardousWasteKg =
+                $access['onto_records']
+                    ? (float) (
+                        $managementMetrics[
+                            'hazardous_waste_kg'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            $municipalWasteKg =
+                $access['onto_records']
+                    ? (float) (
+                        $managementMetrics[
+                            'municipal_waste_kg'
+                        ]
+                        ?? 0
+                    )
+                    : 0;
+
+            /*
+            |--------------------------------------------------------------------------
+            | AFR / ASR
+            |--------------------------------------------------------------------------
+            */
+
+            $periodAfr =
+                $access['kpis']
+                    ? (
+                        $managementMetrics[
+                            'afr'
+                        ]
+                        ?? null
+                    )
+                    : null;
+
+            $periodAsr =
+                $access['kpis']
+                    ? (
+                        $managementMetrics[
+                            'asr'
+                        ]
+                        ?? null
+                    )
+                    : null;
+
+            /*
+            |--------------------------------------------------------------------------
+            | KPI ZA MANAGEMENT
+            |--------------------------------------------------------------------------
+            */
+
+            $managementKpis =
+                $access['kpis']
+                    ? app(
+                        KpiCalculationService::class
+                    )->dashboardGroups(
+                        $reportMonth,
+                        $reportYear,
+                        $compareMonth,
+                        $compareYear
+                    )
+                    : collect();
+
         /*
         |--------------------------------------------------------------------------
         | TREND OZLJEDA
         |--------------------------------------------------------------------------
         */
 
-        $currentYear = (int) now()->year;
-        $previousYear = $currentYear - 1;
+        $currentYear =
+        $reportYear;
 
-        $monthNames = [
-            1 => 'Siječanj',
-            2 => 'Veljača',
-            3 => 'Ožujak',
-            4 => 'Travanj',
-            5 => 'Svibanj',
-            6 => 'Lipanj',
-            7 => 'Srpanj',
-            8 => 'Kolovoz',
-            9 => 'Rujan',
-            10 => 'Listopad',
-            11 => 'Studeni',
-            12 => 'Prosinac',
-        ];
+        $previousYear =
+        $currentYear - 1;
 
         $incidentTrend = [];
         $currentYearIncidents = 0;
@@ -640,6 +1111,116 @@ class ZnrGeneralReportController extends Controller
             'currentYearIncidents' => $currentYearIncidents,
             'previousYearIncidents' => $previousYearIncidents,
             'incidentDifference' => $incidentDifference,
+            /*
+            |--------------------------------------------------------------------------
+            | Odabrano razdoblje
+            |--------------------------------------------------------------------------
+            */
+
+            'reportMonth' =>
+                $reportMonth,
+
+            'reportYear' =>
+                $reportYear,
+
+            'reportPeriodLabel' =>
+                $reportPeriodLabel,
+
+            'compareMonth' =>
+                $compareMonth,
+
+            'compareYear' =>
+                $compareYear,
+
+            /*
+            |--------------------------------------------------------------------------
+            | Mjesečni HSE
+            |--------------------------------------------------------------------------
+            */
+
+            'periodLta' =>
+                $periodLta,
+
+            'periodMta' =>
+                $periodMta,
+
+            'periodFaa' =>
+                $periodFaa,
+
+            'periodLostDays' =>
+                $periodLostDays,
+
+            'periodNearMiss' =>
+                $periodNearMiss,
+
+            'periodNegative' =>
+                $periodNegative,
+
+            'periodPositive' =>
+                $periodPositive,
+
+            'periodObservationTotal' =>
+                $periodObservationTotal,
+
+            'periodCorrectiveOpen' =>
+                $periodCorrectiveOpen,
+
+            'periodCorrectiveClosed' =>
+                $periodCorrectiveClosed,
+
+            'periodCorrectiveInProgress' =>
+                $periodCorrectiveInProgress,
+
+            'periodCorrectiveDelayDays' =>
+                $periodCorrectiveDelayDays,
+
+            'periodInspections' =>
+                $periodInspections,
+
+            'periodFindingsTotal' =>
+                $periodFindingsTotal,
+
+            'periodFindingsOpen' =>
+                $periodFindingsOpen,
+
+            'periodFindingsInProgress' =>
+                $periodFindingsInProgress,
+
+            'periodFindingsClosed' =>
+                $periodFindingsClosed,
+
+            'periodFindingsOverdue' =>
+                $periodFindingsOverdue,
+
+            /*
+            |--------------------------------------------------------------------------
+            | Okoliš
+            |--------------------------------------------------------------------------
+            */
+
+            'nonHazardousWasteKg' =>
+                $nonHazardousWasteKg,
+
+            'hazardousWasteKg' =>
+                $hazardousWasteKg,
+
+            'municipalWasteKg' =>
+                $municipalWasteKg,
+
+            /*
+            |--------------------------------------------------------------------------
+            | KPI
+            |--------------------------------------------------------------------------
+            */
+
+            'periodAfr' =>
+                $periodAfr,
+
+            'periodAsr' =>
+                $periodAsr,
+
+            'managementKpis' =>
+                $managementKpis,
         ];
 
         $pdf = Pdf::loadView(
@@ -655,7 +1236,16 @@ class ZnrGeneralReportController extends Controller
             ]);
 
         return $pdf->stream(
-            'ZNR-izvjestaj-o-stanju-sustava.pdf'
+            'ZNR-Upravljacki-HSE-izvjestaj-'
+            . $reportYear
+            . '-'
+            . str_pad(
+                (string) $reportMonth,
+                2,
+                '0',
+                STR_PAD_LEFT
+            )
+            . '.pdf'
         );
     }
 }

@@ -1,10 +1,6 @@
 <?php
 
-
-
 namespace App\Services;
-
-
 
 use App\Models\Observation;
 
@@ -15,8 +11,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 use Illuminate\Support\Facades\Auth;
-
-
 
 class ObservationReportService
 
@@ -104,14 +98,45 @@ class ObservationReportService
             return $query->whereRaw('1 = 0');
         }
 
-        if (! $user->isSuperAdmin()) {
-            $ownerId = $user->ownerId();
+        $forcedOwnerId =
+            $filters['owner_id']
+            ?? null;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Eksplicitna organizacija
+        |--------------------------------------------------------------------------
+        |
+        | Management report može eksplicitno definirati ownera.
+        | Ostali postojeći izvještaji nastavljaju raditi kao prije.
+        |
+        */
+
+        if (
+            filled(
+                $forcedOwnerId
+            )
+        ) {
+            $query->where(
+                'user_id',
+                (int) $forcedOwnerId
+            );
+        } elseif (
+            ! $user->isSuperAdmin()
+        ) {
+            $ownerId =
+                $user->ownerId();
 
             if (! $ownerId) {
-                return $query->whereRaw('1 = 0');
+                return $query->whereRaw(
+                    '1 = 0'
+                );
             }
 
-            $query->where('user_id', $ownerId);
+            $query->where(
+                'user_id',
+                $ownerId
+            );
         }
 
         $year = $filters['year'] ?? null;

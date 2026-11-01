@@ -2,7 +2,7 @@
 <html lang="hr">
 <head>
     <meta charset="UTF-8">
-    <title>ZNR LIDER - Izvještaj o stanju sustava</title>
+    <title>ZNR LIDER - Upravljački HSE izvještaj</title>
 
     <style>
         @page { margin: 14px; }
@@ -227,6 +227,103 @@
     $canWorkTasks = (bool) ($access['work_tasks'] ?? false);
     $canExpenses = (bool) ($access['expenses'] ?? false);
     $canBudgets = (bool) ($access['budgets'] ?? false);
+    $canKpis =
+    (bool) (
+        $access['kpis']
+        ?? false
+    );
+
+    $canOntoRecords =
+        (bool) (
+            $access['onto_records']
+            ?? false
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | KPI ZA MANAGEMENT REPORT
+    |--------------------------------------------------------------------------
+    |
+    | U PDF prikazujemo samo KPI-je označene za dashboard,
+    | a od njih prvenstveno ZNR i Okoliš.
+    |
+    */
+
+        $managementKpiRows =
+        collect(
+            $managementKpis
+            ?? []
+        )
+            ->flatten(1)
+            ->filter(
+                fn (array $row): bool =>
+                    in_array(
+                        $row['category']
+                            ?? '',
+                        [
+                            'ZNR',
+                            'Okoliš',
+                        ],
+                        true
+                    )
+            )
+            ->values();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sažetak KPI statusa
+    |--------------------------------------------------------------------------
+    |
+    | U upravljačkom HSE izvještaju ne trebamo ponovno prikazivati
+    | cijeli KPI izvještaj.
+    |
+    | Detaljni KPI-i već postoje u KPI modulu.
+    | Ovdje prikazujemo samo stanje KPI pokazatelja.
+    |
+    */
+
+    $kpiSuccessCount =
+        $managementKpiRows
+            ->filter(
+                fn (array $row): bool =>
+                    ($row['status'] ?? null)
+                        === 'success'
+            )
+            ->count();
+
+    $kpiWarningCount =
+        $managementKpiRows
+            ->filter(
+                fn (array $row): bool =>
+                    ($row['status'] ?? null)
+                        === 'warning'
+            )
+            ->count();
+
+    $kpiDangerCount =
+        $managementKpiRows
+            ->filter(
+                fn (array $row): bool =>
+                    ($row['status'] ?? null)
+                        === 'danger'
+            )
+            ->count();
+
+    $kpiUnratedCount =
+        $managementKpiRows
+            ->filter(
+                fn (array $row): bool =>
+                    ! in_array(
+                        $row['status'] ?? 'neutral',
+                        [
+                            'success',
+                            'warning',
+                            'danger',
+                        ],
+                        true
+                    )
+            )
+            ->count();
 
     $hasPeoplePage = $canEmployees || $canPpe;
     $hasTechnicalPage = count($rows ?? []) > 0 || $canFires || $canInspections || $canObservations || $canWorkTasks;
@@ -293,24 +390,31 @@
     {{-- 1. STRANICA - UPRAVLJAČKI PREGLED --}}
     <div class="header">
         <div class="brand">ZNR LIDER</div>
-        <div class="title">Izvještaj o stanju sustava</div>
+        <div class="title">
+            Upravljački HSE izvještaj
+        </div>
+
         <div class="meta">
-            Upravljački izvještaj zaštite na radu
-            · Datum izvještaja: {{ $reportDate }}
+            Odabrano mjesečno razdoblje: {{ $reportPeriodLabel }}
+            · Trenutno stanje sustava na: {{ $reportDate }}
             · Prikaz prema dodijeljenim pravima korisnika
         </div>
     </div>
 
     <div class="intro">
-        Upravljački pregled podataka iz modula kojima trenutačni korisnik ima pravo pristupa.
-        Nedostupni moduli i njihovi pokazatelji nisu uključeni u izračune niti u sadržaj izvještaja.
+        Prva stranica prikazuje trenutačno stanje obveza, rokova i otvorenih aktivnosti
+        u modulima kojima korisnik ima pravo pristupa.
+        Mjesečni HSE pokazatelji na sljedećoj stranici odnose se na odabrano razdoblje
+        <strong>{{ rtrim($reportPeriodLabel, '.') }}.</strong>
     </div>
 
     <div class="smart-box">
         <div class="label">Sažetak za rukovodstvo</div>
         Sustav je trenutno u statusu <strong>{{ mb_strtoupper($systemStatus) }}</strong>.
-        Evidentirano je <strong>{{ $totalExpired }}</strong> isteklih stavki i
-        <strong>{{ $totalSoon }}</strong> stavki koje istječu unutar 30 dana
+        Evidentirano je
+        <strong>{{ $totalExpired }}</strong>
+        isteklih stavki, dok broj stavki koje istječu unutar 30 dana iznosi
+        <strong>{{ $totalSoon }}</strong>
         u modulima kojima korisnik ima pristup.
         @if ($canInspections || $canObservations || $canWorkTasks)
             Aktivno je <strong>{{ $totalOpenActivities }}</strong> otvorenih aktivnosti.
@@ -395,7 +499,9 @@
     </table>
 
     @if ($canIncidents || $canInspections || $canObservations || $canWorkTasks)
-        <div class="section-title">Ključni sigurnosni pokazatelji</div>
+        <div class="section-title">
+            Ključni sigurnosni pokazatelji - {{ $currentYear }}. godina
+        </div>
         <table class="data">
             <thead>
             <tr>
@@ -422,6 +528,623 @@
             </tbody>
         </table>
     @endif
+        {{-- ============================================================= --}}
+        {{-- NOVA STRANICA - MJESEČNI HSE PREGLED                         --}}
+        {{-- ============================================================= --}}
+
+        @if (
+            $canIncidents
+            || $canObservations
+            || $canInspections
+            || $canKpis
+            || $canOntoRecords
+        )
+            <div class="page-break-before">
+
+                <div class="header">
+                    <div class="brand">
+                        ZNR LIDER
+                    </div>
+
+                    <div class="title">
+                        Mjesečni HSE pregled
+                    </div>
+
+                    <div class="meta">
+                        Razdoblje:
+                        {{ $reportPeriodLabel }}
+                        · Ključni sigurnosni, operativni i okolišni pokazatelji
+                    </div>
+                </div>
+
+
+                {{-- ===================================================== --}}
+                {{-- SIGURNOSNI DOGAĐAJI                                  --}}
+                {{-- ===================================================== --}}
+
+                @if ($canIncidents)
+
+                    <div class="section-title">
+                        Sigurnosni događaji
+                    </div>
+
+                    <table class="stats">
+                        <tr>
+
+                            <td class="stat stat-red">
+                                <div class="stat-label">
+                                    LTA
+                                </div>
+
+                                <div class="stat-value red">
+                                    {{ $periodLta }}
+                                </div>
+
+                                <div class="stat-note">
+                                    ozljede s izgubljenim danima
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-yellow">
+                                <div class="stat-label">
+                                    MTA
+                                </div>
+
+                                <div class="stat-value yellow">
+                                    {{ $periodMta }}
+                                </div>
+
+                                <div class="stat-note">
+                                    medicinska obrada
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-blue">
+                                <div class="stat-label">
+                                    FAA
+                                </div>
+
+                                <div class="stat-value blue">
+                                    {{ $periodFaa }}
+                                </div>
+
+                                <div class="stat-note">
+                                    prva pomoć
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-red">
+                                <div class="stat-label">
+                                    Izgubljeni dani
+                                </div>
+
+                                <div class="stat-value red">
+                                    {{ $periodLostDays }}
+                                </div>
+
+                                <div class="stat-note">
+                                    zbog LTA ozljeda
+                                </div>
+                            </td>
+
+                        </tr>
+                    </table>
+
+
+                    @if (
+                        $canKpis
+                        && (
+                            $periodAfr !== null
+                            || $periodAsr !== null
+                        )
+                    )
+
+                        <table class="stats">
+                            <tr>
+
+                                <td class="stat stat-blue">
+                                    <div class="stat-label">
+                                        AFR
+                                    </div>
+
+                                    <div class="stat-value blue">
+                                        {{
+                                            $periodAfr !== null
+                                                ? number_format(
+                                                    (float) $periodAfr,
+                                                    2,
+                                                    ',',
+                                                    '.'
+                                                )
+                                                : '—'
+                                        }}
+                                    </div>
+
+                                    <div class="stat-note">
+                                        stopa učestalosti ozljeda
+                                    </div>
+                                </td>
+
+
+                                <td class="stat stat-blue">
+                                    <div class="stat-label">
+                                        ASR
+                                    </div>
+
+                                    <div class="stat-value blue">
+                                        {{
+                                            $periodAsr !== null
+                                                ? number_format(
+                                                    (float) $periodAsr,
+                                                    2,
+                                                    ',',
+                                                    '.'
+                                                )
+                                                : '—'
+                                        }}
+                                    </div>
+
+                                    <div class="stat-note">
+                                        stopa težine ozljeda
+                                    </div>
+                                </td>
+
+                            </tr>
+                        </table>
+
+                    @endif
+
+                @endif
+
+
+                {{-- ===================================================== --}}
+                {{-- ZAPAŽANJA                                            --}}
+                {{-- ===================================================== --}}
+
+                @if ($canObservations)
+
+                    <div class="section-title">
+                        Zapažanja
+                    </div>
+
+                    <table class="stats">
+                        <tr>
+
+                            <td class="stat stat-blue">
+                                <div class="stat-label">
+                                    Near Miss
+                                </div>
+
+                                <div class="stat-value blue">
+                                    {{ $periodNearMiss }}
+                                </div>
+
+                                <div class="stat-note">
+                                    skoro nezgode
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-red">
+                                <div class="stat-label">
+                                    Negativna
+                                </div>
+
+                                <div class="stat-value red">
+                                    {{ $periodNegative }}
+                                </div>
+
+                                <div class="stat-note">
+                                    negativna zapažanja
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-green">
+                                <div class="stat-label">
+                                    Pozitivna
+                                </div>
+
+                                <div class="stat-value green">
+                                    {{ $periodPositive }}
+                                </div>
+
+                                <div class="stat-note">
+                                    pozitivna zapažanja
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-slate">
+                                <div class="stat-label">
+                                    Ukupno
+                                </div>
+
+                                <div class="stat-value slate">
+                                    {{ $periodObservationTotal }}
+                                </div>
+
+                                <div class="stat-note">
+                                    prijavljena zapažanja
+                                </div>
+                            </td>
+
+                        </tr>
+                    </table>
+
+                @endif
+
+
+                {{-- ===================================================== --}}
+                {{-- NADZORI                                              --}}
+                {{-- ===================================================== --}}
+
+                @if ($canInspections)
+
+                    <div class="section-title">
+                        Nadzori i nalazi
+                    </div>
+
+                    <table class="stats">
+                        <tr>
+
+                            <td class="stat stat-blue">
+                                <div class="stat-label">
+                                    Provedeni nadzori
+                                </div>
+
+                                <div class="stat-value blue">
+                                    {{ $periodInspections }}
+                                </div>
+
+                                <div class="stat-note">
+                                    u odabranom mjesecu
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-slate">
+                                <div class="stat-label">
+                                    Ukupno nalaza
+                                </div>
+
+                                <div class="stat-value slate">
+                                    {{ $periodFindingsTotal }}
+                                </div>
+
+                                <div class="stat-note">
+                                    nalazi nadzora
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-red">
+                                <div class="stat-label">
+                                    Otvoreni nalazi
+                                </div>
+
+                                <div class="stat-value red">
+                                    {{ $periodFindingsOpen }}
+                                </div>
+
+                                <div class="stat-note">
+                                    zahtijevaju postupanje
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-red">
+                                <div class="stat-label">
+                                    Zakašnjeli nalazi
+                                </div>
+
+                                <div class="stat-value red">
+                                    {{ $periodFindingsOverdue }}
+                                </div>
+
+                                <div class="stat-note">
+                                    rok provedbe prekoračen
+                                </div>
+                            </td>
+
+                        </tr>
+                    </table>
+
+                @endif
+
+
+                {{-- ===================================================== --}}
+                {{-- KOREKTIVNE RADNJE                                    --}}
+                {{-- ===================================================== --}}
+
+                @if ($canInspections)
+
+                    <div class="section-title">
+                        Korektivne radnje
+                    </div>
+
+                    <table class="stats">
+                        <tr>
+
+                            <td class="stat stat-red">
+                                <div class="stat-label">
+                                    Otvorene
+                                </div>
+
+                                <div class="stat-value red">
+                                    {{ $periodCorrectiveOpen }}
+                                </div>
+
+                                <div class="stat-note">
+                                    korektivne radnje
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-yellow">
+                                <div class="stat-label">
+                                    U tijeku
+                                </div>
+
+                                <div class="stat-value yellow">
+                                    {{ $periodCorrectiveInProgress }}
+                                </div>
+
+                                <div class="stat-note">
+                                    aktivna provedba
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-green">
+                                <div class="stat-label">
+                                    Zatvorene
+                                </div>
+
+                                <div class="stat-value green">
+                                    {{ $periodCorrectiveClosed }}
+                                </div>
+
+                                <div class="stat-note">
+                                    provedene radnje
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-yellow">
+                                <div class="stat-label">
+                                    Dani kašnjenja
+                                </div>
+
+                                <div class="stat-value yellow">
+                                    {{ $periodCorrectiveDelayDays }}
+                                </div>
+
+                                <div class="stat-note">
+                                    ukupno zakašnjenje
+                                </div>
+                            </td>
+
+                        </tr>
+                    </table>
+
+                @endif
+
+
+                {{-- ===================================================== --}}
+                {{-- OTPAD / OKOLIŠ                                       --}}
+                {{-- ===================================================== --}}
+
+                @if ($canOntoRecords)
+
+                    <div class="section-title">
+                        Okoliš i otpad
+                    </div>
+
+                    <table class="stats">
+                        <tr>
+
+                            <td class="stat stat-green">
+                                <div class="stat-label">
+                                    Neopasni otpad
+                                </div>
+
+                                <div class="stat-value green">
+                                    {{
+                                        number_format(
+                                            (float) $nonHazardousWasteKg,
+                                            2,
+                                            ',',
+                                            '.'
+                                        )
+                                    }}
+                                </div>
+
+                                <div class="stat-note">
+                                    kg
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-red">
+                                <div class="stat-label">
+                                    Opasni otpad
+                                </div>
+
+                                <div class="stat-value red">
+                                    {{
+                                        number_format(
+                                            (float) $hazardousWasteKg,
+                                            2,
+                                            ',',
+                                            '.'
+                                        )
+                                    }}
+                                </div>
+
+                                <div class="stat-note">
+                                    kg
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-blue">
+                                <div class="stat-label">
+                                    Komunalni otpad
+                                </div>
+
+                                <div class="stat-value blue">
+                                    {{
+                                        number_format(
+                                            (float) $municipalWasteKg,
+                                            2,
+                                            ',',
+                                            '.'
+                                        )
+                                    }}
+                                </div>
+
+                                <div class="stat-note">
+                                    kg
+                                </div>
+                            </td>
+
+                        </tr>
+                    </table>
+
+                @endif
+
+
+                {{-- ===================================================== --}}
+                {{-- KPI SAŽETAK                                          --}}
+                {{-- ===================================================== --}}
+
+                @if (
+                    $canKpis
+                    && $managementKpiRows->isNotEmpty()
+                )
+
+                    <div class="section-title">
+                        KPI status
+                    </div>
+
+                    <table class="stats">
+                        <tr>
+
+                            <td class="stat stat-green">
+                                <div class="stat-label">
+                                    U cilju
+                                </div>
+
+                                <div class="stat-value green">
+                                    {{ $kpiSuccessCount }}
+                                </div>
+
+                                <div class="stat-note">
+                                    KPI pokazatelja
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-yellow">
+                                <div class="stat-label">
+                                    Upozorenje
+                                </div>
+
+                                <div class="stat-value yellow">
+                                    {{ $kpiWarningCount }}
+                                </div>
+
+                                <div class="stat-note">
+                                    zahtijeva praćenje
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-red">
+                                <div class="stat-label">
+                                    Izvan cilja
+                                </div>
+
+                                <div class="stat-value red">
+                                    {{ $kpiDangerCount }}
+                                </div>
+
+                                <div class="stat-note">
+                                    zahtijeva postupanje
+                                </div>
+                            </td>
+
+
+                            <td class="stat stat-blue">
+                                <div class="stat-label">
+                                    Bez ocjene
+                                </div>
+
+                                <div class="stat-value blue">
+                                    {{ $kpiUnratedCount }}
+                                </div>
+
+                                <div class="stat-note">
+                                    nema rezultata ili cilja
+                                </div>
+                            </td>
+
+                        </tr>
+                    </table>
+
+                @endif
+
+
+                {{-- ===================================================== --}}
+                {{-- SAŽETAK                                              --}}
+                {{-- ===================================================== --}}
+
+                <div
+                    class="conclusion"
+                    style="margin-top:12px;"
+                >
+                    Mjesečni HSE pregled za
+                        <strong>{{ rtrim($reportPeriodLabel, '.') }}.</strong>
+
+                    @if ($canIncidents)
+                        Evidentirano je
+                        <strong>
+                            {{
+                                $periodLta
+                                + $periodMta
+                                + $periodFaa
+                            }}
+                        </strong>
+                        sigurnosnih događaja i
+                        <strong>
+                            {{ $periodLostDays }}
+                        </strong>
+                        izgubljenih radnih dana.
+                    @endif
+
+                    @if ($canObservations)
+                        Evidentirano je
+                        <strong>
+                            {{ $periodObservationTotal }}
+                        </strong>
+                        zapažanja.
+                    @endif
+
+                    @if ($canInspections)
+                        Provedeno je
+                        <strong>
+                            {{ $periodInspections }}
+                        </strong>
+                        nadzora.
+                    @endif
+                </div>
+
+            </div>
+        @endif
 
     {{-- 2. STRANICA - LJUDI I OSPOSOBLJENOST --}}
     @if ($hasPeoplePage)
@@ -468,10 +1191,12 @@
             @if ($canEmployees)
                 <div class="conclusion" style="margin-top:12px;">
                     Sustav raspolaže s ukupno <strong>{{ $employeesTotal }}</strong> evidentiranih zaposlenika.
-                    Trenutačno je <strong>{{ $medicalExpired }}</strong> liječničkih pregleda isteklo, a
-                    <strong>{{ $medicalSoon }}</strong> istječe unutar sljedećih 30 dana.
-                    U području zaštite na radu evidentirano je <strong>{{ $znrExpired }}</strong>
-                    zaposlenika kojima je prekoračen rok za osposobljavanje.
+                    Trenutačno je
+                    <strong>{{ $medicalExpired }}</strong>
+                    liječničkih pregleda isteklo, dok broj pregleda koji istječu unutar sljedećih 30 dana iznosi
+                    <strong>{{ $medicalSoon }}</strong>.
+                    Broj zaposlenika s prekoračenim rokom za osposobljavanje iznosi
+                    <strong>{{ $znrExpired }}</strong>.
                 </div>
             @endif
         </div>
@@ -498,7 +1223,15 @@
                             $rowPriority = $expired > 0 ? 'VISOK' : ($soon > 0 ? 'SREDNJI' : 'UREDNO');
                         @endphp
                         <tr>
-                            <td><strong>{{ $row['label'] }}</strong></td>
+                            <td>
+                                <strong>
+                                    {{
+                                        ($row['label'] ?? '') === 'Vatrogasni aparati'
+                                            ? 'Vatrogasni aparati – rokovi pregleda/servisa'
+                                            : $row['label']
+                                    }}
+                                </strong>
+                            </td>
                             <td class="center"><span class="badge badge-red">{{ $expired }}</span></td>
                             <td class="center"><span class="badge badge-yellow">{{ $soon }}</span></td>
                             <td class="center">
@@ -545,52 +1278,6 @@
         </div>
     @endif
 
-    {{-- 4. STRANICA - KRITIČNA PODRUČJA --}}
-    @if ($hasCriticalPage)
-        <div class="page-break-before">
-            <div class="header">
-                <div class="brand">ZNR LIDER</div>
-                <div class="title">Kritična područja i rokovi</div>
-                <div class="meta">Prioritetna područja za postupanje i planiranje</div>
-            </div>
-
-            @if (count($rows) > 0)
-                <div class="section-title">Područja koja zahtijevaju hitnu pažnju</div>
-                <table class="data">
-                    <thead><tr><th>Područje</th><th class="center" style="width:90px;">Isteklo</th><th>Preporuka</th></tr></thead>
-                    <tbody>
-                    @forelse ($criticalRows as $row)
-                        <tr><td><strong>{{ $row['label'] }}</strong></td><td class="center"><span class="badge badge-red">{{ $row['expired'] }}</span></td><td>Provjeriti odgovorne osobe, termine i odmah definirati rok sanacije.</td></tr>
-                    @empty
-                        <tr><td colspan="3">Nema područja s isteklim stavkama u dostupnim modulima.</td></tr>
-                    @endforelse
-                    </tbody>
-                </table>
-
-                <div class="section-title">Stavke koje istječu unutar 30 dana</div>
-                <table class="data">
-                    <thead><tr><th>Područje</th><th class="center" style="width:90px;">Broj</th><th>Preporuka</th></tr></thead>
-                    <tbody>
-                    @forelse ($soonRows as $row)
-                        <tr><td><strong>{{ $row['label'] }}</strong></td><td class="center"><span class="badge badge-yellow">{{ $row['soon'] }}</span></td><td>Planirati obnovu, pregled, osposobljavanje ili drugu potrebnu aktivnost prije isteka.</td></tr>
-                    @empty
-                        <tr><td colspan="3">Nema stavki koje istječu unutar 30 dana u dostupnim modulima.</td></tr>
-                    @endforelse
-                    </tbody>
-                </table>
-            @endif
-
-            @if ($canInspections || $canObservations || $canWorkTasks)
-                <div class="section-title">Pregled provedbe aktivnosti</div>
-                <table class="stats"><tr>
-                    @if ($canInspections)<td class="stat stat-yellow"><div class="stat-label">Otvoreni nalazi</div><div class="stat-value yellow">{{ $openInspectionFindings }}</div></td>@endif
-                    @if ($canObservations)<td class="stat stat-yellow"><div class="stat-label">Otvorena zapažanja</div><div class="stat-value yellow">{{ $openObservations }}</div></td>@endif
-                    @if ($canWorkTasks)<td class="stat stat-blue"><div class="stat-label">Otvoreni zadaci</div><div class="stat-value blue">{{ $openWorkTasks }}</div></td><td class="stat stat-green"><div class="stat-label">Zatvoreni zadaci</div><div class="stat-value green">{{ $closedWorkTasks }}</div></td>@endif
-                </tr></table>
-            @endif
-        </div>
-    @endif
-
     {{-- 5. STRANICA - TREND OZLJEDA --}}
     @if ($canIncidents)
         <div class="page-break-before">
@@ -630,12 +1317,21 @@
             </table>
 
             <div class="conclusion" style="margin-top:12px;">
-                U {{ $currentYear }}. godini evidentirano je <strong>{{ $currentYearIncidents }}</strong> sigurnosnih događaja,
-                dok ih je u {{ $previousYear }}. godini bilo <strong>{{ $previousYearIncidents }}</strong>.
+                Ukupan broj sigurnosnih događaja u
+                <strong>{{ $currentYear }}.</strong>
+                godini iznosi
+                <strong>{{ $currentYearIncidents }}</strong>,
+                dok je u
+                <strong>{{ $previousYear }}.</strong>
+                godini iznosio
+                <strong>{{ $previousYearIncidents }}</strong>.
+
                 @if ($incidentDifference > 0)
-                    Broj evidentiranih događaja veći je za <strong>{{ $incidentDifference }}</strong>.
+                    Broj evidentiranih događaja veći je za
+                    <strong>{{ $incidentDifference }}</strong>.
                 @elseif ($incidentDifference < 0)
-                    Broj evidentiranih događaja manji je za <strong>{{ abs($incidentDifference) }}</strong>.
+                    Broj evidentiranih događaja manji je za
+                    <strong>{{ abs($incidentDifference) }}</strong>.
                 @else
                     Broj evidentiranih događaja jednak je prethodnoj godini.
                 @endif
@@ -754,33 +1450,93 @@
                     </td>
                 </tr>
                 <tr>
-                    <td style="padding:5px; font-weight:bold;">2. Rokovi u 30 dana</td>
+                    <td style="padding:5px; font-weight:bold;">
+                        2. Rokovi u 30 dana
+                    </td>
+
                     <td style="padding:5px;">
                         @if ($totalSoon > 0)
-                            <span class="priority-medium">PLANIRATI</span> — evidentirano {{ $totalSoon }} nadolazećih rokova.
+                            <span class="priority-medium">
+                                PLANIRATI
+                            </span>
+                            — broj rokova koji istječu unutar 30 dana iznosi
+                            <strong>{{ $totalSoon }}</strong>.
                         @else
-                            <span class="priority-low">UREDNO</span> — nema kritičnih rokova.
+                            <span class="priority-low">
+                                UREDNO
+                            </span>
+                            — nema kritičnih rokova u sljedećih 30 dana.
                         @endif
                     </td>
                 </tr>
                 @if ($canInspections)
-                    <tr><td style="padding:5px; font-weight:bold;">Nalazi nadzora</td><td style="padding:5px;">{{ $openInspectionFindings }} otvorenih nalaza zahtijeva praćenje odgovornosti i rokova sanacije.</td></tr>
-                @endif
+                <tr>
+                    <td style="padding:5px; font-weight:bold;">
+                        Nalazi nadzora
+                    </td>
+
+                    <td style="padding:5px;">
+                        Otvoreni nalazi nadzora:
+                        <strong>{{ $openInspectionFindings }}</strong>.
+                        Potrebno je pratiti odgovornosti i rokove sanacije.
+                    </td>
+                </tr>
+            @endif
                 @if ($canEmployees)
                     <tr><td style="padding:5px; font-weight:bold;">Liječnički pregledi</td><td style="padding:5px;">{{ $medicalExpired }} pregleda je isteklo, a {{ $medicalSoon }} istječe unutar 30 dana.</td></tr>
-                    <tr><td style="padding:5px; font-weight:bold;">Osposobljavanje ZNR</td><td style="padding:5px;">{{ $znrExpired }} zaposlenika ima prekoračen rok osposobljavanja, a {{ $znrSoon }} približava se roku.</td></tr>
+                    <tr>
+                        <td style="padding:5px; font-weight:bold;">
+                            Osposobljavanje ZNR
+                        </td>
+
+                        <td style="padding:5px;">
+                            Zaposlenici s prekoračenim rokom osposobljavanja:
+                            <strong>{{ $znrExpired }}</strong>.
+                            Zaposlenici kojima se rok približava:
+                            <strong>{{ $znrSoon }}</strong>.
+                        </td>
+                    </tr>
                 @endif
                 @if ($canPpe)
-                    <tr><td style="padding:5px; font-weight:bold;">OZO</td><td style="padding:5px;">{{ $ppeExpired }} aktivno izdanih OZO stavki ima istekao rok uporabe, a {{ $ppeSoon }} istječe unutar 30 dana.</td></tr>
+                    <tr>
+                        <td style="padding:5px; font-weight:bold;">
+                            OZO
+                        </td>
+
+                        <td style="padding:5px;">
+                            Aktivno izdane OZO stavke s isteklim rokom uporabe:
+                            <strong>{{ $ppeExpired }}</strong>.
+                            OZO stavke kojima rok istječe unutar 30 dana:
+                            <strong>{{ $ppeSoon }}</strong>.
+                        </td>
+                    </tr>
                 @endif
                 @if ($canObservations)
-                    <tr><td style="padding:5px; font-weight:bold;">Zapažanja</td><td style="padding:5px;">{{ $openObservations }} otvorenih zapažanja zahtijeva praćenje.</td></tr>
+                    <tr>
+                        <td style="padding:5px; font-weight:bold;">
+                            Zapažanja
+                        </td>
+
+                        <td style="padding:5px;">
+                            Broj otvorenih zapažanja koja zahtijevaju praćenje iznosi
+                            <strong>{{ $openObservations }}</strong>.
+                        </td>
+                    </tr>
                 @endif
                 @if ($canWorkTasks)
                     <tr><td style="padding:5px; font-weight:bold;">Radni zadaci</td><td style="padding:5px;">{{ $openWorkTasks }} otvorenih zadataka; stopa zatvaranja iznosi {{ $workTaskClosureRate }} %.</td></tr>
                 @endif
                 @if ($canIncidents)
-                    <tr><td style="padding:5px; font-weight:bold;">Sigurnosni događaji</td><td style="padding:5px;">Evidentirano je ukupno {{ $totalSafetyEvents }} LTA/MTA/FAA događaja u dostupnom razdoblju sažetka.</td></tr>
+                    <tr>
+                        <td style="padding:5px; font-weight:bold;">
+                            Sigurnosni događaji
+                        </td>
+
+                        <td style="padding:5px;">
+                            Ukupan broj evidentiranih LTA/MTA/FAA događaja u dostupnom razdoblju sažetka iznosi
+                            <strong>{{ $totalSafetyEvents }}</strong>.
+                        </td>
+                    </tr>
                 @endif
                 @if ($canBudgets && $canExpenses)
                     <tr><td style="padding:5px; font-weight:bold;">Budžet</td><td style="padding:5px;">Iskorištenost godišnjeg budžeta iznosi <strong>{{ $budgetUsagePercent }} %</strong>.</td></tr>
@@ -792,12 +1548,151 @@
             </table>
         </div>
 
-        <div class="section-title">Preporučene akcije</div>
+        @php
+            /*
+            |--------------------------------------------------------------------------
+            | Sažete preporuke za Upravu
+            |--------------------------------------------------------------------------
+            |
+            | Management report ne ponavlja sve pojedinačne sistemske preporuke.
+            | Prikazujemo samo najvažnije upravljačke aktivnosti.
+            |
+            */
+
+            $managementActions = [];
+
+            if ($totalExpired > 0) {
+                $text =
+                    'Prioritetno riješiti '
+                    . $totalExpired
+                    . ' isteklih obveza u dostupnim modulima.';
+
+                if ($topCritical) {
+                    $text .=
+                        ' Najizraženije područje je '
+                        . $topCritical['label']
+                        . ' (broj isteklih stavki: '
+                        . $topCritical['expired']
+                        . ').';
+                }
+
+                $managementActions[] =
+                    $text;
+            }
+
+            if ($totalSoon > 0) {
+                $managementActions[] =
+                    'Planirati aktivnosti za stavke koje istječu unutar sljedećih 30 dana (ukupno: '
+                    . $totalSoon
+                    . ').';
+            }
+
+            if (
+                $canEmployees
+                && (
+                    $medicalExpired > 0
+                    || $znrExpired > 0
+                )
+            ) {
+                $parts = [];
+
+                if ($medicalExpired > 0) {
+                    $parts[] =
+                        'istekli liječnički pregledi: '
+                        . $medicalExpired;
+                }
+
+                if ($znrExpired > 0) {
+                    $parts[] =
+                        'prekoračeni rokovi ZNR osposobljavanja: '
+                        . $znrExpired;
+                }
+
+                $managementActions[] =
+                    'Prioritetno riješiti obveze zaposlenika — '
+                    . implode(
+                        '; ',
+                        $parts
+                    )
+                    . '.';
+            }
+
+            if (
+                $canPpe
+                && $ppeExpired > 0
+            ) {
+                $managementActions[] =
+                    'Pregledati i riješiti '
+                    . $ppeExpired
+                    . ' aktivnih OZO stavki s isteklim evidentiranim rokom uporabe.';
+            }
+
+           if (
+                $canInspections
+                && $openInspectionFindings > 0
+            ) {
+                $managementActions[] =
+                    'Pregledati odgovornosti i rokove te zatvoriti otvorene nalaze nadzora (ukupno: '
+                    . $openInspectionFindings
+                    . ').';
+            }
+
+            if (
+                $canObservations
+                && $openObservations > 0
+            ) {
+                $managementActions[] =
+                    'Pratiti provedbu i zatvaranje '
+                    . $openObservations
+                    . ' otvorenih zapažanja.';
+            }
+
+            if (
+                $canWorkTasks
+                && $openWorkTasks > 0
+            ) {
+                $managementActions[] =
+                    'Pratiti provedbu '
+                    . $openWorkTasks
+                    . ' otvorenih radnih zadataka; trenutačna stopa zatvaranja iznosi '
+                    . $workTaskClosureRate
+                    . ' %.';
+            }
+
+            /*
+            * Ako je sve uredno, ipak želimo jednu jasnu poruku.
+            */
+            if (
+                empty(
+                    $managementActions
+                )
+            ) {
+                $managementActions[] =
+                    'Nisu utvrđene kritične otvorene aktivnosti koje zahtijevaju posebno postupanje Uprave.';
+            }
+        @endphp
+
+
+        <div class="section-title">
+            Preporučene akcije
+        </div>
+
         <div class="actions-box">
             <ol class="actions">
-                @foreach ($actions as $action)
-                    <li>{{ $action }}</li>
+
+                @foreach (
+                    array_slice(
+                        $managementActions,
+                        0,
+                        7
+                    )
+                    as $action
+                )
+                    <li>
+                        {{ $action }}
+                    </li>
                 @endforeach
+
             </ol>
         </div>
 
@@ -808,50 +1703,6 @@
             Preporuke i zaključak ovog izvještaja temelje se isključivo na podacima iz modula kojima trenutačni korisnik ima pravo pregleda.
         </div>
 
-        <div class="director-box">
-            <div class="label">Informacije za UPRAVU</div>
-            Trenutačni upravljački prioritet dostupnog dijela sustava je
-            <strong class="{{ $managementPriorityClass }}">{{ $managementPriority }}</strong>.
-
-            @if ($topCritical)
-                Najizraženije kritično područje trenutno je
-                <strong>{{ $topCritical['label'] }}</strong>
-                s <strong>{{ $topCritical['expired'] }}</strong> isteklih stavki.
-            @else
-                Trenutno nema područja s evidentiranim isteklim stavkama u modulima dostupnima korisniku.
-            @endif
-
-            @if ($canInspections || $canObservations || $canWorkTasks)
-                <br><br>
-                U dostupnim operativnim modulima otvoreno je ukupno
-                <strong>{{ $totalOpenActivities }}</strong> aktivnosti.
-            @endif
-
-            @if ($canBudgets && $canExpenses)
-                <br><br>
-                Godišnji budžet iskorišten je <strong>{{ $budgetUsagePercent }} %</strong>,
-                dok trenutno raspoloživa sredstva iznose
-                <strong>{{ number_format($budgetRemaining, 2, ',', '.') }} €</strong>.
-            @elseif ($canBudgets)
-                <br><br>
-                Evidentirani godišnji budžet iznosi
-                <strong>{{ number_format($budgetAmount, 2, ',', '.') }} €</strong>.
-            @elseif ($canExpenses)
-                <br><br>
-                Realizirani godišnji troškovi iznose
-                <strong>{{ number_format($expensesRealized, 2, ',', '.') }} €</strong>.
-            @endif
-
-            <br><br>
-            Sustav treba koristiti kao osnovu za praćenje odgovornosti, rokova i provedbe mjera,
-            uz redoviti pregled statusa na razini Uprave i u okviru dodijeljenih prava pristupa.
-        </div>
-
-        <div class="footer">
-            Ovaj izvještaj automatski je generiran iz sustava <strong>ZNR LIDER</strong>.<br>
-            Izvještaj predstavlja upravljački pregled podataka dostupnih trenutačnom korisniku na datum
-            <strong>{{ $reportDate }}</strong>.
-        </div>
     </div>
 
 </div>

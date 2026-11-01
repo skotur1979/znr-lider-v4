@@ -48,6 +48,97 @@ class KpiCalculationService
         ];
     }
 
+    public function managementMetrics(
+        int $month,
+        int $year
+    ): array {
+        return [
+            'lta_count' =>
+                $this->ltaCount(
+                    $month,
+                    $year
+                ),
+
+            'lta_lost_days' =>
+                $this->ltaLostDays(
+                    $month,
+                    $year
+                ),
+
+            'near_miss_count' =>
+                $this->nearMissCount(
+                    $month,
+                    $year
+                ),
+
+            'negative_observation_count' =>
+                $this->negativeObservationCount(
+                    $month,
+                    $year
+                ),
+
+            'inspection_count' =>
+                $this->inspectionCount(
+                    $month,
+                    $year
+                ),
+
+            'corrective_actions_open' =>
+                $this->openCorrectiveActionCount(
+                    $month,
+                    $year
+                ),
+
+            'corrective_actions_closed' =>
+                $this->closedCorrectiveActionCount(
+                    $month,
+                    $year
+                ),
+
+            'corrective_actions_in_progress' =>
+                $this->inProgressCorrectiveActionCount(
+                    $month,
+                    $year
+                ),
+
+            'corrective_actions_delay_days' =>
+                $this->correctiveActionDelayDays(
+                    $month,
+                    $year
+                ),
+
+            'non_hazardous_waste_kg' =>
+                $this->nonHazardousWasteKg(
+                    $month,
+                    $year
+                ),
+
+            'hazardous_waste_kg' =>
+                $this->hazardousWasteKg(
+                    $month,
+                    $year
+                ),
+
+            'municipal_waste_kg' =>
+                $this->municipalWasteKg(
+                    $month,
+                    $year
+                ),
+
+            'afr' =>
+                $this->calculateAfr(
+                    $month,
+                    $year
+                ),
+
+            'asr' =>
+                $this->calculateAsr(
+                    $month,
+                    $year
+                ),
+        ];
+    }
+
     protected function currentUser()
     {
         return Auth::user();
