@@ -113,52 +113,143 @@
             </div>
 
             <div class="tsb-right">
-                <div class="tsb-score-card tsb-score-danger">
-                    <div class="tsb-score-icon">
-                        <x-filament::icon icon="heroicon-o-calendar-days" class="tsb-score-svg" />
+
+                    {{-- ISTEKLO --}}
+                    <div class="tsb-score-card tsb-score-danger">
+                        <div class="tsb-score-icon">
+                            <x-filament::icon
+                                icon="heroicon-o-calendar-days"
+                                class="tsb-score-svg"
+                            />
+                        </div>
+
+                        <div>
+                            <span class="tsb-score-label">
+                                Isteklo
+                            </span>
+
+                            <span class="tsb-score-value">
+                                {{ $totalExpired }}
+                            </span>
+                        </div>
                     </div>
-                    <div>
-                        <span class="tsb-score-label">Isteklo</span>
-                        <span class="tsb-score-value">{{ $totalExpired }}</span>
+
+
+                    {{-- USKORO --}}
+                    <div class="tsb-score-card tsb-score-warning">
+                        <div class="tsb-score-icon">
+                            <x-filament::icon
+                                icon="heroicon-o-clock"
+                                class="tsb-score-svg"
+                            />
+                        </div>
+
+                        <div>
+                            <span class="tsb-score-label">
+                                Uskoro
+                            </span>
+
+                            <span class="tsb-score-value">
+                                {{ $totalSoon }}
+                            </span>
+                        </div>
                     </div>
+
+
+                    {{-- HSE PDF --}}
+                    {{-- VAŽNO: gumb je direktni child .tsb-right --}}
+                    <button
+                        type="button"
+                        class="tsb-report-card"
+                        x-on:click="$dispatch('open-modal', { id: 'management-hse-report' })"
+                    >
+                        <x-filament::icon
+                            icon="heroicon-o-document-chart-bar"
+                            class="tsb-report-icon"
+                        />
+
+                        <div class="tsb-report-text">
+                            <span class="tsb-report-label">
+                                PDF
+                            </span>
+
+                            <span class="tsb-report-title">
+                                HSE izvještaj
+                            </span>
+                        </div>
+                    </button>
+
+
+                    {{-- BEZ LTA --}}
+                    <div class="tsb-score-card tsb-score-lta">
+                        <div class="tsb-score-icon">
+                            <x-filament::icon
+                                icon="heroicon-o-shield-check"
+                                class="tsb-score-svg"
+                            />
+                        </div>
+
+                        <div>
+                            <span class="tsb-score-label">
+                                Bez LTA
+                            </span>
+
+                            <span class="tsb-score-value">
+                                {{ $daysWithoutLta ?? '—' }}
+                            </span>
+
+                            <span class="tsb-score-small">
+                                {{ $daysWithoutLta !== null ? 'dana' : '' }}
+                            </span>
+                        </div>
+                    </div>
+
+
+                    {{-- REKORD BEZ LTA --}}
+                    <div
+                        class="
+                            tsb-score-card
+                            tsb-score-record
+                            {{ $recordIsActive ? 'tsb-record-active' : '' }}
+                        "
+                    >
+                        <div class="tsb-score-icon">
+                            <x-filament::icon
+                                icon="heroicon-o-trophy"
+                                class="tsb-score-svg"
+                            />
+                        </div>
+
+                        <div>
+                            <span class="tsb-score-label">
+                                Rekord bez LTA
+                            </span>
+
+                            <span class="tsb-score-value">
+                                {{ $recordDaysWithoutLta ?? '—' }}
+                            </span>
+
+                            <span class="tsb-score-small">
+                                {{ $recordDaysWithoutLta !== null ? 'dana' : '' }}
+                            </span>
+                        </div>
+                    </div>
+
                 </div>
 
-                <div class="tsb-score-card tsb-score-warning">
-                    <div class="tsb-score-icon">
-                        <x-filament::icon icon="heroicon-o-clock" class="tsb-score-svg" />
-                    </div>
-                    <div>
-                        <span class="tsb-score-label">Uskoro</span>
-                        <span class="tsb-score-value">{{ $totalSoon }}</span>
-                    </div>
                 </div>
+                </div>
+
+
+                {{-- ================================================================ --}}
+                {{-- HSE REPORT MODAL                                                 --}}
+                {{-- ================================================================ --}}
+                {{-- VAŽNO: modal je izvan .tsb-right grida                           --}}
 
                 <x-filament::modal
                     id="management-hse-report"
                     width="sm"
                 >
-                    <x-slot name="trigger">
-                        <button
-                            type="button"
-                            class="tsb-report-card"
-                        >
-                            <x-filament::icon
-                                icon="heroicon-o-document-chart-bar"
-                                class="tsb-report-icon"
-                            />
-
-                            <div class="tsb-report-text">
-                                <span class="tsb-report-label">
-                                    PDF
-                                </span>
-
-                                <span class="tsb-report-title">
-                                    HSE izvještaj
-                                </span>
-                            </div>
-                        </button>
-                    </x-slot>
-
                     <x-slot name="heading">
                         Upravljački HSE izvještaj
                     </x-slot>
@@ -209,9 +300,13 @@
                             x-bind:value="year"
                         >
 
+
                         <div class="hse-report-grid">
 
-                            {{-- MJESEC --}}
+                            {{-- ======================================================== --}}
+                            {{-- MJESEC                                                  --}}
+                            {{-- ======================================================== --}}
+
                             <div
                                 class="hse-report-field"
                                 x-on:click.outside="monthOpen = false"
@@ -237,6 +332,7 @@
                                         class="hse-report-picker-icon"
                                     />
                                 </button>
+
 
                                 <div
                                     x-cloak
@@ -286,7 +382,11 @@
                                 </div>
                             </div>
 
-                            {{-- GODINA --}}
+
+                            {{-- ======================================================== --}}
+                            {{-- GODINA                                                  --}}
+                            {{-- ======================================================== --}}
+
                             <div
                                 class="hse-report-field"
                                 x-on:click.outside="yearOpen = false"
@@ -312,6 +412,7 @@
                                         class="hse-report-picker-icon"
                                     />
                                 </button>
+
 
                                 <div
                                     x-cloak
@@ -352,6 +453,7 @@
 
                         </div>
 
+
                         <div class="hse-report-actions">
                             <x-filament::button
                                 type="submit"
@@ -361,33 +463,9 @@
                                 Generiraj PDF
                             </x-filament::button>
                         </div>
+
                     </form>
                 </x-filament::modal>
-
-                <div class="tsb-score-card tsb-score-lta">
-                    <div class="tsb-score-icon">
-                        <x-filament::icon icon="heroicon-o-shield-check" class="tsb-score-svg" />
-                    </div>
-                    <div>
-                        <span class="tsb-score-label">Bez LTA</span>
-                        <span class="tsb-score-value">{{ $daysWithoutLta ?? '—' }}</span>
-                        <span class="tsb-score-small">{{ $daysWithoutLta !== null ? 'dana' : '' }}</span>
-                    </div>
-                </div>
-
-                <div class="tsb-score-card tsb-score-record {{ $recordIsActive ? 'tsb-record-active' : '' }}">
-                    <div class="tsb-score-icon">
-                        <x-filament::icon icon="heroicon-o-trophy" class="tsb-score-svg" />
-                    </div>
-                    <div>
-                        <span class="tsb-score-label">Rekord bez LTA</span>
-                        <span class="tsb-score-value">{{ $recordDaysWithoutLta ?? '—' }}</span>
-                        <span class="tsb-score-small">{{ $recordDaysWithoutLta !== null ? 'dana' : '' }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <style>
         .tsb-wrap{
@@ -632,44 +710,156 @@
         }
 
         @media (max-width:700px){
+
             .tsb-wrap{
                 padding:18px 16px;
             }
 
-            .tsb-right{
-                width:100%;
+
+            /*
+            |--------------------------------------------------------------------------
+            | Glavni status blok
+            |--------------------------------------------------------------------------
+            */
+
+            .tsb-summary-row{
+                display:flex;
+                flex-direction:column;
+                align-items:stretch;
+                gap:18px;
             }
 
-            .tsb-score-card{
+            .tsb-left{
+                width:100%;
+                min-width:0;
+            }
+
+            .tsb-summary-copy{
+                width:100%;
                 min-width:0;
                 flex:1;
             }
 
-            .tsb-report-card{
-                min-width:100%;
+            .tsb-summary-title{
                 width:100%;
+                max-width:none;
+
+                font-size:1.16rem;
+                line-height:1.25;
+
+                white-space:normal;
+                overflow:visible;
+                text-overflow:clip;
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | KPI kartice
+            |--------------------------------------------------------------------------
+            |
+            | Mobilni raspored:
+            |
+            | Isteklo       | Uskoro
+            | -----------------------
+            | PDF HSE izvještaj
+            | -----------------------
+            | Bez LTA       | Rekord bez LTA
+            |
+            */
+
+            .tsb-right{
+                width:100%;
+                min-width:0;
+
+                display:grid;
+                grid-template-columns:
+                    repeat(2, minmax(0, 1fr));
+
+                gap:10px;
+
+                align-items:stretch;
+            }
+
+            .tsb-right > *{
+                min-width:0;
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Obične KPI kartice
+            |--------------------------------------------------------------------------
+            */
+
+            .tsb-score-card{
+                width:100%;
+                min-width:0;
+
+                box-sizing:border-box;
+
+                display:flex;
+                align-items:center;
                 justify-content:center;
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | HSE PDF
+            |--------------------------------------------------------------------------
+            |
+            | Gumb je sada DIREKTNI child .tsb-right pa grid-column radi.
+            |
+            */
+
+            .tsb-right > .tsb-report-card{
+                grid-column:1 / -1;
+
+                width:100%;
+                min-width:0;
+                max-width:none;
+
+                box-sizing:border-box;
+
+                display:flex;
+                align-items:center;
+                justify-content:center;
+
                 text-align:center;
             }
 
             .tsb-report-text{
+                display:flex;
+                flex-direction:column;
+
                 align-items:center;
+                justify-content:center;
+
                 text-align:center;
             }
 
-            .tsb-summary-row{
-                align-items:flex-start;
-            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Ikona upozorenja
+            |--------------------------------------------------------------------------
+            */
 
             .tsb-alert-icon{
                 width:48px;
                 height:48px;
+                min-width:48px;
+
                 font-size:1.6rem;
             }
 
-            .tsb-summary-title{
-                white-space:normal;
-            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Status modula
+            |--------------------------------------------------------------------------
+            */
 
             .tsb-modules{
                 grid-template-columns:1fr;

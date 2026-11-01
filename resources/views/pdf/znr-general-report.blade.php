@@ -395,17 +395,21 @@
         </div>
 
         <div class="meta">
-            Odabrano mjesečno razdoblje: {{ $reportPeriodLabel }}
-            · Trenutno stanje sustava na: {{ $reportDate }}
-            · Prikaz prema dodijeljenim pravima korisnika
-        </div>
+        Mjesečni podaci: {{ rtrim($reportPeriodLabel, '.') }}
+        · Trenutni status i rokovi: stanje na {{ $reportDate }}
+        · Trendovi i financije: {{ $currentYear }}. godina
+    </div>
     </div>
 
     <div class="intro">
-        Prva stranica prikazuje trenutačno stanje obveza, rokova i otvorenih aktivnosti
-        u modulima kojima korisnik ima pravo pristupa.
-        Mjesečni HSE pokazatelji na sljedećoj stranici odnose se na odabrano razdoblje
-        <strong>{{ rtrim($reportPeriodLabel, '.') }}.</strong>
+        Izvještaj kombinira
+        <strong>mjesečne HSE pokazatelje</strong> za
+        {{ rtrim($reportPeriodLabel, '.') }},
+        <strong>trenutačno stanje sustava i rokova</strong>
+        na datum {{ $reportDate }}
+        te <strong>godišnje trendove i financijske pokazatelje</strong>
+        za {{ $currentYear }}. godinu.
+        Prikazuju se samo podaci iz modula kojima korisnik ima pravo pristupa.
     </div>
 
     <div class="smart-box">
@@ -551,9 +555,9 @@
                     </div>
 
                     <div class="meta">
-                        Razdoblje:
-                        {{ $reportPeriodLabel }}
-                        · Ključni sigurnosni, operativni i okolišni pokazatelji
+                        Mjesečno razdoblje:
+                        {{ rtrim($reportPeriodLabel, '.') }}
+                        · Podaci na ovoj stranici odnose se isključivo na odabrani mjesec
                     </div>
                 </div>
 
