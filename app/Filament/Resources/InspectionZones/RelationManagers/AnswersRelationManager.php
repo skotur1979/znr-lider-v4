@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\InspectionZones\RelationManagers;
 
-use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables;
@@ -26,12 +25,17 @@ class AnswersRelationManager extends RelationManager
         }
 
         /*
-         * Odgovor tražimo ISKLJUČIVO kroz trenutno
-         * otvorenu zonu.
-         *
-         * Time odgovor druge zone nije moguće izmijeniti
-         * slanjem tuđeg ID-a.
-         */
+        |--------------------------------------------------------------------------
+        | Sigurnosna provjera odgovora
+        |--------------------------------------------------------------------------
+        |
+        | Odgovor tražimo isključivo kroz trenutno otvorenu zonu.
+        |
+        | Na ovaj način nije moguće izmijeniti odgovor koji pripada
+        | nekoj drugoj zoni slanjem njegovog ID-a.
+        |
+        */
+
         $record = $this->getOwnerRecord()
             ->answers()
             ->whereKey($answerId)
@@ -44,20 +48,33 @@ class AnswersRelationManager extends RelationManager
         $score = (int) ($data['score'] ?? 0);
 
         /*
-         * 5S ocjena mora biti 0 - 5.
-         */
+        |--------------------------------------------------------------------------
+        | Dozvoljene 5S ocjene
+        |--------------------------------------------------------------------------
+        */
+
         if ($score < 0 || $score > 5) {
             return;
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Spremanje ocjene
+        |--------------------------------------------------------------------------
+        |
+        | Ne šaljemo Filament success notification nakon svakog klika.
+        |
+        | Kod brzog ocjenjivanja to bi stvaralo velik broj toast poruka
+        | jednu ispod druge.
+        |
+        | Vizualno označen odabrani gumb već korisniku potvrđuje da je
+        | ocjena prihvaćena.
+        |
+        */
+
         $record->update([
             'score' => $score,
         ]);
-
-        Notification::make()
-            ->title('Ocjena spremljena.')
-            ->success()
-            ->send();
     }
 
     public function table(Table $table): Table
@@ -85,8 +102,18 @@ class AnswersRelationManager extends RelationManager
                     ->orderBy('inspection_questions.id')
                     ->select('inspection_answers.*');
             })
+
             ->columns([
-                Tables\Columns\TextColumn::make('question.section')
+
+                /*
+                |--------------------------------------------------------------------------
+                | Sekcija
+                |--------------------------------------------------------------------------
+                */
+
+                Tables\Columns\TextColumn::make(
+                    'question.section'
+                )
                     ->label('Sekcija')
                     ->formatStateUsing(
                         fn ($state) => match ($state) {
@@ -105,22 +132,41 @@ class AnswersRelationManager extends RelationManager
                             'Samoodržavanje' =>
                                 '5 - SAMOODRŽAVANJE',
 
-                            default => $state,
+                            default =>
+                                $state,
                         }
                     )
                     ->badge()
                     ->color(
                         fn ($state) => match ($state) {
-                            'Sortiranje' => 'primary',
-                            'Slaganje' => 'info',
-                            'Sjaj' => 'success',
-                            'Standardiziranje' => 'warning',
-                            'Samoodržavanje' => 'danger',
-                            default => 'gray',
+                            'Sortiranje' =>
+                                'primary',
+
+                            'Slaganje' =>
+                                'info',
+
+                            'Sjaj' =>
+                                'success',
+
+                            'Standardiziranje' =>
+                                'warning',
+
+                            'Samoodržavanje' =>
+                                'danger',
+
+                            default =>
+                                'gray',
                         }
                     )
                     ->grow(false)
                     ->width('170px'),
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | Pitanje
+                |--------------------------------------------------------------------------
+                */
 
                 Tables\Columns\TextColumn::make(
                     'question.question'
@@ -137,6 +183,13 @@ class AnswersRelationManager extends RelationManager
                             . 'font-weight: 600;',
                     ]),
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | Brzo ocjenjivanje 0 - 5
+                |--------------------------------------------------------------------------
+                */
+
                 Tables\Columns\ViewColumn::make(
                     'score_buttons'
                 )
@@ -144,16 +197,30 @@ class AnswersRelationManager extends RelationManager
                     ->view(
                         'filament.tables.columns.score-buttons'
                     )
-                    ->alignment(Alignment::Center)
+                    ->alignment(
+                        Alignment::Center
+                    )
                     ->grow(false)
                     ->width('420px'),
 
-                Tables\Columns\TextColumn::make('score')
+
+                /*
+                |--------------------------------------------------------------------------
+                | Trenutna ocjena
+                |--------------------------------------------------------------------------
+                */
+
+                Tables\Columns\TextColumn::make(
+                    'score'
+                )
                     ->label('Trenutna')
-                    ->alignment(Alignment::Center)
+                    ->alignment(
+                        Alignment::Center
+                    )
                     ->html()
                     ->state(function ($record) {
-                        $score = $record->score;
+                        $score =
+                            $record->score;
 
                         $classes = match (true) {
                             $score === null =>
@@ -181,29 +248,41 @@ class AnswersRelationManager extends RelationManager
                                 'background:#6b7280;color:#ffffff;',
                         };
 
-                        return '<div style="
-                            display:inline-flex;
-                            align-items:center;
-                            justify-content:center;
-                            min-width:52px;
-                            height:42px;
-                            padding:0 14px;
-                            border-radius:12px;
-                            font-weight:900;
-                            font-size:20px;
-                            line-height:1;
-                            ' . $classes . '
-                        ">'
+                        return '
+                            <div
+                                style="
+                                    display:inline-flex;
+                                    align-items:center;
+                                    justify-content:center;
+                                    min-width:52px;
+                                    height:42px;
+                                    padding:0 14px;
+                                    border-radius:12px;
+                                    font-weight:900;
+                                    font-size:20px;
+                                    line-height:1;
+                                    '
+                                    . $classes .
+                                '"
+                            >'
                             . e(
                                 filled($score)
                                     ? (string) $score
                                     : '-'
                             )
-                            . '</div>';
+                            . '</div>
+                        ';
                     })
                     ->grow(false)
                     ->width('100px'),
             ])
+
+            /*
+            |--------------------------------------------------------------------------
+            | Grupiranje prema 5S sekciji
+            |--------------------------------------------------------------------------
+            */
+
             ->groups([
                 Tables\Grouping\Group::make(
                     'question.section'
@@ -211,7 +290,9 @@ class AnswersRelationManager extends RelationManager
                     ->label('Sekcija')
                     ->getTitleFromRecordUsing(
                         fn ($record) => match (
-                            $record->question?->section
+                            $record
+                                ->question
+                                ?->section
                         ) {
                             'Sortiranje' =>
                                 '1 - SORTIRANJE',
@@ -229,15 +310,24 @@ class AnswersRelationManager extends RelationManager
                                 '5 - SAMOODRŽAVANJE',
 
                             default =>
-                                $record->question?->section
+                                $record
+                                    ->question
+                                    ?->section
                                 ?? '-',
                         }
                     ),
             ])
-            ->defaultGroup('question.section')
+
+            ->defaultGroup(
+                'question.section'
+            )
+
             ->striped()
+
             ->actions([])
+
             ->headerActions([])
+
             ->paginated(false);
     }
 }

@@ -237,6 +237,11 @@
             border-color: #374151;
         }
 
+        .dark .znr-table th {
+            color: #d1d5db;
+            font-weight: 800;
+        }
+
         .dark .znr-dossier-name,
         .dark .znr-dossier-section-title,
         .dark .znr-dossier-value,

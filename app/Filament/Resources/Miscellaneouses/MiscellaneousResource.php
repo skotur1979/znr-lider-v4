@@ -431,7 +431,7 @@ class MiscellaneousResource extends BaseResource
         return $table
             ->defaultSort(
                 'examination_valid_until',
-                'desc'
+                'asc'
             )
 
             ->columns([

@@ -592,89 +592,6 @@ class ItemsRelationManager extends RelationManager
         return $data;
     }
 
-    protected function deadlinePregled(): ?string
-    {
-        /*
-        * Kod običnog GET zahtjeva.
-        */
-        $pregled =
-            request()->query(
-                'pregled'
-            );
-
-        /*
-        * Kod Livewire akcije zahtjev ide
-        * preko /livewire/update pa pregled
-        * čitamo iz URL-a stranice s koje
-        * je akcija pozvana.
-        */
-        if (blank($pregled)) {
-            $referer =
-                request()
-                    ->headers
-                    ->get(
-                        'referer'
-                    );
-
-            if ($referer) {
-                $queryString =
-                    parse_url(
-                        $referer,
-                        PHP_URL_QUERY
-                    );
-
-                $query = [];
-
-                if ($queryString) {
-                    parse_str(
-                        $queryString,
-                        $query
-                    );
-                }
-
-                $pregled =
-                    $query[
-                        'pregled'
-                    ]
-                    ?? null;
-            }
-        }
-
-        return in_array(
-            $pregled,
-            [
-                'isteklo',
-                'uskoro',
-            ],
-            true
-        )
-            ? $pregled
-            : null;
-    }
-
-    protected function redirectToDeadlineListIfNeeded(): void
-    {
-        $pregled =
-            $this->deadlinePregled();
-
-        if (! $pregled) {
-            return;
-        }
-
-        $this->redirect(
-            PPELogResource::getUrl(
-                'index',
-                [
-                    'pregled' =>
-                        $pregled,
-
-                    'tableRecordsPerPage' =>
-                        'all',
-                ]
-            )
-        );
-    }
-
 
     public function table(Table $table): Table
     {
@@ -997,11 +914,6 @@ class ItemsRelationManager extends RelationManager
                             static::prepareFormData(
                                 $data
                             )
-                    )
-                    ->after(
-                        fn () =>
-                            $this
-                                ->redirectToDeadlineListIfNeeded()
                     ),
 
                 Action::make('extend3')
@@ -1012,11 +924,9 @@ class ItemsRelationManager extends RelationManager
                         fn (
                             $record
                         ): bool =>
-                            $this
-                                ->canManageItems()
+                            $this->canManageItems()
                             && blank(
-                                $record
-                                    ->return_date
+                                $record->return_date
                             )
                     )
                     ->requiresConfirmation()
@@ -1025,47 +935,33 @@ class ItemsRelationManager extends RelationManager
                             $record
                         ): void {
                             if (
-                                ! $this
-                                    ->canManageItems()
+                                ! $this->canManageItems()
                             ) {
                                 abort(403);
                             }
 
-
-                            $record
-                                ->duration_months =
+                            $record->duration_months =
                                 max(
                                     0,
-                                    (int) $record
-                                        ->duration_months
+                                    (int) $record->duration_months
                                 ) + 3;
 
-
                             if (
-                                $record
-                                    ->issue_date
-                                && $record
-                                    ->duration_months
-                                    > 0
+                                $record->issue_date
+                                && $record->duration_months > 0
                             ) {
-                                $record
-                                    ->end_date =
+                                $record->end_date =
                                     Carbon::parse(
-                                        $record
-                                            ->issue_date
+                                        $record->issue_date
                                     )->addMonths(
-                                        $record
-                                            ->duration_months
+                                        $record->duration_months
                                     );
                             } else {
-                                $record
-                                    ->end_date =
+                                $record->end_date =
                                     null;
                             }
 
-
                             $record->save();
-                            $this->redirectToDeadlineListIfNeeded();
                         }
                     ),
 
@@ -1082,8 +978,7 @@ class ItemsRelationManager extends RelationManager
                     )
                     ->visible(
                         fn (): bool =>
-                            $this
-                                ->canManageItems()
+                            $this->canManageItems()
                     )
                     ->modalHeading(
                         'Označi OZO kao vraćen'
@@ -1117,27 +1012,20 @@ class ItemsRelationManager extends RelationManager
                             array $data
                         ): void {
                             if (
-                                ! $this
-                                    ->canManageItems()
+                                ! $this->canManageItems()
                             ) {
                                 abort(403);
                             }
 
-
                             $record->update([
                                 'return_date' =>
-                                    $data[
-                                        'return_date'
-                                    ],
+                                    $data['return_date'],
 
                                 'end_date' =>
                                     null,
                             ]);
-                            $this
-                                ->redirectToDeadlineListIfNeeded();
                         }
                     ),
-
 
                 DeleteAction::make()
                     ->label('Deaktiviraj')

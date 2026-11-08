@@ -316,8 +316,12 @@ class MachineResource extends BaseResource
 
     public static function table(Table $table): Table
     {
-        return $table
-            ->columns([
+    return $table
+        ->defaultSort(
+            'examination_valid_until',
+            'asc'
+        )
+        ->columns([
                 TextColumn::make('name')
                     ->label('Naziv')
                     ->searchable()
