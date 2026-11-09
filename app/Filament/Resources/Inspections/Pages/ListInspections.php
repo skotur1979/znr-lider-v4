@@ -22,6 +22,11 @@ class ListInspections extends ListRecords
                 ->visible(
                     fn (): bool =>
                         InspectionResource::canCreate()
+                )
+                ->before(
+                    InspectionResource::beforeModulePermission(
+                        'create'
+                    )
                 ),
                 
             Action::make('create_five_s')
@@ -44,10 +49,20 @@ class ListInspections extends ListRecords
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->action(function () {
+                    if (
+                        ! InspectionResource::allowsModulePermission(
+                            'view'
+                        )
+                    ) {
+                        return null;
+                    }
+
                     return Excel::download(
                         new InspectionsExport(),
-                        'nadzori-' . now()->format('Y-m-d') . '.xlsx'
-                    );
+                        'nadzori-'
+                            . now()->format('Y-m-d')
+                            . '.xlsx'
+                        );
                 }),
         ];
     }

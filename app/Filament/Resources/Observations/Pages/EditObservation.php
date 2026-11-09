@@ -103,13 +103,22 @@ class EditObservation extends EditRecord
     ): array {
         /*
         |--------------------------------------------------------------------------
-        | Stara fotografija
+        | Ownership
         |--------------------------------------------------------------------------
         |
-        | Pamtimo put postojeće fotografije kako
-        | bismo je nakon spremanja mogli obrisati
-        | ako ju je korisnik zamijenio novom.
+        | Ownership zapažanja nikada se ne mijenja kroz edit.
         |
+        | user_id dolazi iz skrivenog polja forme i zato ga
+        | ne prihvaćamo iz browsera.
+        |
+        */
+
+        unset($data['user_id']);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Stara fotografija
+        |--------------------------------------------------------------------------
         */
 
         $this->oldPicturePath =

@@ -2,16 +2,29 @@
 
 namespace App\Filament\Resources\InspectionZones\Pages;
 
+use App\Filament\Resources\Inspections\InspectionResource;
 use App\Filament\Resources\InspectionZones\InspectionZoneResource;
 use Filament\Resources\Pages\ListRecords;
 
 class ListInspectionZone extends ListRecords
 {
-    protected static string $resource = InspectionZoneResource::class;
+    protected static string $resource =
+        InspectionZoneResource::class;
 
     public function mount(): void
     {
-        $this->redirect('/admin/inspections', navigate: true);
+        /*
+         * Zone nadzora nemaju samostalan popis.
+         *
+         * Njima se upravlja isključivo kroz
+         * konkretni nadzor.
+         */
+        $this->redirect(
+            InspectionResource::getUrl(
+                'index'
+            ),
+            navigate: true
+        );
     }
 
     public function getTitle(): string

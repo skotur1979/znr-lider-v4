@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\InspectionZones\RelationManagers;
 
 use Filament\Resources\RelationManagers\RelationManager;
+use App\Filament\Resources\Inspections\InspectionResource;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -18,7 +19,25 @@ class AnswersRelationManager extends RelationManager
 
     public function setScore($data): void
     {
-        $answerId = $data['id'] ?? null;
+        /*
+        |--------------------------------------------------------------------------
+        | Dozvola
+        |--------------------------------------------------------------------------
+        |
+        | Livewire event se može pozvati i mimo vidljivog UI-a,
+        | zato serverski provjeravamo update pravo.
+        |
+        */
+
+        abort_unless(
+            InspectionResource::canUpdateModuleRecord(),
+            403,
+            'Nemate ovlasti za uređivanje nadzora.'
+        );
+
+        $answerId =
+            $data['id']
+            ?? null;
 
         if (! $answerId) {
             return;

@@ -24,16 +24,32 @@ class InspectionsExport implements FromCollection, WithHeadings, WithMapping, Sh
 
     public function __construct()
     {
-        $user = auth()->user();
+        abort_unless(
+            InspectionResource::canViewModule(),
+            403,
+            'Nemate ovlasti za pregled nadzora.'
+        );
+
+        $user =
+            auth()->user();
 
         $this->showUserColumn =
             (bool) $user?->isSuperAdmin();
 
-        $inspections = InspectionResource::getEloquentQuery()
-            ->with(['user', 'findings'])
-            ->withCount(['findings', 'zones'])
-            ->orderByDesc('performed_at')
-            ->get();
+        $inspections =
+            InspectionResource::getEloquentQuery()
+                ->with([
+                    'user',
+                    'findings',
+                ])
+                ->withCount([
+                    'findings',
+                    'zones',
+                ])
+                ->orderByDesc(
+                    'performed_at'
+                )
+                ->get();
 
         $this->rows = collect();
 

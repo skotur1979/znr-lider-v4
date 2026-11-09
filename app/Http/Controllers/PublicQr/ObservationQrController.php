@@ -461,14 +461,55 @@ class ObservationQrController extends Controller
                 )
                 ->first();
 
+        /*
+        * Organizacija mora postojati.
+        */
         abort_unless(
             $owner,
             404
         );
 
+        /*
+        * QR kod mora stvarno pripadati
+        * vlasniku organizacije.
+        */
         abort_unless(
             (int) $owner->getKey()
                 === (int) $qrCode->owner_id,
+            404
+        );
+
+        /*
+        * Javni QR obrazac ne smije raditi
+        * za deaktiviranu organizaciju.
+        */
+        abort_unless(
+            $owner->is_active,
+            404
+        );
+
+        /*
+        * Superadmin nije vlasnik poslovne
+        * organizacije i ne koristi javni
+        * QR za prijavu zapažanja.
+        */
+        abort_if(
+            $owner->isSuperAdmin(),
+            404
+        );
+
+        /*
+        * Organizacija mora imati omogućen
+        * modul Zapažanja.
+        *
+        * Ako joj se modul kasnije isključi,
+        * postojeći QR poster više ne smije
+        * prihvaćati nove prijave.
+        */
+        abort_unless(
+            $owner->canAccessModule(
+                'observations'
+            ),
             404
         );
 

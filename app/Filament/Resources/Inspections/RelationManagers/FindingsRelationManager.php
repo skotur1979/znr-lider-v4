@@ -134,8 +134,6 @@ class FindingsRelationManager extends RelationManager
 
         return ObservationResource::getUrl('create', [
             'inspection_finding_id' => $record->id,
-            'user_id' => $inspection->user_id
-                ?? auth()->user()?->ownerId(),
             'incident_date' => optional($inspection->performed_at)?->format('Y-m-d'),
             'observation_type' => 'Negative Observation',
             'location' => $inspection->location ?? '',
@@ -631,8 +629,14 @@ class FindingsRelationManager extends RelationManager
                 ->modalHeading('Napravi novi nalaz')
                 ->modalSubmitActionLabel('Napravi')
                 ->modalCancelActionLabel('Odustani')
+                ->before(
+                    InspectionResource::beforeModulePermission(
+                        'update'
+                    )
+                )
                 ->mutateDataUsing(
-                    fn (array $data): array => $this->mutateFindingData($data)
+                    fn (array $data): array =>
+                        $this->mutateFindingData($data)
                 ),
 
             Action::make('inspectionReports')
@@ -828,7 +832,13 @@ class FindingsRelationManager extends RelationManager
                                 ->send();
                         }),
 
-                    DeleteAction::make()->label('Obriši'),
+                    DeleteAction::make()
+                        ->label('Obriši')
+                        ->before(
+                            InspectionResource::beforeModulePermission(
+                                'delete'
+                            )
+                        ),
                 ])
                     ->label('')
                     ->icon('heroicon-o-ellipsis-vertical'),
@@ -836,6 +846,11 @@ class FindingsRelationManager extends RelationManager
             ->bulkActions([
                 DeleteBulkAction::make()
                     ->label('Izbriši odabrano')
+                    ->before(
+                        InspectionResource::beforeModulePermission(
+                            'delete'
+                        )
+                    )
                     ->requiresConfirmation()
                     ->modalHeading('Izbriši odabrane nalaze')
                     ->modalDescription('Jesi li siguran/a da želiš izbrisati odabrane nalaze?')

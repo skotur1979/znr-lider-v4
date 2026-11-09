@@ -6,29 +6,59 @@ use App\Models\InspectionZone;
 
 class InspectionZoneTemplateService
 {
-    public function syncQuestionsAndAnswers(InspectionZone $zone): void
-    {
-        $template = config('inspection_zone_questions', []);
+    public function syncQuestionsAndAnswers(
+        InspectionZone $zone
+    ): void {
+        $template =
+            config(
+                'inspection_zone_questions',
+                []
+            );
 
         if (empty($template)) {
             return;
         }
 
-        foreach ($template as $section => $questions) {
-            foreach ($questions as $questionText) {
-                $question = $zone->questions()->firstOrCreate([
-                    'section' => $section,
-                    'question' => trim($questionText),
-                ]);
+        foreach (
+            $template
+            as $section => $questions
+        ) {
+            foreach (
+                $questions
+                as $questionText
+            ) {
+                $question =
+                    $zone
+                        ->questions()
+                        ->firstOrCreate([
+                            'section' =>
+                                $section,
 
-                $zone->answers()->firstOrCreate(
-                    [
-                        'inspection_question_id' => $question->id,
-                    ],
-                    [
-                        'score' => 0,
-                    ]
-                );
+                            'question' =>
+                                trim(
+                                    $questionText
+                                ),
+                        ]);
+
+                /*
+                 * inspection_zone_id automatski postavlja
+                 * HasMany relacija zone.
+                 *
+                 * Odgovor se povezuje s pitanjem preko
+                 * inspection_question_id.
+                 */
+                $zone
+                    ->answers()
+                    ->firstOrCreate(
+                        [
+                            'inspection_question_id' =>
+                                $question->id,
+                        ],
+                        [
+                            'score' =>
+                                0,
+                        ]
+                    );
             }
         }
     }

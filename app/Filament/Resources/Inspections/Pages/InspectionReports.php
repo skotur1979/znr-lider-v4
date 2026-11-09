@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\Inspections\Pages;
 
+use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Inspections\InspectionResource;
 use App\Services\InspectionReportService;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\Page;
 use Filament\Support\Enums\Width;
+
 
 class InspectionReports extends Page
 {
@@ -45,6 +47,14 @@ class InspectionReports extends Page
 
     public function mount(): void
     {
+        if (
+            $this->redirectIfMissingModulePermission(
+                'view'
+            )
+        ) {
+            return;
+        }
+
         $this->year =
             (string) now()->year;
 
@@ -53,10 +63,23 @@ class InspectionReports extends Page
                 'inspection'
             );
 
-        $this->inspectionId =
+        /*
+        * ID iz URL-a prihvaćamo samo ako
+        * nadzor pripada organizaciji koju
+        * trenutačni korisnik smije vidjeti.
+        */
+        if (
             $inspectionId > 0
-                ? $inspectionId
-                : null;
+            && InspectionResource::getEloquentQuery()
+                ->whereKey($inspectionId)
+                ->exists()
+        ) {
+            $this->inspectionId =
+                $inspectionId;
+        } else {
+            $this->inspectionId =
+                null;
+        }
     }
 
     public function getTitle(): string

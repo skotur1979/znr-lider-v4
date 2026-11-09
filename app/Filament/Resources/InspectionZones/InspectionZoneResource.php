@@ -5,6 +5,8 @@ namespace App\Filament\Resources\InspectionZones;
 use App\Filament\Resources\InspectionZones\Pages;
 use App\Filament\Resources\InspectionZones\RelationManagers\AnswersRelationManager;
 use App\Filament\Resources\InspectionZones\RelationManagers\QuestionsRelationManager;
+use App\Filament\Resources\Inspections\InspectionResource;
+use Illuminate\Database\Eloquent\Model;
 use App\Models\InspectionZone;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -27,6 +29,40 @@ class InspectionZoneResource extends Resource
     protected static ?string $modelLabel = 'Zona nadzora';
 
     protected static ?string $pluralModelLabel = 'Zone nadzora';
+    /*
+    |--------------------------------------------------------------------------
+    | AUTORIZACIJA
+    |--------------------------------------------------------------------------
+    |
+    | InspectionZone nema vlastiti user_id.
+    |
+    | Prava i ownership nasljeđuje preko:
+    |
+    | InspectionZone -> Inspection -> user_id
+    |
+    */
+
+    public static function canViewAny(): bool
+    {
+        return InspectionResource::canViewModule();
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return InspectionResource::canViewModule();
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return InspectionResource::canViewModule()
+            && InspectionResource::canUpdateModuleRecord();
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return InspectionResource::canViewModule()
+            && InspectionResource::canDeleteModuleRecord();
+    }
 
     /**
      * InspectionZone nema vlastiti user_id.
@@ -46,25 +82,50 @@ class InspectionZoneResource extends Resource
         }
 
         /*
-         * Superadmin smije administrirati postojeće zone
-         * svih organizacija.
-         */
+        * Bez prava pregleda modula Nadzori
+        * zone se ne smiju dohvatiti ni direktnim URL-om.
+        */
+        if (
+            ! InspectionResource::canViewModule()
+        ) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        /*
+        * Superadmin smije pregledavati postojeće
+        * zone svih organizacija.
+        */
         if ($user->isSuperAdmin()) {
             return $query;
         }
 
+        $ownerId =
+            $user->ownerId();
+
         /*
-         * Glavni korisnik i podkorisnici vide samo zone
-         * nadzora svoje organizacije.
-         */
+        * Fail closed.
+        */
+        if (! $ownerId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        /*
+        * Organizacijski korisnik vidi samo zone
+        * nadzora vlastite organizacije.
+        */
         return $query->whereHas(
             'inspection',
             fn (Builder $inspectionQuery) =>
                 $inspectionQuery->where(
                     'user_id',
-                    $user->ownerId()
+                    $ownerId
                 )
         );
+    }
+
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return static::getEloquentQuery();
     }
 
     /**

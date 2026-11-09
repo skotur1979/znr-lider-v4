@@ -10,6 +10,11 @@ class InspectionZoneReportService
 {
     public function report(array $filters = []): array
     {
+        abort_unless(
+            InspectionResource::canViewModule(),
+            403,
+            'Nemate ovlasti za pregled nadzora.'
+        );
         $inspections = $this->filteredQuery($filters)
             ->with([
                 'zones',

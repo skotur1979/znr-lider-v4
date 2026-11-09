@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Inspections\Pages;
 
+use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Inspections\InspectionResource;
 use App\Services\InspectionZoneReportService;
 use Filament\Actions\Action;
@@ -33,16 +34,34 @@ class ZoneResultsReport extends Page
 
     public function mount(): void
     {
+        if (
+            $this->redirectIfMissingModulePermission(
+                'view'
+            )
+        ) {
+            return;
+        }
+
         $this->year =
             (string) now()->year;
 
         $inspectionId =
-            request()->integer('inspection');
+            request()->integer(
+                'inspection'
+            );
 
-        $this->inspectionId =
+        if (
             $inspectionId > 0
-                ? $inspectionId
-                : null;
+            && InspectionResource::getEloquentQuery()
+                ->whereKey($inspectionId)
+                ->exists()
+        ) {
+            $this->inspectionId =
+                $inspectionId;
+        } else {
+            $this->inspectionId =
+                null;
+        }
     }
 
     public function getTitle(): string

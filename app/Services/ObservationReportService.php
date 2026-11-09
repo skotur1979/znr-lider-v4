@@ -104,26 +104,30 @@ class ObservationReportService
 
         /*
         |--------------------------------------------------------------------------
-        | Eksplicitna organizacija
+        | Organizacija / tenant
         |--------------------------------------------------------------------------
         |
-        | Management report može eksplicitno definirati ownera.
-        | Ostali postojeći izvještaji nastavljaju raditi kao prije.
+        | Samo superadmin smije eksplicitno odabrati drugu
+        | organizaciju kroz owner_id.
+        |
+        | Organizacijski korisnik uvijek koristi vlastiti
+        | ownerId(), bez obzira na eventualni owner_id
+        | primljen izvana.
         |
         */
 
-        if (
-            filled(
-                $forcedOwnerId
-            )
-        ) {
-            $query->where(
-                'user_id',
-                (int) $forcedOwnerId
-            );
-        } elseif (
-            ! $user->isSuperAdmin()
-        ) {
+        if ($user->isSuperAdmin()) {
+            if (
+                filled(
+                    $forcedOwnerId
+                )
+            ) {
+                $query->where(
+                    'user_id',
+                    (int) $forcedOwnerId
+                );
+            }
+        } else {
             $ownerId =
                 $user->ownerId();
 

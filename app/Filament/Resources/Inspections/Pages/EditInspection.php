@@ -2,17 +2,42 @@
 
 namespace App\Filament\Resources\Inspections\Pages;
 
+use App\Filament\Concerns\InteractsWithModulePagePermissions;
 use App\Filament\Resources\Inspections\InspectionResource;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditInspection extends EditRecord
 {
-    protected static string $resource = InspectionResource::class;
+    use InteractsWithModulePagePermissions;
+
+    protected static string $resource =
+        InspectionResource::class;
+
+    public function mount(
+        int|string $record
+    ): void {
+        parent::mount($record);
+
+        $this->redirectIfMissingModulePermission(
+            'update'
+        );
+    }
+
+    protected function beforeSave(): void
+    {
+        $this->haltIfMissingModulePermission(
+            'update'
+        );
+    }
 
     protected function mutateFormDataBeforeSave(
-    array $data
+        array $data
     ): array {
+        /*
+         * Ownership nadzora nikada se ne mijenja
+         * kroz edit formu.
+         */
         unset($data['user_id']);
 
         return $data;
@@ -22,13 +47,20 @@ class EditInspection extends EditRecord
     {
         return [
             DeleteAction::make()
-                ->requiresConfirmation(),
+                ->requiresConfirmation()
+                ->before(
+                    InspectionResource::beforeModulePermission(
+                        'delete'
+                    )
+                ),
         ];
     }
 
     protected function getRedirectUrl(): string
     {
         return $this->previousUrl
-            ?? static::getResource()::getUrl('index');
+            ?? static::getResource()::getUrl(
+                'index'
+            );
     }
 }

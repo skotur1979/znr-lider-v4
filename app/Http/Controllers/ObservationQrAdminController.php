@@ -141,7 +141,7 @@ class ObservationQrAdminController extends Controller
     ) {
         $owner =
             $this->authorizedOwner(
-                'view'
+                'create'
             );
 
         $qrCode =

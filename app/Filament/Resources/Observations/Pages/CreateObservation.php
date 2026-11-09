@@ -91,6 +91,18 @@ class CreateObservation extends CreateRecord
         );
 
         if ($findingId) {
+            /*
+            * Kreiranje zapažanja iz nalaza mijenja i sam
+            * nalaz nadzora u status converted_to_observation.
+            *
+            * Zato korisnik uz pravo kreiranja zapažanja
+            * mora imati i pravo izmjene modula Nadzori.
+            */
+            abort_unless(
+                InspectionResource::canUpdateModuleRecord(),
+                403,
+                'Nemate ovlasti za izmjenu nalaza nadzora.'
+            );
             $finding = InspectionFinding::query()
                 ->with('inspection')
                 ->whereKey($findingId)
@@ -228,12 +240,30 @@ class CreateObservation extends CreateRecord
     protected function beforeCreate(): void
     {
         /*
-         * Dodatna serverska provjera neposredno
-         * prije spremanja.
-         */
+        * Dodatna serverska provjera neposredno
+        * prije spremanja zapažanja.
+        */
         $this->haltIfMissingModulePermission(
             'create'
         );
+
+        /*
+        * Ako zapažanje nastaje iz nalaza nadzora,
+        * nakon spremanja mijenjat će se i status
+        * InspectionFinding zapisa.
+        *
+        * Zato ponovno provjeravamo update pravo
+        * neposredno prije samog spremanja.
+        */
+        if (
+            $this->validatedInspectionFindingId
+        ) {
+            abort_unless(
+                InspectionResource::canUpdateModuleRecord(),
+                403,
+                'Nemate ovlasti za izmjenu nalaza nadzora.'
+            );
+        }
     }
 
     protected function mutateFormDataBeforeCreate(

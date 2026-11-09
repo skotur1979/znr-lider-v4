@@ -6,6 +6,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\RelationManagers\RelationManager;
+use App\Filament\Resources\Inspections\InspectionResource;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -117,6 +118,15 @@ class QuestionsRelationManager extends RelationManager
             ->actions([
                 EditAction::make()
                 ->label('Uredi pitanje')
+                ->visible(
+                    fn (): bool =>
+                        InspectionResource::canUpdateModuleRecord()
+                )
+                ->before(
+                    InspectionResource::beforeModulePermission(
+                        'update'
+                    )
+                )
                 ->modalHeading('Uredi pitanje zone')
                 ->icon('heroicon-o-pencil-square')
                 ->color('warning')
