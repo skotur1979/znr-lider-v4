@@ -41,13 +41,18 @@ class IncidentReportService
             ->where('type_of_incident', 'FAA')
             ->count();
 
-        $totalLostDays = (int) $incidents
-            ->sum(
-                fn ($incident) =>
-                    (int) ($incident->working_days_lost ?? 0)
-            );
+        /*
+         * Izgubljeni radni dani pripadaju isključivo
+         * LTA incidentima.
+         */
+        $ltaIncidents = $incidents
+            ->where('type_of_incident', 'LTA');
 
-        $incidentsWithLostDays = $incidents
+        $totalLostDays = $this->ltaLostDays(
+            $ltaIncidents
+        );
+
+        $incidentsWithLostDays = $ltaIncidents
             ->filter(
                 fn ($incident): bool =>
                     (int) ($incident->working_days_lost ?? 0) > 0
@@ -62,7 +67,7 @@ class IncidentReportService
             : 0;
 
         $maxLostDays = (int) (
-            $incidents->max('working_days_lost') ?? 0
+            $ltaIncidents->max('working_days_lost') ?? 0
         );
 
         return [
@@ -273,15 +278,12 @@ class IncidentReportService
                     )
                     ->count(),
 
-                'lost_days' => (int) $items
-                    ->sum(
-                        fn ($incident) =>
-                            (int) (
-                                $incident
-                                    ->working_days_lost
-                                ?? 0
-                            )
-                    ),
+                /*
+                 * Izgubljeni radni dani računaju se
+                 * samo za LTA incidente.
+                 */
+                'lost_days' =>
+                    $this->ltaLostDays($items),
             ];
         }
 
@@ -383,15 +385,12 @@ class IncidentReportService
                         'label' => $label,
                         'count' => $items->count(),
 
-                        'lost_days' => (int) $items
-                            ->sum(
-                                fn ($incident) =>
-                                    (int) (
-                                        $incident
-                                            ->working_days_lost
-                                        ?? 0
-                                    )
-                            ),
+                        /*
+                         * Izgubljeni radni dani računaju se
+                         * samo za LTA incidente.
+                         */
+                        'lost_days' =>
+                            $this->ltaLostDays($items),
                     ];
                 }
             )
@@ -450,22 +449,41 @@ class IncidentReportService
                                 )
                                 ->count(),
 
+                        /*
+                         * Izgubljeni radni dani računaju se
+                         * samo za LTA incidente.
+                         */
                         'lost_days' =>
-                            (int) $items
-                                ->sum(
-                                    fn ($incident) =>
-                                        (int) (
-                                            $incident
-                                                ->working_days_lost
-                                            ?? 0
-                                        )
-                                ),
+                            $this->ltaLostDays($items),
                     ];
                 }
             )
             ->sortByDesc('total')
             ->values()
             ->all();
+    }
+
+    /**
+     * Zbroj izgubljenih radnih dana samo za LTA incidente.
+     *
+     * MTA i FAA incidenti ne smiju utjecati na
+     * statistiku izgubljenih radnih dana.
+     */
+    protected function ltaLostDays(
+        Collection $incidents
+    ): int {
+        return (int) $incidents
+            ->where(
+                'type_of_incident',
+                'LTA'
+            )
+            ->sum(
+                fn ($incident) =>
+                    (int) (
+                        $incident->working_days_lost
+                        ?? 0
+                    )
+            );
     }
 
     protected function filterOptions(): array

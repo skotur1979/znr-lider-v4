@@ -42,4 +42,21 @@ class Incident extends Model
     {
         return $this->belongsTo(User::class);
     }
+    protected static function booted(): void
+    {
+        static::saving(
+            function (Incident $incident): void {
+                if (
+                    strtoupper(
+                        trim(
+                            (string) $incident->type_of_incident
+                        )
+                    ) !== 'LTA'
+                ) {
+                    $incident->date_of_return = null;
+                    $incident->working_days_lost = null;
+                }
+            }
+        );
+    }
 }

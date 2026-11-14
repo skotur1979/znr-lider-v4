@@ -1205,6 +1205,34 @@ Route::middleware(['auth'])->group(function () {
             }
 
             /*
+             * Disk dolazi iz POTPISANOG URL-a.
+             *
+             * public:
+             * - postojeći moduli i postojeći prilozi
+             *
+             * local:
+             * - privatni prilozi, npr. Incidenti
+             *
+             * Ne dopuštamo proizvoljne Laravel diskove.
+             */
+            $disk = (string) $request->query(
+                'disk',
+                'public'
+            );
+
+            abort_unless(
+                in_array(
+                    $disk,
+                    [
+                        'public',
+                        'local',
+                    ],
+                    true
+                ),
+                403
+            );
+
+            /*
              * Normalizacija putanje.
              */
             $file = str_replace(
@@ -1253,24 +1281,32 @@ Route::middleware(['auth'])->group(function () {
             );
 
             /*
+             * Koristimo samo prethodno dopušteni disk.
+             */
+            $filesystem = Storage::disk(
+                $disk
+            );
+
+            /*
              * Datoteka mora postojati
-             * na Laravel public disku.
+             * na odabranom disku.
              */
             abort_unless(
-                Storage::disk('public')
-                    ->exists($file),
+                $filesystem->exists(
+                    $file
+                ),
                 404
             );
 
             /*
              * Dohvaćamo stvarnu putanju datoteke.
              */
-            $fullPath = Storage::disk('public')
-                ->path($file);
+            $fullPath = $filesystem->path(
+                $file
+            );
 
-            $publicRoot = realpath(
-                Storage::disk('public')
-                    ->path('')
+            $diskRoot = realpath(
+                $filesystem->path('')
             );
 
             $resolvedPath = realpath(
@@ -1280,18 +1316,17 @@ Route::middleware(['auth'])->group(function () {
             /*
              * Dodatna sigurnosna provjera.
              *
-             * Čak i ako bi netko pokušao manipulirati
-             * putanjom, stvarna datoteka mora ostati
-             * unutar storage/app/public direktorija.
+             * Stvarna datoteka mora ostati unutar
+             * root direktorija odabranog Laravel diska.
              */
             abort_unless(
-                $publicRoot !== false
+                $diskRoot !== false
                 && $resolvedPath !== false
                 && (
-                    $resolvedPath === $publicRoot
+                    $resolvedPath === $diskRoot
                     || str_starts_with(
                         $resolvedPath,
-                        $publicRoot
+                        $diskRoot
                             . DIRECTORY_SEPARATOR
                     )
                 ),
@@ -1342,6 +1377,12 @@ Route::middleware(['auth'])->group(function () {
                 'webp' =>
                     'image/webp',
 
+                'zip' =>
+                    'application/zip',
+
+                'rar' =>
+                    'application/vnd.rar',
+
                 default =>
                     mime_content_type(
                         $resolvedPath
@@ -1387,6 +1428,6 @@ Route::middleware(['auth'])->group(function () {
             );
         }
     )
-        ->middleware('signed')
+        ->middleware('signed:relative')
         ->name('file.preview');
 });

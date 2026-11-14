@@ -6,6 +6,8 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Incidents\Pages;
 use App\Models\Incident;
 use App\Services\StorageQuotaService;
+use App\Support\SecureFilePreview;
+use Illuminate\Support\Facades\Storage;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -26,7 +28,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
@@ -34,6 +35,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\HtmlString;
 
 class IncidentResource extends BaseResource
 {
@@ -249,7 +251,26 @@ class IncidentResource extends BaseResource
                                     ->options(
                                         static::incidentTypes()
                                     )
-                                    ->required(),
+                                    ->required()
+                                    ->reactive()
+                                    ->afterStateUpdated(
+                                        function (
+                                            $state,
+                                            callable $set
+                                        ): void {
+                                            if ($state !== 'LTA') {
+                                                $set(
+                                                    'date_of_return',
+                                                    null
+                                                );
+
+                                                $set(
+                                                    'working_days_lost',
+                                                    null
+                                                );
+                                            }
+                                        }
+                                    ),
 
                                 Select::make(
                                     'permanent_or_temporary'
@@ -313,6 +334,14 @@ class IncidentResource extends BaseResource
                                         'Europe/Zagreb'
                                     )
                                     ->reactive()
+                                    ->visible(
+                                        fn (callable $get): bool =>
+                                            $get('type_of_incident') === 'LTA'
+                                    )
+                                    ->dehydrated(
+                                        fn (callable $get): bool =>
+                                            $get('type_of_incident') === 'LTA'
+                                    )
                                     ->after(
                                         'date_occurred'
                                     )
@@ -343,6 +372,14 @@ class IncidentResource extends BaseResource
                                     ->numeric()
                                     ->minValue(0)
                                     ->readOnly()
+                                    ->visible(
+                                        fn (callable $get): bool =>
+                                            $get('type_of_incident') === 'LTA'
+                                    )
+                                    ->dehydrated(
+                                        fn (callable $get): bool =>
+                                            $get('type_of_incident') === 'LTA'
+                                    )
                                     ->dehydrateStateUsing(
                                         function (
                                             $state,
@@ -415,13 +452,13 @@ class IncidentResource extends BaseResource
                                     )
                                     ->image()
                                     ->disk(
-                                        'public'
+                                        'local'
                                     )
                                     ->directory(
                                         'incidents'
                                     )
                                     ->visibility(
-                                        'public'
+                                        'private'
                                     )
                                     ->preserveFilenames()
                                     ->openable()
@@ -538,13 +575,13 @@ class IncidentResource extends BaseResource
                                         'Dodaj priloge (max. 5, do 30 MB po datoteci)'
                                     )
                                     ->disk(
-                                        'public'
+                                        'local'
                                     )
                                     ->directory(
                                         'incidents'
                                     )
                                     ->visibility(
-                                        'public'
+                                        'private'
                                     )
                                     ->multiple()
                                     ->maxFiles(
@@ -813,21 +850,53 @@ class IncidentResource extends BaseResource
                     )
                     ->toggleable(),
 
-                ImageColumn::make(
+                TextColumn::make(
                     'image_path'
                 )
                     ->label(
                         'Slika'
                     )
-                    ->disk(
-                        'public'
+                    ->html()
+                    ->state(
+                        function (
+                            Incident $record
+                        ): HtmlString {
+                            if (
+                                blank(
+                                    $record->image_path
+                                )
+                            ) {
+                                return new HtmlString(
+                                    '<span style="color:#9ca3af;">—</span>'
+                                );
+                            }
+
+                            $url =
+                                SecureFilePreview::url(
+                                    $record->image_path,
+                                    30,
+                                    'local'
+                                );
+
+                            if (blank($url)) {
+                                return new HtmlString(
+                                    '<span style="color:#9ca3af;">—</span>'
+                                );
+                            }
+
+                            return new HtmlString(
+                                '<a href="'
+                                . e($url)
+                                . '" target="_blank" rel="noopener noreferrer" title="Otvori sliku">'
+                                . '<img src="'
+                                . e($url)
+                                . '" alt="Slika incidenta" style="width:36px;height:36px;border-radius:9999px;object-fit:cover;display:inline-block;" />'
+                                . '</a>'
+                            );
+                        }
                     )
-                    ->circular()
-                    ->height(
-                        36
-                    )
-                    ->width(
-                        36
+                    ->alignment(
+                        Alignment::Center
                     )
                     ->toggleable(),
 
@@ -849,73 +918,165 @@ class IncidentResource extends BaseResource
                     ->label(
                         'Izvještaji'
                     )
-                    ->badge()
                     ->alignment(
                         Alignment::Center
                     )
-                    ->icon(
-                        fn (
+                    ->html()
+                    ->state(
+                        function (
                             Incident $record
-                        ) =>
-                            is_array(
-                                $record
-                                    ->investigation_report
-                            )
-                            && count(
-                                $record
-                                    ->investigation_report
-                            )
-                                ? Heroicon::PaperClip
-                                : null
-                    )
-                    ->color(
-                        fn (
-                            Incident $record
-                        ) =>
-                            is_array(
-                                $record
-                                    ->investigation_report
-                            )
-                            && count(
-                                $record
-                                    ->investigation_report
-                            )
-                                ? 'info'
-                                : 'gray'
-                    )
-                    ->formatStateUsing(
-                        fn (
-                            $state,
-                            Incident $record
-                        ) =>
-                            is_array(
-                                $record
-                                    ->investigation_report
-                            )
-                                ? (string) count(
-                                    $record
-                                        ->investigation_report
+                        ): string {
+                            if (
+                                ! is_array(
+                                    $record->investigation_report
                                 )
-                                : '0'
+                                || count(
+                                    $record->investigation_report
+                                ) === 0
+                            ) {
+                                return
+                                    '<span style="color:#6b7280;">0</span>';
+                            }
+
+                            return collect(
+                                $record->investigation_report
+                            )
+                                ->map(
+                                    function (
+                                        $file,
+                                        $index
+                                    ): string {
+                                        if (
+                                            ! is_string($file)
+                                            || blank($file)
+                                        ) {
+                                            return '';
+                                        }
+
+                                        $path = ltrim(
+                                            $file,
+                                            '/'
+                                        );
+
+                                        /*
+                                        * Novi Incident prilozi:
+                                        * local/private
+                                        *
+                                        * Legacy prilozi:
+                                        * public
+                                        */
+                                        if (
+                                            Storage::disk('local')
+                                                ->exists($path)
+                                        ) {
+                                            $disk = 'local';
+                                        } elseif (
+                                            Storage::disk('public')
+                                                ->exists($path)
+                                        ) {
+                                            $disk = 'public';
+                                        } else {
+                                            return '';
+                                        }
+
+                                        $url =
+                                            SecureFilePreview::url(
+                                                $path,
+                                                30,
+                                                $disk
+                                            );
+
+                                        if (! $url) {
+                                            return '';
+                                        }
+
+                                        $name =
+                                            e(
+                                                basename(
+                                                    $path
+                                                )
+                                            );
+
+                                        $number =
+                                            $index + 1;
+
+                                        return
+                                            '<a href="'
+                                            . e($url)
+                                            . '"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                title="'
+                                            . $name
+                                            . '"
+                                                onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); window.open(this.href, \'_blank\'); return false;"
+                                                style="
+                                                    display:inline-flex;
+                                                    align-items:center;
+                                                    justify-content:center;
+                                                    min-width:28px;
+                                                    height:24px;
+                                                    padding:0 8px;
+                                                    margin:1px 2px;
+                                                    border-radius:7px;
+                                                    background:rgba(59,130,246,.15);
+                                                    border:1px solid rgba(59,130,246,.35);
+                                                    color:#93c5fd;
+                                                    font-size:12px;
+                                                    font-weight:700;
+                                                    text-decoration:none;
+                                                    cursor:pointer;
+                                                "
+                                            >📎 '
+                                            . $number
+                                            . '</a>';
+                                    }
+                                )
+                                ->filter()
+                                ->implode('');
+                        }
                     )
                     ->tooltip(
-                        fn (
+                        function (
                             Incident $record
-                        ) =>
-                            is_array(
-                                $record
-                                    ->investigation_report
-                            )
-                            && count(
-                                $record
-                                    ->investigation_report
-                            )
-                                ? implode(
-                                    "\n",
-                                    $record
-                                        ->investigation_report
+                        ): string {
+                            if (
+                                ! is_array(
+                                    $record->investigation_report
                                 )
-                                : 'Nema izvještaja'
+                                || count(
+                                    $record->investigation_report
+                                ) === 0
+                            ) {
+                                return
+                                    'Nema priloga';
+                            }
+
+                            return collect(
+                                $record->investigation_report
+                            )
+                                ->filter(
+                                    fn ($file) =>
+                                        is_string($file)
+                                        && filled($file)
+                                )
+                                ->map(
+                                    fn (
+                                        $file,
+                                        $index
+                                    ) =>
+                                        (
+                                            $index + 1
+                                        )
+                                        . '. '
+                                        . basename(
+                                            $file
+                                        )
+                                )
+                                ->implode(
+                                    "\n"
+                                );
+                        }
                     )
                     ->toggleable(),
             ])

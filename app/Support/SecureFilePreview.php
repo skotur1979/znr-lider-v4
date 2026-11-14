@@ -16,10 +16,16 @@ class SecureFilePreview
      * Superadmin:
      * - owner = 0
      * - pristup se provjerava kao superadmin na samoj ruti.
+     *
+     * Disk:
+     * - public je zadani disk radi kompatibilnosti
+     *   s postojećim modulima
+     * - local se koristi za privatne priloge
      */
     public static function url(
         ?string $file,
-        int $minutes = 30
+        int $minutes = 30,
+        string $disk = 'public'
     ): ?string {
         if (blank($file)) {
             return null;
@@ -37,11 +43,30 @@ class SecureFilePreview
             return null;
         }
 
+        /*
+         * Ne dopuštamo proizvoljne filesystem diskove.
+         */
+        if (
+            ! in_array(
+                $disk,
+                [
+                    'public',
+                    'local',
+                ],
+                true
+            )
+        ) {
+            return null;
+        }
+
         $ownerId = $user->isSuperAdmin()
             ? 0
             : (int) $user->ownerId();
 
-        if (! $user->isSuperAdmin() && $ownerId <= 0) {
+        if (
+            ! $user->isSuperAdmin()
+            && $ownerId <= 0
+        ) {
             return null;
         }
 
@@ -51,7 +76,9 @@ class SecureFilePreview
             [
                 'file' => $file,
                 'owner' => $ownerId,
-            ]
+                'disk' => $disk,
+            ],
+            absolute: false
         );
     }
 
@@ -61,7 +88,11 @@ class SecureFilePreview
     public static function normalizePath(
         string $file
     ): string {
-        $file = str_replace('\\', '/', $file);
+        $file = str_replace(
+            '\\',
+            '/',
+            $file
+        );
 
         return ltrim(
             trim($file),
