@@ -82,11 +82,8 @@ class KpiReports extends Page
                             'isHtml5ParserEnabled' =>
                                 true,
 
-                            'isRemoteEnabled' =>
-                                true,
-
-                            'isPhpEnabled' =>
-                                true,
+                            'isRemoteEnabled' => false,
+                            'isPhpEnabled' => false,
 
                             'dpi' =>
                                 96,

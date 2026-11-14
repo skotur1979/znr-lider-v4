@@ -77,12 +77,14 @@ class QrCode extends Model
     {
         static::query()
             ->whereKey($this->getKey())
-            ->update([
-                'scan_count' => $this->scan_count + 1,
-                'last_scanned_at' => now(),
-            ]);
+            ->increment(
+                'scan_count',
+                1,
+                [
+                    'last_scanned_at' => now(),
+                ]
+            );
 
-        $this->scan_count++;
-        $this->last_scanned_at = now();
+        $this->refresh();
     }
 }

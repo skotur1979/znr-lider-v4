@@ -40,7 +40,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class MiscellaneousResource extends BaseResource
@@ -134,7 +133,7 @@ class MiscellaneousResource extends BaseResource
                                 TextInput::make('name')
                                     ->label('Naziv (obavezno)')
                                     ->required()
-                                    ->maxLength(255),
+                                    ->maxLength(512),
 
                                 Select::make('category_id')
                                     ->label('Kategorija')
@@ -187,7 +186,7 @@ class MiscellaneousResource extends BaseResource
                                         TextInput::make('name')
                                             ->label('Naziv kategorije')
                                             ->required()
-                                            ->maxLength(255),
+                                            ->maxLength(256),
                                     ])
                                     ->createOptionUsing(
                                         function (array $data): int {
@@ -247,42 +246,12 @@ class MiscellaneousResource extends BaseResource
 
                                 TextInput::make('examiner')
                                     ->label('Ispitao')
-                                    ->maxLength(255),
+                                    ->maxLength(256),
 
                                 TextInput::make('report_number')
                                     ->label('Broj izvještaja')
-                                    ->maxLength(255)
-                                    ->nullable()
-                                    ->rule(
-                                    function ($record) {
-                                        $ownerId =
-                                            static::formOwnerId($record);
-
-                                        return Rule::unique(
-                                            'miscellaneouses',
-                                            'report_number'
-                                        )
-                                            ->where(
-                                                function ($query) use ($ownerId) {
-                                                    $query
-                                                        ->where(
-                                                            'user_id',
-                                                            $ownerId
-                                                        )
-                                                        ->whereNull(
-                                                            'deleted_at'
-                                                        );
-                                                }
-                                            )
-                                                ->ignore(
-                                                    $record?->id
-                                                );
-                                        }
-                                    )
-                                    ->validationMessages([
-                                        'unique' =>
-                                            'Već postoji zapis s istim brojem izvještaja.',
-                                    ]),
+                                    ->maxLength(191)
+                                    ->nullable(),
                             ]),
 
                         Section::make('Ispitivanje')
@@ -314,7 +283,14 @@ class MiscellaneousResource extends BaseResource
                                     ->timezone(
                                         'Europe/Zagreb'
                                     )
-                                    ->native(false),
+                                    ->native(false)
+                                    ->rule(
+                                        'after_or_equal:examination_valid_from'
+                                    )
+                                    ->validationMessages([
+                                        'after_or_equal' =>
+                                            'Datum do kada ispitivanje vrijedi ne može biti prije datuma od kojeg vrijedi.',
+                                    ]),
                             ]),
 
                         Grid::make(2)
@@ -333,6 +309,7 @@ class MiscellaneousResource extends BaseResource
                                                 'Napomena'
                                             )
                                             ->rows(7)
+                                            ->maxLength(1024)
                                             ->columnSpanFull(),
                                     ]),
 
@@ -1071,6 +1048,14 @@ class MiscellaneousResource extends BaseResource
                 )
                 ->modalCancelActionLabel(
                     'Odustani'
+                )
+                ->visible(
+                    fn (
+                        HasTable $livewire
+                    ): bool =>
+                        static::isOnlyTrashed(
+                            $livewire
+                        )
                 )
                 ->deselectRecordsAfterCompletion(),
             ]);

@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\WasteType;
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -26,28 +27,55 @@ class WasteTypesExport implements
 
     public function __construct(array $ids)
     {
-        $user = auth()->user();
+        $user = Auth::user();
+
+        if (
+            ! $user
+            || ! $user->hasModulePermission(
+                'waste_types',
+                'view'
+            )
+        ) {
+            $this->rows = collect();
+            $this->showUserColumn = false;
+
+            return;
+        }
 
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+            $user->isSuperAdmin()
+            || $user->canCreateSubusers();
 
-        /*
-         * ID-evi dolaze iz filtrirane Filament tablice.
-         *
-         * Zato export poštuje:
-         * - tenant scope
-         * - aktivne filtere
-         * - pretragu
-         * - status aktivan/deaktiviran
-         */
-        $this->rows = WasteType::query()
+        $query = WasteType::query()
             ->withTrashed()
             ->with('user')
-            ->whereIn('id', $ids)
-            ->orderBy('waste_code')
-            ->orderBy('name')
-            ->get();
+            ->whereIn('id', $ids);
+
+        /*
+        * Organizacijski korisnik izvozi
+        * samo vrste otpada svoje organizacije.
+        */
+        if (! $user->isSuperAdmin()) {
+            $ownerId =
+                (int) $user->ownerId();
+
+            if ($ownerId <= 0) {
+                $this->rows = collect();
+
+                return;
+            }
+
+            $query->where(
+                'user_id',
+                $ownerId
+            );
+        }
+
+        $this->rows =
+            $query
+                ->orderBy('waste_code')
+                ->orderBy('name')
+                ->get();
     }
 
     public function collection()

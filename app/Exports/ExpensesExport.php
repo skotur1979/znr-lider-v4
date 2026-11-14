@@ -26,17 +26,22 @@ class ExpensesExport implements
 {
     protected $expenses;
 
-    protected string $year;
+    protected ?string $year = null;
 
     protected bool $showUserColumn = false;
 
     protected float $totalExpenses = 0.0;
+
     protected float $totalBudget = 0.0;
+
     protected float $balance = 0.0;
 
-    public function __construct(string $year)
-    {
-        $this->year = $year;
+    public function __construct(
+        ?string $year = null
+    ) {
+        $this->year = filled($year)
+            ? (string) $year
+            : null;
 
         $user = auth()->user();
 
@@ -45,43 +50,89 @@ class ExpensesExport implements
         }
 
         $this->showUserColumn =
-        $user->isSuperAdmin();
+            $user->isSuperAdmin();
 
         /*
-         * VAŽNO:
-         * Koristimo ExpenseResource::getEloquentQuery()
-         * kako bi Excel koristio potpuno isti tenant scope
-         * kao i tablica Troškovi.
+         * Koristimo isti tenant scope
+         * kao tablica Troškovi.
+         *
+         * Excel sadrži samo
+         * realizirane troškove.
          */
-        $this->expenses = ExpenseResource::getEloquentQuery()
-            ->with([
-                'user',
-                'budget',
-                'category',
-            ])
-            ->whereHas(
-                'budget',
-                fn (Builder $query) =>
-                    $query->where('godina', $this->year)
-            )
-            ->orderByRaw("
-                FIELD(
-                    mjesec,
-                    'Siječanj','Veljača','Ožujak','Travanj','Svibanj','Lipanj',
-                    'Srpanj','Kolovoz','Rujan','Listopad','Studeni','Prosinac'
+        $this->expenses =
+            ExpenseResource::getEloquentQuery()
+                ->with([
+                    'user',
+                    'budget',
+                    'category',
+                ])
+                ->where(
+                    'realizirano',
+                    true
                 )
-            ")
-            ->orderBy('naziv_troska')
-            ->get();
-
-        $this->totalExpenses = (float) $this->expenses->sum('iznos');
+                ->when(
+                    filled($this->year),
+                    fn (
+                        Builder $query
+                    ) =>
+                        $query->whereHas(
+                            'budget',
+                            fn (
+                                Builder $budgetQuery
+                            ) =>
+                                $budgetQuery->where(
+                                    'godina',
+                                    $this->year
+                                )
+                        )
+                )
+                ->orderByRaw("
+                    FIELD(
+                        mjesec,
+                        'Siječanj',
+                        'Veljača',
+                        'Ožujak',
+                        'Travanj',
+                        'Svibanj',
+                        'Lipanj',
+                        'Srpanj',
+                        'Kolovoz',
+                        'Rujan',
+                        'Listopad',
+                        'Studeni',
+                        'Prosinac'
+                    )
+                ")
+                ->orderBy(
+                    'naziv_troska'
+                )
+                ->get();
 
         /*
-         * Budžet također ograničavamo na organizaciju
-         * za sve korisnike osim superadmina.
+         * Svi Expense zapisi u kolekciji
+         * već su realizirani.
          */
-        $budgetQuery = Budget::query()
-            ->where('godina', $this->year);
+        $this->totalExpenses =
+            (float)
+            $this->expenses
+                ->sum('iznos');
+
+        /*
+         * Budget prati isti filter godine
+         * i isti tenant.
+         */
+        $budgetQuery =
+            Budget::query()
+                ->when(
+                    filled($this->year),
+                    fn (
+                        Builder $query
+                    ) =>
+                        $query->where(
+                            'godina',
+                            $this->year
+                        )
+                );
 
         if (! $user->isSuperAdmin()) {
             $budgetQuery->where(
@@ -90,11 +141,16 @@ class ExpensesExport implements
             );
         }
 
-        $this->totalBudget = (float) $budgetQuery
-            ->sum('ukupni_budget');
+        $this->totalBudget =
+            (float)
+            $budgetQuery
+                ->sum(
+                    'ukupni_budget'
+                );
 
         $this->balance =
-            $this->totalBudget - $this->totalExpenses;
+            $this->totalBudget
+            - $this->totalExpenses;
     }
 
     public function collection()
@@ -109,41 +165,73 @@ class ExpensesExport implements
         ];
 
         if ($this->showUserColumn) {
-            $headings[] = 'Korisnik';
+            $headings[] =
+                'Korisnik';
         }
 
-        return array_merge($headings, [
-            'Budžet (€)',
-            'Kategorija',
-            'Mjesec',
-            'Naziv troška',
-            'Iznos (€)',
-            'Dobavljač',
-            'Realizirano',
-        ]);
+        return array_merge(
+            $headings,
+            [
+                'Budžet (€)',
+                'Kategorija',
+                'Mjesec',
+                'Naziv troška',
+                'Iznos (€)',
+                'Dobavljač',
+                'Realizirano',
+            ]
+        );
     }
 
-    public function map($expense): array
-    {
+    public function map(
+        $expense
+    ): array {
         /** @var Expense $expense */
 
         $row = [
-            $expense->budget?->godina ?? '',
+            $expense
+                ->budget
+                ?->godina
+            ?? '',
         ];
 
         if ($this->showUserColumn) {
-            $row[] = $expense->user?->name ?? '';
+            $row[] =
+                $expense
+                    ->user
+                    ?->name
+                ?? '';
         }
 
-        return array_merge($row, [
-            $expense->budget?->ukupni_budget ?? null,
-            $expense->category?->name ?? '',
-            $expense->mjesec,
-            $expense->naziv_troska,
-            (float) $expense->iznos,
-            $expense->dobavljac,
-            $expense->realizirano ? 'Da' : 'Ne',
-        ]);
+        return array_merge(
+            $row,
+            [
+                $expense
+                    ->budget
+                    ?->ukupni_budget
+                ?? null,
+
+                $expense
+                    ->category
+                    ?->name
+                ?? '',
+
+                $expense->mjesec,
+
+                $expense
+                    ->naziv_troska,
+
+                (float)
+                $expense->iznos,
+
+                $expense
+                    ->dobavljac,
+
+                $expense->realizirano
+                    ? 'Da'
+                    : 'Ne',
+            ]
+        );
     }
 
     public function columnFormats(): array
@@ -164,225 +252,446 @@ class ExpensesExport implements
     public function registerEvents(): array
     {
         return [
-            AfterSheet::class => function (AfterSheet $event) {
-                $sheet = $event->sheet->getDelegate();
+            AfterSheet::class =>
+                function (
+                    AfterSheet $event
+                ) {
+                    $sheet =
+                        $event
+                            ->sheet
+                            ->getDelegate();
 
-                $lastDataRow = $this->expenses->count() + 1;
-                $summaryStartRow = $lastDataRow + 3;
+                    $dataCount =
+                        $this->expenses
+                            ->count();
 
-                $lastCol = $this->showUserColumn ? 'I' : 'H';
+                    $lastDataRow =
+                        $dataCount + 1;
 
-                $sheet->getStyle("A1:{$lastCol}{$summaryStartRow}")
-                    ->getFont()
-                    ->setName('DejaVu Sans')
-                    ->setSize(10);
+                    $summaryStartRow =
+                        $lastDataRow + 3;
 
-                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['rgb' => 'FFFFFF'],
-                        'name' => 'DejaVu Sans',
-                        'size' => 10,
-                    ],
-                    'fill' => [
-                        'fillType' => 'solid',
-                        'startColor' => ['rgb' => '1F2937'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => Alignment::HORIZONTAL_CENTER,
-                        'vertical' => Alignment::VERTICAL_CENTER,
-                        'wrapText' => true,
-                    ],
-                ]);
+                    $lastCol =
+                        $this->showUserColumn
+                            ? 'I'
+                            : 'H';
 
-                $sheet->getStyle("A2:{$lastCol}{$lastDataRow}")
-                    ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER)
-                    ->setWrapText(true);
+                    /*
+                     * Osnovni font.
+                     */
+                    $sheet
+                        ->getStyle(
+                            "A1:{$lastCol}{$summaryStartRow}"
+                        )
+                        ->getFont()
+                        ->setName(
+                            'DejaVu Sans'
+                        )
+                        ->setSize(10);
 
-                $sheet->getStyle("A2:{$lastCol}{$lastDataRow}")
-                    ->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    /*
+                     * Zaglavlje tablice.
+                     */
+                    $sheet
+                        ->getStyle(
+                            "A1:{$lastCol}1"
+                        )
+                        ->applyFromArray([
+                            'font' => [
+                                'bold' => true,
+                                'color' => [
+                                    'rgb' =>
+                                        'FFFFFF',
+                                ],
+                                'name' =>
+                                    'DejaVu Sans',
+                                'size' => 10,
+                            ],
+                            'fill' => [
+                                'fillType' =>
+                                    'solid',
+                                'startColor' => [
+                                    'rgb' =>
+                                        '1F2937',
+                                ],
+                            ],
+                            'alignment' => [
+                                'horizontal' =>
+                                    Alignment::
+                                        HORIZONTAL_CENTER,
 
-                if ($this->showUserColumn) {
-                    $sheet->getStyle("A2:A{$lastDataRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                                'vertical' =>
+                                    Alignment::
+                                        VERTICAL_CENTER,
 
-                    $sheet->getStyle("C2:C{$lastDataRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                                'wrapText' =>
+                                    true,
+                            ],
+                        ]);
 
-                    $sheet->getStyle("E2:E{$lastDataRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    /*
+                     * Širine stupaca.
+                     */
+                    if (
+                        $this->showUserColumn
+                    ) {
+                        $widths = [
+                            'A' => 12,
+                            'B' => 22,
+                            'C' => 16,
+                            'D' => 26,
+                            'E' => 16,
+                            'F' => 38,
+                            'G' => 16,
+                            'H' => 28,
+                            'I' => 16,
+                        ];
+                    } else {
+                        $widths = [
+                            'A' => 12,
+                            'B' => 16,
+                            'C' => 26,
+                            'D' => 16,
+                            'E' => 38,
+                            'F' => 16,
+                            'G' => 28,
+                            'H' => 16,
+                        ];
+                    }
 
-                    $sheet->getStyle("G2:I{$lastDataRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    foreach (
+                        $widths
+                        as $column => $width
+                    ) {
+                        $sheet
+                            ->getColumnDimension(
+                                $column
+                            )
+                            ->setWidth(
+                                $width
+                            );
+                    }
 
-                    $widths = [
-                        'A' => 12,
-                        'B' => 22,
-                        'C' => 16,
-                        'D' => 26,
-                        'E' => 16,
-                        'F' => 38,
-                        'G' => 16,
-                        'H' => 28,
-                        'I' => 16,
-                    ];
-                } else {
-                    $sheet->getStyle("A2:A{$lastDataRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet
+                        ->getRowDimension(1)
+                        ->setRowHeight(28);
 
-                    $sheet->getStyle("B2:B{$lastDataRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    /*
+                     * Stil redova s podacima
+                     * samo ako zapisi postoje.
+                     */
+                    if ($dataCount > 0) {
+                        $sheet
+                            ->getStyle(
+                                "A2:{$lastCol}{$lastDataRow}"
+                            )
+                            ->getAlignment()
+                            ->setVertical(
+                                Alignment::
+                                    VERTICAL_CENTER
+                            )
+                            ->setWrapText(
+                                true
+                            );
 
-                    $sheet->getStyle("D2:D{$lastDataRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet
+                            ->getStyle(
+                                "A2:{$lastCol}{$lastDataRow}"
+                            )
+                            ->getAlignment()
+                            ->setHorizontal(
+                                Alignment::
+                                    HORIZONTAL_LEFT
+                            );
 
-                    $sheet->getStyle("F2:H{$lastDataRow}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        if (
+                            $this
+                                ->showUserColumn
+                        ) {
+                            $sheet
+                                ->getStyle(
+                                    "A2:A{$lastDataRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::
+                                        HORIZONTAL_CENTER
+                                );
 
-                    $widths = [
-                        'A' => 12,
-                        'B' => 16,
-                        'C' => 26,
-                        'D' => 16,
-                        'E' => 38,
-                        'F' => 16,
-                        'G' => 28,
-                        'H' => 16,
-                    ];
-                }
+                            $sheet
+                                ->getStyle(
+                                    "C2:C{$lastDataRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::
+                                        HORIZONTAL_RIGHT
+                                );
 
-                foreach ($widths as $column => $width) {
-                    $sheet->getColumnDimension($column)
-                        ->setWidth($width);
-                }
+                            $sheet
+                                ->getStyle(
+                                    "E2:E{$lastDataRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::
+                                        HORIZONTAL_CENTER
+                                );
 
-                $sheet->getRowDimension(1)
-                    ->setRowHeight(28);
+                            $sheet
+                                ->getStyle(
+                                    "G2:I{$lastDataRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::
+                                        HORIZONTAL_CENTER
+                                );
+                        } else {
+                            $sheet
+                                ->getStyle(
+                                    "A2:A{$lastDataRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::
+                                        HORIZONTAL_CENTER
+                                );
 
-                for ($row = 2; $row <= $lastDataRow; $row++) {
-                    $sheet->getRowDimension($row)
-                        ->setRowHeight(32);
-                }
+                            $sheet
+                                ->getStyle(
+                                    "B2:B{$lastDataRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::
+                                        HORIZONTAL_RIGHT
+                                );
 
-                $sheet->freezePane('A2');
+                            $sheet
+                                ->getStyle(
+                                    "D2:D{$lastDataRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::
+                                        HORIZONTAL_CENTER
+                                );
 
-                $sheet->setAutoFilter(
-                    "A1:{$lastCol}{$lastDataRow}"
-                );
+                            $sheet
+                                ->getStyle(
+                                    "F2:H{$lastDataRow}"
+                                )
+                                ->getAlignment()
+                                ->setHorizontal(
+                                    Alignment::
+                                        HORIZONTAL_CENTER
+                                );
+                        }
 
-                $sheet->setCellValue(
-                    "A{$summaryStartRow}",
-                    "SAŽETAK TROŠKOVA ZA {$this->year}. GODINU"
-                );
+                        for (
+                            $row = 2;
+                            $row <=
+                            $lastDataRow;
+                            $row++
+                        ) {
+                            $sheet
+                                ->getRowDimension(
+                                    $row
+                                )
+                                ->setRowHeight(
+                                    32
+                                );
+                        }
+                    }
 
-                $sheet->mergeCells(
-                    "A{$summaryStartRow}:{$lastCol}{$summaryStartRow}"
-                );
-
-                $sheet->getStyle(
-                    "A{$summaryStartRow}:{$lastCol}{$summaryStartRow}"
-                )->applyFromArray([
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['rgb' => 'FFFFFF'],
-                        'name' => 'DejaVu Sans',
-                        'size' => 11,
-                    ],
-                    'fill' => [
-                        'fillType' => 'solid',
-                        'startColor' => ['rgb' => '374151'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => Alignment::HORIZONTAL_CENTER,
-                        'vertical' => Alignment::VERTICAL_CENTER,
-                    ],
-                ]);
-
-                $sheet->getRowDimension($summaryStartRow)
-                    ->setRowHeight(26);
-
-                $r1 = $summaryStartRow + 1;
-                $r2 = $summaryStartRow + 2;
-                $r3 = $summaryStartRow + 3;
-
-                $sheet->setCellValue(
-                    "A{$r1}",
-                    'Ukupno troškova (€)'
-                );
-
-                $sheet->setCellValue(
-                    "B{$r1}",
-                    $this->totalExpenses
-                );
-
-                $sheet->setCellValue(
-                    "A{$r2}",
-                    'Ukupni budžet (€)'
-                );
-
-                $sheet->setCellValue(
-                    "B{$r2}",
-                    $this->totalBudget
-                );
-
-                $sheet->setCellValue(
-                    "A{$r3}",
-                    'Stanje (budžet - troškovi) (€)'
-                );
-
-                $sheet->setCellValue(
-                    "B{$r3}",
-                    $this->balance
-                );
-
-                $sheet->getStyle("A{$r1}:A{$r3}")
-                    ->getFont()
-                    ->setBold(true);
-
-                $sheet->getStyle("B{$r1}:B{$r3}")
-                    ->getFont()
-                    ->setBold(true);
-
-                $sheet->getStyle("B{$r1}:B{$r3}")
-                    ->getNumberFormat()
-                    ->setFormatCode('#,##0.00');
-
-                $sheet->getStyle("A{$r1}:B{$r3}")
-                    ->getAlignment()
-                    ->setVertical(
-                        Alignment::VERTICAL_CENTER
+                    $sheet->freezePane(
+                        'A2'
                     );
 
-                $sheet->getStyle("B{$r1}:B{$r3}")
-                    ->getAlignment()
-                    ->setHorizontal(
-                        Alignment::HORIZONTAL_RIGHT
+                    /*
+                     * Auto filter uvijek uključuje
+                     * barem red zaglavlja.
+                     */
+                    $sheet->setAutoFilter(
+                        "A1:{$lastCol}{$lastDataRow}"
                     );
 
-                if ($this->balance < 0) {
-                    $this->fillCell(
-                        $sheet,
+                    /*
+                     * Naslov sažetka.
+                     */
+                    $summaryTitle =
+                        filled($this->year)
+                            ? "SAŽETAK TROŠKOVA ZA {$this->year}. GODINU"
+                            : 'SAŽETAK TROŠKOVA ZA SVE GODINE';
+
+                    $sheet->setCellValue(
+                        "A{$summaryStartRow}",
+                        $summaryTitle
+                    );
+
+                    $sheet->mergeCells(
+                        "A{$summaryStartRow}:{$lastCol}{$summaryStartRow}"
+                    );
+
+                    $sheet
+                        ->getStyle(
+                            "A{$summaryStartRow}:{$lastCol}{$summaryStartRow}"
+                        )
+                        ->applyFromArray([
+                            'font' => [
+                                'bold' =>
+                                    true,
+
+                                'color' => [
+                                    'rgb' =>
+                                        'FFFFFF',
+                                ],
+
+                                'name' =>
+                                    'DejaVu Sans',
+
+                                'size' =>
+                                    11,
+                            ],
+
+                            'fill' => [
+                                'fillType' =>
+                                    'solid',
+
+                                'startColor' => [
+                                    'rgb' =>
+                                        '374151',
+                                ],
+                            ],
+
+                            'alignment' => [
+                                'horizontal' =>
+                                    Alignment::
+                                        HORIZONTAL_CENTER,
+
+                                'vertical' =>
+                                    Alignment::
+                                        VERTICAL_CENTER,
+                            ],
+                        ]);
+
+                    $sheet
+                        ->getRowDimension(
+                            $summaryStartRow
+                        )
+                        ->setRowHeight(
+                            26
+                        );
+
+                    $r1 =
+                        $summaryStartRow
+                        + 1;
+
+                    $r2 =
+                        $summaryStartRow
+                        + 2;
+
+                    $r3 =
+                        $summaryStartRow
+                        + 3;
+
+                    $sheet->setCellValue(
+                        "A{$r1}",
+                        'Ukupno realiziranih troškova (€)'
+                    );
+
+                    $sheet->setCellValue(
+                        "B{$r1}",
+                        $this
+                            ->totalExpenses
+                    );
+
+                    $sheet->setCellValue(
+                        "A{$r2}",
+                        'Ukupni budžet (€)'
+                    );
+
+                    $sheet->setCellValue(
+                        "B{$r2}",
+                        $this
+                            ->totalBudget
+                    );
+
+                    $sheet->setCellValue(
+                        "A{$r3}",
+                        'Stanje (budžet - troškovi) (€)'
+                    );
+
+                    $sheet->setCellValue(
                         "B{$r3}",
-                        'FFFF0000'
+                        $this->balance
                     );
-                } else {
-                    $this->fillCell(
-                        $sheet,
-                        "B{$r3}",
-                        'FF00B050'
-                    );
-                }
-            },
+
+                    $sheet
+                        ->getStyle(
+                            "A{$r1}:A{$r3}"
+                        )
+                        ->getFont()
+                        ->setBold(true);
+
+                    $sheet
+                        ->getStyle(
+                            "B{$r1}:B{$r3}"
+                        )
+                        ->getFont()
+                        ->setBold(true);
+
+                    $sheet
+                        ->getStyle(
+                            "B{$r1}:B{$r3}"
+                        )
+                        ->getNumberFormat()
+                        ->setFormatCode(
+                            '#,##0.00'
+                        );
+
+                    $sheet
+                        ->getStyle(
+                            "A{$r1}:B{$r3}"
+                        )
+                        ->getAlignment()
+                        ->setVertical(
+                            Alignment::
+                                VERTICAL_CENTER
+                        );
+
+                    $sheet
+                        ->getStyle(
+                            "B{$r1}:B{$r3}"
+                        )
+                        ->getAlignment()
+                        ->setHorizontal(
+                            Alignment::
+                                HORIZONTAL_RIGHT
+                        );
+
+                    /*
+                     * Stanje:
+                     * negativno = crveno,
+                     * pozitivno / nula = zeleno.
+                     */
+                    if (
+                        $this->balance < 0
+                    ) {
+                        $this->fillCell(
+                            $sheet,
+                            "B{$r3}",
+                            'FFFF0000'
+                        );
+                    } else {
+                        $this->fillCell(
+                            $sheet,
+                            "B{$r3}",
+                            'FF00B050'
+                        );
+                    }
+                },
         ];
     }
 
@@ -391,23 +700,32 @@ class ExpensesExport implements
         string $cell,
         string $argb
     ): void {
-        $sheet->getStyle($cell)
+        $sheet
+            ->getStyle($cell)
             ->getFill()
-            ->setFillType(Fill::FILL_SOLID);
+            ->setFillType(
+                Fill::FILL_SOLID
+            );
 
-        $sheet->getStyle($cell)
+        $sheet
+            ->getStyle($cell)
             ->getFill()
             ->getStartColor()
-            ->setARGB($argb);
+            ->setARGB(
+                $argb
+            );
 
-        $sheet->getStyle($cell)
+        $sheet
+            ->getStyle($cell)
             ->getFont()
             ->setBold(true);
 
-        $sheet->getStyle($cell)
+        $sheet
+            ->getStyle($cell)
             ->getAlignment()
             ->setHorizontal(
-                Alignment::HORIZONTAL_CENTER
+                Alignment::
+                    HORIZONTAL_CENTER
             );
     }
 }

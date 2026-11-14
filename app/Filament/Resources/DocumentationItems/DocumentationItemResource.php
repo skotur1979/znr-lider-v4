@@ -87,12 +87,12 @@ class DocumentationItemResource extends BaseResource
                     TextInput::make('naziv')
                         ->label('Naziv dokumenta')
                         ->required()
-                        ->maxLength(255)
+                        ->maxLength(191)
                         ->columnSpanFull(),
 
                     TextInput::make('tvrtka')
                         ->label('Tvrtka')
-                        ->maxLength(255)
+                        ->maxLength(191)
                         ->columnSpanFull(),
 
                     DatePicker::make('datum_izrade')
@@ -104,7 +104,7 @@ class DocumentationItemResource extends BaseResource
 
                     TextInput::make('status_napomena')
                         ->label('Status / napomena')
-                        ->maxLength(255)
+                        ->maxLength(191)
                         ->columnSpanFull(),
                 ])
                 ->extraAttributes([
@@ -128,11 +128,15 @@ class DocumentationItemResource extends BaseResource
                             'Dodaj priloge (max. 5 kom do 30 MB po datoteci)'
                         )
                         ->disk('public')
-                        ->directory('pdfs')
+                        ->directory(
+                            fn ($record): string =>
+                                DocumentationItem::attachmentDirectory(
+                                    $record
+                                )
+                        )
                         ->multiple()
                         ->maxFiles(5)
                         ->maxSize(30720)
-                        ->preserveFilenames()
                         ->openable()
                         ->downloadable()
                         ->deletable()

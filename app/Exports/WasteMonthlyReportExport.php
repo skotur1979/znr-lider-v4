@@ -161,25 +161,27 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
 
     private function rows(): array
     {
-        $ownerId = Auth::user()?->ownerId();
+        $user = Auth::user();
 
-        $baseWasteTypeIds = OntoRecord::query()
-            ->when(
-                ! Auth::user()?->isSuperAdmin(),
-                fn ($query) => $query->where('user_id', $ownerId)
+        if (
+            ! $user
+            || ! $user->hasModulePermission(
+                'onto_records',
+                'view'
             )
-            ->where('year', $this->year)
-            ->when(
-                filled($this->locationId),
-                fn ($query) => $query->where('waste_organization_location_id', $this->locationId)
-            )
-            ->distinct()
-            ->pluck('waste_type_id')
-            ->filter()
-            ->values()
-            ->all();
+        ) {
+            return [];
+        }
 
-        if (empty($baseWasteTypeIds)) {
+        $ownerId =
+            $user->isSuperAdmin()
+                ? null
+                : (int) $user->ownerId();
+
+        if (
+            ! $user->isSuperAdmin()
+            && $ownerId <= 0
+        ) {
             return [];
         }
 
@@ -194,7 +196,7 @@ class WasteMonthlyReportExport implements FromArray, WithHeadings, ShouldAutoSiz
             ->where('onto_entries.entry_type', 'output')
             ->whereYear('onto_entries.entry_date', $this->year)
             ->when(
-                ! Auth::user()?->isSuperAdmin(),
+                ! $user->isSuperAdmin(),
                 fn ($query) => $query->where('onto_records.user_id', $ownerId)
             )
             ->when(

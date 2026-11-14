@@ -19,10 +19,23 @@ class MiscellaneousQrAdminController extends Controller
             'view'
         );
 
-        $qrCode = $qrService->getOrCreate(
-            $miscellaneous,
-            auth()->user()
-        );
+        $qrCode =
+            $qrService->find(
+                $miscellaneous
+            );
+
+        if (! $qrCode) {
+            $this->authorizeMiscellaneous(
+                $miscellaneous,
+                'update'
+            );
+
+            $qrCode =
+                $qrService->getOrCreate(
+                    $miscellaneous,
+                    auth()->user()
+                );
+        }
 
         $svg = $qrService->svg(
             $qrCode,
@@ -149,10 +162,23 @@ class MiscellaneousQrAdminController extends Controller
             'view'
         );
 
-        $qrCode = $qrService->getOrCreate(
-            $miscellaneous,
-            auth()->user()
-        );
+        $qrCode =
+            $qrService->find(
+                $miscellaneous
+            );
+
+        if (! $qrCode) {
+            $this->authorizeMiscellaneous(
+                $miscellaneous,
+                'update'
+            );
+
+            $qrCode =
+                $qrService->getOrCreate(
+                    $miscellaneous,
+                    auth()->user()
+                );
+        }
 
         $svg = $qrService->svg(
             $qrCode,

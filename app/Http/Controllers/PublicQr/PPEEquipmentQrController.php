@@ -19,27 +19,9 @@ class PPEEquipmentQrController extends Controller
             );
 
         $ppeEquipment =
-            PPEEquipment::query()
-                ->whereKey(
-                    $qrCode->qrable_id
-                )
-                ->first();
-
-        abort_unless(
-            $ppeEquipment,
-            404,
-            'OZO oprema nije dostupna.'
-        );
-
-        /*
-         * Dodatna tenant zaštita.
-         */
-        abort_unless(
-            (int) $ppeEquipment->user_id
-                ===
-            (int) $qrCode->owner_id,
-            404
-        );
+            $this->findEquipment(
+                $qrCode
+            );
 
         $qrCode->recordScan();
 
@@ -56,29 +38,20 @@ class PPEEquipmentQrController extends Controller
         string $token,
         int $index
     ): StreamedResponse {
+        abort_unless(
+            $index >= 0,
+            404
+        );
+
         $qrCode =
             $this->findQr(
                 $token
             );
 
         $ppeEquipment =
-            PPEEquipment::query()
-                ->whereKey(
-                    $qrCode->qrable_id
-                )
-                ->first();
-
-        abort_unless(
-            $ppeEquipment,
-            404
-        );
-
-        abort_unless(
-            (int) $ppeEquipment->user_id
-                ===
-            (int) $qrCode->owner_id,
-            404
-        );
+            $this->findEquipment(
+                $qrCode
+            );
 
         $files =
             is_array(
@@ -101,36 +74,60 @@ class PPEEquipmentQrController extends Controller
             $files[$index];
 
         abort_unless(
-            is_string(
-                $path
-            )
-            && filled(
-                $path
-            )
-            && Storage::disk(
-                'public'
-            )->exists(
-                $path
+            $this->isSafeAttachmentPath(
+                $path,
+                $ppeEquipment
             ),
             404
         );
 
-        return Storage::disk(
-            'public'
-        )->response(
-            $path,
-            basename(
-                $path
-            ),
-            [
-                'Content-Disposition' =>
-                    'inline; filename="'
-                    . basename(
-                        $path
-                    )
-                    . '"',
-            ]
+        abort_unless(
+            Storage::disk('public')
+                ->exists($path),
+            404
         );
+
+        return Storage::disk('public')
+            ->response(
+                $path,
+                basename($path),
+                [
+                    'Content-Disposition' =>
+                        'inline; filename="'
+                        . basename($path)
+                        . '"',
+                ]
+            );
+    }
+
+    protected function findEquipment(
+        QrCode $qrCode
+    ): PPEEquipment {
+        $ppeEquipment =
+            PPEEquipment::query()
+                ->whereKey(
+                    $qrCode->qrable_id
+                )
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->first();
+
+        abort_unless(
+            $ppeEquipment,
+            404,
+            'OZO oprema nije dostupna.'
+        );
+
+        abort_unless(
+            (int) $ppeEquipment->user_id
+                ===
+            (int) $qrCode->owner_id,
+            404
+        );
+
+        return $ppeEquipment;
     }
 
     protected function findQr(
@@ -154,5 +151,55 @@ class PPEEquipmentQrController extends Controller
                 PPEEquipment::class
             )
             ->firstOrFail();
+    }
+
+    protected function isSafeAttachmentPath(
+        mixed $path,
+        PPEEquipment $ppeEquipment
+    ): bool {
+        if (
+            ! is_string($path)
+            || blank($path)
+        ) {
+            return false;
+        }
+
+        $path =
+            str_replace(
+                '\\',
+                '/',
+                $path
+            );
+
+        if (
+            str_contains($path, '../')
+            || str_contains($path, "\0")
+        ) {
+            return false;
+        }
+
+        /*
+         * Stari prilozi.
+         */
+        $legacyPrefix =
+            'ppe-equipment/attachments/';
+
+        /*
+         * Novi tenant-scoped prilozi.
+         */
+        $ownerPrefix =
+            'ppe-equipment/'
+            . (int) $ppeEquipment->user_id
+            . '/attachments/';
+
+        return
+            str_starts_with(
+                $path,
+                $legacyPrefix
+            )
+            || str_starts_with(
+                $path,
+                $ownerPrefix
+            );
     }
 }

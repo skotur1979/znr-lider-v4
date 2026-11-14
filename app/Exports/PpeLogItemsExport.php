@@ -2,6 +2,8 @@
 
 namespace App\Exports;
 
+use App\Filament\Resources\PPELogs\PPELogResource;
+use App\Models\PPEItem;
 use App\Models\PPELog;
 use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -23,16 +25,58 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
 
     protected bool $showUserColumn = false;
 
-    public function __construct(PPELog $log)
-    {
+    public function __construct(
+        PPELog $log
+    ) {
         $user = auth()->user();
 
-        $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+        if (
+            ! $user
+            || ! PPELogResource::allowsModulePermission(
+                'view'
+            )
+            || ! PPELogResource::canView(
+                $log
+            )
+        ) {
+            abort(403);
+        }
 
-        $this->log = $log->load(['items', 'user']);
-        $this->items = $this->log->items->sortBy('equipment_name')->values();
+        $this->showUserColumn =
+            (bool) $user->isSuperAdmin()
+            || (bool) $user->canCreateSubusers();
+
+        /*
+         * Ponovno dohvaćamo zapis kroz tenant-scoped
+         * Resource query kako caller ne bi mogao proslijediti
+         * proizvoljan model druge organizacije.
+         */
+        $this->log =
+            PPELogResource::getEloquentQuery()
+                ->whereKey(
+                    $log->getKey()
+                )
+                ->firstOrFail();
+
+        abort_unless(
+            PPELogResource::canView(
+                $this->log
+            ),
+            403
+        );
+
+        $this->log->load([
+            'items',
+            'user',
+        ]);
+
+        $this->items =
+            $this->log
+                ->items
+                ->sortBy(
+                    'equipment_name'
+                )
+                ->values();
     }
 
     public function collection()
@@ -48,186 +92,466 @@ class PpeLogItemsExport implements FromCollection, WithHeadings, WithMapping, Wi
             $headings[] = 'Korisnik';
         }
 
-        return array_merge($headings, [
-            'Prezime i ime',
-            'OIB',
-            'Radno mjesto',
-            'Organizacijska jedinica',
-            'Naziv OZO',
-            'HRN EN',
-            'Veličina',
-            'Rok (mjeseci)',
-            'Izdano',
-            'Istek',
-            'Datum vraćanja',
-        ]);
+        return array_merge(
+            $headings,
+            [
+                'Prezime i ime',
+                'OIB',
+                'Radno mjesto',
+                'Organizacijska jedinica',
+                'Naziv OZO',
+                'HRN EN',
+                'Veličina',
+                'Rok (mjeseci)',
+                'Izdano',
+                'Istek',
+                'Datum vraćanja',
+            ]
+        );
     }
 
     public function map($item): array
     {
-        $issue = $item->issue_date ? Carbon::parse($item->issue_date) : null;
-        $end = $item->end_date ? Carbon::parse($item->end_date) : null;
-        $return = $item->return_date ? Carbon::parse($item->return_date) : null;
+        /** @var PPEItem $item */
+
+        $issue =
+            $item->issue_date
+                ? Carbon::parse(
+                    $item->issue_date
+                )
+                : null;
+
+        $end =
+            $item->end_date
+                ? Carbon::parse(
+                    $item->end_date
+                )
+                : null;
+
+        $return =
+            $item->return_date
+                ? Carbon::parse(
+                    $item->return_date
+                )
+                : null;
 
         $row = [];
 
         if ($this->showUserColumn) {
-            $row[] = $this->log->user?->name ?? '';
+            $row[] =
+                $this->safeText(
+                    $this->log->user?->name
+                    ?? ''
+                );
         }
 
-        return array_merge($row, [
-            $this->log->user_last_name,
-            $this->log->user_oib,
-            $this->log->workplace,
-            $this->log->organization_unit,
-            $item->equipment_name,
-            $item->standard,
-            $item->size,
-            $item->duration_months,
-            $issue ? ExcelDate::dateTimeToExcel($issue) : null,
-            $end ? ExcelDate::dateTimeToExcel($end) : null,
-            $return ? ExcelDate::dateTimeToExcel($return) : null,
-        ]);
+        return array_merge(
+            $row,
+            [
+                $this->safeText(
+                    $this->log
+                        ->user_last_name
+                ),
+
+                $this->safeText(
+                    $this->log
+                        ->user_oib
+                ),
+
+                $this->safeText(
+                    $this->log
+                        ->workplace
+                ),
+
+                $this->safeText(
+                    $this->log
+                        ->organization_unit
+                ),
+
+                $this->safeText(
+                    $item->equipment_name
+                ),
+
+                $this->safeText(
+                    $item->standard
+                ),
+
+                $this->safeText(
+                    $item->size
+                ),
+
+                $item->duration_months,
+
+                $issue
+                    ? ExcelDate::dateTimeToExcel(
+                        $issue
+                    )
+                    : null,
+
+                $end
+                    ? ExcelDate::dateTimeToExcel(
+                        $end
+                    )
+                    : null,
+
+                $return
+                    ? ExcelDate::dateTimeToExcel(
+                        $return
+                    )
+                    : null,
+            ]
+        );
     }
 
     public function columnFormats(): array
     {
         if ($this->showUserColumn) {
             return [
-                'J' => 'dd.mm.yyyy',
-                'K' => 'dd.mm.yyyy',
-                'L' => 'dd.mm.yyyy',
+                'J' =>
+                    'dd.mm.yyyy',
+
+                'K' =>
+                    'dd.mm.yyyy',
+
+                'L' =>
+                    'dd.mm.yyyy',
             ];
         }
 
         return [
-            'I' => 'dd.mm.yyyy',
-            'J' => 'dd.mm.yyyy',
-            'K' => 'dd.mm.yyyy',
+            'I' =>
+                'dd.mm.yyyy',
+
+            'J' =>
+                'dd.mm.yyyy',
+
+            'K' =>
+                'dd.mm.yyyy',
         ];
     }
 
     public function registerEvents(): array
     {
         return [
-            AfterSheet::class => function (AfterSheet $event) {
-                $sheet = $event->sheet->getDelegate();
-                $lastRow = $this->items->count() + 1;
-                $lastCol = $this->showUserColumn ? 'L' : 'K';
+            AfterSheet::class =>
+                function (
+                    AfterSheet $event
+                ): void {
+                    $sheet =
+                        $event
+                            ->sheet
+                            ->getDelegate();
 
-                $sheet->getStyle("A1:{$lastCol}{$lastRow}")
-                    ->getFont()
-                    ->setName('DejaVu Sans')
-                    ->setSize(10);
+                    $lastRow =
+                        $this
+                            ->items
+                            ->count()
+                        + 1;
 
-                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['rgb' => 'FFFFFF'],
-                        'name' => 'DejaVu Sans',
-                        'size' => 10,
-                    ],
-                    'fill' => [
-                        'fillType' => 'solid',
-                        'startColor' => ['rgb' => '1F2937'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => Alignment::HORIZONTAL_CENTER,
-                        'vertical' => Alignment::VERTICAL_CENTER,
-                        'wrapText' => true,
-                    ],
-                ]);
+                    $lastCol =
+                        $this->showUserColumn
+                            ? 'L'
+                            : 'K';
 
-                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
-                    ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER)
-                    ->setWrapText(true);
+                    $sheet
+                        ->getStyle(
+                            "A1:{$lastCol}{$lastRow}"
+                        )
+                        ->getFont()
+                        ->setName(
+                            'DejaVu Sans'
+                        )
+                        ->setSize(10);
 
-                if ($this->showUserColumn) {
-                    foreach (['C', 'G', 'H', 'I', 'J', 'K', 'L'] as $col) {
-                        $sheet->getStyle("{$col}2:{$col}{$lastRow}")
+                    $sheet
+                        ->getStyle(
+                            "A1:{$lastCol}1"
+                        )
+                        ->applyFromArray([
+                            'font' => [
+                                'bold' =>
+                                    true,
+
+                                'color' => [
+                                    'rgb' =>
+                                        'FFFFFF',
+                                ],
+
+                                'name' =>
+                                    'DejaVu Sans',
+
+                                'size' =>
+                                    10,
+                            ],
+
+                            'fill' => [
+                                'fillType' =>
+                                    'solid',
+
+                                'startColor' => [
+                                    'rgb' =>
+                                        '1F2937',
+                                ],
+                            ],
+
+                            'alignment' => [
+                                'horizontal' =>
+                                    Alignment::HORIZONTAL_CENTER,
+
+                                'vertical' =>
+                                    Alignment::VERTICAL_CENTER,
+
+                                'wrapText' =>
+                                    true,
+                            ],
+                        ]);
+
+                    $sheet
+                        ->getRowDimension(1)
+                        ->setRowHeight(30);
+
+                    if ($lastRow >= 2) {
+                        $sheet
+                            ->getStyle(
+                                "A2:{$lastCol}{$lastRow}"
+                            )
                             ->getAlignment()
-                            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                            ->setVertical(
+                                Alignment::VERTICAL_CENTER
+                            )
+                            ->setWrapText(
+                                true
+                            );
                     }
 
-                    $widths = [
-                        'A' => 22,
-                        'B' => 28,
-                        'C' => 16,
-                        'D' => 26,
-                        'E' => 28,
-                        'F' => 32,
-                        'G' => 18,
-                        'H' => 14,
-                        'I' => 16,
-                        'J' => 16,
-                        'K' => 16,
-                        'L' => 18,
-                    ];
+                    if ($this->showUserColumn) {
+                        if ($lastRow >= 2) {
+                            foreach (
+                                [
+                                    'C',
+                                    'G',
+                                    'H',
+                                    'I',
+                                    'J',
+                                    'K',
+                                    'L',
+                                ]
+                                as $col
+                            ) {
+                                $sheet
+                                    ->getStyle(
+                                        "{$col}2:{$col}{$lastRow}"
+                                    )
+                                    ->getAlignment()
+                                    ->setHorizontal(
+                                        Alignment::HORIZONTAL_CENTER
+                                    );
+                            }
+                        }
 
-                    $expiryColumn = 'K';
-                } else {
-                    foreach (['B', 'F', 'G', 'H', 'I', 'J', 'K'] as $col) {
-                        $sheet->getStyle("{$col}2:{$col}{$lastRow}")
-                            ->getAlignment()
-                            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $widths = [
+                            'A' => 22,
+                            'B' => 28,
+                            'C' => 16,
+                            'D' => 26,
+                            'E' => 28,
+                            'F' => 32,
+                            'G' => 18,
+                            'H' => 14,
+                            'I' => 16,
+                            'J' => 16,
+                            'K' => 16,
+                            'L' => 18,
+                        ];
+
+                        $expiryColumn =
+                            'K';
+                    } else {
+                        if ($lastRow >= 2) {
+                            foreach (
+                                [
+                                    'B',
+                                    'F',
+                                    'G',
+                                    'H',
+                                    'I',
+                                    'J',
+                                    'K',
+                                ]
+                                as $col
+                            ) {
+                                $sheet
+                                    ->getStyle(
+                                        "{$col}2:{$col}{$lastRow}"
+                                    )
+                                    ->getAlignment()
+                                    ->setHorizontal(
+                                        Alignment::HORIZONTAL_CENTER
+                                    );
+                            }
+                        }
+
+                        $widths = [
+                            'A' => 28,
+                            'B' => 16,
+                            'C' => 26,
+                            'D' => 28,
+                            'E' => 32,
+                            'F' => 18,
+                            'G' => 14,
+                            'H' => 16,
+                            'I' => 16,
+                            'J' => 16,
+                            'K' => 18,
+                        ];
+
+                        $expiryColumn =
+                            'J';
                     }
 
-                    $widths = [
-                        'A' => 28,
-                        'B' => 16,
-                        'C' => 26,
-                        'D' => 28,
-                        'E' => 32,
-                        'F' => 18,
-                        'G' => 14,
-                        'H' => 16,
-                        'I' => 16,
-                        'J' => 16,
-                        'K' => 18,
-                    ];
-
-                    $expiryColumn = 'J';
-                }
-
-                foreach ($widths as $column => $width) {
-                    $sheet->getColumnDimension($column)->setWidth($width);
-                }
-
-                $sheet->getRowDimension(1)->setRowHeight(30);
-
-                for ($row = 2; $row <= $lastRow; $row++) {
-                    $sheet->getRowDimension($row)->setRowHeight(34);
-                }
-
-                $today = Carbon::today();
-                $soon = $today->copy()->addDays(30);
-
-                foreach ($this->items as $i => $item) {
-                    $row = $i + 2;
-                    $end = $item->end_date ? Carbon::parse($item->end_date) : null;
-
-                    if (! $end) {
-                        continue;
+                    foreach (
+                        $widths
+                        as $column => $width
+                    ) {
+                        $sheet
+                            ->getColumnDimension(
+                                $column
+                            )
+                            ->setWidth(
+                                $width
+                            );
                     }
 
-                    if ($end->lt($today)) {
-                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFF0000');
-                    } elseif ($end->lte($soon)) {
-                        $this->fillCell($sheet, "{$expiryColumn}{$row}", 'FFFFFF00');
+                    for (
+                        $row = 2;
+                        $row <= $lastRow;
+                        $row++
+                    ) {
+                        $sheet
+                            ->getRowDimension(
+                                $row
+                            )
+                            ->setRowHeight(
+                                34
+                            );
                     }
-                }
 
-                $sheet->freezePane('A2');
-                $sheet->setAutoFilter("A1:{$lastCol}{$lastRow}");
-            },
+                    $today =
+                        Carbon::today();
+
+                    $soon =
+                        $today
+                            ->copy()
+                            ->addDays(30);
+
+                    foreach (
+                        $this->items
+                        as $i => $item
+                    ) {
+                        $row =
+                            $i + 2;
+
+                        $end =
+                            $item->end_date
+                                ? Carbon::parse(
+                                    $item->end_date
+                                )
+                                : null;
+
+                        if (! $end) {
+                            continue;
+                        }
+
+                        if (
+                            $end->lt(
+                                $today
+                            )
+                        ) {
+                            $this->fillCell(
+                                $sheet,
+                                "{$expiryColumn}{$row}",
+                                'FFFF0000'
+                            );
+                        } elseif (
+                            $end->lte(
+                                $soon
+                            )
+                        ) {
+                            $this->fillCell(
+                                $sheet,
+                                "{$expiryColumn}{$row}",
+                                'FFFFFF00'
+                            );
+                        }
+                    }
+
+                    $sheet
+                        ->freezePane(
+                            'A2'
+                        );
+
+                    $sheet
+                        ->setAutoFilter(
+                            "A1:{$lastCol}{$lastRow}"
+                        );
+                },
         ];
     }
 
-    private function fillCell($sheet, string $cell, string $argb): void
-    {
-        $sheet->getStyle($cell)->getFill()->setFillType(Fill::FILL_SOLID);
-        $sheet->getStyle($cell)->getFill()->getStartColor()->setARGB($argb);
-        $sheet->getStyle($cell)->getFont()->setBold(true);
+    protected function safeText(
+        mixed $value
+    ): string {
+        $value =
+            (string) (
+                $value
+                ?? ''
+            );
+
+        if (
+            $value !== ''
+            && preg_match(
+                '/^[=+\-@]/',
+                $value
+            )
+        ) {
+            return "'"
+                . $value;
+        }
+
+        return $value;
+    }
+
+    private function fillCell(
+        $sheet,
+        string $cell,
+        string $argb
+    ): void {
+        $sheet
+            ->getStyle(
+                $cell
+            )
+            ->getFill()
+            ->setFillType(
+                Fill::FILL_SOLID
+            );
+
+        $sheet
+            ->getStyle(
+                $cell
+            )
+            ->getFill()
+            ->getStartColor()
+            ->setARGB(
+                $argb
+            );
+
+        $sheet
+            ->getStyle(
+                $cell
+            )
+            ->getFont()
+            ->setBold(
+                true
+            );
     }
 }

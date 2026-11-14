@@ -95,18 +95,12 @@ class FirstAidKitQrController extends Controller
         $user =
             auth()->user();
 
-        $canEdit = false;
-
-        if ($user) {
-            if ($user->isSuperAdmin()) {
-                $canEdit = true;
-            } else {
-                $canEdit =
-                    (int) $firstAidKit->user_id
-                    ===
-                    (int) $user->ownerId();
-            }
-        }
+        $canEdit =
+            $user
+                ? FirstAidKitResource::canEdit(
+                    $firstAidKit
+                )
+                : false;
 
         /*
          * URL postoji samo ako trenutni

@@ -8,42 +8,31 @@ use App\Models\PPEEquipment;
 use App\Services\StorageQuotaService;
 use App\Support\SecureFilePreview;
 use BackedEnum;
-use Filament\Actions\ActionGroup;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload as FormFileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use UnitEnum;
 
 class PPEEquipmentResource extends BaseResource
 {
     protected static ?string $model =
         PPEEquipment::class;
-
-    /*
-    |--------------------------------------------------------------------------
-    | OWNERSHIP
-    |--------------------------------------------------------------------------
-    |
-    | Registar OZO više nema globalne zapise.
-    |
-    | Svaki OZO zapis pripada jednoj organizaciji:
-    |
-    | user_id = ownerId()
-    |
-    | Glavni korisnik i njegovi podkorisnici
-    | koriste isti organizacijski registar OZO.
-    |
-    */
 
     protected static bool $hasOwnership =
         true;
@@ -81,6 +70,267 @@ class PPEEquipmentResource extends BaseResource
 
     /*
     |--------------------------------------------------------------------------
+    | CENTRALNA PRIPREMA PODATAKA
+    |--------------------------------------------------------------------------
+    |
+    | Registar OZO je organizacijski modul.
+    |
+    | Identitet OZO zapisa:
+    |
+    | user_id + name
+    |
+    | To odgovara DB UNIQUE constraintu:
+    |
+    | ppe_equipments_user_id_name_unique
+    |
+    */
+
+    public static function prepareData(
+        array $data,
+        ?PPEEquipment $record = null
+    ): array {
+        $user =
+            Auth::user();
+
+        if (! $user) {
+            abort(403);
+        }
+
+        /*
+         * EDIT
+         */
+        if ($record) {
+            abort_unless(
+                static::canEdit(
+                    $record
+                ),
+                403
+            );
+
+            $ownerId =
+                (int) $record->user_id;
+        }
+
+        /*
+         * CREATE
+         */
+        else {
+            abort_unless(
+                static::canCreate(),
+                403
+            );
+
+            /*
+             * Superadmin ne kreira organizacijski
+             * Registar OZO u ime organizacije.
+             */
+            if ($user->isSuperAdmin()) {
+                abort(403);
+            }
+
+            $ownerId =
+                (int) $user->ownerId();
+        }
+
+        if ($ownerId <= 0) {
+            abort(403);
+        }
+
+        /*
+         * Organizacijski korisnik smije raditi
+         * samo unutar svoje organizacije.
+         */
+        if (
+            ! $user->isSuperAdmin()
+            && $ownerId
+                !== (int) $user->ownerId()
+        ) {
+            abort(403);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | NAZIV
+        |--------------------------------------------------------------------------
+        */
+
+        $name =
+            preg_replace(
+                '/\s+/u',
+                ' ',
+                trim(
+                    (string) (
+                        $data['name']
+                        ?? ''
+                    )
+                )
+            );
+
+        if ($name === '') {
+            throw ValidationException::withMessages([
+                'name' =>
+                    'Naziv OZO je obavezan.',
+            ]);
+        }
+
+        if (
+            mb_strlen(
+                $name
+            ) > 191
+        ) {
+            throw ValidationException::withMessages([
+                'name' =>
+                    'Naziv OZO može imati najviše 191 znak.',
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | NORMA
+        |--------------------------------------------------------------------------
+        */
+
+        $standardRaw =
+            preg_replace(
+                '/\s+/u',
+                ' ',
+                trim(
+                    (string) (
+                        $data['standard']
+                        ?? ''
+                    )
+                )
+            );
+
+        $standard =
+            $standardRaw !== ''
+                ? $standardRaw
+                : null;
+
+        if (
+            $standard !== null
+            && mb_strlen(
+                $standard
+            ) > 191
+        ) {
+            throw ValidationException::withMessages([
+                'standard' =>
+                    'HRN EN / Norma može imati najviše 191 znak.',
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | ROK UPORABE
+        |--------------------------------------------------------------------------
+        */
+
+        $durationRaw =
+            $data['duration_months']
+            ?? null;
+
+        if (
+            $durationRaw === ''
+            || $durationRaw === null
+        ) {
+            $duration = null;
+        } else {
+            if (
+                ! is_numeric(
+                    $durationRaw
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'duration_months' =>
+                        'Rok uporabe mora biti broj.',
+                ]);
+            }
+
+            $duration =
+                (int) $durationRaw;
+
+            if (
+                $duration < 0
+                || $duration > 120
+            ) {
+                throw ValidationException::withMessages([
+                    'duration_months' =>
+                        'Rok uporabe mora biti između 0 i 120 mjeseci.',
+                ]);
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | DUPLIKAT
+        |--------------------------------------------------------------------------
+        |
+        | Jedinstvenost je:
+        |
+        | user_id + name
+        |
+        | Norma nije dio identiteta zapisa.
+        |
+        */
+
+        $duplicateQuery =
+            PPEEquipment::query()
+                ->where(
+                    'user_id',
+                    $ownerId
+                )
+                ->where(
+                    'name',
+                    $name
+                );
+
+        if ($record) {
+            $duplicateQuery
+                ->where(
+                    $record->getKeyName(),
+                    '!=',
+                    $record->getKey()
+                );
+        }
+
+        if (
+            $duplicateQuery->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'name' =>
+                    'OZO s ovim nazivom već postoji u Registru OZO ove organizacije.',
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | FINALNI PODACI
+        |--------------------------------------------------------------------------
+        */
+
+        $data['user_id'] =
+            $ownerId;
+
+        $data['name'] =
+            $name;
+
+        $data['standard'] =
+            $standard;
+
+        $data['duration_months'] =
+            $duration;
+
+        $data['is_active'] =
+            (bool) (
+                $data['is_active']
+                ?? true
+            );
+
+        return $data;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | FORMA
     |--------------------------------------------------------------------------
     */
@@ -104,7 +354,7 @@ class PPEEquipmentResource extends BaseResource
                             )
                             ->required()
                             ->maxLength(
-                                255
+                                191
                             ),
 
                         TextInput::make(
@@ -114,7 +364,7 @@ class PPEEquipmentResource extends BaseResource
                                 'HRN EN / Norma'
                             )
                             ->maxLength(
-                                255
+                                191
                             ),
 
                         TextInput::make(
@@ -125,7 +375,9 @@ class PPEEquipmentResource extends BaseResource
                             )
                             ->numeric()
                             ->minValue(0)
-                            ->maxValue(240),
+                            ->maxValue(
+                                120
+                            ),
 
                         Toggle::make(
                             'is_active'
@@ -133,8 +385,12 @@ class PPEEquipmentResource extends BaseResource
                             ->label(
                                 'Aktivno'
                             )
-                            ->default(true)
-                            ->inline(false),
+                            ->default(
+                                true
+                            )
+                            ->inline(
+                                false
+                            ),
 
                         FormFileUpload::make(
                             'attachments'
@@ -146,31 +402,50 @@ class PPEEquipmentResource extends BaseResource
                                 'public'
                             )
                             ->directory(
-                                'ppe-equipment/attachments'
+                                function (
+                                    ?PPEEquipment $record
+                                ): string {
+                                    $ownerId =
+                                        (int) (
+                                            $record?->user_id
+                                            ?? auth()
+                                                ->user()
+                                                ?->ownerId()
+                                            ?? 0
+                                        );
+
+                                    return
+                                        'ppe-equipment/'
+                                        . $ownerId
+                                        . '/attachments';
+                                }
                             )
                             ->multiple()
-                            ->maxFiles(5)
+                            ->maxFiles(
+                                5
+                            )
                             ->maxSize(
                                 30720
                             )
-                            ->preserveFilenames()
                             ->openable()
                             ->downloadable()
                             ->columnSpanFull()
 
-                            /*
-                             * Prikaz zauzeća storagea
-                             * organizacije.
-                             */
                             ->helperText(
-                                function () {
+                                function (
+                                    ?PPEEquipment $record
+                                ): ?string {
                                     $ownerId =
-                                        auth()
-                                            ->user()
-                                            ?->ownerId();
+                                        (int) (
+                                            $record?->user_id
+                                            ?? auth()
+                                                ->user()
+                                                ?->ownerId()
+                                            ?? 0
+                                        );
 
                                     if (
-                                        ! $ownerId
+                                        $ownerId <= 0
                                     ) {
                                         return null;
                                     }
@@ -185,24 +460,28 @@ class PPEEquipmentResource extends BaseResource
                                 }
                             )
 
-                            /*
-                             * Provjera organizacijskog
-                             * storage limita.
-                             */
                             ->rules([
-                                function () {
+                                function (
+                                    ?PPEEquipment $record
+                                ) {
                                     return function (
                                         string $attribute,
                                         mixed $value,
                                         \Closure $fail
+                                    ) use (
+                                        $record
                                     ): void {
                                         $ownerId =
-                                            auth()
-                                                ->user()
-                                                ?->ownerId();
+                                            (int) (
+                                                $record?->user_id
+                                                ?? auth()
+                                                    ->user()
+                                                    ?->ownerId()
+                                                ?? 0
+                                            );
 
                                         if (
-                                            ! $ownerId
+                                            $ownerId <= 0
                                         ) {
                                             return;
                                         }
@@ -226,25 +505,15 @@ class PPEEquipmentResource extends BaseResource
 
                             ->acceptedFileTypes([
                                 'application/pdf',
-
                                 'application/msword',
-
                                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-
                                 'application/vnd.ms-excel',
-
                                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-
                                 'image/jpeg',
-
                                 'image/png',
-
                                 'image/gif',
-
                                 'image/webp',
-
                                 'application/zip',
-
                                 'application/x-rar-compressed',
                             ]),
                     ]),
@@ -288,78 +557,82 @@ class PPEEquipmentResource extends BaseResource
                     ->wrap()
                     ->toggleable(),
 
-                /*
-                 * Korisnik / organizacija.
-                 *
-                 * Standardna kolona iz BaseResourcea.
-                 */
                 static::userTableColumn()
                     ->toggleable(),
 
                 TextColumn::make(
-                'standard'
-            )
-                ->label(
-                    'HRN EN / Norma'
+                    'standard'
                 )
-                ->searchable()
-                ->sortable()
-                ->html()
-                ->formatStateUsing(
-                    function ($state): string {
-                        if (blank($state)) {
-                            return '—';
-                        }
+                    ->label(
+                        'HRN EN / Norma'
+                    )
+                    ->searchable()
+                    ->sortable()
+                    ->html()
+                    ->formatStateUsing(
+                        function (
+                            $state
+                        ): string {
+                            if (
+                                blank(
+                                    $state
+                                )
+                            ) {
+                                return '—';
+                            }
 
-                        $text =
-                            preg_replace(
+                            $text =
+                                preg_replace(
+                                    '/\s+/',
+                                    ' ',
+                                    trim(
+                                        (string)
+                                        $state
+                                    )
+                                );
+
+                            return
+                                '<div style="
+                                    width:210px;
+                                    max-width:210px;
+                                    white-space:normal;
+                                    word-break:break-word;
+                                    line-height:1.25em;
+                                    max-height:2.5em;
+                                    overflow:hidden;
+                                    display:-webkit-box;
+                                    -webkit-box-orient:vertical;
+                                    -webkit-line-clamp:2;
+                                ">'
+                                . e(
+                                    $text
+                                )
+                                . '</div>';
+                        }
+                    )
+                    ->tooltip(
+                        function (
+                            PPEEquipment $record
+                        ): ?string {
+                            if (
+                                blank(
+                                    $record->standard
+                                )
+                            ) {
+                                return null;
+                            }
+
+                            return preg_replace(
                                 '/\s+/',
                                 ' ',
                                 trim(
-                                    (string) $state
+                                    (string)
+                                    $record->standard
                                 )
                             );
-
-                        return
-                            '<div style="
-                                width:210px;
-                                max-width:210px;
-                                white-space:normal;
-                                word-break:break-word;
-                                line-height:1.25em;
-                                max-height:2.5em;
-                                overflow:hidden;
-                                display:-webkit-box;
-                                -webkit-box-orient:vertical;
-                                -webkit-line-clamp:2;
-                            ">'
-                            . e($text)
-                            . '</div>';
-                    }
-                )
-                ->tooltip(
-                    function (
-                        PPEEquipment $record
-                    ): ?string {
-                        if (
-                            blank(
-                                $record->standard
-                            )
-                        ) {
-                            return null;
                         }
-
-                        return preg_replace(
-                            '/\s+/',
-                            ' ',
-                            trim(
-                                (string)
-                                $record->standard
-                            )
-                        );
-                    }
-                )
-                ->toggleable(),
+                    )
+                    ->toggleable(),
 
                 TextColumn::make(
                     'duration_months'
@@ -381,12 +654,6 @@ class PPEEquipmentResource extends BaseResource
                     ->alignCenter()
                     ->toggleable(),
 
-                /*
-                |--------------------------------------------------------------------------
-                | PRILOZI
-                |--------------------------------------------------------------------------
-                */
-
                 TextColumn::make(
                     'attachments'
                 )
@@ -401,12 +668,10 @@ class PPEEquipmentResource extends BaseResource
                         ): string {
                             if (
                                 ! is_array(
-                                    $record
-                                        ->attachments
+                                    $record->attachments
                                 )
                                 || count(
-                                    $record
-                                        ->attachments
+                                    $record->attachments
                                 ) === 0
                             ) {
                                 return
@@ -414,8 +679,7 @@ class PPEEquipmentResource extends BaseResource
                             }
 
                             return collect(
-                                $record
-                                    ->attachments
+                                $record->attachments
                             )
                                 ->map(
                                     function (
@@ -427,16 +691,24 @@ class PPEEquipmentResource extends BaseResource
                                                 $file
                                             );
 
+                                        if (
+                                            blank(
+                                                $url
+                                            )
+                                        ) {
+                                            return '';
+                                        }
+
                                         $name =
                                             e(
                                                 basename(
+                                                    (string)
                                                     $file
                                                 )
                                             );
 
                                         $number =
-                                            $index
-                                            + 1;
+                                            $index + 1;
 
                                         return
                                             '<a href="'
@@ -481,6 +753,7 @@ class PPEEquipmentResource extends BaseResource
                                             . '</a>';
                                     }
                                 )
+                                ->filter()
                                 ->implode('');
                         }
                     )
@@ -490,12 +763,10 @@ class PPEEquipmentResource extends BaseResource
                         ): string {
                             if (
                                 ! is_array(
-                                    $record
-                                        ->attachments
+                                    $record->attachments
                                 )
                                 || count(
-                                    $record
-                                        ->attachments
+                                    $record->attachments
                                 ) === 0
                             ) {
                                 return
@@ -503,8 +774,7 @@ class PPEEquipmentResource extends BaseResource
                             }
 
                             return collect(
-                                $record
-                                    ->attachments
+                                $record->attachments
                             )
                                 ->map(
                                     fn (
@@ -514,6 +784,7 @@ class PPEEquipmentResource extends BaseResource
                                         ($index + 1)
                                         . '. '
                                         . basename(
+                                            (string)
                                             $file
                                         )
                                 )
@@ -525,15 +796,6 @@ class PPEEquipmentResource extends BaseResource
                     ->toggleable(),
             ])
 
-            /*
-             * Više nema filtera:
-             *
-             * Globalno
-             * Organizacija
-             *
-             * jer svaki zapis pripada organizaciji.
-             */
-
             ->filters([])
 
             /*
@@ -544,10 +806,26 @@ class PPEEquipmentResource extends BaseResource
 
             ->actions([
                 ActionGroup::make([
-                    Action::make('qrCode')
-                        ->label('QR kod')
-                        ->icon('heroicon-o-qr-code')
-                        ->color('success')
+                    Action::make(
+                        'qrCode'
+                    )
+                        ->label(
+                            'QR kod'
+                        )
+                        ->icon(
+                            'heroicon-o-qr-code'
+                        )
+                        ->color(
+                            'success'
+                        )
+                        ->visible(
+                            fn (
+                                PPEEquipment $record
+                            ): bool =>
+                                static::canView(
+                                    $record
+                                )
+                        )
                         ->url(
                             fn (
                                 PPEEquipment $record
@@ -561,6 +839,7 @@ class PPEEquipmentResource extends BaseResource
                                 )
                         )
                         ->openUrlInNewTab(),
+
                     EditAction::make()
                         ->label(
                             'Uredi'
@@ -570,27 +849,55 @@ class PPEEquipmentResource extends BaseResource
                         )
                         ->color(
                             'warning'
+                        )
+                        ->visible(
+                            fn (
+                                PPEEquipment $record
+                            ): bool =>
+                                static::canEdit(
+                                    $record
+                                )
                         ),
 
                     DeleteAction::make()
                         ->label(
-                            'Izbriši'
+                            'Trajno izbriši'
                         )
                         ->color(
                             'danger'
                         )
                         ->requiresConfirmation()
                         ->modalHeading(
-                            'Izbriši OZO opremu'
+                            'Trajno izbriši OZO opremu'
                         )
                         ->modalDescription(
-                            'Jesi li siguran/a da želiš izbrisati ovu OZO opremu?'
+                            'OZO se može trajno izbrisati samo ako nikada nije korišten u Upisniku OZO. Ako se više ne koristi, postavi polje Aktivno na Ne.'
                         )
                         ->modalSubmitActionLabel(
-                            'Izbriši'
+                            'Trajno izbriši'
                         )
                         ->modalCancelActionLabel(
                             'Odustani'
+                        )
+                        ->visible(
+                            fn (
+                                PPEEquipment $record
+                            ): bool =>
+                                static::canDelete(
+                                    $record
+                                )
+                        )
+                        ->before(
+                            function (
+                                PPEEquipment $record
+                            ): void {
+                                abort_unless(
+                                    static::canDelete(
+                                        $record
+                                    ),
+                                    403
+                                );
+                            }
                         ),
                 ])
                     ->label(''),
@@ -603,25 +910,108 @@ class PPEEquipmentResource extends BaseResource
             */
 
             ->bulkActions([
-                DeleteBulkAction::make()
+                BulkAction::make(
+                    'deleteSelected'
+                )
                     ->label(
-                        'Izbriši označeno'
+                        'Trajno izbriši označeno'
+                    )
+                    ->icon(
+                        'heroicon-o-trash'
+                    )
+                    ->color(
+                        'danger'
                     )
                     ->requiresConfirmation()
                     ->modalHeading(
-                        'Izbriši odabranu OZO opremu'
+                        'Trajno izbriši odabranu OZO opremu'
                     )
                     ->modalDescription(
-                        'Jesi li siguran/a da želiš izbrisati odabrane OZO zapise?'
+                        'Izbrisat će se samo nekorišteni OZO zapisi. OZO koji je korišten u Upisniku OZO neće biti izbrisan.'
                     )
                     ->modalSubmitActionLabel(
-                        'Izbriši'
+                        'Trajno izbriši'
                     )
                     ->modalCancelActionLabel(
                         'Odustani'
                     )
+                    ->visible(
+                        fn (): bool =>
+                            static::canDeleteAny()
+                    )
+                    ->action(
+                        function (
+                            EloquentCollection $records
+                        ): void {
+                            $deleted = 0;
+                            $skipped = 0;
+
+                            foreach (
+                                $records
+                                as $record
+                            ) {
+                                if (
+                                    ! $record
+                                        instanceof
+                                        PPEEquipment
+                                    || ! static::canDelete(
+                                        $record
+                                    )
+                                ) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+
+                                $record->delete();
+
+                                $deleted++;
+                            }
+
+                            Notification::make()
+                                ->title(
+                                    'Brisanje Registra OZO završeno'
+                                )
+                                ->body(
+                                    "Trajno izbrisano: {$deleted}\n"
+                                    . "Preskočeno: {$skipped}"
+                                )
+                                ->success()
+                                ->send();
+                        }
+                    )
                     ->deselectRecordsAfterCompletion(),
             ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | BRISANJE
+    |--------------------------------------------------------------------------
+    */
+
+    public static function canDelete(
+        Model $record
+    ): bool {
+        if (
+            ! parent::canDelete(
+                $record
+            )
+        ) {
+            return false;
+        }
+
+        if (
+            ! $record
+                instanceof
+                PPEEquipment
+        ) {
+            return false;
+        }
+
+        return
+            ! $record
+                ->isUsedInPPELogs();
     }
 
     /*

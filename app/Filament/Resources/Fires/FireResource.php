@@ -132,7 +132,7 @@ class FireResource extends BaseResource
                                     ->label(
                                         'Tvornički broj/Godina proizvodnje'
                                     )
-                                    ->maxLength(255)
+                                    ->maxLength(125)
                                     ->rule(
                                         function (?Fire $record) {
                                             return Rule::unique(
@@ -191,7 +191,49 @@ class FireResource extends BaseResource
                                     ->label(
                                         'Serijski broj evidencijske naljepnice'
                                     )
-                                    ->maxLength(255),
+                                    ->maxLength(125)
+                                    ->rule(
+                                        function (?Fire $record) {
+                                            return Rule::unique(
+                                                'fires',
+                                                'serial_label_number'
+                                            )
+                                                ->where(
+                                                    function ($query) use (
+                                                        $record
+                                                    ) {
+                                                        $ownerId =
+                                                            static::formOwnerId(
+                                                                $record
+                                                            );
+
+                                                        if (! $ownerId) {
+                                                            $query->whereRaw(
+                                                                '1 = 0'
+                                                            );
+
+                                                            return;
+                                                        }
+
+                                                        $query
+                                                            ->where(
+                                                                'user_id',
+                                                                $ownerId
+                                                            )
+                                                            ->whereNull(
+                                                                'deleted_at'
+                                                            );
+                                                    }
+                                                )
+                                                ->ignore(
+                                                    $record?->id
+                                                );
+                                        }
+                                    )
+                                    ->validationMessages([
+                                        'unique' =>
+                                            'Već postoji vatrogasni aparat s istim serijskim brojem evidencijske naljepnice.',
+                                    ]),
                             ]),
 
                         Section::make('Ispitivanje')
@@ -215,13 +257,20 @@ class FireResource extends BaseResource
                                     )
                                     ->required()
                                     ->displayFormat('d.m.Y.')
-                                    ->native(false),
+                                    ->native(false)
+                                    ->rule(
+                                        'after_or_equal:examination_valid_from'
+                                    )
+                                    ->validationMessages([
+                                        'after_or_equal' =>
+                                            'Datum do kada periodički servis vrijedi ne može biti prije datuma periodičkog servisa.',
+                                    ]),
 
                                 TextInput::make('service')
                                     ->label(
                                         'Naziv servisera koji je servisirao aparat'
                                     )
-                                    ->maxLength(255),
+                                    ->maxLength(125),
 
                                 DatePicker::make(
                                     'regular_examination_valid_from'
@@ -250,13 +299,13 @@ class FireResource extends BaseResource
                                     ->label(
                                         'Uočeni nedostatci'
                                     )
-                                    ->maxLength(255),
+                                    ->maxLength(1024),
 
                                 TextInput::make('action')
                                     ->label(
                                         'Postupci otklanjanja'
                                     )
-                                    ->maxLength(255)
+                                    ->maxLength(1024)
                                     ->columnSpanFull(),
                             ]),
 
@@ -852,6 +901,14 @@ class FireResource extends BaseResource
                                 ->success()
                                 ->send();
                         }
+                    )
+                    ->visible(
+                        fn (
+                            HasTable $livewire
+                        ): bool =>
+                            ! self::isOnlyTrashed(
+                                $livewire
+                            )
                     ),
 
                 BulkAction::make(
@@ -947,6 +1004,14 @@ class FireResource extends BaseResource
                                 ->success()
                                 ->send();
                         }
+                    )
+                    ->visible(
+                        fn (
+                            HasTable $livewire
+                        ): bool =>
+                            ! self::isOnlyTrashed(
+                                $livewire
+                            )
                     ),
 
                 DeleteBulkAction::make()
@@ -1059,6 +1124,20 @@ class FireResource extends BaseResource
                             /** @var Fire $record */
                             $record =
                                 $records->first();
+                                if ($record->trashed()) {
+
+                            Notification::make()
+                                ->title(
+                                    'Zapis je deaktiviran'
+                                )
+                                ->body(
+                                    'Deaktivirani vatrogasni aparat nije moguće kopirati. Prvo vratite zapis.'
+                                )
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
 
                             $newRecord =
                                 $record->replicate([
@@ -1066,8 +1145,20 @@ class FireResource extends BaseResource
                                     'updated_at',
                                     'deleted_at',
                                 ]);
+                                /*
+                                * Novi aparat mora dobiti vlastite
+                                * identifikacijske brojeve.
+                                */
+                                $newRecord->factory_number_year_of_production =
+                                    null;
 
-                            $newRecord->pdf = [];
+                                $newRecord->serial_label_number =
+                                    null;
+
+                                /*
+                                * Prilozi se ne kopiraju.
+                                */
+                                $newRecord->pdf = [];
 
                             /*
                              * Novi zapis organizacijskog
@@ -1116,6 +1207,14 @@ class FireResource extends BaseResource
                     ->modalCancelActionLabel(
                         'Odustani'
                     )
+                    ->visible(
+                    fn (
+                        HasTable $livewire
+                    ): bool =>
+                        self::isOnlyTrashed(
+                            $livewire
+                        )
+                )
                     ->deselectRecordsAfterCompletion(),
             ]);
     }

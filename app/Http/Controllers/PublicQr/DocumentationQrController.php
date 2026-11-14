@@ -33,7 +33,8 @@ class DocumentationQrController extends Controller
         );
 
         /*
-         * Tenant zaštita.
+         * QR mora pripadati istoj organizaciji
+         * kao i dokumentacija.
          */
         abort_unless(
             (int) $documentationItem->user_id
@@ -103,24 +104,56 @@ class DocumentationQrController extends Controller
             $files[$index];
 
         abort_unless(
-            is_string($path)
-            && filled($path)
-            && Storage::disk('public')
-                ->exists($path),
+            DocumentationItem::isSafeAttachmentPath(
+                $path,
+                (int) $documentationItem->user_id
+            ),
             404
         );
 
-        return Storage::disk('public')
-            ->response(
-                $path,
-                basename($path),
-                [
-                    'Content-Disposition' =>
-                        'inline; filename="'
-                        . basename($path)
-                        . '"',
-                ]
+        $path =
+            ltrim(
+                str_replace(
+                    '\\',
+                    '/',
+                    trim($path)
+                ),
+                '/'
             );
+
+        $disk =
+            Storage::disk(
+                'public'
+            );
+
+        abort_unless(
+            $disk->exists(
+                $path
+            ),
+            404
+        );
+
+        $filename =
+            str_replace(
+                [
+                    "\r",
+                    "\n",
+                    '"',
+                ],
+                '',
+                basename(
+                    $path
+                )
+            );
+
+        return $disk->response(
+            $path,
+            $filename,
+            [
+                'Content-Disposition' =>
+                    'inline',
+            ]
+        );
     }
 
     protected function findQr(

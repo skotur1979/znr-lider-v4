@@ -131,7 +131,9 @@ class SystemTaskMonitor
             return 0;
         }
 
-        return Carbon::parse($startedAt)
-            ->diffInMilliseconds($finishedAt);
+        return (int) round(
+            Carbon::parse($startedAt)
+                ->diffInMilliseconds($finishedAt)
+        );
     }
 }

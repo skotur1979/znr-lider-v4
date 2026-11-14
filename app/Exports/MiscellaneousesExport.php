@@ -32,11 +32,14 @@ class MiscellaneousesExport implements FromCollection, WithHeadings, WithMapping
             ->with(['user', 'category'])
             ->orderByDesc('examination_valid_until');
 
-        if ($recordIds !== null && count($recordIds) > 0) {
-            $query->whereIn('miscellaneouses.id', $recordIds);
-        } else {
-            $query->withoutTrashed();
-        }
+        if ($recordIds !== null) {
+        $query->whereIn(
+            'miscellaneouses.id',
+            $recordIds
+        );
+    } else {
+        $query->withoutTrashed();
+    }
 
         $this->records = $query->get();
     }

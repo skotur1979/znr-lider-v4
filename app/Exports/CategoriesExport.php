@@ -96,10 +96,16 @@ class CategoriesExport implements FromCollection, WithHeadings, WithMapping, Sho
                     ],
                 ]);
 
-                $sheet->getStyle("A2:{$lastCol}{$lastRow}")
-                    ->getAlignment()
-                    ->setVertical(Alignment::VERTICAL_CENTER)
-                    ->setWrapText(true);
+                if ($this->categories->isNotEmpty()) {
+                    $sheet->getStyle(
+                        "A2:{$lastCol}{$lastRow}"
+                    )
+                        ->getAlignment()
+                        ->setVertical(
+                            Alignment::VERTICAL_CENTER
+                        )
+                        ->setWrapText(true);
+                }
 
                 $sheet->getColumnDimension('A')->setWidth(36);
 

@@ -11,6 +11,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Validation\ValidationException;
 
 class Kpi extends Model
 {
@@ -44,17 +45,128 @@ class Kpi extends Model
         'show_on_dashboard' => 'boolean',
     ];
 
+    public function setUserIdAttribute(
+        mixed $value
+    ): void {
+        $newOwnerId =
+            $value === null
+            || $value === ''
+                ? null
+                : (int) $value;
+
+        if ($this->exists) {
+            $originalOwnerId =
+                $this->getRawOriginal(
+                    'user_id'
+                );
+
+            $originalOwnerId =
+                $originalOwnerId === null
+                    ? null
+                    : (int) $originalOwnerId;
+
+            if (
+                $newOwnerId
+                    !== $originalOwnerId
+            ) {
+                throw ValidationException::withMessages([
+                    'user_id' =>
+                        'Vlasništvo KPI definicije ne može se promijeniti.',
+                ]);
+            }
+        }
+
+        $this->attributes['user_id'] =
+            $newOwnerId;
+    }
+
     protected static function booted(): void
     {
-        static::creating(function (self $kpi) {
-            if (blank($kpi->slug)) {
-                $kpi->slug = Str::slug($kpi->name);
+        static::creating(function (self $kpi): void {
+            $baseSlug =
+                Str::slug(
+                    (string) $kpi->name
+                );
+
+            /*
+            * Organizacijski KPI dobiva owner suffix
+            * kako dvije organizacije mogu imati KPI
+            * istog naziva.
+            */
+            if (filled($kpi->user_id)) {
+                $baseSlug .=
+                    '-org-'
+                    . (int) $kpi->user_id;
             }
+
+            $slug = $baseSlug;
+            $counter = 2;
+
+            /*
+            * Uključujemo i soft-deleted KPI-je jer je
+            * slug UNIQUE na razini baze.
+            */
+            while (
+                self::withTrashed()
+                    ->where(
+                        'slug',
+                        $slug
+                    )
+                    ->exists()
+            ) {
+                $slug =
+                    $baseSlug
+                    . '-'
+                    . $counter;
+
+                $counter++;
+            }
+
+            $kpi->slug = $slug;
         });
 
-        static::updating(function (self $kpi) {
-            if ($kpi->isDirty('name') && blank($kpi->slug)) {
-                $kpi->slug = Str::slug($kpi->name);
+        static::updating(function (self $kpi): void {
+            /*
+            * Slug postojećeg KPI-ja ne mijenjamo samo
+            * zato što se promijenio naziv.
+            *
+            * Time URL/identifikator ostaje stabilan.
+            */
+            if (blank($kpi->slug)) {
+                $baseSlug =
+                    Str::slug(
+                        (string) $kpi->name
+                    );
+
+                if (filled($kpi->user_id)) {
+                    $baseSlug .=
+                        '-org-'
+                        . (int) $kpi->user_id;
+                }
+
+                $slug = $baseSlug;
+                $counter = 2;
+
+                while (
+                    self::withTrashed()
+                        ->where(
+                            'slug',
+                            $slug
+                        )
+                        ->whereKeyNot(
+                            $kpi->getKey()
+                        )
+                        ->exists()
+                ) {
+                    $slug =
+                        $baseSlug
+                        . '-'
+                        . $counter;
+
+                    $counter++;
+                }
+
+                $kpi->slug = $slug;
             }
         });
     }
@@ -73,52 +185,53 @@ class Kpi extends Model
     }
 
     public function latestValue(?int $userId = null): ?KpiValue
-{
-    $user = Auth::user();
+    {
+        $user = Auth::user();
 
-    /*
-     * Ako je eksplicitno proslijeđen owner ID,
-     * koristimo njega.
-     */
-    if ($userId) {
+        /*
+        * Ako je eksplicitno proslijeđen owner ID,
+        * koristimo njega.
+        */
+        if ($userId) {
+            return $this->values()
+                ->reorder()
+                ->where('user_id', $userId)
+                ->orderByDesc('year')
+                ->orderByDesc('month')
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        /*
+        * Bez prijavljenog korisnika ne vraćamo
+        * organizacijske KPI vrijednosti.
+        */
+        if (! $user) {
+            return null;
+        }
+
+        /*
+        * Superadmin nema vlastitu organizacijsku
+        * KPI vrijednost.
+        */
+        if ($user->isSuperAdmin()) {
+            return null;
+        }
+
+        $ownerId = $user->ownerId();
+
+        if (! $ownerId) {
+            return null;
+        }
+
         return $this->values()
-            ->where('user_id', $userId)
+            ->reorder()
+            ->where('user_id', $ownerId)
             ->orderByDesc('year')
             ->orderByDesc('month')
+            ->orderByDesc('id')
             ->first();
     }
-
-    /*
-     * Bez prijavljenog korisnika ne vraćamo
-     * organizacijske KPI vrijednosti.
-     */
-    if (! $user) {
-        return null;
-    }
-
-    /*
-     * Superadmin nema vlastitu organizacijsku
-     * KPI vrijednost.
-     *
-     * Administrativni pregled svih vrijednosti
-     * već postoji kroz relation manager.
-     */
-    if ($user->isSuperAdmin()) {
-        return null;
-    }
-
-    $ownerId = $user->ownerId();
-
-    if (! $ownerId) {
-        return null;
-    }
-
-    return $this->values()
-        ->where('user_id', $ownerId)
-        ->orderByDesc('year')
-        ->orderByDesc('month')
-        ->first();
-}
 
     protected function currentOwnerId(): ?int
     {

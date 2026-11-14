@@ -30,7 +30,13 @@ class EditDocumentationItem extends EditRecord
             ViewAction::make(),
 
             DeleteAction::make()
-                ->requiresConfirmation(),
+                ->requiresConfirmation()
+                ->visible(
+                    fn (): bool =>
+                        DocumentationItemResource::canDelete(
+                            $this->getRecord()
+                        )
+                ),
         ];
     }
 

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Filament\Resources\FirstAidKits\FirstAidKitResource;
 use App\Models\FirstAidKit;
 use App\Services\FirstAidKitQrService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
+
 
 class FirstAidKitQrAdminController extends Controller
 {
@@ -14,7 +16,8 @@ class FirstAidKitQrAdminController extends Controller
         FirstAidKitQrService $qrService
     ) {
         $this->authorizeFirstAidKit(
-            $firstAidKit
+            $firstAidKit,
+            'view'
         );
 
         $firstAidKit->load([
@@ -58,7 +61,8 @@ class FirstAidKitQrAdminController extends Controller
         FirstAidKitQrService $qrService
     ): RedirectResponse {
         $this->authorizeFirstAidKit(
-            $firstAidKit
+            $firstAidKit,
+            'update'
         );
 
         $qrCode =
@@ -90,7 +94,8 @@ class FirstAidKitQrAdminController extends Controller
         FirstAidKitQrService $qrService
     ): RedirectResponse {
         $this->authorizeFirstAidKit(
-            $firstAidKit
+            $firstAidKit,
+            'update'
         );
 
         $qrCode =
@@ -122,7 +127,8 @@ class FirstAidKitQrAdminController extends Controller
         FirstAidKitQrService $qrService
     ): RedirectResponse {
         $this->authorizeFirstAidKit(
-            $firstAidKit
+            $firstAidKit,
+            'update'
         );
 
         $qrCode =
@@ -154,7 +160,8 @@ class FirstAidKitQrAdminController extends Controller
         FirstAidKitQrService $qrService
     ) {
         $this->authorizeFirstAidKit(
-            $firstAidKit
+            $firstAidKit,
+            'view'
         );
 
         $qrCode =
@@ -215,7 +222,8 @@ class FirstAidKitQrAdminController extends Controller
     }
 
     protected function authorizeFirstAidKit(
-        FirstAidKit $firstAidKit
+        FirstAidKit $firstAidKit,
+        string $permission
     ): void {
         $user =
             auth()->user();
@@ -226,16 +234,32 @@ class FirstAidKitQrAdminController extends Controller
         );
 
         if (
-            $user->isSuperAdmin()
+            ! $user->isSuperAdmin()
+            && (int) $firstAidKit->user_id
+                !== (int) $user->ownerId()
         ) {
-            return;
+            abort(404);
         }
 
+        $allowed =
+            match ($permission) {
+                'view' =>
+                    FirstAidKitResource::canView(
+                        $firstAidKit
+                    ),
+
+                'update' =>
+                    FirstAidKitResource::canEdit(
+                        $firstAidKit
+                    ),
+
+                default =>
+                    false,
+            };
+
         abort_unless(
-            (int) $firstAidKit->user_id
-                ===
-            (int) $user->ownerId(),
-            404
+            $allowed,
+            403
         );
     }
 }

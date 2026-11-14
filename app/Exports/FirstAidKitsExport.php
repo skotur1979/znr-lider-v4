@@ -7,6 +7,7 @@ use App\Models\FirstAidItem;
 use App\Models\FirstAidKit;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
@@ -25,23 +26,50 @@ class FirstAidKitsExport implements FromCollection, WithHeadings, WithMapping, W
 
     protected bool $showUserColumn = false;
 
-    private int $maxItems = 15;
+    private int $maxItems = 0;
 
-    public function __construct()
-    {
-        $user = auth()->user();
+    public function __construct(
+        ?Builder $query = null
+    ) {
+        $user =
+            auth()->user();
 
         $this->showUserColumn =
             (bool) $user?->isSuperAdmin();
 
-        $this->kits = FirstAidKitResource::getEloquentQuery()
-            ->with([
-                'user',
-                'items' => fn ($query) => $query->orderBy('valid_until'),
-            ])
-            ->withCount('items')
-            ->orderByDesc('inspected_at')
-            ->get();
+        if ($query) {
+            $query =
+                clone $query;
+        } else {
+            $query =
+                FirstAidKitResource::getEloquentQuery()
+                    ->orderByDesc(
+                        'inspected_at'
+                    );
+        }
+
+        $this->kits =
+            $query
+                ->with([
+                    'user',
+
+                    'items' =>
+                        fn ($query) =>
+                            $query->orderBy(
+                                'valid_until'
+                            ),
+                ])
+                ->withCount(
+                    'items'
+                )
+                ->get();
+
+        $this->maxItems =
+            (int) (
+                $this->kits
+                    ->max('items_count')
+                ?? 0
+            );
     }
 
     public function collection()

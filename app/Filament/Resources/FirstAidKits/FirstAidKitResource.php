@@ -83,7 +83,7 @@ class FirstAidKitResource extends BaseResource
                                         'Lokacija ormarića PP'
                                     )
                                     ->required()
-                                    ->maxLength(255),
+                                    ->maxLength(191),
 
                                 DatePicker::make(
                                     'inspected_at'
@@ -179,7 +179,7 @@ class FirstAidKitResource extends BaseResource
                                                     )
                                                     ->required()
                                                     ->maxLength(
-                                                        255
+                                                        191
                                                     ),
 
                                                 TextInput::make(
@@ -190,7 +190,7 @@ class FirstAidKitResource extends BaseResource
                                                     )
                                                     ->required()
                                                     ->maxLength(
-                                                        255
+                                                        191
                                                     ),
 
                                                 /*

@@ -133,6 +133,24 @@ class EditWasteTrackingForm extends EditRecord
 
         $data['user_id'] = $ownerId;
 
+        /*
+        * Ako je PL-O ikada već proizveo ONTO izlaz,
+        * njegova veza na ONTO obrazac više se ne
+        * smije mijenjati.
+        *
+        * UI je također zaključan, ali ovo je
+        * server-side zaštita od izmijenjenog requesta.
+        */
+        if (
+            $this->record
+                ->outputEntry()
+                ->withTrashed()
+                ->exists()
+        ) {
+            $data['onto_record_id'] =
+                $this->record->onto_record_id;
+        }
+
         $ontoRecordId =
             (int) (
                 $data['onto_record_id']
@@ -176,18 +194,6 @@ class EditWasteTrackingForm extends EditRecord
                 $data['handover_date']
                 ?? $this->record->handover_date
             );
-
-        if (
-            FormVersionService::isCurrentPlo(
-                $data['form_version']
-            )
-        ) {
-    /*
-     * Nova verzija obrasca više nema
-     * ovo polje.
-     */
-    $data['report_choice'] = null;
-}
 
         /*
          * Novi obrazac više nema

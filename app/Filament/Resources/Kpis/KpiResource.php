@@ -33,6 +33,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class KpiResource extends BaseResource
@@ -848,6 +849,178 @@ class KpiResource extends BaseResource
         ];
     }
 
+    public static function canView(
+        Model $record
+    ): bool {
+        if (
+            ! static::hasModuleActionPermission(
+                'view'
+            )
+        ) {
+            return false;
+        }
+
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        /*
+        * Zapis mora biti dio KPI skupa koji
+        * je vidljiv trenutnoj organizaciji.
+        */
+        if (
+            ! static::getEloquentQuery()
+                ->whereKey(
+                    $record->getKey()
+                )
+                ->exists()
+        ) {
+            return false;
+        }
+
+        /*
+        * Vidljivi globalni KPI je organizaciji
+        * dopušten samo za pregled.
+        */
+        if (blank($record->user_id)) {
+            return true;
+        }
+
+        return parent::canView(
+            $record
+        );
+    }
+
+    public static function canEdit(
+        Model $record
+    ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        /*
+        * Organizacija nikada ne uređuje
+        * globalnu KPI definiciju.
+        */
+        if (blank($record->user_id)) {
+            return false;
+        }
+
+        if (
+            (int) $record->user_id
+                !==
+            (int) static::resolveOwnerId()
+        ) {
+            return false;
+        }
+
+        return parent::canEdit(
+            $record
+        );
+    }
+
+    public static function canDelete(
+        Model $record
+    ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        if (
+            blank($record->user_id)
+            || (int) $record->user_id
+                !==
+            (int) static::resolveOwnerId()
+        ) {
+            return false;
+        }
+
+        /*
+        * Organizacija smije obrisati samo
+        * vlastiti ručno dodani KPI.
+        */
+        if (
+            $record->calculation_type
+                !== 'manual'
+        ) {
+            return false;
+        }
+
+        if (
+            static::isProtectedSystemKpi(
+                $record
+            )
+        ) {
+            return false;
+        }
+
+        return parent::canDelete(
+            $record
+        );
+    }
+
+    public static function canRestore(
+        Model $record
+    ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        if (
+            blank($record->user_id)
+            || (int) $record->user_id
+                !==
+            (int) static::resolveOwnerId()
+        ) {
+            return false;
+        }
+
+        if (
+            $record->calculation_type
+                !== 'manual'
+            || static::isProtectedSystemKpi(
+                $record
+            )
+        ) {
+            return false;
+        }
+
+        return parent::canRestore(
+            $record
+        );
+    }
+
+    public static function canForceDelete(
+        Model $record
+    ): bool {
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        if (
+            blank($record->user_id)
+            || (int) $record->user_id
+                !==
+            (int) static::resolveOwnerId()
+        ) {
+            return false;
+        }
+
+        if (
+            $record->calculation_type
+                !== 'manual'
+            || static::isProtectedSystemKpi(
+                $record
+            )
+        ) {
+            return false;
+        }
+
+        return parent::canForceDelete(
+            $record
+        );
+    }
+
     public static function getPages(): array
     {
         return [
@@ -980,11 +1153,10 @@ class KpiResource extends BaseResource
     {
         $model = static::getModel();
 
-        $query = $model::query();
-
-        $query->withoutGlobalScopes([
-            SoftDeletingScope::class,
-        ]);
+        $query = $model::query()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
 
         if (static::isSuperAdmin()) {
             return $query;
@@ -993,77 +1165,102 @@ class KpiResource extends BaseResource
         $ownerId = static::ownerId();
 
         if (! $ownerId) {
-            return $query
-                ->whereRaw('1 = 0');
+            return $query->whereRaw('1 = 0');
         }
 
-        return $query
-            ->where(
-                function (
-                    Builder $query
-                ) use (
-                    $ownerId
-                ): void {
-                    $query
-                        ->where(
-                            'user_id',
-                            $ownerId
-                        )
-                        ->orWhere(
-                            function (
-                                Builder $global
-                            ): void {
-                                $global
-                                    ->whereNull(
-                                        'user_id'
-                                    )
-                                    ->where(
-                                        function (
-                                            Builder $source
-                                        ): void {
-                                            $source
-                                                ->whereNull(
-                                                    'source_key'
-                                                )
-                                                ->orWhereNotIn(
-                                                    'source_key',
-                                                    static::
-                                                        protectedAutomaticSourceKeys()
-                                                );
-                                        }
-                                    );
-                            }
-                        );
-                }
-            );
+        return $query->where(
+            function (Builder $query) use ($ownerId): void {
+                $query
+                    ->where(
+                        'user_id',
+                        $ownerId
+                    )
+                    ->orWhere(
+                        function (Builder $global) use ($ownerId): void {
+                            $global
+                                ->whereNull('user_id')
+                                ->whereNotExists(
+                                    function ($sub) use ($ownerId): void {
+                                        $sub
+                                            ->selectRaw('1')
+                                            ->from('kpis as org_kpis')
+                                            ->where(
+                                                'org_kpis.user_id',
+                                                $ownerId
+                                            )
+                                            ->whereNull(
+                                                'org_kpis.deleted_at'
+                                            )
+                                            ->where(
+                                                function ($match): void {
+                                                    $match
+                                                        ->where(
+                                                            function ($bySource): void {
+                                                                $bySource
+                                                                    ->whereNotNull(
+                                                                        'kpis.source_key'
+                                                                    )
+                                                                    ->whereColumn(
+                                                                        'org_kpis.source_key',
+                                                                        'kpis.source_key'
+                                                                    );
+                                                            }
+                                                        )
+                                                        ->orWhere(
+                                                            function ($byName): void {
+                                                                $byName
+                                                                    ->whereNull(
+                                                                        'kpis.source_key'
+                                                                    )
+                                                                    ->whereColumn(
+                                                                        'org_kpis.name',
+                                                                        'kpis.name'
+                                                                    );
+                                                            }
+                                                        );
+                                                }
+                                            );
+                                    }
+                                );
+                        }
+                    );
+            }
+        );
     }
 
     protected static function latestVisibleKpiValue(
         Kpi $record
     ): ?KpiValue {
-        $query = KpiValue::query()
+        /*
+        * Superadmin nema vlastitu organizacijsku
+        * KPI vrijednost.
+        *
+        * Sve organizacijske vrijednosti može
+        * pregledati kroz relation manager.
+        */
+        if (static::isSuperAdmin()) {
+            return null;
+        }
+
+        $ownerId =
+            static::resolveOwnerId();
+
+        if (! $ownerId) {
+            return null;
+        }
+
+        return KpiValue::query()
             ->where(
                 'kpi_id',
                 $record->id
             )
-            ->orderByDesc('year')
-            ->orderByDesc('month');
-
-        if (! static::isSuperAdmin()) {
-            $ownerId =
-                static::resolveOwnerId();
-
-            if (! $ownerId) {
-                return null;
-            }
-
-            $query->where(
+            ->where(
                 'user_id',
                 $ownerId
-            );
-        }
-
-        return $query->first();
+            )
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->first();
     }
 
     public static function getGlobalSearchEloquentQuery(): Builder
@@ -1079,52 +1276,74 @@ class KpiResource extends BaseResource
             ])
             ->withoutTrashed();
 
-        if (! static::isSuperAdmin()) {
-            $ownerId = static::ownerId();
-
-            if (! $ownerId) {
-                return '0';
-            }
-
-            $query->where(
-                function (
-                    Builder $query
-                ) use (
-                    $ownerId
-                ): void {
-                    $query
-                        ->where(
-                            'user_id',
-                            $ownerId
-                        )
-                        ->orWhere(
-                            function (
-                                Builder $global
-                            ): void {
-                                $global
-                                    ->whereNull(
-                                        'user_id'
-                                    )
-                                    ->where(
-                                        function (
-                                            Builder $source
-                                        ): void {
-                                            $source
-                                                ->whereNull(
-                                                    'source_key'
-                                                )
-                                                ->orWhereNotIn(
-                                                    'source_key',
-                                                    static::
-                                                        protectedAutomaticSourceKeys()
-                                                );
-                                        }
-                                    );
-                            }
-                        );
-                }
-            );
+        if (static::isSuperAdmin()) {
+            return (string) $query->count();
         }
+
+        $ownerId = static::ownerId();
+
+        if (! $ownerId) {
+            return '0';
+        }
+
+        $query->where(
+            function (Builder $query) use ($ownerId): void {
+                $query
+                    ->where(
+                        'user_id',
+                        $ownerId
+                    )
+                    ->orWhere(
+                        function (Builder $global) use ($ownerId): void {
+                            $global
+                                ->whereNull('user_id')
+                                ->whereNotExists(
+                                    function ($sub) use ($ownerId): void {
+                                        $sub
+                                            ->selectRaw('1')
+                                            ->from('kpis as org_kpis')
+                                            ->where(
+                                                'org_kpis.user_id',
+                                                $ownerId
+                                            )
+                                            ->whereNull(
+                                                'org_kpis.deleted_at'
+                                            )
+                                            ->where(
+                                                function ($match): void {
+                                                    $match
+                                                        ->where(
+                                                            function ($bySource): void {
+                                                                $bySource
+                                                                    ->whereNotNull(
+                                                                        'kpis.source_key'
+                                                                    )
+                                                                    ->whereColumn(
+                                                                        'org_kpis.source_key',
+                                                                        'kpis.source_key'
+                                                                    );
+                                                            }
+                                                        )
+                                                        ->orWhere(
+                                                            function ($byName): void {
+                                                                $byName
+                                                                    ->whereNull(
+                                                                        'kpis.source_key'
+                                                                    )
+                                                                    ->whereColumn(
+                                                                        'org_kpis.name',
+                                                                        'kpis.name'
+                                                                    );
+                                                            }
+                                                        );
+                                                }
+                                            );
+                                    }
+                                );
+                        }
+                    );
+            }
+        );
 
         return (string) $query->count();
     }

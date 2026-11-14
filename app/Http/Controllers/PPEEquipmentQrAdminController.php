@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Filament\Resources\PPEEquipment\PPEEquipmentResource;
 use App\Models\PPEEquipment;
 use App\Services\PPEEquipmentQrService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -13,7 +14,7 @@ class PPEEquipmentQrAdminController extends Controller
         PPEEquipment $ppeEquipment,
         PPEEquipmentQrService $qrService
     ) {
-        $this->authorizePPEEquipment(
+        $this->authorizeView(
             $ppeEquipment
         );
 
@@ -49,7 +50,7 @@ class PPEEquipmentQrAdminController extends Controller
         PPEEquipment $ppeEquipment,
         PPEEquipmentQrService $qrService
     ): RedirectResponse {
-        $this->authorizePPEEquipment(
+        $this->authorizeUpdate(
             $ppeEquipment
         );
 
@@ -81,7 +82,7 @@ class PPEEquipmentQrAdminController extends Controller
         PPEEquipment $ppeEquipment,
         PPEEquipmentQrService $qrService
     ): RedirectResponse {
-        $this->authorizePPEEquipment(
+        $this->authorizeUpdate(
             $ppeEquipment
         );
 
@@ -113,7 +114,7 @@ class PPEEquipmentQrAdminController extends Controller
         PPEEquipment $ppeEquipment,
         PPEEquipmentQrService $qrService
     ): RedirectResponse {
-        $this->authorizePPEEquipment(
+        $this->authorizeUpdate(
             $ppeEquipment
         );
 
@@ -145,7 +146,7 @@ class PPEEquipmentQrAdminController extends Controller
         PPEEquipment $ppeEquipment,
         PPEEquipmentQrService $qrService
     ) {
-        $this->authorizePPEEquipment(
+        $this->authorizeView(
             $ppeEquipment
         );
 
@@ -206,35 +207,34 @@ class PPEEquipmentQrAdminController extends Controller
         );
     }
 
-    protected function authorizePPEEquipment(
+    protected function authorizeView(
         PPEEquipment $ppeEquipment
     ): void {
-        $user =
-            auth()->user();
-
         abort_unless(
-            $user,
+            auth()->check(),
             403
         );
 
-        /*
-         * Superadmin smije administrativno
-         * pristupiti svakom postojećem OZO zapisu.
-         */
-        if (
-            $user->isSuperAdmin()
-        ) {
-            return;
-        }
-
-        /*
-         * Organizacijski korisnik smije pristupiti
-         * samo OZO zapisima svoje organizacije.
-         */
         abort_unless(
-            (int) $ppeEquipment->user_id
-                ===
-            (int) $user->ownerId(),
+            PPEEquipmentResource::canView(
+                $ppeEquipment
+            ),
+            404
+        );
+    }
+
+    protected function authorizeUpdate(
+        PPEEquipment $ppeEquipment
+    ): void {
+        abort_unless(
+            auth()->check(),
+            403
+        );
+
+        abort_unless(
+            PPEEquipmentResource::canEdit(
+                $ppeEquipment
+            ),
             404
         );
     }

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Filament\Widgets\DashboardCalendarWidget;
 use App\Filament\Widgets\DashboardDeadlinesGrid;
 use App\Models\ActivityLog;
+use App\Models\Kpi;
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Widgets\QuickActionsWidget;
 use App\Models\LearningCategory;
@@ -161,8 +162,25 @@ class AppServiceProvider extends ServiceProvider
             }
 
             if ($user?->isSuperAdmin()) {
-                if (! $model->exists && empty($model->user_id)) {
-                    $model->user_id = $user->id;
+                /*
+                * KPI definicije mogu biti globalne.
+                *
+                * Globalni KPI namjerno ima:
+                * user_id = NULL
+                *
+                * Zato superadminu ne dodjeljujemo njegov ID
+                * kao vlasnika KPI definicije.
+                */
+                if ($model instanceof Kpi) {
+                    return;
+                }
+
+                if (
+                    ! $model->exists
+                    && empty($model->user_id)
+                ) {
+                    $model->user_id =
+                        $user->id;
                 }
 
                 return;

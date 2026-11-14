@@ -13,26 +13,88 @@ use Illuminate\Support\Facades\Auth;
 
 class MiscellaneousQrService
 {
+    public function find(
+        Miscellaneous $miscellaneous
+    ): ?QrCode {
+        return QrCode::query()
+            ->where(
+                'type',
+                'miscellaneous'
+            )
+            ->where(
+                'qrable_type',
+                Miscellaneous::class
+            )
+            ->where(
+                'qrable_id',
+                $miscellaneous->getKey()
+            )
+            ->where(
+                'owner_id',
+                $miscellaneous->user_id
+            )
+            ->first();
+    }
+
     public function getOrCreate(
         Miscellaneous $miscellaneous,
         ?User $actor = null
     ): QrCode {
         $actor ??= Auth::user();
 
-        return QrCode::query()
-            ->firstOrCreate(
-                [
-                    'type' => 'miscellaneous',
-                    'qrable_type' => Miscellaneous::class,
-                    'qrable_id' => $miscellaneous->getKey(),
-                ],
-                [
-                    'owner_id' => $miscellaneous->user_id,
-                    'created_by' => $actor?->id,
-                    'name' => $this->qrName($miscellaneous),
-                    'is_active' => true,
-                ]
-            );
+        $existing = QrCode::query()
+            ->where(
+                'type',
+                'miscellaneous'
+            )
+            ->where(
+                'qrable_type',
+                Miscellaneous::class
+            )
+            ->where(
+                'qrable_id',
+                $miscellaneous->getKey()
+            )
+            ->first();
+
+        if ($existing) {
+            if (
+                (int) $existing->owner_id
+                !==
+                (int) $miscellaneous->user_id
+            ) {
+                throw new \RuntimeException(
+                    'QR kod ostalog ispitivanja ima neispravnog vlasnika.'
+                );
+            }
+
+            return $existing;
+        }
+
+        return QrCode::create([
+            'type' =>
+                'miscellaneous',
+
+            'qrable_type' =>
+                Miscellaneous::class,
+
+            'qrable_id' =>
+                $miscellaneous->getKey(),
+
+            'owner_id' =>
+                $miscellaneous->user_id,
+
+            'created_by' =>
+                $actor?->id,
+
+            'name' =>
+                $this->qrName(
+                    $miscellaneous
+                ),
+
+            'is_active' =>
+                true,
+        ]);
     }
 
     public function publicUrl(

@@ -43,10 +43,11 @@ class CreateCategory extends CreateRecord
     protected function mutateFormDataBeforeCreate(
         array $data
     ): array {
-        /*
-         * Glavni korisnik i podkorisnik spremaju zapis
-         * na ownerId organizacije.
-         */
+        $data['name'] =
+            trim(
+                (string) ($data['name'] ?? '')
+            );
+
         return CategoryResource::fillOwnershipData(
             $data
         );

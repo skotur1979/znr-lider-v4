@@ -16,17 +16,37 @@ class FireQrAdminController extends Controller
         Fire $fire,
         QrCodeService $qrCodeService
     ) {
+        /*
+        * Pregled postojećeg QR-a zahtijeva
+        * samo view pravo.
+        */
         $this->authorizeFire(
             $fire,
             'view'
         );
 
         $qrCode =
-            $qrCodeService
-                ->getOrCreateForFire(
-                    $fire,
-                    auth()->user()
-                );
+            $qrCodeService->findForFire(
+                $fire
+            );
+
+        /*
+        * Ako QR još ne postoji, njegovo kreiranje
+        * je promjena podatka i zahtijeva update pravo.
+        */
+        if (! $qrCode) {
+            $this->authorizeFire(
+                $fire,
+                'update'
+            );
+
+            $qrCode =
+                $qrCodeService
+                    ->getOrCreateForFire(
+                        $fire,
+                        auth()->user()
+                    );
+        }
 
         $svg =
             $qrCodeService
@@ -222,17 +242,37 @@ class FireQrAdminController extends Controller
         Fire $fire,
         QrCodeService $qrCodeService
     ) {
+        /*
+        * Preuzimanje postojećeg QR-a zahtijeva
+        * samo view pravo.
+        */
         $this->authorizeFire(
             $fire,
             'view'
         );
 
         $qrCode =
-            $qrCodeService
-                ->getOrCreateForFire(
-                    $fire,
-                    auth()->user()
-                );
+            $qrCodeService->findForFire(
+                $fire
+            );
+
+        /*
+        * Ako QR još ne postoji, njegovo kreiranje
+        * zahtijeva update pravo.
+        */
+        if (! $qrCode) {
+            $this->authorizeFire(
+                $fire,
+                'update'
+            );
+
+            $qrCode =
+                $qrCodeService
+                    ->getOrCreateForFire(
+                        $fire,
+                        auth()->user()
+                    );
+        }
 
         $svg =
             $qrCodeService

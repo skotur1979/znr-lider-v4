@@ -128,25 +128,22 @@ class WasteTrackingFormResource extends BaseResource
         }
 
         /*
-        * Superadmin može administrirati postojeći
-        * poslovni zapis.
-        *
-        * Ovo ne znači da može kreirati novi PL-O
-        * niti izvršavati poslovne transakcije
-        * poput zaključavanja.
+        * Superadmin ima pregled,
+        * ali ne mijenja poslovni PL-O.
         */
         if ($user->isSuperAdmin()) {
-            return true;
+            return false;
         }
 
-        $ownerId = $user->ownerId();
+        $ownerId =
+            $user->ownerId();
 
         if (! $ownerId) {
             return false;
         }
 
-        return (int) $record->user_id ===
-            (int) $ownerId;
+        return (int) $record->user_id
+            === (int) $ownerId;
     }
 
     public static function canEdit(
@@ -166,8 +163,22 @@ class WasteTrackingFormResource extends BaseResource
     public static function canDelete(
         Model $record
     ): bool {
+        if (
+            $record instanceof WasteTrackingForm
+            && (
+                $record->isLocked()
+                || $record
+                    ->outputEntry()
+                    ->exists()
+            )
+        ) {
+            return false;
+        }
+
         return parent::canDelete($record)
-            && static::canManageRecord($record);
+            && static::canManageRecord(
+                $record
+            );
     }
 
     public static function canRestore(
@@ -182,13 +193,23 @@ class WasteTrackingFormResource extends BaseResource
     ): bool {
         if (
             $record instanceof WasteTrackingForm
-            && $record->isLocked()
+            && (
+                $record->isLocked()
+                || $record
+                    ->outputEntry()
+                    ->withTrashed()
+                    ->exists()
+            )
         ) {
             return false;
         }
 
-        return parent::canForceDelete($record)
-            && static::canManageRecord($record);
+        return parent::canForceDelete(
+            $record
+        )
+            && static::canManageRecord(
+                $record
+            );
     }
 
     /*
@@ -350,6 +371,17 @@ class WasteTrackingFormResource extends BaseResource
                             ->searchable()
                             ->preload()
                             ->required()
+                            ->disabled(
+                                fn (
+                                    ?WasteTrackingForm $record
+                                ): bool =>
+                                    $record
+                                        ?->outputEntry()
+                                        ->withTrashed()
+                                        ->exists()
+                                    ?? false
+                            )
+                            ->dehydrated()
                             ->live()
                             ->afterStateUpdated(
                                 function (

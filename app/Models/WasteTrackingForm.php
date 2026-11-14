@@ -183,10 +183,12 @@ class WasteTrackingForm extends Model
 
     public function ontoRecord(): BelongsTo
     {
-        return $this->belongsTo(
-            OntoRecord::class,
-            'onto_record_id'
-        );
+        return $this
+            ->belongsTo(
+                OntoRecord::class,
+                'onto_record_id'
+            )
+            ->withTrashed();
     }
 
     public function outputEntry(): HasOne

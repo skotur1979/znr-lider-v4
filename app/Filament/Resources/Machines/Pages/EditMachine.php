@@ -669,7 +669,7 @@ class EditMachine extends EditRecord
                 $value
             )->format('Y-m-d');
         } catch (\Throwable) {
-            return $value;
+            return null;
         }
     }
 

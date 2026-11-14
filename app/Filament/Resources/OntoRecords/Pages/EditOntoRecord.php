@@ -47,13 +47,105 @@ class EditOntoRecord extends EditRecord
         }
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
+    protected function mutateFormDataBeforeSave(
+        array $data
+    ): array {
+        $user = auth()->user();
+
+        if (
+            ! $user
+            || $user->isSuperAdmin()
+        ) {
+            abort(403);
+        }
+
+        $ownerId =
+            (int) $this->record->user_id;
+
+        if (
+            $ownerId <= 0
+            || (int) $user->ownerId()
+                !== $ownerId
+        ) {
+            abort(403);
+        }
+
         /*
-         * Ownership ONTO obrasca se prilikom uređivanja
-         * nikada ne smije promijeniti.
-         */
-        $data['user_id'] = $this->record->user_id;
+        * Ownership se nikada ne mijenja.
+        */
+        $data['user_id'] =
+            $ownerId;
+
+        $organizationId =
+            (int) (
+                $data['waste_organization_id']
+                ?? 0
+            );
+
+        $organizationExists =
+            \App\Models\WasteOrganization::query()
+                ->whereKey(
+                    $organizationId
+                )
+                ->where(
+                    'user_id',
+                    $ownerId
+                )
+                ->exists();
+
+        abort_unless(
+            $organizationExists,
+            403,
+            'Odabrana organizacija nije dopuštena.'
+        );
+
+        $locationId =
+            (int) (
+                $data[
+                    'waste_organization_location_id'
+                ]
+                ?? 0
+            );
+
+        $locationExists =
+            \App\Models\WasteOrganizationLocation::query()
+                ->whereKey(
+                    $locationId
+                )
+                ->where(
+                    'waste_organization_id',
+                    $organizationId
+                )
+                ->exists();
+
+        abort_unless(
+            $locationExists,
+            403,
+            'Odabrana lokacija nije dopuštena.'
+        );
+
+        $wasteTypeId =
+            (int) (
+                $data['waste_type_id']
+                ?? 0
+            );
+
+        $wasteTypeExists =
+            \App\Models\WasteType::query()
+                ->whereKey(
+                    $wasteTypeId
+                )
+                ->where(
+                    'user_id',
+                    $ownerId
+                )
+                ->exists();
+
+        abort_unless(
+            $wasteTypeExists,
+            403,
+            'Odabrana vrsta otpada nije dopuštena.'
+        );
 
         return $data;
     }
@@ -206,7 +298,9 @@ class EditOntoRecord extends EditRecord
                 ->visible(
                     fn (): bool =>
                         ! $this->record->is_closed
+                        && ! $this->record->trashed()
                         && ! auth()->user()?->isSuperAdmin()
+                        && WasteTrackingFormResource::canCreate()
                 )
                 ->fillForm(function (): array {
                     $record = $this->record->loadMissing([
@@ -259,6 +353,12 @@ class EditOntoRecord extends EditRecord
                         ->rows(3),
                 ])
                 ->action(function (array $data): void {
+                    abort_unless(
+                        WasteTrackingFormResource::canCreate(),
+                        403,
+                        'Nemate ovlasti za izradu pratećeg lista.'
+                    );
+
                     $record = $this->record->loadMissing([
                         'organization',
                         'organizationLocation',

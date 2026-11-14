@@ -14,34 +14,45 @@ class EditPPEEquipment extends EditRecord
     protected function mutateFormDataBeforeSave(
         array $data
     ): array {
-        /*
-         * Ownership postojećeg OZO zapisa
-         * nikada se ne mijenja kroz edit formu.
-         */
-        unset(
-            $data['user_id']
+        return PPEEquipmentResource::prepareData(
+            $data,
+            $this->record
         );
-
-        return $data;
     }
 
     protected function getHeaderActions(): array
     {
         return [
             DeleteAction::make()
-                ->label('Izbriši')
+                ->label('Trajno izbriši')
                 ->requiresConfirmation()
                 ->modalHeading(
-                    'Izbriši OZO opremu'
+                    'Trajno izbriši OZO opremu'
                 )
                 ->modalDescription(
-                    'Jesi li siguran/a da želiš izbrisati ovu OZO opremu?'
+                    'OZO se može trajno izbrisati samo ako nikada nije korišten u Upisniku OZO. Ako se više ne koristi, postavi polje Aktivno na Ne.'
                 )
                 ->modalSubmitActionLabel(
-                    'Izbriši'
+                    'Trajno izbriši'
                 )
                 ->modalCancelActionLabel(
                     'Odustani'
+                )
+                ->visible(
+                    fn (): bool =>
+                        PPEEquipmentResource::canDelete(
+                            $this->record
+                        )
+                )
+                ->before(
+                    function (): void {
+                        abort_unless(
+                            PPEEquipmentResource::canDelete(
+                                $this->record
+                            ),
+                            403
+                        );
+                    }
                 ),
         ];
     }

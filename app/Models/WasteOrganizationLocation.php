@@ -30,7 +30,12 @@ class WasteOrganizationLocation extends Model
 
     public function organization(): BelongsTo
     {
-        return $this->belongsTo(WasteOrganization::class, 'waste_organization_id');
+        return $this
+            ->belongsTo(
+                WasteOrganization::class,
+                'waste_organization_id'
+            )
+            ->withTrashed();
     }
 
     public function ontoRecords(): HasMany

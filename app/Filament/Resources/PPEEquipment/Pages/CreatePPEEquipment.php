@@ -13,19 +13,7 @@ class CreatePPEEquipment extends CreateRecord
     protected function mutateFormDataBeforeCreate(
         array $data
     ): array {
-        /*
-         * Registar OZO je organizacijski modul.
-         *
-         * BaseResource automatski postavlja:
-         *
-         * user_id = ownerId()
-         *
-         * za glavnog korisnika i podkorisnike.
-         *
-         * Superadmin ne kreira OZO zapise
-         * u ime organizacije.
-         */
-        return PPEEquipmentResource::fillOwnershipData(
+        return PPEEquipmentResource::prepareData(
             $data
         );
     }

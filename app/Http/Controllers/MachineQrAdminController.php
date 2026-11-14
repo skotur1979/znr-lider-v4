@@ -22,9 +22,9 @@ class MachineQrAdminController extends Controller
         );
 
         $qrCode =
-            $qrCodeService->getOrCreateForMachine(
+            $this->resolveMachineQr(
                 $machine,
-                auth()->user()
+                $qrCodeService
             );
 
         $svg =
@@ -155,9 +155,9 @@ class MachineQrAdminController extends Controller
     );
 
     $qrCode =
-        $qrCodeService->getOrCreateForMachine(
+        $this->resolveMachineQr(
             $machine,
-            auth()->user()
+            $qrCodeService
         );
 
     $svg =
@@ -196,9 +196,9 @@ class MachineQrAdminController extends Controller
         );
 
         $qrCode =
-            $qrCodeService->getOrCreateForMachine(
+            $this->resolveMachineQr(
                 $machine,
-                auth()->user()
+                $qrCodeService
             );
 
         $svg =
@@ -235,6 +235,41 @@ class MachineQrAdminController extends Controller
             . $machine->id
             . '.pdf'
         );
+    }
+    protected function resolveMachineQr(
+        Machine $machine,
+        QrCodeService $qrCodeService
+    ): QrCode {
+        /*
+        * Ako QR već postoji, samo ga čitamo.
+        * Za to je dovoljno view pravo koje je
+        * controller već provjerio.
+        */
+        $qrCode =
+            $qrCodeService->findForMachine(
+                $machine
+            );
+
+        if ($qrCode) {
+            return $qrCode;
+        }
+
+        /*
+        * Ako QR još ne postoji, njegovo stvaranje
+        * predstavlja promjenu poslovnog zapisa.
+        *
+        * Zato korisnik mora imati update pravo.
+        */
+        $this->authorizeMachine(
+            $machine,
+            'update'
+        );
+
+        return $qrCodeService
+            ->getOrCreateForMachine(
+                $machine,
+                auth()->user()
+            );
     }
 
     protected function authorizeMachine(

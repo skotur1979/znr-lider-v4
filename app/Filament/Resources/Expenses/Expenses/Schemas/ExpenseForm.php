@@ -15,7 +15,8 @@ use Illuminate\Validation\ValidationException;
 class ExpenseForm
 {
     /**
-     * Vlasnik organizacije čije podatke forma smije koristiti.
+     * Vlasnik organizacije čije podatke
+     * forma smije koristiti.
      *
      * Organizacijski korisnik:
      * ownerId()
@@ -25,8 +26,9 @@ class ExpenseForm
      *
      * Superadmin ne kreira nove troškove.
      */
-    protected static function ownerId($record = null): ?int
-    {
+    protected static function ownerId(
+        $record = null
+    ): ?int {
         $user = Auth::user();
 
         if (! $user) {
@@ -34,7 +36,9 @@ class ExpenseForm
         }
 
         if ($user->isSuperAdmin()) {
-            return filled($record?->user_id)
+            return filled(
+                $record?->user_id
+            )
                 ? (int) $record->user_id
                 : null;
         }
@@ -50,9 +54,7 @@ class ExpenseForm
                 ->columns(2)
                 ->schema([
                     /*
-                     * ---------------------------------------------------------
-                     * Kategorija
-                     * ---------------------------------------------------------
+                     * KATEGORIJA
                      */
                     Select::make('category_id')
                         ->label('Kategorija')
@@ -60,9 +62,13 @@ class ExpenseForm
                         ->searchable()
                         ->preload()
                         ->options(
-                            function ($record): array {
+                            function (
+                                $record
+                            ): array {
                                 $ownerId =
-                                    static::ownerId($record);
+                                    static::ownerId(
+                                        $record
+                                    );
 
                                 if (! $ownerId) {
                                     return [];
@@ -73,8 +79,13 @@ class ExpenseForm
                                         'user_id',
                                         $ownerId
                                     )
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id')
+                                    ->orderBy(
+                                        'name'
+                                    )
+                                    ->pluck(
+                                        'name',
+                                        'id'
+                                    )
                                     ->toArray();
                             }
                         )
@@ -84,7 +95,9 @@ class ExpenseForm
                                 $record
                             ): array {
                                 $ownerId =
-                                    static::ownerId($record);
+                                    static::ownerId(
+                                        $record
+                                    );
 
                                 if (! $ownerId) {
                                     return [];
@@ -100,9 +113,14 @@ class ExpenseForm
                                         'like',
                                         "%{$search}%"
                                     )
-                                    ->orderBy('name')
+                                    ->orderBy(
+                                        'name'
+                                    )
                                     ->limit(50)
-                                    ->pluck('name', 'id')
+                                    ->pluck(
+                                        'name',
+                                        'id'
+                                    )
                                     ->toArray();
                             }
                         )
@@ -112,7 +130,9 @@ class ExpenseForm
                                 $record
                             ): ?string {
                                 $ownerId =
-                                    static::ownerId($record);
+                                    static::ownerId(
+                                        $record
+                                    );
 
                                 if (
                                     ! $ownerId
@@ -122,46 +142,51 @@ class ExpenseForm
                                 }
 
                                 return Category::query()
-                                    ->whereKey($value)
+                                    ->whereKey(
+                                        $value
+                                    )
                                     ->where(
                                         'user_id',
                                         $ownerId
                                     )
-                                    ->value('name');
+                                    ->value(
+                                        'name'
+                                    );
                             }
                         )
                         ->createOptionForm([
-                            TextInput::make('name')
+                            TextInput::make(
+                                'name'
+                            )
                                 ->label(
                                     'Naziv kategorije'
                                 )
                                 ->required()
-                                ->maxLength(255),
+                                ->maxLength(256),
                         ])
                         ->createOptionUsing(
                             function (
                                 array $data
                             ): int {
-                                $user = Auth::user();
+                                $user =
+                                    Auth::user();
 
                                 /*
-                                 * Superadmin standardno ne kreira
-                                 * poslovne kategorije organizacije.
+                                 * Superadmin standardno
+                                 * ne kreira poslovne
+                                 * kategorije organizacije.
                                  */
                                 if (
                                     ! $user
-                                    || $user->isSuperAdmin()
+                                    || $user
+                                        ->isSuperAdmin()
                                 ) {
                                     abort(403);
                                 }
 
                                 /*
-                                 * Categories je jedan od šest
-                                 * kontroliranih modula.
-                                 *
-                                 * Ako podkorisnik nema CREATE pravo,
-                                 * ne smije zaobići zabranu stvaranjem
-                                 * kategorije iz forme Troškova.
+                                 * Podkorisnik mora imati
+                                 * CREATE pravo za Categories.
                                  */
                                 if (
                                     ! CategoryResource::
@@ -177,31 +202,61 @@ class ExpenseForm
                                 }
 
                                 $ownerId =
-                                    (int) $user->ownerId();
+                                    (int)
+                                    $user->ownerId();
 
-                                if ($ownerId <= 0) {
+                                if (
+                                    $ownerId <= 0
+                                ) {
                                     abort(403);
+                                }
+
+                                $name = trim(
+                                    (string)
+                                    $data['name']
+                                );
+
+                                /*
+                                 * Ne dopuštamo duplikat
+                                 * iste kategorije za
+                                 * istog vlasnika.
+                                 */
+                                $existingCategory =
+                                    Category::query()
+                                        ->where(
+                                            'user_id',
+                                            $ownerId
+                                        )
+                                        ->whereRaw(
+                                            'LOWER(TRIM(name)) = LOWER(?)',
+                                            [$name]
+                                        )
+                                        ->first();
+
+                                if (
+                                    $existingCategory
+                                ) {
+                                    return (int)
+                                        $existingCategory
+                                            ->id;
                                 }
 
                                 $category =
                                     Category::create([
                                         'name' =>
-                                            trim(
-                                                (string) $data['name']
-                                            ),
+                                            $name,
 
                                         'user_id' =>
                                             $ownerId,
                                     ]);
 
-                                return (int) $category->id;
+                                return (int)
+                                    $category->id;
                             }
                         ),
 
                     /*
-                     * ---------------------------------------------------------
-                     * Budžet / godina
-                     * ---------------------------------------------------------
+                     * BUDŽET / GODINA
                      */
                     Select::make('budget_id')
                         ->label('Godina')
@@ -209,9 +264,13 @@ class ExpenseForm
                         ->searchable()
                         ->preload()
                         ->options(
-                            function ($record): array {
+                            function (
+                                $record
+                            ): array {
                                 $ownerId =
-                                    static::ownerId($record);
+                                    static::ownerId(
+                                        $record
+                                    );
 
                                 if (! $ownerId) {
                                     return [];
@@ -222,7 +281,9 @@ class ExpenseForm
                                         'user_id',
                                         $ownerId
                                     )
-                                    ->orderByDesc('godina')
+                                    ->orderByDesc(
+                                        'godina'
+                                    )
                                     ->pluck(
                                         'godina',
                                         'id'
@@ -236,7 +297,9 @@ class ExpenseForm
                                 $record
                             ): ?string {
                                 $ownerId =
-                                    static::ownerId($record);
+                                    static::ownerId(
+                                        $record
+                                    );
 
                                 if (
                                     ! $ownerId
@@ -247,23 +310,27 @@ class ExpenseForm
 
                                 $year =
                                     Budget::query()
-                                        ->whereKey($value)
+                                        ->whereKey(
+                                            $value
+                                        )
                                         ->where(
                                             'user_id',
                                             $ownerId
                                         )
-                                        ->value('godina');
+                                        ->value(
+                                            'godina'
+                                        );
 
-                                return filled($year)
+                                return filled(
+                                    $year
+                                )
                                     ? (string) $year
                                     : null;
                             }
                         ),
 
                     /*
-                     * ---------------------------------------------------------
-                     * Mjesec
-                     * ---------------------------------------------------------
+                     * MJESEC
                      */
                     Select::make('mjesec')
                         ->label('Mjesec')
@@ -273,43 +340,46 @@ class ExpenseForm
                         ->required(),
 
                     /*
-                     * ---------------------------------------------------------
-                     * Naziv troška
-                     * ---------------------------------------------------------
+                     * NAZIV TROŠKA
                      */
-                    TextInput::make('naziv_troska')
-                        ->label('Naziv troška')
+                    TextInput::make(
+                        'naziv_troska'
+                    )
+                        ->label(
+                            'Naziv troška'
+                        )
                         ->required()
                         ->maxLength(255)
                         ->columnSpanFull(),
 
                     /*
-                     * ---------------------------------------------------------
-                     * Iznos
-                     * ---------------------------------------------------------
+                     * IZNOS
                      */
                     TextInput::make('iznos')
                         ->label('Iznos (€)')
                         ->numeric()
-                        ->required(),
+                        ->required()
+                        ->minValue(0),
 
                     /*
-                     * ---------------------------------------------------------
-                     * Dobavljač
-                     * ---------------------------------------------------------
+                     * DOBAVLJAČ
                      */
-                    TextInput::make('dobavljac')
+                    TextInput::make(
+                        'dobavljac'
+                    )
                         ->label('Dobavljač')
-                        ->maxLength(255)
+                        ->maxLength(191)
                         ->nullable(),
 
                     /*
-                     * ---------------------------------------------------------
-                     * Realizirano
-                     * ---------------------------------------------------------
+                     * REALIZIRANO
                      */
-                    Toggle::make('realizirano')
-                        ->label('Realizirano')
+                    Toggle::make(
+                        'realizirano'
+                    )
+                        ->label(
+                            'Realizirano'
+                        )
                         ->default(true),
                 ]),
         ];

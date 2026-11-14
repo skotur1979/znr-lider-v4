@@ -39,47 +39,84 @@ class ChemicalForm
                                         TextInput::make('product_name')
                                             ->label('Ime proizvoda')
                                             ->required()
-                                            ->maxLength(255),
+                                            ->maxLength(191),
 
                                         TextInput::make('cas_number')
                                             ->label('CAS broj')
-                                            ->maxLength(50),
+                                            ->nullable()
+                                            ->maxLength(191),
 
                                         TextInput::make('ufi_number')
                                             ->label('UFI broj')
-                                            ->maxLength(255)
                                             ->nullable()
+                                            ->maxLength(191)
                                             ->dehydrateStateUsing(
-                                                fn ($state) =>
-                                                    trim((string) $state) === '/'
+                                                function ($state) {
+                                                    $state = trim(
+                                                        (string) $state
+                                                    );
+
+                                                    return in_array(
+                                                        $state,
+                                                        [
+                                                            '',
+                                                            '/',
+                                                            '-',
+                                                        ],
+                                                        true
+                                                    )
                                                         ? null
-                                                        : $state
+                                                        : $state;
+                                                }
                                             ),
 
                                         TextInput::make('usage_location')
                                             ->label('Mjesto upotrebe')
                                             ->required()
-                                            ->maxLength(255),
+                                            ->maxLength(191),
                                     ]),
                             ]),
 
                         Tab::make('Opasnosti')
                             ->schema([
-                                Section::make('Označavanje opasnosti')
+                                Section::make(
+                                    'Označavanje opasnosti'
+                                )
                                     ->columns(2)
                                     ->schema([
-                                        Select::make('hazard_pictograms')
-                                            ->label('Piktogrami opasnosti')
+                                        Select::make(
+                                            'hazard_pictograms'
+                                        )
+                                            ->label(
+                                                'Piktogrami opasnosti'
+                                            )
                                             ->options([
-                                                'GHS01' => 'GHS01 – Eksplozivno',
-                                                'GHS02' => 'GHS02 – Zapaljivo',
-                                                'GHS03' => 'GHS03 – Oksidirajuće',
-                                                'GHS04' => 'GHS04 – Plin pod tlakom',
-                                                'GHS05' => 'GHS05 – Korozivno',
-                                                'GHS06' => 'GHS06 – Akutna toksičnost',
-                                                'GHS07' => 'GHS07 – Nadražujuće / štetno',
-                                                'GHS08' => 'GHS08 – Ozbiljna opasnost za zdravlje',
-                                                'GHS09' => 'GHS09 – Opasno za okoliš',
+                                                'GHS01' =>
+                                                    'GHS01 – Eksplozivno',
+
+                                                'GHS02' =>
+                                                    'GHS02 – Zapaljivo',
+
+                                                'GHS03' =>
+                                                    'GHS03 – Oksidirajuće',
+
+                                                'GHS04' =>
+                                                    'GHS04 – Plin pod tlakom',
+
+                                                'GHS05' =>
+                                                    'GHS05 – Korozivno',
+
+                                                'GHS06' =>
+                                                    'GHS06 – Akutna toksičnost',
+
+                                                'GHS07' =>
+                                                    'GHS07 – Nadražujuće / štetno',
+
+                                                'GHS08' =>
+                                                    'GHS08 – Ozbiljna opasnost za zdravlje',
+
+                                                'GHS09' =>
+                                                    'GHS09 – Opasno za okoliš',
                                             ])
                                             ->multiple()
                                             ->searchable()
@@ -98,39 +135,57 @@ class ChemicalForm
                                                     Select $component,
                                                     mixed $state
                                                 ): void {
-                                                    if (! is_array($state)) {
-                                                        $state = filled($state)
-                                                            ? [$state]
-                                                            : [];
+                                                    if (
+                                                        ! is_array(
+                                                            $state
+                                                        )
+                                                    ) {
+                                                        $state =
+                                                            filled(
+                                                                $state
+                                                            )
+                                                                ? [
+                                                                    $state,
+                                                                ]
+                                                                : [];
                                                     }
 
-                                                    $normalized = collect($state)
-                                                        ->flatMap(
-                                                            function ($value): array {
-                                                                return preg_split(
-                                                                    '/\s*[,;]\s*/',
-                                                                    (string) $value
-                                                                ) ?: [];
-                                                            }
+                                                    $normalized =
+                                                        collect(
+                                                            $state
                                                         )
-                                                        ->map(
-                                                            fn ($value) =>
-                                                                strtoupper(
-                                                                    trim(
-                                                                        (string) $value
-                                                                    )
-                                                                )
-                                                        )
-                                                        ->filter(
-                                                            fn ($value) =>
-                                                                preg_match(
-                                                                    '/^GHS0[1-9]$/',
+                                                            ->flatMap(
+                                                                function (
                                                                     $value
-                                                                )
-                                                        )
-                                                        ->unique()
-                                                        ->values()
-                                                        ->all();
+                                                                ): array {
+                                                                    return preg_split(
+                                                                        '/\s*[,;]\s*/',
+                                                                        (string) $value
+                                                                    ) ?: [];
+                                                                }
+                                                            )
+                                                            ->map(
+                                                                fn (
+                                                                    $value
+                                                                ) =>
+                                                                    strtoupper(
+                                                                        trim(
+                                                                            (string) $value
+                                                                        )
+                                                                    )
+                                                            )
+                                                            ->filter(
+                                                                fn (
+                                                                    $value
+                                                                ) =>
+                                                                    preg_match(
+                                                                        '/^GHS0[1-9]$/',
+                                                                        $value
+                                                                    )
+                                                            )
+                                                            ->unique()
+                                                            ->values()
+                                                            ->all();
 
                                                     $component->state(
                                                         $normalized
@@ -138,16 +193,31 @@ class ChemicalForm
                                                 }
                                             )
                                             ->dehydrateStateUsing(
-                                                function (mixed $state): array {
-                                                    if (! is_array($state)) {
-                                                        $state = filled($state)
-                                                            ? [$state]
-                                                            : [];
+                                                function (
+                                                    mixed $state
+                                                ): array {
+                                                    if (
+                                                        ! is_array(
+                                                            $state
+                                                        )
+                                                    ) {
+                                                        $state =
+                                                            filled(
+                                                                $state
+                                                            )
+                                                                ? [
+                                                                    $state,
+                                                                ]
+                                                                : [];
                                                     }
 
-                                                    return collect($state)
+                                                    return collect(
+                                                        $state
+                                                    )
                                                         ->flatMap(
-                                                            function ($value): array {
+                                                            function (
+                                                                $value
+                                                            ): array {
                                                                 return preg_split(
                                                                     '/\s*[,;]\s*/',
                                                                     (string) $value
@@ -155,7 +225,9 @@ class ChemicalForm
                                                             }
                                                         )
                                                         ->map(
-                                                            fn ($value) =>
+                                                            fn (
+                                                                $value
+                                                            ) =>
                                                                 strtoupper(
                                                                     trim(
                                                                         (string) $value
@@ -163,7 +235,9 @@ class ChemicalForm
                                                                 )
                                                         )
                                                         ->filter(
-                                                            fn ($value) =>
+                                                            fn (
+                                                                $value
+                                                            ) =>
                                                                 preg_match(
                                                                     '/^GHS0[1-9]$/',
                                                                     $value
@@ -176,8 +250,12 @@ class ChemicalForm
                                             )
                                             ->columnSpanFull(),
 
-                                        Select::make('h_statements')
-                                            ->label('H oznake (opasnosti)')
+                                        Select::make(
+                                            'h_statements'
+                                        )
+                                            ->label(
+                                                'H oznake (opasnosti)'
+                                            )
                                             ->options(
                                                 HazardStatement::list()
                                             )
@@ -187,7 +265,9 @@ class ChemicalForm
                                             ->default([])
                                             ->columnSpanFull(),
 
-                                        Select::make('p_statements')
+                                        Select::make(
+                                            'p_statements'
+                                        )
                                             ->label(
                                                 'P oznake (mjere opreza)'
                                             )
@@ -202,7 +282,9 @@ class ChemicalForm
                                     ]),
                             ]),
 
-                        Tab::make('Količine i izloženost')
+                        Tab::make(
+                            'Količine i izloženost'
+                        )
                             ->schema([
                                 Section::make(
                                     'Količine, granične vrijednosti i STL'
@@ -216,19 +298,23 @@ class ChemicalForm
                                                 'Godišnje količine (kg/l)'
                                             )
                                             ->nullable()
-                                            ->maxLength(50),
+                                            ->maxLength(191),
 
-                                        TextInput::make('gvi_kgvi')
-                                            ->label('GVI / KGVI')
+                                        TextInput::make(
+                                            'gvi_kgvi'
+                                        )
+                                            ->label(
+                                                'GVI / KGVI'
+                                            )
                                             ->nullable()
-                                            ->maxLength(50),
+                                            ->maxLength(191),
 
                                         TextInput::make('voc')
                                             ->label(
                                                 'Hlapljivi organski spojevi (VOC)'
                                             )
                                             ->nullable()
-                                            ->maxLength(50),
+                                            ->maxLength(191),
 
                                         $date(
                                             'stl_hzjz',
@@ -247,9 +333,47 @@ class ChemicalForm
                                             ->label(
                                                 'Dodaj priloge (max. 10, do 30 MB po datoteci)'
                                             )
-                                            ->directory('chemicals')
+                                            ->directory(
+                                                function (
+                                                    $record
+                                                ): string {
+                                                    $user =
+                                                        auth()
+                                                            ->user();
+
+                                                    $ownerId =
+                                                        $user?->isSuperAdmin()
+                                                            ? $record?->user_id
+                                                            : $user?->ownerId();
+
+                                                    /*
+                                                     * Novi zapisi organizacijskog
+                                                     * korisnika uvijek imaju ownerId.
+                                                     *
+                                                     * Legacy NULL-owner zapis
+                                                     * superadmin može pregledavati,
+                                                     * ali upload je na takvom
+                                                     * zapisu onemogućen.
+                                                     */
+                                                    if (
+                                                        filled(
+                                                            $ownerId
+                                                        )
+                                                        && (int) $ownerId > 0
+                                                    ) {
+                                                        return
+                                                            'chemicals/'
+                                                            . (int) $ownerId;
+                                                    }
+
+                                                    return
+                                                        'chemicals/legacy';
+                                                }
+                                            )
                                             ->disk('public')
-                                            ->visibility('public')
+                                            ->visibility(
+                                                'public'
+                                            )
                                             ->acceptedFileTypes([
                                                 'application/pdf',
                                                 'application/msword',
@@ -262,39 +386,53 @@ class ChemicalForm
                                                 'image/webp',
                                                 'application/zip',
                                                 'application/x-rar-compressed',
+                                                'application/vnd.rar',
                                             ])
                                             ->maxSize(30720)
                                             ->multiple()
                                             ->maxFiles(10)
-                                            ->preserveFilenames()
+                                            /*
+                                             * Namjerno nema
+                                             * preserveFilenames().
+                                             *
+                                             * Time izbjegavamo koliziju
+                                             * jednakih naziva datoteka.
+                                             */
                                             ->openable()
                                             ->downloadable()
+                                            ->disabled(
+                                                fn (
+                                                    $record
+                                                ): bool =>
+                                                    $record !== null
+                                                    && blank(
+                                                        $record->user_id
+                                                    )
+                                            )
                                             ->helperText(
                                                 function (
                                                     $get,
                                                     $record
                                                 ) {
                                                     $user =
-                                                        auth()->user();
+                                                        auth()
+                                                            ->user();
 
                                                     if (! $user) {
                                                         return null;
                                                     }
 
-                                                    /*
-                                                     * Organizacijski korisnik koristi
-                                                     * svoj ownerId.
-                                                     *
-                                                     * Kod superadmin pregleda/edita
-                                                     * vlasnika uzimamo iz zapisa.
-                                                     */
                                                     $ownerId =
-                                                        $user->isSuperAdmin()
+                                                        $user
+                                                            ->isSuperAdmin()
                                                             ? $record?->user_id
                                                             : $user->ownerId();
 
-                                                    if (! $ownerId) {
-                                                        return null;
+                                                    if (
+                                                        ! $ownerId
+                                                    ) {
+                                                        return
+                                                            'Legacy zapis bez vlasnika organizacije – dodavanje novih priloga nije dopušteno.';
                                                     }
 
                                                     return
@@ -317,20 +455,26 @@ class ChemicalForm
                                                         \Closure $fail
                                                     ) use (
                                                         $record
-                                                    ) {
+                                                    ): void {
                                                         $user =
-                                                            auth()->user();
+                                                            auth()
+                                                                ->user();
 
-                                                        if (! $user) {
+                                                        if (
+                                                            ! $user
+                                                        ) {
                                                             return;
                                                         }
 
                                                         $ownerId =
-                                                            $user->isSuperAdmin()
+                                                            $user
+                                                                ->isSuperAdmin()
                                                                 ? $record?->user_id
                                                                 : $user->ownerId();
 
-                                                        if (! $ownerId) {
+                                                        if (
+                                                            ! $ownerId
+                                                        ) {
                                                             return;
                                                         }
 

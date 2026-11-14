@@ -8,7 +8,6 @@ use App\Models\Category;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -51,7 +50,56 @@ class CategoryResource extends BaseResource
                     TextInput::make('name')
                         ->label('Naziv')
                         ->required()
-                        ->maxLength(255),
+                        ->maxLength(256)
+                        ->rule(
+                            function (?Category $record) {
+                                return function (
+                                    string $attribute,
+                                    mixed $value,
+                                    \Closure $fail
+                                ) use ($record): void {
+                                    $ownerId =
+                                        $record?->user_id
+                                        ?? static::defaultUserId();
+
+                                    if (! $ownerId) {
+                                        $fail(
+                                            'Nije moguće odrediti organizaciju korisnika.'
+                                        );
+
+                                        return;
+                                    }
+
+                                    $name =
+                                        trim(
+                                            (string) $value
+                                        );
+
+                                    $query =
+                                        Category::query()
+                                            ->where(
+                                                'user_id',
+                                                $ownerId
+                                            )
+                                            ->whereRaw(
+                                                'LOWER(TRIM(name)) = LOWER(?)',
+                                                [$name]
+                                            );
+
+                                    if ($record) {
+                                        $query->whereKeyNot(
+                                            $record->getKey()
+                                        );
+                                    }
+
+                                    if ($query->exists()) {
+                                        $fail(
+                                            'Kategorija s ovim nazivom već postoji.'
+                                        );
+                                    }
+                                };
+                            }
+                        ),
                 ]),
         ]);
     }
@@ -87,54 +135,76 @@ class CategoryResource extends BaseResource
                      */
                     Action::make('editCategory')
                         ->label('Uredi')
-                        ->icon(Heroicon::PencilSquare)
+                        ->icon(
+                            Heroicon::PencilSquare
+                        )
                         ->color('warning')
-                        ->action(function (Category $record) {
-                            if (
-                                ! static::allowsModulePermission(
-                                    'update'
-                                )
+                        ->action(
+                            function (
+                                Category $record
                             ) {
-                                return;
-                            }
+                                if (
+                                    ! static::
+                                        allowsModulePermission(
+                                            'update'
+                                        )
+                                ) {
+                                    return;
+                                }
 
-                            return redirect(
-                                static::getUrl('edit', [
-                                    'record' => $record,
-                                ])
-                            );
-                        }),
+                                return redirect(
+                                    static::getUrl(
+                                        'edit',
+                                        [
+                                            'record' =>
+                                                $record,
+                                        ]
+                                    )
+                                );
+                            }
+                        ),
 
                     DeleteAction::make()
                         ->label('Obriši')
                         ->color('danger')
                         ->requiresConfirmation()
+                        ->disabled(
+                            fn (
+                                Category $record
+                            ): bool =>
+                                $record
+                                    ->miscellaneouses()
+                                    ->exists()
+                                || $record
+                                    ->expenses()
+                                    ->exists()
+                        )
+                        ->tooltip(
+                            fn (
+                                Category $record
+                            ): ?string =>
+                                (
+                                    $record
+                                        ->miscellaneouses()
+                                        ->exists()
+                                    || $record
+                                        ->expenses()
+                                        ->exists()
+                                )
+                                    ? 'Kategoriju nije moguće obrisati jer se koristi u evidenciji.'
+                                    : null
+                        )
                         ->before(
-                            static::beforeModulePermission(
-                                'delete'
-                            )
+                            static::
+                                beforeModulePermission(
+                                    'delete'
+                                )
                         ),
                 ])
-                    ->icon(Heroicon::EllipsisVertical)
+                    ->icon(
+                        Heroicon::EllipsisVertical
+                    )
                     ->label(''),
-            ])
-            ->bulkActions([
-                DeleteBulkAction::make()
-                    ->label('Obriši označeno')
-                    ->requiresConfirmation()
-                    ->modalHeading(
-                        'Obriši odabrane kategorije'
-                    )
-                    ->modalDescription(
-                        'Jesi li siguran/a da želiš obrisati odabrane kategorije?'
-                    )
-                    ->modalSubmitActionLabel('Obriši')
-                    ->modalCancelActionLabel('Odustani')
-                    ->before(
-                        static::beforeModulePermission(
-                            'delete'
-                        )
-                    ),
             ]);
     }
 
@@ -142,13 +212,19 @@ class CategoryResource extends BaseResource
     {
         return [
             'index' =>
-                Pages\ListCategories::route('/'),
+                Pages\ListCategories::route(
+                    '/'
+                ),
 
             'create' =>
-                Pages\CreateCategory::route('/create'),
+                Pages\CreateCategory::route(
+                    '/create'
+                ),
 
             'view' =>
-                Pages\ViewCategory::route('/{record}'),
+                Pages\ViewCategory::route(
+                    '/{record}'
+                ),
 
             'edit' =>
                 Pages\EditCategory::route(

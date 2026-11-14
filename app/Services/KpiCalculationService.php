@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Incident;
 use App\Models\Inspection;
-use App\Models\InspectionFinding;
 use App\Models\Kpi;
 use Illuminate\Support\Facades\DB;
 use App\Models\KpiValue;
@@ -509,10 +508,11 @@ class KpiCalculationService
                         - (float) $compare;
                 }
 
-                $target = $kpi->effectiveTargetValue(
-                    $ownerId,
+                $target =
+                $kpi->effectiveTargetValueForPeriod(
                     $month,
-                    $year
+                    $year,
+                    $ownerId
                 );
 
                 return [
@@ -525,11 +525,12 @@ class KpiCalculationService
                     'difference' => $difference,
                     'delta' => $difference,
                     'target' => $target,
-                    'status' => $kpi->evaluateStatus(
+                    'status' =>
+                    $kpi->evaluateStatusForPeriod(
                         $current,
-                        $ownerId,
                         $month,
-                        $year
+                        $year,
+                        $ownerId
                     ),
                     'formatted_current' =>
                         $kpi->formatNumberOnly(
@@ -586,12 +587,14 @@ class KpiCalculationService
                 }
 
                 $current =
-                    count($currentValues) > 0
-                        ? $this->yearlyAggregateValue(
-                            $kpi,
-                            $currentValues
-                        )
-                        : null;
+                    $current =
+                        count($currentValues) > 0
+                            ? $this->yearlyAggregateValue(
+                                $kpi,
+                                $currentValues,
+                                $year
+                            )
+                            : null;
 
                 $compare = null;
 
@@ -617,10 +620,11 @@ class KpiCalculationService
 
                     if (count($compareValues) > 0) {
                         $compare =
-                            $this->yearlyAggregateValue(
-                                $kpi,
-                                $compareValues
-                            );
+                        $this->yearlyAggregateValue(
+                            $kpi,
+                            $compareValues,
+                            $compareYear
+                        );
                     }
                 }
 
@@ -635,11 +639,12 @@ class KpiCalculationService
                         - (float) $compare;
                 }
 
-                $target = $kpi->effectiveTargetValue(
-                    $ownerId,
-                    12,
-                    $year
-                );
+                $target =
+                    $kpi->effectiveTargetValueForPeriod(
+                        12,
+                        $year,
+                        $ownerId
+                    );
 
                 return [
                     'id' => $kpi->id,
@@ -651,12 +656,13 @@ class KpiCalculationService
                     'difference' => $difference,
                     'delta' => $difference,
                     'target' => $target,
-                    'status' => $kpi->evaluateStatus(
-                        $current,
-                        $ownerId,
-                        12,
-                        $year
-                    ),
+                    'status' =>
+                        $kpi->evaluateStatusForPeriod(
+                            $current,
+                            12,
+                            $year,
+                            $ownerId
+                        ),
                     'formatted_current' =>
                         $kpi->formatNumberOnly(
                             $current
@@ -680,21 +686,50 @@ class KpiCalculationService
 
     protected function yearlyAggregateValue(
         Kpi $kpi,
-        array $values
+        array $values,
+        int $year
     ): ?float {
         if (empty($values)) {
             return null;
         }
 
+        $sourceKey = (string) $kpi->source_key;
+
         /*
-         * Pokazatelji koji predstavljaju količinu ili broj
-         * kroz godinu zbrajaju se.
-         *
-         * AFR/ASR i slični indeksi ne smiju se zbrajati.
-         */
+        * Snapshot KPI-jevi predstavljaju stanje na kraju
+        * posljednjeg mjeseca za koji postoji vrijednost.
+        *
+        * Njihove mjesečne vrijednosti ne smiju se zbrajati.
+        */
         if (
             in_array(
-                $kpi->source_key,
+                $sourceKey,
+                [
+                    'days_without_lta',
+                    'corrective_actions_open',
+                    'corrective_actions_in_progress',
+                    'corrective_actions_delay_days',
+                ],
+                true
+            )
+        ) {
+            $lastKey = array_key_last($values);
+
+            return round(
+                (float) $values[$lastKey],
+                4
+            );
+        }
+
+        /*
+        * AFR i ASR se na godišnjoj razini ponovno računaju
+        * iz godišnjih osnovnih podataka.
+        *
+        * Ne smije se koristiti prosjek mjesečnih stopa.
+        */
+        if (
+            in_array(
+                $sourceKey,
                 [
                     'afr',
                     'asr',
@@ -702,13 +737,67 @@ class KpiCalculationService
                 true
             )
         ) {
+            $workedHours = 0.0;
+            $ltaCount = 0.0;
+            $lostDays = 0.0;
+
+            for ($month = 1; $month <= 12; $month++) {
+                $monthlyHours = $this->workedHours(
+                    $month,
+                    $year
+                );
+
+                if (
+                    $monthlyHours !== null
+                    && $monthlyHours > 0
+                ) {
+                    $workedHours += $monthlyHours;
+                }
+
+                if ($sourceKey === 'afr') {
+                    $ltaCount += $this->ltaCount(
+                        $month,
+                        $year
+                    );
+                }
+
+                if ($sourceKey === 'asr') {
+                    $lostDays += $this->ltaLostDays(
+                        $month,
+                        $year
+                    );
+                }
+            }
+
+            if ($workedHours <= 0) {
+                return null;
+            }
+
+            $numerator = $sourceKey === 'afr'
+                ? $ltaCount
+                : $lostDays;
+
             return round(
-                array_sum($values)
-                / count($values),
+                ($numerator * 1000000)
+                / $workedHours,
                 4
             );
         }
 
+        /*
+        * KPI-jevi koji predstavljaju broj ili količinu
+        * tijekom godine zbrajaju se.
+        *
+        * Primjeri:
+        * - LTA
+        * - izgubljeni dani
+        * - Near Miss
+        * - negativna zapažanja
+        * - nadzori
+        * - zatvorene korektivne radnje
+        * - količine otpada
+        * - ručni KPI-jevi koji se zbrajaju
+        */
         return round(
             array_sum($values),
             4
@@ -750,18 +839,18 @@ class KpiCalculationService
                     $values[$month] = $value;
 
                     $targets[$month] =
-                        $kpi->effectiveTargetValue(
-                            $ownerId,
+                        $kpi->effectiveTargetValueForPeriod(
                             $month,
-                            $year
+                            $year,
+                            $ownerId
                         );
 
                     $statuses[$month] =
-                        $kpi->evaluateStatus(
+                        $kpi->evaluateStatusForPeriod(
                             $value,
-                            $ownerId,
                             $month,
-                            $year
+                            $year,
+                            $ownerId
                         );
                 }
 
@@ -779,18 +868,28 @@ class KpiCalculationService
                     )
                     : null;
 
-                $total = $existingValues->isNotEmpty()
-                    ? round(
-                        (float) $existingValues->sum(),
-                        4
+                /*
+                * Godišnja vrijednost mora koristiti istu poslovnu
+                * logiku kao godišnji dashboard:
+                *
+                * - sum za količine/brojeve
+                * - latest za snapshot KPI-jeve
+                * - godišnju formulu za AFR/ASR
+                */
+                $yearlyValue = $existingValues->isNotEmpty()
+                    ? $this->yearlyAggregateValue(
+                        $kpi,
+                        $existingValues->all(),
+                        $year
                     )
                     : null;
 
-                $target = $kpi->effectiveTargetValue(
-                    $ownerId,
-                    12,
-                    $year
-                );
+                                $target =
+                                    $kpi->effectiveTargetValueForPeriod(
+                                        12,
+                                        $year,
+                                        $ownerId
+                                    );
 
                 return [
                     'id' => $kpi->id,
@@ -804,9 +903,24 @@ class KpiCalculationService
                     'values' => $values,
                     'statuses' => $statuses,
                     'targets' => $targets,
+
                     'average' => $average,
-                    'total' => $total,
+
+                    'yearly_value' => $yearlyValue,
+
+                    /*
+                    * Kompatibilni alias za postojeće
+                    * prikaze/exporte.
+                    */
+                    'total' => $yearlyValue,
+
                     'target' => $target,
+
+                    'formatted_yearly_value' =>
+                        $kpi->formatNumberOnly(
+                            $yearlyValue
+                        ),
+
                     'formatted_target' =>
                         $kpi->formatNumberOnly(
                             $target
@@ -830,9 +944,16 @@ class KpiCalculationService
         $ownerId = $this->resolveOwnerId();
 
         /*
-         * Superadmin vidi globalne KPI definicije.
-         */
-        if ($this->isSuperAdmin()) {
+        * Superadmin bez prisilno zadane organizacije
+        * vidi samo globalne KPI definicije.
+        *
+        * Ako je forcedOwnerId postavljen preko generateForOwner(),
+        * moramo nastaviti kroz organizacijsku shadow/fallback logiku.
+        */
+        if (
+            $this->forcedOwnerId === null
+            && $this->isSuperAdmin()
+        ) {
             return Kpi::query()
                 ->whereNull('user_id');
         }
@@ -1063,12 +1184,14 @@ class KpiCalculationService
             ]
         );
 
-        if ($typeColumn) {
+        if (! $typeColumn) {
+                return 0.0;
+            }
+
             $query->whereRaw(
                 'LOWER(TRIM(' . $typeColumn . ')) = ?',
                 ['lta']
             );
-        }
 
         $lostDaysColumn =
             $this->firstExistingColumn(
@@ -1953,62 +2076,81 @@ class KpiCalculationService
             return null;
         }
 
-        $kpiIds = Kpi::query()
-            ->where(function (
-                Builder $query
-            ) use (
-                $ownerId
-            ): void {
-                $query
-                    ->whereNull('user_id')
-                    ->orWhere(
-                        'user_id',
-                        $ownerId
-                    );
-            })
-            ->where(function (
-                Builder $query
-            ) use (
-                $sourceKey,
-                $names
-            ): void {
-                $hasCondition = false;
+        if (
+            $sourceKey === null
+            && empty($names)
+        ) {
+            return null;
+        }
 
-                if ($sourceKey !== null) {
-                    $query->where(
-                        'source_key',
-                        $sourceKey
-                    );
+        /*
+        * Prvo pronađemo KPI definicije koje odgovaraju
+        * traženom source_key-u ili nazivu.
+        */
+        $definitions = Kpi::query()
+            ->where(
+                function (
+                    Builder $query
+                ) use (
+                    $sourceKey,
+                    $names
+                ): void {
+                    if (
+                        $sourceKey !== null
+                        && ! empty($names)
+                    ) {
+                        $query
+                            ->where(
+                                'source_key',
+                                $sourceKey
+                            )
+                            ->orWhereIn(
+                                'name',
+                                $names
+                            );
 
-                    $hasCondition = true;
-                }
-
-                if (! empty($names)) {
-                    if ($hasCondition) {
-                        $query->orWhereIn(
-                            'name',
-                            $names
-                        );
-                    } else {
-                        $query->whereIn(
-                            'name',
-                            $names
-                        );
+                        return;
                     }
+
+                    if ($sourceKey !== null) {
+                        $query->where(
+                            'source_key',
+                            $sourceKey
+                        );
+
+                        return;
+                    }
+
+                    $query->whereIn(
+                        'name',
+                        $names
+                    );
                 }
-            })
+            );
+
+        /*
+        * Organizacijska definicija ima prednost.
+        *
+        * Ako postoji lokalna kopija KPI-ja,
+        * globalna definicija više nije fallback.
+        */
+        $localIds = (clone $definitions)
+            ->where(
+                'user_id',
+                $ownerId
+            )
             ->pluck('id');
+
+        $kpiIds = $localIds->isNotEmpty()
+            ? $localIds
+            : (clone $definitions)
+                ->whereNull('user_id')
+                ->pluck('id');
 
         if ($kpiIds->isEmpty()) {
             return null;
         }
 
-        /*
-         * Ako postoje i globalni i organizacijski KPI,
-         * tražimo stvarnu vrijednost organizacije.
-         *
-         * KpiValue ionako nosi user_id organizacije.
-         */
         $value = KpiValue::query()
             ->where(
                 'user_id',
@@ -2027,64 +2169,91 @@ class KpiCalculationService
                 $year
             )
             ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->first();
 
         return $value?->value !== null
             ? (float) $value->value
             : null;
     }
-        /**
+    /**
      * Neopasni otpad predan u odabranom mjesecu.
+     *
+     * Miješani komunalni otpad 20 03 01 vodi se zasebno
+     * i zato se ne uključuje u ovaj KPI.
      */
     protected function nonHazardousWasteKg(
         int $month,
         int $year
     ): float {
-        return $this->wasteKgByType(
+        return $this->sumOntoWasteOutput(
             $month,
             $year,
-            'non_hazardous'
+            function (
+                string $normalizedCode,
+                bool $hasStar
+            ): bool {
+                return ! $hasStar
+                    && $normalizedCode !== '200301';
+            }
         );
     }
 
     /**
      * Opasni otpad predan u odabranom mjesecu.
+     *
+     * Zvjezdica u ključnom broju otpada označava
+     * opasni otpad.
      */
     protected function hazardousWasteKg(
         int $month,
         int $year
     ): float {
-        return $this->wasteKgByType(
+        return $this->sumOntoWasteOutput(
             $month,
             $year,
-            'hazardous'
+            function (
+                string $normalizedCode,
+                bool $hasStar
+            ): bool {
+                return $hasStar;
+            }
         );
     }
 
     /**
-     * Miješani komunalni otpad predan u odabranom mjesecu.
+     * Miješani komunalni otpad – ključni broj 20 03 01.
      */
     protected function municipalWasteKg(
         int $month,
         int $year
     ): float {
-        return $this->wasteKgByType(
+        return $this->sumOntoWasteOutput(
             $month,
             $year,
-            'municipal'
+            function (
+                string $normalizedCode,
+                bool $hasStar
+            ): bool {
+                return ! $hasStar
+                    && $normalizedCode === '200301';
+            }
         );
     }
 
     /**
      * Zbraja izlaz otpada iz ONTO evidencije.
      *
-     * Funkcija je namjerno tolerantna na različite nazive
-     * stupaca kako bi radila i sa starijim verzijama modula.
+     * Tenant se određuje preko roditeljskog OntoRecord zapisa,
+     * jer OntoEntry pripada ONTO obrascu preko onto_record_id.
+     *
+     * Vrsta otpada također se određuje preko:
+     * OntoEntry -> OntoRecord -> WasteType.
      */
-    protected function wasteKgByType(
+    protected function sumOntoWasteOutput(
         int $month,
         int $year,
-        string $type
+        callable $filter
     ): float {
         $ownerId = $this->resolveOwnerId();
 
@@ -2092,164 +2261,104 @@ class KpiCalculationService
             return 0.0;
         }
 
-        /*
-         * Ako projekt nema ONTO model, KPI ne smije
-         * srušiti cijeli Dashboard.
-         */
-        $modelClass = $this->resolveOntoModelClass();
-
-        if (! $modelClass) {
+        if (
+            ! class_exists(OntoEntry::class)
+            || ! Schema::hasTable('onto_entries')
+        ) {
             return 0.0;
         }
-
-        $model = new $modelClass();
-        $table = $model->getTable();
 
         [$from, $to] = $this->monthRange(
             $month,
             $year
         );
 
-        /** @var Builder $query */
-        $query = $modelClass::query();
-
-        $this->applyOwnerScope(
-            $query,
-            $table,
-            $ownerId
-        );
-
-        $dateColumn = $this->firstExistingColumn(
-            $table,
-            [
+        $query = OntoEntry::query()
+            ->with([
+                'ontoRecord.wasteType',
+            ])
+            ->whereHas(
+                'ontoRecord',
+                function (
+                    Builder $query
+                ) use (
+                    $ownerId
+                ): void {
+                    $query->where(
+                        'user_id',
+                        $ownerId
+                    );
+                }
+            )
+            ->whereBetween(
                 'entry_date',
-                'handover_date',
-                'date',
-                'created_at',
-            ]
-        );
-
-        if (! $dateColumn) {
-            return 0.0;
-        }
-
-        $query->whereBetween(
-            $dateColumn,
-            [
-                $from,
-                $to,
-            ]
-        );
+                [
+                    $from,
+                    $to,
+                ]
+            );
 
         /*
-         * U ONTO evidenciji KPI pratimo izlaz otpada.
-         */
-        $outputColumn = $this->firstExistingColumn(
-            $table,
-            [
-                'output_kg',
-                'quantity_kg',
-                'weight_kg',
-                'amount_kg',
-            ]
-        );
-
-        if (! $outputColumn) {
-            return 0.0;
+        * KPI prati samo stvarni izlaz otpada.
+        */
+        if (
+            Schema::hasColumn(
+                'onto_entries',
+                'entry_type'
+            )
+        ) {
+            $query->where(
+                'entry_type',
+                'output'
+            );
         }
 
-        /*
-         * Pokušavamo pronaći stupac koji označava vrstu
-         * otpada. Ako ga nema na samom ONTO zapisu,
-         * funkcija neće nagađati kategoriju.
-         */
-        $typeColumn = $this->firstExistingColumn(
-            $table,
-            [
-                'waste_type',
-                'waste_category',
-                'category',
-                'type',
-            ]
-        );
+        $entries = $query->get();
 
-        if (! $typeColumn) {
-            return 0.0;
-        }
+        $sum = 0.0;
 
-        $variants = match ($type) {
-            'hazardous' => [
-                'hazardous',
-                'Hazardous',
-                'opasni',
-                'Opasni',
-                'opasan',
-                'Opasan',
-                'opasni otpad',
-                'Opasni otpad',
-            ],
+        foreach ($entries as $entry) {
+            $wasteCode = (string) (
+                $entry
+                    ->ontoRecord
+                    ?->wasteType
+                    ?->waste_code
+                ?? ''
+            );
 
-            'non_hazardous' => [
-                'non_hazardous',
-                'non-hazardous',
-                'Non hazardous',
-                'neopasni',
-                'Neopasni',
-                'neopasan',
-                'Neopasan',
-                'neopasni otpad',
-                'Neopasni otpad',
-            ],
+            if ($wasteCode === '') {
+                continue;
+            }
 
-            'municipal' => [
-                'municipal',
-                'Municipal',
-                'mixed_municipal',
-                'miješani komunalni',
-                'Miješani komunalni',
-                'miješani komunalni otpad',
-                'Miješani komunalni otpad',
-            ],
+            $normalizedCode = (string) preg_replace(
+                '/[^0-9]/',
+                '',
+                $wasteCode
+            );
 
-            default => [
-                $type,
-            ],
-        };
+            $hasStar = str_contains(
+                $wasteCode,
+                '*'
+            );
 
-        $query->whereIn(
-            $typeColumn,
-            $variants
-        );
-
-        return round(
-            (float) $query->sum(
-                $outputColumn
-            ),
-            4
-        );
-    }
-
-    /**
-     * Pronalazi ONTO model koji postoji u aplikaciji.
-     */
-    protected function resolveOntoModelClass(): ?string
-    {
-        $candidates = [
-            \App\Models\Onto::class,
-            \App\Models\OntoEntry::class,
-            \App\Models\WasteOnto::class,
-            \App\Models\WasteEntry::class,
-        ];
-
-        foreach ($candidates as $candidate) {
-            if (class_exists($candidate)) {
-                return $candidate;
+            if (
+                $filter(
+                    $normalizedCode,
+                    $hasStar
+                )
+            ) {
+                $sum += (float) (
+                    $entry->output_kg
+                    ?? 0
+                );
             }
         }
 
-        return null;
+        return round(
+            $sum,
+            4
+        );
     }
-
     /**
      * Primjenjuje tenant/organization ograničenje na model.
      *

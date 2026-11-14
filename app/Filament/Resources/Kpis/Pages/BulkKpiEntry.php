@@ -236,6 +236,54 @@ class BulkKpiEntry extends Page
             abort(403);
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | SERVERSKA VALIDACIJA
+        |--------------------------------------------------------------------------
+        |
+        | Ne oslanjamo se samo na vrijednosti iz UI-ja.
+        | Livewire payload može biti ručno izmijenjen,
+        | zato mjesec, godina i KPI vrijednosti moraju
+        | proći serversku validaciju prije spremanja.
+        |
+        */
+
+        $this->validate([
+            'month' => [
+                'required',
+                'integer',
+                'min:1',
+                'max:12',
+            ],
+
+            'year' => [
+                'required',
+                'integer',
+                'min:2000',
+                'max:2100',
+            ],
+
+            'rows' => [
+                'array',
+            ],
+
+            'rows.*.kpi_id' => [
+                'required',
+                'integer',
+            ],
+
+            'rows.*.value' => [
+                'nullable',
+                'numeric',
+            ],
+
+            'rows.*.note' => [
+                'nullable',
+                'string',
+                'max:1000',
+            ],
+        ]);
+
         $ownerId =
             $user->ownerId();
 
@@ -261,7 +309,7 @@ class BulkKpiEntry extends Page
 
             /*
             |--------------------------------------------------------------------------
-            | Serverska provjera KPI-ja
+            | SERVERSKA PROVJERA KPI-ja
             |--------------------------------------------------------------------------
             */
 
@@ -289,6 +337,7 @@ class BulkKpiEntry extends Page
              * - globalni ručni KPI
              * - KPI iste organizacije
              */
+
             $canUseKpi =
                 blank(
                     $kpi->user_id
@@ -300,6 +349,63 @@ class BulkKpiEntry extends Page
                 continue;
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | ZAŠTITA OD GLOBALNOG DUPLIKATA
+            |--------------------------------------------------------------------------
+            |
+            | Ako organizacija već ima vlastitu kopiju
+            | globalnog KPI-ja, vrijednost se mora spremati
+            | samo na organizacijsku kopiju.
+            |
+            | Time modificirani Livewire request ne može
+            | zaobići logiku iz loadRows().
+            |
+            */
+
+            if (
+                blank(
+                    $kpi->user_id
+                )
+            ) {
+                $shadowed =
+                    Kpi::query()
+                        ->where(
+                            'user_id',
+                            $ownerId
+                        )
+                        ->where(
+                            function (
+                                Builder $query
+                            ) use (
+                                $kpi
+                            ): void {
+                                if (
+                                    filled(
+                                        $kpi->source_key
+                                    )
+                                ) {
+                                    $query->where(
+                                        'source_key',
+                                        $kpi->source_key
+                                    );
+
+                                    return;
+                                }
+
+                                $query->where(
+                                    'name',
+                                    $kpi->name
+                                );
+                            }
+                        )
+                        ->exists();
+
+                if ($shadowed) {
+                    continue;
+                }
+            }
+
             $value =
                 $row['value']
                 ?? null;
@@ -307,6 +413,7 @@ class BulkKpiEntry extends Page
             /*
              * Prazno polje ne briše postojeću vrijednost.
              */
+
             if (
                 $value === null
                 || $value === ''
@@ -353,7 +460,7 @@ class BulkKpiEntry extends Page
 
         /*
         |--------------------------------------------------------------------------
-        | Ponovni izračun automatskih KPI-ja
+        | PONOVNI IZRAČUN AUTOMATSKIH KPI-ja
         |--------------------------------------------------------------------------
         |
         | Nakon ručnog unosa odmah ponovno računamo:
@@ -403,6 +510,7 @@ class BulkKpiEntry extends Page
          * Ponovno učitamo vrijednosti kako bi se forma
          * odmah uskladila s bazom.
          */
+
         $this->loadRows();
     }
 

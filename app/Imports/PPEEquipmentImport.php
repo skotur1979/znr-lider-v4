@@ -2,11 +2,14 @@
 
 namespace App\Imports;
 
+use App\Filament\Resources\PPEEquipment\PPEEquipmentResource;
 use App\Models\PPEEquipment;
 use App\Services\ActivityLogger;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use RuntimeException;
 
 class PPEEquipmentImport implements ToCollection
 {
@@ -18,57 +21,43 @@ class PPEEquipmentImport implements ToCollection
 
     public int $unchanged = 0;
 
-    public function collection(
-        Collection $rows
-    ): void {
+    protected int $ownerId;
+
+    public function __construct(
+        int $ownerId
+    ) {
+        $this->ownerId =
+            $ownerId;
+
         $user =
-            auth()->user();
-
-        if (! $user) {
-            $this->skipped++;
-
-            $this->logImport();
-
-            return;
-        }
+            Auth::user();
 
         /*
         |--------------------------------------------------------------------------
-        | ORGANIZACIJSKI REGISTAR OZO
+        | AUTORIZACIJA
         |--------------------------------------------------------------------------
-        |
-        | Registar OZO više nema globalne zapise.
-        |
-        | Svaki zapis pripada organizaciji:
-        |
-        | user_id = ownerId()
-        |
-        | Glavni korisnik i njegovi podkorisnici
-        | koriste isti Registar OZO.
-        |
-        | Superadmin ne uvozi OZO u ime organizacije.
-        |
         */
 
-        if ($user->isSuperAdmin()) {
-            $this->skipped++;
-
-            $this->logImport();
-
-            return;
+        if (
+            $this->ownerId <= 0
+            || ! $user
+            || $user->isSuperAdmin()
+            || (int) $user->ownerId()
+                !== $this->ownerId
+            || ! PPEEquipmentResource::canCreate()
+            || ! PPEEquipmentResource::allowsModulePermission(
+                'update'
+            )
+        ) {
+            throw new RuntimeException(
+                'Nemate dopuštenje za uvoz Registra OZO.'
+            );
         }
+    }
 
-        $ownerId =
-            (int) $user->ownerId();
-
-        if ($ownerId <= 0) {
-            $this->skipped++;
-
-            $this->logImport();
-
-            return;
-        }
-
+    public function collection(
+        Collection $rows
+    ): void {
         /*
         |--------------------------------------------------------------------------
         | ZAGLAVLJE
@@ -97,10 +86,27 @@ class PPEEquipmentImport implements ToCollection
                     $column
                 );
 
-            if ($key !== '') {
+            if (
+                $key !== ''
+            ) {
                 $map[$key] =
                     $index;
             }
+        }
+
+        if (
+            ! $this->hasAnyHeader(
+                $map,
+                [
+                    'naziv_ozo',
+                    'naziv',
+                    'name',
+                ]
+            )
+        ) {
+            throw new RuntimeException(
+                'Excel mora sadržavati stupac Naziv OZO.'
+            );
         }
 
         /*
@@ -113,9 +119,6 @@ class PPEEquipmentImport implements ToCollection
             $rows->skip(1)
             as $row
         ) {
-            /*
-             * Prazan red ignoriramo.
-             */
             if (
                 $this->isEmptyRow(
                     $row
@@ -131,7 +134,7 @@ class PPEEquipmentImport implements ToCollection
             */
 
             $name =
-                $this->clean(
+                $this->cleanText(
                     $this->value(
                         $row,
                         $map,
@@ -143,10 +146,12 @@ class PPEEquipmentImport implements ToCollection
                     )
                 );
 
-            /*
-             * Naziv je obavezan.
-             */
-            if (! $name) {
+            if (
+                ! $name
+                || mb_strlen(
+                    $name
+                ) > 191
+            ) {
                 $this->skipped++;
 
                 continue;
@@ -159,7 +164,7 @@ class PPEEquipmentImport implements ToCollection
             */
 
             $standard =
-                $this->clean(
+                $this->cleanText(
                     $this->value(
                         $row,
                         $map,
@@ -171,6 +176,17 @@ class PPEEquipmentImport implements ToCollection
                         ]
                     )
                 );
+
+            if (
+                $standard !== null
+                && mb_strlen(
+                    $standard
+                ) > 191
+            ) {
+                $this->skipped++;
+
+                continue;
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -190,18 +206,14 @@ class PPEEquipmentImport implements ToCollection
                     ]
                 );
 
-            $duration = null;
+            $duration =
+                null;
 
-            /*
-             * Rok nije obavezan.
-             *
-             * Ako postoji, mora biti broj
-             * između 0 i 240 mjeseci.
-             */
             if (
                 $durationRaw !== null
                 && trim(
-                    (string) $durationRaw
+                    (string)
+                    $durationRaw
                 ) !== ''
             ) {
                 if (
@@ -219,7 +231,7 @@ class PPEEquipmentImport implements ToCollection
 
                 if (
                     $duration < 0
-                    || $duration > 240
+                    || $duration > 120
                 ) {
                     $this->skipped++;
 
@@ -232,12 +244,12 @@ class PPEEquipmentImport implements ToCollection
             | TRAŽENJE POSTOJEĆEG ZAPISA
             |--------------------------------------------------------------------------
             |
-            | Zapis tražimo samo unutar
-            | trenutne organizacije.
+            | Identitet Registra OZO:
             |
-            | Organizacija A nikada ne može
-            | pronaći ili izmijeniti zapis
-            | organizacije B.
+            | user_id + name
+            |
+            | Isto pravilo postoji kao UNIQUE constraint
+            | u bazi podataka.
             |
             */
 
@@ -245,7 +257,7 @@ class PPEEquipmentImport implements ToCollection
                 PPEEquipment::query()
                     ->where(
                         'user_id',
-                        $ownerId
+                        $this->ownerId
                     )
                     ->where(
                         'name',
@@ -255,14 +267,14 @@ class PPEEquipmentImport implements ToCollection
 
             /*
             |--------------------------------------------------------------------------
-            | NOVI ZAPIS
+            | CREATE
             |--------------------------------------------------------------------------
             */
 
             if (! $record) {
                 PPEEquipment::create([
                     'user_id' =>
-                        $ownerId,
+                        $this->ownerId,
 
                     'name' =>
                         $name,
@@ -284,11 +296,11 @@ class PPEEquipmentImport implements ToCollection
 
             /*
             |--------------------------------------------------------------------------
-            | AŽURIRANJE POSTOJEĆEG ZAPISA
+            | UPDATE
             |--------------------------------------------------------------------------
             |
-            | Prazna vrijednost iz Excela
-            | ne briše postojeću vrijednost.
+            | Prazna vrijednost iz Excela ne briše
+            | postojeću vrijednost.
             |
             */
 
@@ -299,7 +311,8 @@ class PPEEquipmentImport implements ToCollection
                 && (string) (
                     $record->standard
                     ?? ''
-                ) !==
+                )
+                    !==
                 (string) $standard
             ) {
                 $changed['standard'] =
@@ -309,28 +322,31 @@ class PPEEquipmentImport implements ToCollection
             if (
                 $duration !== null
                 && (
-                    $record
-                        ->duration_months
-                    === null
-
-                    || (int) $record
-                        ->duration_months
-                    !== $duration
+                    $record->duration_months
+                        === null
+                    || (int)
+                        $record->duration_months
+                        !== $duration
                 )
             ) {
                 $changed[
                     'duration_months'
-                ] = $duration;
+                ] =
+                    $duration;
             }
 
             /*
              * is_active namjerno ne mijenjamo.
              *
              * Ako je korisnik ručno deaktivirao OZO,
-             * novi import ga neće ponovno aktivirati.
+             * ponovni import ga ne smije aktivirati.
              */
 
-            if (empty($changed)) {
+            if (
+                empty(
+                    $changed
+                )
+            ) {
                 $this->unchanged++;
 
                 continue;
@@ -345,6 +361,39 @@ class PPEEquipmentImport implements ToCollection
 
         $this->logImport();
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HEADER
+    |--------------------------------------------------------------------------
+    */
+
+    protected function hasAnyHeader(
+        array $map,
+        array $keys
+    ): bool {
+        foreach (
+            $keys
+            as $key
+        ) {
+            if (
+                array_key_exists(
+                    $key,
+                    $map
+                )
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | LOG
+    |--------------------------------------------------------------------------
+    */
 
     protected function logImport(): void
     {
@@ -365,6 +414,12 @@ class PPEEquipmentImport implements ToCollection
                 $this->skipped,
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALUE
+    |--------------------------------------------------------------------------
+    */
 
     protected function value(
         $row,
@@ -392,22 +447,63 @@ class PPEEquipmentImport implements ToCollection
         return null;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | CLEAN TEXT
+    |--------------------------------------------------------------------------
+    */
+
+    protected function cleanText(
+        mixed $value
+    ): ?string {
+        if (
+            $value === null
+        ) {
+            return null;
+        }
+
+        $value =
+            preg_replace(
+                '/\s+/u',
+                ' ',
+                trim(
+                    (string)
+                    $value
+                )
+            );
+
+        return
+            $value === ''
+                ? null
+                : $value;
+    }
+
     protected function clean(
         mixed $value
     ): ?string {
-        if ($value === null) {
+        if (
+            $value === null
+        ) {
             return null;
         }
 
         $value =
             trim(
-                (string) $value
+                (string)
+                $value
             );
 
-        return $value === ''
-            ? null
-            : $value;
+        return
+            $value === ''
+                ? null
+                : $value;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | EMPTY ROW
+    |--------------------------------------------------------------------------
+    */
 
     protected function isEmptyRow(
         $row
@@ -428,11 +524,18 @@ class PPEEquipmentImport implements ToCollection
         return true;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | NORMALIZE HEADER
+    |--------------------------------------------------------------------------
+    */
+
     protected function normalize(
         $value
     ): string {
         return Str::of(
-            (string) $value
+            (string)
+            $value
         )
             ->lower()
             ->ascii()

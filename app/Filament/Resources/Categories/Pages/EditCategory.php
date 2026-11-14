@@ -44,6 +44,11 @@ class EditCategory extends EditRecord
     ): array {
         unset($data['user_id']);
 
+        $data['name'] =
+            trim(
+                (string) ($data['name'] ?? '')
+            );
+
         return $data;
     }
 

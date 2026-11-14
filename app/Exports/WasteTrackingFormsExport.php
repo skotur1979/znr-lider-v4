@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\WasteTrackingForm;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
@@ -13,6 +14,7 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+
 
 class WasteTrackingFormsExport implements
     FromCollection,
@@ -28,33 +30,64 @@ class WasteTrackingFormsExport implements
 
     public function __construct(array $ids)
     {
-        $user = auth()->user();
-
-        $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+        $user = Auth::user();
 
         /*
-         * Export dobiva isključivo ID-eve zapisa koji su
-         * trenutno vidljivi u Filament tablici.
-         *
-         * Time poštuje:
-         * - tenant scope
-         * - filtere
-         * - pretragu
-         * - sortiranje / izbor zapisa iz tablice
-         */
-        $this->records = WasteTrackingForm::query()
+        * Export mora biti siguran i kada ga jednog dana
+        * pozove nešto drugo osim Filament tablice.
+        */
+        if (
+            ! $user
+            || ! $user->hasModulePermission(
+                'waste_tracking_forms',
+                'view'
+            )
+        ) {
+            $this->records = collect();
+            $this->showUserColumn = false;
+
+            return;
+        }
+
+        $this->showUserColumn =
+            $user->isSuperAdmin()
+            || $user->canCreateSubusers();
+
+        $query = WasteTrackingForm::query()
+            ->withTrashed()
             ->with([
                 'user',
                 'ontoRecord.organizationLocation',
                 'ontoRecord.wasteType',
             ])
-            ->whereIn('id', $ids)
-            ->orderByDesc('handover_date')
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->get();
+            ->whereIn('id', $ids);
+
+        /*
+        * Organizacijski korisnik može izvesti
+        * samo PL-O svoje organizacije.
+        */
+        if (! $user->isSuperAdmin()) {
+            $ownerId =
+                (int) $user->ownerId();
+
+            if ($ownerId <= 0) {
+                $this->records = collect();
+
+                return;
+            }
+
+            $query->where(
+                'user_id',
+                $ownerId
+            );
+        }
+
+        $this->records =
+            $query
+                ->orderByDesc('handover_date')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get();
     }
 
     public function collection()

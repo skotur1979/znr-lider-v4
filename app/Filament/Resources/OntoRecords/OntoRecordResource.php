@@ -806,6 +806,7 @@ class OntoRecordResource extends BaseResource
                                 ! $record->is_closed
                                 && ! $record->trashed()
                                 && ! static::isSuperAdmin()
+                                && WasteTrackingFormResource::canCreate()
                         )
                         ->fillForm(
                             function (
@@ -894,9 +895,13 @@ class OntoRecordResource extends BaseResource
                                 OntoRecord $record,
                                 array $data
                             ): void {
-                                if (
-                                    static::isSuperAdmin()
-                                ) {
+                                abort_unless(
+                                    WasteTrackingFormResource::canCreate(),
+                                    403,
+                                    'Nemate ovlasti za izradu pratećeg lista.'
+                                );
+
+                                if (static::isSuperAdmin()) {
                                     abort(403);
                                 }
 
@@ -1292,42 +1297,111 @@ class OntoRecordResource extends BaseResource
      * ali ne kreira nove ONTO obrasce niti nove
      * poslovne transakcije organizacije.
      */
-    public static function canEdit(Model $record): bool
-    {
+    public static function canEdit(
+        Model $record
+    ): bool {
+        /*
+        * Superadmin pregledava ONTO,
+        * ali ne mijenja poslovnu evidenciju.
+        */
         if (static::isSuperAdmin()) {
-            return true;
+            return false;
+        }
+
+        if (
+            $record instanceof OntoRecord
+            && (
+                $record->is_closed
+                || $record->trashed()
+            )
+        ) {
+            return false;
         }
 
         return parent::canEdit($record);
     }
 
-    public static function canDelete(Model $record): bool
-    {
+    public static function canDelete(
+        Model $record
+    ): bool {
         if (static::isSuperAdmin()) {
-            return true;
+            return false;
+        }
+
+        if (
+            $record instanceof OntoRecord
+            && (
+                $record->entries()
+                    ->withTrashed()
+                    ->exists()
+                || $record->trackingForms()
+                    ->withTrashed()
+                    ->exists()
+            )
+        ) {
+            return false;
         }
 
         return parent::canDelete($record);
     }
 
-    public static function canRestore(Model $record): bool
-    {
+    public static function canRestore(
+        Model $record
+    ): bool {
         if (static::isSuperAdmin()) {
-            return true;
+            return false;
         }
 
         return parent::canRestore($record);
     }
 
-    public static function canForceDelete(Model $record): bool
-    {
+    public static function canForceDelete(
+        Model $record
+    ): bool {
         if (static::isSuperAdmin()) {
-            return true;
+            return false;
         }
 
-        return parent::canForceDelete($record);
+        /*
+        * ONTO koji je ikada korišten ne brišemo
+        * trajno jer predstavlja povijesnu evidenciju.
+        */
+        if (
+            $record instanceof OntoRecord
+            && (
+                $record->entries()
+                    ->withTrashed()
+                    ->exists()
+                || $record->trackingForms()
+                    ->withTrashed()
+                    ->exists()
+            )
+        ) {
+            return false;
+        }
+
+        return parent::canForceDelete(
+            $record
+        );
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return ! static::isSuperAdmin()
+            && parent::canDeleteAny();
+    }
+
+    public static function canRestoreAny(): bool
+    {
+        return ! static::isSuperAdmin()
+            && parent::canRestoreAny();
+    }
+
+    public static function canForceDeleteAny(): bool
+    {
+        return ! static::isSuperAdmin()
+            && parent::canForceDeleteAny();
+    }
     /**
      * Jednostavna logika:
      *

@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Enums\HazardStatement;
 use App\Enums\PrecautionaryStatement;
+use App\Filament\Resources\Chemicals\ChemicalResource;
 use App\Models\Chemical;
 use App\Services\ActivityLogger;
 use Illuminate\Support\Carbon;
@@ -16,11 +17,27 @@ use PhpOffice\PhpSpreadsheet\Shared\Date;
 class ChemicalsImport implements ToCollection
 {
     public int $created = 0;
+
     public int $updated = 0;
+
     public int $unchanged = 0;
+
     public int $skipped = 0;
 
     protected int $ownerId;
+
+    /*
+     * Stvarni DB stupci su varchar(191).
+     */
+    private const STRING_LIMITS = [
+        'product_name' => 191,
+        'cas_number' => 191,
+        'ufi_number' => 191,
+        'usage_location' => 191,
+        'annual_quantity' => 191,
+        'gvi_kgvi' => 191,
+        'voc' => 191,
+    ];
 
     public function __construct()
     {
@@ -28,7 +45,9 @@ class ChemicalsImport implements ToCollection
 
         /*
          * Import je poslovna radnja organizacije.
-         * Superadmin ne importira podatke u ime organizacija.
+         *
+         * Superadmin ne importira podatke
+         * u ime organizacija.
          */
         if (
             ! $user
@@ -38,9 +57,23 @@ class ChemicalsImport implements ToCollection
         }
 
         /*
-         * Glavni korisnik i podkorisnici uvijek
-         * importiraju u vlastitu organizaciju.
+         * Import može:
+         * - kreirati novi zapis
+         * - ažurirati postojeći zapis
+         *
+         * Zato korisnik mora imati obje dozvole.
          */
+        if (
+            ! ChemicalResource::allowsModulePermission(
+                'create'
+            )
+            || ! ChemicalResource::allowsModulePermission(
+                'update'
+            )
+        ) {
+            abort(403);
+        }
+
         $this->ownerId =
             (int) $user->ownerId();
 
@@ -52,6 +85,12 @@ class ChemicalsImport implements ToCollection
     public function collection(
         Collection $rows
     ): void {
+        /*
+         * Postojeći Excel predložak:
+         *
+         * index 3 = red zaglavlja
+         * index 4 = prvi podatkovni red
+         */
         $headerRowIndex = 3;
         $dataStartIndex = 4;
 
@@ -109,16 +148,20 @@ class ChemicalsImport implements ToCollection
                     )
                 );
 
-            if (! $productName) {
+            /*
+             * Ime proizvoda je obvezno.
+             */
+            if (
+                ! $productName
+                || mb_strlen(
+                    $productName
+                ) > 191
+            ) {
                 $this->skipped++;
 
                 continue;
             }
 
-            /*
-             * Ownership je određen jednom
-             * u konstruktoru importa.
-             */
             $userId =
                 $this->ownerId;
 
@@ -132,57 +175,82 @@ class ChemicalsImport implements ToCollection
                 );
 
             /*
-             * Postojeći zapis tražimo
-             * ISKLJUČIVO unutar iste organizacije.
+             * Prvo tražimo AKTIVNI zapis.
+             *
+             * Ako postoji aktivni zapis,
+             * ažurirat ćemo njega čak i ako postoji
+             * stariji deaktivirani duplikat.
              */
             $chemical =
-                Chemical::query()
-                    ->where(
-                        'user_id',
-                        $userId
-                    )
-                    ->where(
-                        'product_name',
-                        $productName
-                    )
-                    ->where(
-                        function (
-                            $query
-                        ) use (
-                            $cas
-                        ): void {
-                            if ($cas) {
-                                $query->where(
-                                    'cas_number',
-                                    $cas
-                                );
-                            } else {
-                                $query->whereNull(
-                                    'cas_number'
-                                );
-                            }
-                        }
-                    )
-                    ->first();
+                $this->findMatchingChemical(
+                    userId: $userId,
+                    productName: $productName,
+                    cas: $cas,
+                    trashedOnly: false
+                );
+
+            /*
+             * Ako aktivni zapis ne postoji,
+             * provjeravamo postoji li isti
+             * deaktivirani zapis.
+             *
+             * Import ga NE vraća automatski
+             * jer bi to zaobišlo restore/delete
+             * dozvolu.
+             */
+            if (! $chemical) {
+                $trashedChemical =
+                    $this->findMatchingChemical(
+                        userId: $userId,
+                        productName: $productName,
+                        cas: $cas,
+                        trashedOnly: true
+                    );
+
+                if ($trashedChemical) {
+                    $this->skipped++;
+
+                    continue;
+                }
+            }
 
             $ufiRaw =
                 trim(
-                    (string) $this->value(
-                        $row,
-                        $map,
-                        'ufi_broj'
+                    (string) (
+                        $this->value(
+                            $row,
+                            $map,
+                            'ufi_broj'
+                        )
+                        ?? ''
                     )
                 );
+
+            $ufi =
+                in_array(
+                    $ufiRaw,
+                    [
+                        '',
+                        '/',
+                        '-',
+                    ],
+                    true
+                )
+                    ? null
+                    : $this->clean(
+                        $ufiRaw
+                    );
 
             /*
              * Array polja.
              *
              * Prazna Excel ćelija vraća null.
-             * Time kod UPDATE-a ne brišemo
-             * postojeće podatke.
+             *
+             * Kod UPDATE-a null znači:
+             * "ne mijenjaj postojeću vrijednost".
              */
             $hazardPictograms =
-                $this->parseList(
+                $this->parsePictograms(
                     $this->value(
                         $row,
                         $map,
@@ -210,6 +278,15 @@ class ChemicalsImport implements ToCollection
                     'P'
                 );
 
+            $usageLocation =
+                $this->clean(
+                    $this->value(
+                        $row,
+                        $map,
+                        'mjesto_upotrebe'
+                    )
+                );
+
             $data = [
                 'user_id' =>
                     $userId,
@@ -221,23 +298,7 @@ class ChemicalsImport implements ToCollection
                     $cas,
 
                 'ufi_number' =>
-                    in_array(
-                        $ufiRaw,
-                        [
-                            '/',
-                            '-',
-                            '',
-                        ],
-                        true
-                    )
-                        ? null
-                        : $this->clean(
-                            $this->value(
-                                $row,
-                                $map,
-                                'ufi_broj'
-                            )
-                        ),
+                    $ufi,
 
                 'hazard_pictograms' =>
                     $hazardPictograms,
@@ -249,13 +310,7 @@ class ChemicalsImport implements ToCollection
                     $pStatements,
 
                 'usage_location' =>
-                    $this->clean(
-                        $this->value(
-                            $row,
-                            $map,
-                            'mjesto_upotrebe'
-                        )
-                    ),
+                    $usageLocation,
 
                 'annual_quantity' =>
                     $this->clean(
@@ -295,28 +350,57 @@ class ChemicalsImport implements ToCollection
             ];
 
             /*
-             * NOVI ZAPIS.
+             * Zaštita stvarnih DB duljina.
              *
-             * Kod novog zapisa prazna array polja
-             * spremamo kao prazne arraye.
+             * Ne režemo podatke tiho.
+             * Ako je vrijednost preduga,
+             * red se preskače.
+             */
+            if (
+                ! $this->fitsDatabaseLimits(
+                    $data
+                )
+            ) {
+                $this->skipped++;
+
+                continue;
+            }
+
+            /*
+             * NOVI ZAPIS.
              */
             if (! $chemical) {
-                $createData = $data;
+                /*
+                 * Mjesto upotrebe je obvezno
+                 * za novi Chemical, jednako kao
+                 * u ručnoj formi.
+                 */
+                if (blank($usageLocation)) {
+                    $this->skipped++;
+
+                    continue;
+                }
+
+                $createData =
+                    $data;
 
                 $createData[
                     'hazard_pictograms'
                 ] =
-                    $hazardPictograms ?? [];
+                    $hazardPictograms
+                    ?? [];
 
                 $createData[
                     'h_statements'
                 ] =
-                    $hStatements ?? [];
+                    $hStatements
+                    ?? [];
 
                 $createData[
                     'p_statements'
                 ] =
-                    $pStatements ?? [];
+                    $pStatements
+                    ?? [];
 
                 Chemical::create(
                     $createData
@@ -330,8 +414,11 @@ class ChemicalsImport implements ToCollection
             /*
              * POSTOJEĆI ZAPIS.
              *
-             * Mijenjamo samo podatke
-             * koji su stvarno promijenjeni.
+             * Ownership i identifikacijska
+             * polja ne mijenjamo.
+             *
+             * Prazne Excel ćelije ne brišu
+             * postojeće podatke.
              */
             $changed = [];
 
@@ -339,10 +426,6 @@ class ChemicalsImport implements ToCollection
                 $data as
                 $field => $value
             ) {
-                /*
-                 * Ownership i identifikacijska
-                 * polja ne mijenjamo kod updatea.
-                 */
                 if (
                     in_array(
                         $field,
@@ -357,10 +440,6 @@ class ChemicalsImport implements ToCollection
                     continue;
                 }
 
-                /*
-                 * Prazna ćelija iz Excela
-                 * NE briše postojeći podatak.
-                 */
                 if ($value === null) {
                     continue;
                 }
@@ -379,10 +458,6 @@ class ChemicalsImport implements ToCollection
                         );
                 }
 
-                /*
-                 * Array vrijednosti uspoređujemo
-                 * kao normalizirane JSON vrijednosti.
-                 */
                 if (is_array($current)) {
                     $current =
                         json_encode(
@@ -410,9 +485,8 @@ class ChemicalsImport implements ToCollection
                     !==
                     (string) $compareValue
                 ) {
-                    $changed[
-                        $field
-                    ] = $value;
+                    $changed[$field] =
+                        $value;
                 }
             }
 
@@ -430,6 +504,102 @@ class ChemicalsImport implements ToCollection
         }
 
         $this->logImport();
+    }
+
+    /**
+     * Traži isti proizvod isključivo
+     * unutar iste organizacije.
+     *
+     * CAS normaliziramo samo za usporedbu:
+     * uklanjamo whitespace koji često nastaje
+     * prijelomom ćelija u Excelu.
+     */
+    private function findMatchingChemical(
+        int $userId,
+        string $productName,
+        ?string $cas,
+        bool $trashedOnly
+    ): ?Chemical {
+        $query =
+            Chemical::query()
+                ->where(
+                    'user_id',
+                    $userId
+                )
+                ->whereRaw(
+                    'LOWER(TRIM(product_name)) = LOWER(?)',
+                    [
+                        trim($productName),
+                    ]
+                );
+
+        if ($trashedOnly) {
+            $query->onlyTrashed();
+        }
+
+        $normalizedCas =
+            $this->normalizeCas(
+                $cas
+            );
+
+        return $query
+            ->get()
+            ->first(
+                fn (
+                    Chemical $chemical
+                ): bool =>
+                    $this->normalizeCas(
+                        $chemical->cas_number
+                    )
+                    ===
+                    $normalizedCas
+            );
+    }
+
+    private function normalizeCas(
+        ?string $value
+    ): string {
+        if ($value === null) {
+            return '';
+        }
+
+        $value =
+            preg_replace(
+                '/\s+/u',
+                '',
+                trim($value)
+            ) ?? '';
+
+        return mb_strtolower(
+            $value
+        );
+    }
+
+    private function fitsDatabaseLimits(
+        array $data
+    ): bool {
+        foreach (
+            self::STRING_LIMITS as
+            $field => $maxLength
+        ) {
+            $value =
+                $data[$field]
+                ?? null;
+
+            if ($value === null) {
+                continue;
+            }
+
+            if (
+                mb_strlen(
+                    (string) $value
+                ) > $maxLength
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function logImport(): void
@@ -463,10 +633,21 @@ class ChemicalsImport implements ToCollection
     private function isEmptyRow(
         $row
     ): bool {
-        foreach ($row as $value) {
+        foreach (
+            $row as $value
+        ) {
             if (
-                $this->clean($value)
-                !== null
+                $value
+                instanceof
+                \DateTimeInterface
+            ) {
+                return false;
+            }
+
+            if (
+                $this->clean(
+                    $value
+                ) !== null
             ) {
                 return false;
             }
@@ -482,9 +663,29 @@ class ChemicalsImport implements ToCollection
             return null;
         }
 
-        $value = trim(
-            (string) $value
-        );
+        if (
+            $value
+            instanceof
+            \DateTimeInterface
+        ) {
+            return $value->format(
+                'Y-m-d'
+            );
+        }
+
+        if (
+            ! is_scalar($value)
+            && ! $value
+                instanceof
+                \Stringable
+        ) {
+            return null;
+        }
+
+        $value =
+            trim(
+                (string) $value
+            );
 
         return $value === ''
             ? null
@@ -494,13 +695,12 @@ class ChemicalsImport implements ToCollection
     /**
      * Prazna ćelija vraća null.
      *
-     * To omogućuje da prilikom UPDATE-a
-     * prazna Excel ćelija ne obriše postojeće
-     * GHS / H / P oznake.
+     * Neispravni/poznato nepodržani kodovi
+     * također ne prepisuju postojeći UPDATE.
      *
      * @return array<int, string>|null
      */
-    private function parseList(
+    private function parsePictograms(
         $value
     ): ?array {
         $value =
@@ -512,96 +712,105 @@ class ChemicalsImport implements ToCollection
             return null;
         }
 
-        return collect(
-            preg_split(
-                '/[,\n\r;:]+/',
-                $value
-            ) ?: []
-        )
-            ->map(
-                fn ($item) =>
-                    trim(
-                        (string) $item
-                    )
+        $result =
+            collect(
+                preg_split(
+                    '/[,\n\r;:]+/',
+                    $value
+                ) ?: []
             )
-            ->filter()
-            ->map(
-                function (
-                    $item
-                ) {
-                    $item =
-                        strtoupper(
-                            trim(
-                                (string) $item
-                            )
-                        );
-
-                    $item =
-                        pathinfo(
-                            $item,
-                            PATHINFO_FILENAME
-                        );
-
-                    $item =
-                        str_replace(
-                            [
-                                ' ',
-                                '_',
-                                '-',
-                            ],
-                            '',
-                            $item
-                        );
-
-                    /*
-                     * GHS1 / GHS01 -> GHS01
-                     */
-                    if (
-                        preg_match(
-                            '/GHS0?([1-9])/',
-                            $item,
-                            $matches
+                ->map(
+                    fn ($item) =>
+                        trim(
+                            (string) $item
                         )
-                    ) {
-                        return
-                            'GHS0'
-                            . $matches[1];
-                    }
+                )
+                ->filter()
+                ->map(
+                    function (
+                        $item
+                    ): ?string {
+                        $item =
+                            strtoupper(
+                                trim(
+                                    (string) $item
+                                )
+                            );
 
-                    return
-                        $this
-                            ->normalizeStatementCode(
+                        /*
+                         * Podržava npr.
+                         * GHS01.png
+                         */
+                        $item =
+                            pathinfo(
+                                $item,
+                                PATHINFO_FILENAME
+                            );
+
+                        $item =
+                            str_replace(
+                                [
+                                    ' ',
+                                    '_',
+                                    '-',
+                                ],
+                                '',
                                 $item
                             );
-                }
-            )
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
+
+                        if (
+                            preg_match(
+                                '/^GHS0?([1-9])$/',
+                                $item,
+                                $matches
+                            )
+                        ) {
+                            return
+                                'GHS0'
+                                . $matches[1];
+                        }
+
+                        /*
+                         * Sve ostalo odbacujemo.
+                         */
+                        return null;
+                    }
+                )
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+        /*
+         * Ako ćelija nije prazna, ali niti jedna
+         * oznaka nije valjana, UPDATE neće obrisati
+         * postojeće podatke.
+         */
+        return empty($result)
+            ? null
+            : $result;
     }
 
     /**
-     * Normalizira H / EUH / P oznake iz Excela
-     * prema stvarnim vrijednostima dostupnim
-     * u HazardStatement i PrecautionaryStatement enumima.
-     *
-     * Prazna ćelija vraća null kako UPDATE ne bi
-     * obrisao postojeće vrijednosti.
-     *
      * @return array<int, string>|null
      */
     private function parseStatementList(
         $value,
         string $type
     ): ?array {
-        $value = $this->clean($value);
+        $value =
+            $this->clean(
+                $value
+            );
 
         if (! $value) {
             return null;
         }
 
-        $type = strtoupper($type);
+        $type =
+            strtoupper(
+                $type
+            );
 
         $available =
             $type === 'H'
@@ -609,60 +818,66 @@ class ChemicalsImport implements ToCollection
                 : PrecautionaryStatement::list();
 
         /*
-        * Case-insensitive mapa:
-        *
-        * H361D -> H361d
-        * H360FD -> H360FD
-        * EUH066 -> EUH066
-        */
+         * Case-insensitive mapa.
+         *
+         * Primjeri:
+         * H361D -> stvarni H361d
+         * P280E -> možemo posebno mapirati.
+         */
         $availableMap = [];
 
         foreach (
-            array_keys($available)
-            as $code
+            array_keys(
+                $available
+            ) as $code
         ) {
             $availableMap[
-                strtoupper($code)
+                strtoupper(
+                    $code
+                )
             ] = $code;
         }
 
-        return collect(
-            preg_split(
-                '/[,\n\r;:]+/',
-                $value
-            ) ?: []
-        )
-            ->map(
-                fn ($item): string =>
-                    trim(
-                        (string) $item
-                    )
+        $result =
+            collect(
+                preg_split(
+                    '/[,\n\r;:]+/',
+                    $value
+                ) ?: []
             )
-            ->filter()
-            ->flatMap(
-                function (
-                    string $item
-                ) use (
-                    $type,
-                    $availableMap
-                ): array {
-                    return $this
-                        ->normalizeImportedStatement(
-                            $item,
-                            $type,
-                            $availableMap
-                        );
-                }
-            )
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
+                ->map(
+                    fn ($item): string =>
+                        trim(
+                            (string) $item
+                        )
+                )
+                ->filter()
+                ->flatMap(
+                    function (
+                        string $item
+                    ) use (
+                        $type,
+                        $availableMap
+                    ): array {
+                        return $this
+                            ->normalizeImportedStatement(
+                                $item,
+                                $type,
+                                $availableMap
+                            );
+                    }
+                )
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+        return empty($result)
+            ? null
+            : $result;
     }
+
     /**
-     * Pretvara jednu oznaku / kombinaciju iz Excela
-     * u jednu ili više oznaka koje aplikacija poznaje.
-     *
      * @param array<string, string> $availableMap
      * @return array<int, string>
      */
@@ -671,61 +886,112 @@ class ChemicalsImport implements ToCollection
         string $type,
         array $availableMap
     ): array {
-        $item = trim($item);
+        $item =
+            trim(
+                $item
+            );
 
         if ($item === '') {
             return [];
         }
 
         /*
-        * Brišemo razmake i znakove koji se često
-        * pojavljuju u Excel zapisima.
-        */
-        $item = str_replace(
-            [
-                ' ',
-                '_',
-            ],
-            '',
-            $item
-        );
+         * Normalizacija whitespacea.
+         */
+        $item =
+            str_replace(
+                [
+                    ' ',
+                    '_',
+                ],
+                '',
+                $item
+            );
 
         /*
-        * Normalizacija crtice.
-        */
-        $item = str_replace(
-            [
-                '–',
-                '—',
-            ],
-            '-',
-            $item
-        );
-
-        /*
-        * Kod statementa crtica između kodova
-        * nije separator pa ju uklanjamo.
-        */
-        $item = str_replace(
-            '-',
-            '',
-            $item
-        );
+         * Unicode crtice -> obična crtica.
+         */
+        $item =
+            str_replace(
+                [
+                    '–',
+                    '—',
+                ],
+                '-',
+                $item
+            );
 
         $upper =
-            strtoupper($item);
+            strtoupper(
+                $item
+            );
 
         /*
         |--------------------------------------------------------------------------
-        | Poznate H kombinacije
+        | H / EUH OZNAKE
         |--------------------------------------------------------------------------
-        |
-        | U našem HazardStatement enumu ove kombinacije
-        | već predstavlja jedan glavni ključ.
-        |
         */
-
         if ($type === 'H') {
+            /*
+             * Neki izvori koriste npr.
+             * H222-H229 za dvije zasebne oznake.
+             */
+            if (
+                preg_match(
+                    '/^(H\d{3}[A-Z]?)-H?(\d{3}[A-Z]?)$/',
+                    $upper,
+                    $matches
+                )
+            ) {
+                $first =
+                    $matches[1];
+
+                $second =
+                    'H'
+                    . $matches[2];
+
+                $result = [];
+
+                if (
+                    isset(
+                        $availableMap[
+                            $first
+                        ]
+                    )
+                ) {
+                    $result[] =
+                        $availableMap[
+                            $first
+                        ];
+                }
+
+                if (
+                    isset(
+                        $availableMap[
+                            $second
+                        ]
+                    )
+                ) {
+                    $result[] =
+                        $availableMap[
+                            $second
+                        ];
+                }
+
+                return $result;
+            }
+
+            /*
+             * Za ostale statemente crtica
+             * nije separator.
+             */
+            $upper =
+                str_replace(
+                    '-',
+                    '',
+                    $upper
+                );
+
             $aliases = [
                 'H300+H310+H330' =>
                     'H300',
@@ -747,19 +1013,14 @@ class ChemicalsImport implements ToCollection
             ];
 
             /*
-            * Dopuni prefiks ako Excel ima:
-            *
-            * H300+310+330
-            *
-            * umjesto:
-            *
-            * H300+H310+H330
-            */
+             * H300+310+330
+             * ->
+             * H300+H310+H330
+             */
             if (
                 preg_match(
                     '/^(H)(\d{3})(\+\d{3})+$/',
-                    $upper,
-                    $matches
+                    $upper
                 )
             ) {
                 $upper =
@@ -773,52 +1034,81 @@ class ChemicalsImport implements ToCollection
 
             if (
                 isset(
-                    $aliases[$upper]
+                    $aliases[
+                        $upper
+                    ]
                 )
             ) {
                 return [
-                    $aliases[$upper],
+                    $aliases[
+                        $upper
+                    ],
                 ];
             }
 
-            /*
-            * Direktno postoji u enumu.
-            *
-            * Ovdje se npr.
-            * H361D automatski vrati kao H361d.
-            */
             if (
                 isset(
-                    $availableMap[$upper]
+                    $availableMap[
+                        $upper
+                    ]
                 )
             ) {
                 return [
-                    $availableMap[$upper],
+                    $availableMap[
+                        $upper
+                    ],
                 ];
             }
 
             /*
-            * Nepoznata H/EUH oznaka
-            * ne sprema se u bazu.
-            *
-            * Primjer: H366.
-            */
+             * Nepoznata H / EUH oznaka
+             * ne sprema se.
+             */
             return [];
         }
 
         /*
         |--------------------------------------------------------------------------
-        | P oznake
+        | P OZNAKE
         |--------------------------------------------------------------------------
         */
 
         /*
-        * P305+351+338
-        *
-        * pretvaramo u:
-        *
-        * P305+P351+P338
-        */
+         * U starim podacima postoji P280e / P280E.
+         *
+         * Enum koristi P280.
+         */
+        $pAliases = [
+            'P280E' =>
+                'P280',
+        ];
+
+        $upper =
+            str_replace(
+                '-',
+                '',
+                $upper
+            );
+
+        if (
+            isset(
+                $pAliases[
+                    $upper
+                ]
+            )
+        ) {
+            return [
+                $pAliases[
+                    $upper
+                ],
+            ];
+        }
+
+        /*
+         * P305+351+338
+         * ->
+         * P305+P351+P338
+         */
         if (
             preg_match(
                 '/^P\d{3}(?:\+\d{3})+$/',
@@ -835,27 +1125,26 @@ class ChemicalsImport implements ToCollection
         }
 
         /*
-        * Ako kompletna kombinacija već postoji,
-        * koristimo baš nju.
-        *
-        * Primjer:
-        *
-        * P305+P351+P338
-        */
+         * Ako cijela kombinacija postoji
+         * u enumu, koristimo nju.
+         */
         if (
             isset(
-                $availableMap[$upper]
+                $availableMap[
+                    $upper
+                ]
             )
         ) {
             return [
-                $availableMap[$upper],
+                $availableMap[
+                    $upper
+                ],
             ];
         }
 
         /*
-        * Ako nije kombinacija, a ne postoji
-        * u enumu, ne spremamo je.
-        */
+         * Jedna nepoznata oznaka se odbacuje.
+         */
         if (
             ! str_contains(
                 $upper,
@@ -866,8 +1155,18 @@ class ChemicalsImport implements ToCollection
         }
 
         /*
-        * Razbijamo kombinaciju na pojedinačne kodove.
-        */
+         * Razbijamo kombinaciju i tražimo
+         * najduže valjane kombinacije.
+         *
+         * Primjer:
+         *
+         * P305+P351+P338+P310
+         *
+         * ->
+         *
+         * P305+P351+P338
+         * P310
+         */
         $parts =
             array_values(
                 array_filter(
@@ -882,41 +1181,20 @@ class ChemicalsImport implements ToCollection
             return [];
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Greedy kombiniranje
-        |--------------------------------------------------------------------------
-        |
-        | P305+P351+P338+P310
-        |
-        | postaje:
-        |
-        | P305+P351+P338
-        | P310
-        |
-        | P403+P233+P235
-        |
-        | postaje:
-        |
-        | P403+P233
-        | P235
-        |
-        */
-
         $result = [];
 
         $count =
-            count($parts);
+            count(
+                $parts
+            );
 
         $index = 0;
 
-        while ($index < $count) {
+        while (
+            $index < $count
+        ) {
             $matched = false;
 
-            /*
-            * Tražimo najdužu kombinaciju
-            * počevši od trenutnog elementa.
-            */
             for (
                 $end = $count;
                 $end > $index;
@@ -959,14 +1237,14 @@ class ChemicalsImport implements ToCollection
             }
 
             /*
-            * Nepoznata oznaka poput P030
-            * preskače se.
-            */
+             * Nepoznata komponenta se preskače.
+             */
             $index++;
         }
 
         return $result;
     }
+
     private function parseDate(
         $value
     ): ?string {
@@ -1033,9 +1311,10 @@ class ChemicalsImport implements ToCollection
                     );
 
                 if ($date !== false) {
-                    return $date->format(
-                        'Y-m-d'
-                    );
+                    return $date
+                        ->format(
+                            'Y-m-d'
+                        );
                 }
             } catch (\Throwable) {
                 //
@@ -1053,53 +1332,6 @@ class ChemicalsImport implements ToCollection
         }
     }
 
-    private function normalizeStatementCode(
-        string $item
-    ): string {
-        $item =
-            strtoupper(
-                trim($item)
-            );
-
-        $item =
-            str_replace(
-                [
-                    ' ',
-                    '_',
-                    '-',
-                ],
-                '',
-                $item
-            );
-
-        /*
-         * Primjer:
-         *
-         * H300+310+330
-         *
-         * postaje:
-         *
-         * H300+H310+H330
-         */
-        if (
-            preg_match(
-                '/^([HP])(\d{3})(\+\d{3})+$/',
-                $item,
-                $matches
-            )
-        ) {
-            return preg_replace(
-                '/\+(\d{3})/',
-                '+'
-                    . $matches[1]
-                    . '$1',
-                $item
-            );
-        }
-
-        return $item;
-    }
-
     private function normalizeKey(
         $key
     ): ?string {
@@ -1112,50 +1344,51 @@ class ChemicalsImport implements ToCollection
             return null;
         }
 
-        $key = Str::of(
-            (string) $key
-        )
-            ->lower()
-            ->replace(
-                [
-                    'š',
-                    'đ',
-                    'č',
-                    'ć',
-                    'ž',
-                ],
-                [
-                    's',
-                    'd',
-                    'c',
-                    'c',
-                    'z',
-                ]
+        $key =
+            Str::of(
+                (string) $key
             )
-            ->replace(
-                [
-                    '/',
-                    '-',
-                    '.',
-                    '(',
-                    ')',
-                ],
-                ' '
-            )
-            ->replace(
-                "\u{00A0}",
-                ' '
-            )
-            ->replaceMatches(
-                '/\s+/',
-                ' '
-            )
-            ->trim()
-            ->replace(
-                ' ',
-                '_'
-            )
-            ->toString();
+                ->lower()
+                ->replace(
+                    [
+                        'š',
+                        'đ',
+                        'č',
+                        'ć',
+                        'ž',
+                    ],
+                    [
+                        's',
+                        'd',
+                        'c',
+                        'c',
+                        'z',
+                    ]
+                )
+                ->replace(
+                    [
+                        '/',
+                        '-',
+                        '.',
+                        '(',
+                        ')',
+                    ],
+                    ' '
+                )
+                ->replace(
+                    "\u{00A0}",
+                    ' '
+                )
+                ->replaceMatches(
+                    '/\s+/',
+                    ' '
+                )
+                ->trim()
+                ->replace(
+                    ' ',
+                    '_'
+                )
+                ->toString();
 
         return match ($key) {
             'ime_proizvoda',
@@ -1205,7 +1438,8 @@ class ChemicalsImport implements ToCollection
             'stl_hzjz'
                 => 'stl_hzjz',
 
-            default => $key,
+            default =>
+                $key,
         };
     }
 }

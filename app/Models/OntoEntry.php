@@ -36,12 +36,22 @@ class OntoEntry extends Model
 
     public function ontoRecord(): BelongsTo
     {
-        return $this->belongsTo(OntoRecord::class, 'onto_record_id');
+        return $this
+            ->belongsTo(
+                OntoRecord::class,
+                'onto_record_id'
+            )
+            ->withTrashed();
     }
 
     public function trackingForm(): BelongsTo
     {
-        return $this->belongsTo(WasteTrackingForm::class, 'waste_tracking_form_id');
+        return $this
+            ->belongsTo(
+                WasteTrackingForm::class,
+                'waste_tracking_form_id'
+            )
+            ->withTrashed();
     }
 
     public function getQuantityAttribute(): float

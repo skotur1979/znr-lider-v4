@@ -103,8 +103,21 @@ class ListPPELogs extends BaseListRecords
                 ->color(
                     'success'
                 )
+                ->visible(
+                    fn (): bool =>
+                        PPELogResource::allowsModulePermission(
+                            'view'
+                        )
+                )
                 ->action(
                     function () {
+                        abort_unless(
+                            PPELogResource::allowsModulePermission(
+                                'view'
+                            ),
+                            403
+                        );
+
                         /*
                          * Trenutno odabrani Filament filter.
                          */
@@ -209,6 +222,9 @@ class ListPPELogs extends BaseListRecords
                 ->visible(
                     fn (): bool =>
                         PPELogResource::canCreate()
+                        && PPELogResource::allowsModulePermission(
+                            'update'
+                        )
                 )
                 ->modalHeading(
                     'Uvoz zaduženja OZO iz Excela'
@@ -239,7 +255,7 @@ class ListPPELogs extends BaseListRecords
                         ->directory(
                             'imports'
                         )
-                        ->preserveFilenames()
+                        ->maxSize(10240)
                         ->acceptedFileTypes([
                             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                             'application/vnd.ms-excel',
@@ -260,6 +276,12 @@ class ListPPELogs extends BaseListRecords
                         if (
                             ! $user
                             || $user->isSuperAdmin()
+                            || ! PPELogResource::allowsModulePermission(
+                                'create'
+                            )
+                            || ! PPELogResource::allowsModulePermission(
+                                'update'
+                            )
                         ) {
                             abort(403);
                         }
@@ -299,7 +321,9 @@ class ListPPELogs extends BaseListRecords
                         }
 
                         if (
-                            ! Storage::disk(
+                            ! is_string($path)
+                            || $path === ''
+                            || ! Storage::disk(
                                 'local'
                             )->exists(
                                 $path

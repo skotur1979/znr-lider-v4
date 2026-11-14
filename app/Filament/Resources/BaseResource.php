@@ -5,9 +5,9 @@ namespace App\Filament\Resources;
 use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\Concerns\HasUserTableColumn;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Model;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -153,6 +153,90 @@ abstract class BaseResource extends Resource
     }
 
     /**
+     * Provjera pripada li pojedinačni zapis
+     * trenutnoj organizaciji.
+     *
+     * Za standardne poslovne module:
+     *
+     * record.user_id mora biti jednak ownerId().
+     *
+     * Resource koji nema standardni ownership
+     * ($hasOwnership = false) koristi vlastitu logiku.
+     */
+    protected static function recordBelongsToCurrentOwner(
+        Model $record
+    ): bool {
+        if (! static::$hasOwnership) {
+            return true;
+        }
+
+        if (! static::modelHasColumn('user_id')) {
+            return true;
+        }
+
+        /*
+         * Superadmin može administrirati postojeće
+         * zapise svih organizacija.
+         */
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
+        $ownerId = static::ownerId();
+
+        if (! $ownerId) {
+            return false;
+        }
+
+        return (int) $record->getAttribute('user_id')
+            === (int) $ownerId;
+    }
+
+    /**
+     * Centralna provjera dozvole za određenu
+     * vrstu akcije nad modulom.
+     *
+     * Kontrolirani moduli:
+     * - view
+     * - create
+     * - update
+     * - delete
+     *
+     * koriste granularne dozvole iz User modela.
+     *
+     * Nekontrolirani moduli i dalje koriste
+     * standardnu module-access logiku iz User modela.
+     */
+    protected static function hasModuleActionPermission(
+        string $permission
+    ): bool {
+        $user = static::user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        $moduleKey = static::getModuleKey();
+
+        /*
+         * Resource bez module key-a ima svoju
+         * posebnu autorizacijsku logiku.
+         */
+        if (! $moduleKey) {
+            return true;
+        }
+
+        return $user->hasModulePermission(
+            $moduleKey,
+            $permission
+        );
+    }
+
+    /**
      * Navigacija.
      *
      * Superadmin vidi sve.
@@ -203,11 +287,26 @@ abstract class BaseResource extends Resource
 
     /**
      * Pregled pojedinačnog zapisa.
-     *
-     * Superadmin smije pregledavati sve postojeće zapise.
      */
-    public static function canView(Model $record): bool
-    {
+    public static function canView(
+        Model $record
+    ): bool {
+        if (
+            ! static::hasModuleActionPermission(
+                'view'
+            )
+        ) {
+            return false;
+        }
+
+        if (
+            ! static::recordBelongsToCurrentOwner(
+                $record
+            )
+        ) {
+            return false;
+        }
+
         if (static::isSuperAdmin()) {
             return true;
         }
@@ -215,15 +314,28 @@ abstract class BaseResource extends Resource
         return parent::canView($record);
     }
 
-
     /**
      * Uređivanje postojećeg zapisa.
-     *
-     * Superadmin smije administrirati postojeće zapise,
-     * ali ownership se time ne mijenja.
      */
-    public static function canEdit(Model $record): bool
-    {
+    public static function canEdit(
+        Model $record
+    ): bool {
+        if (
+            ! static::hasModuleActionPermission(
+                'update'
+            )
+        ) {
+            return false;
+        }
+
+        if (
+            ! static::recordBelongsToCurrentOwner(
+                $record
+            )
+        ) {
+            return false;
+        }
+
         if (static::isSuperAdmin()) {
             return true;
         }
@@ -231,12 +343,28 @@ abstract class BaseResource extends Resource
         return parent::canEdit($record);
     }
 
-
     /**
      * Brisanje / deaktiviranje postojećeg zapisa.
      */
-    public static function canDelete(Model $record): bool
-    {
+    public static function canDelete(
+        Model $record
+    ): bool {
+        if (
+            ! static::hasModuleActionPermission(
+                'delete'
+            )
+        ) {
+            return false;
+        }
+
+        if (
+            ! static::recordBelongsToCurrentOwner(
+                $record
+            )
+        ) {
+            return false;
+        }
+
         if (static::isSuperAdmin()) {
             return true;
         }
@@ -244,12 +372,19 @@ abstract class BaseResource extends Resource
         return parent::canDelete($record);
     }
 
-
     /**
      * Bulk brisanje.
      */
     public static function canDeleteAny(): bool
     {
+        if (
+            ! static::hasModuleActionPermission(
+                'delete'
+            )
+        ) {
+            return false;
+        }
+
         if (static::isSuperAdmin()) {
             return true;
         }
@@ -257,12 +392,31 @@ abstract class BaseResource extends Resource
         return parent::canDeleteAny();
     }
 
-
     /**
      * Vraćanje soft-deleted zapisa.
+     *
+     * Restore je upravljanje zapisom pa koristi
+     * istu "delete" dozvolu kao deaktivacija.
      */
-    public static function canRestore(Model $record): bool
-    {
+    public static function canRestore(
+        Model $record
+    ): bool {
+        if (
+            ! static::hasModuleActionPermission(
+                'delete'
+            )
+        ) {
+            return false;
+        }
+
+        if (
+            ! static::recordBelongsToCurrentOwner(
+                $record
+            )
+        ) {
+            return false;
+        }
+
         if (static::isSuperAdmin()) {
             return true;
         }
@@ -270,12 +424,19 @@ abstract class BaseResource extends Resource
         return parent::canRestore($record);
     }
 
-
     /**
      * Bulk vraćanje.
      */
     public static function canRestoreAny(): bool
     {
+        if (
+            ! static::hasModuleActionPermission(
+                'delete'
+            )
+        ) {
+            return false;
+        }
+
         if (static::isSuperAdmin()) {
             return true;
         }
@@ -283,12 +444,28 @@ abstract class BaseResource extends Resource
         return parent::canRestoreAny();
     }
 
-
     /**
      * Trajno brisanje soft-deleted zapisa.
      */
-    public static function canForceDelete(Model $record): bool
-    {
+    public static function canForceDelete(
+        Model $record
+    ): bool {
+        if (
+            ! static::hasModuleActionPermission(
+                'delete'
+            )
+        ) {
+            return false;
+        }
+
+        if (
+            ! static::recordBelongsToCurrentOwner(
+                $record
+            )
+        ) {
+            return false;
+        }
+
         if (static::isSuperAdmin()) {
             return true;
         }
@@ -296,18 +473,29 @@ abstract class BaseResource extends Resource
         return parent::canForceDelete($record);
     }
 
-
     /**
      * Bulk trajno brisanje.
      */
     public static function canForceDeleteAny(): bool
     {
+        if (
+            ! static::hasModuleActionPermission(
+                'delete'
+            )
+        ) {
+            return false;
+        }
+
         if (static::isSuperAdmin()) {
             return true;
         }
 
         return parent::canForceDeleteAny();
     }
+
+    /**
+     * Kreiranje novog zapisa.
+     */
     public static function canCreate(): bool
     {
         $user = static::user();
@@ -400,7 +588,11 @@ abstract class BaseResource extends Resource
 
         $cacheKey =
             'navigation_badge_'
-            . str_replace('\\', '_', static::class)
+            . str_replace(
+                '\\',
+                '_',
+                static::class
+            )
             . '_'
             . $userId
             . '_'
@@ -450,9 +642,10 @@ abstract class BaseResource extends Resource
                     );
                 }
 
-                return (string) static::scopeToOwner(
-                    $query
-                )->count();
+                return (string)
+                    static::scopeToOwner(
+                        $query
+                    )->count();
             }
         );
     }

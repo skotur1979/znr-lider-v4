@@ -47,15 +47,13 @@ class OntoService
                     ->max('entry_no'))
                 + 1;
 
-            $currentBalance =
-                (float)
-                $ontoRecord
-                    ->current_balance_kg;
-
-            $newBalance =
-                $currentBalance
-                + $quantityKg;
-
+            /*
+            * entry_no predstavlja redoslijed
+            * evidentiranja zapisa.
+            *
+            * Datum može biti stariji jer je
+            * retroaktivni unos dopušten.
+            */
             $entry =
                 $ontoRecord
                     ->entries()
@@ -78,19 +76,27 @@ class OntoService
                         'method' =>
                             $method,
 
+                        /*
+                        * Privremena vrijednost.
+                        * Odmah ispod ponovno
+                        * računamo cijelu evidenciju.
+                        */
                         'balance_after_kg' =>
-                            $newBalance,
+                            0,
 
                         'note' =>
                             $note,
                     ]);
 
-            $ontoRecord->update([
-                'current_balance_kg' =>
-                    $newBalance,
-            ]);
+            /*
+            * Retroaktivni unos može promijeniti
+            * saldo svih kasnijih stavki.
+            */
+            $this->recalculateOntoBalances(
+                $ontoRecord
+            );
 
-            return $entry;
+            return $entry->refresh();
         });
     }
 
@@ -125,11 +131,26 @@ class OntoService
                 $ontoRecord
             );
 
+            /*
+            * Izlaz ne može postojati prije
+            * prvog evidentiranog ulaza.
+            *
+            * Ako korisnik naknadno otkrije da
+            * nedostaje raniji ulaz, prvo evidentira
+            * taj ulaz pa zatim izlaz.
+            */
             $this->assertOutputDateIsValid(
                 $ontoRecord,
                 $date
             );
 
+            /*
+            * Brza provjera ukupnog trenutnog stanja.
+            *
+            * Konačna povijesna kontrola radi se
+            * nakon kreiranja kroz
+            * recalculateOntoBalances().
+            */
             $currentBalance =
                 (float)
                 $ontoRecord
@@ -190,10 +211,6 @@ class OntoService
                     ->max('entry_no'))
                 + 1;
 
-            $newBalance =
-                $currentBalance
-                - $quantityKg;
-
             $entry =
                 $ontoRecord
                     ->entries()
@@ -216,8 +233,12 @@ class OntoService
                         'method' =>
                             $method,
 
+                        /*
+                        * Preračunava se odmah
+                        * nakon kreiranja.
+                        */
                         'balance_after_kg' =>
-                            $newBalance,
+                            0,
 
                         'note' =>
                             $note,
@@ -226,12 +247,21 @@ class OntoService
                             $trackingFormId,
                     ]);
 
-            $ontoRecord->update([
-                'current_balance_kg' =>
-                    $newBalance,
-            ]);
+            /*
+            * Ovo je ključ retroaktivnog unosa:
+            *
+            * sve stavke ponovno računamo po
+            * stvarnom datumu događaja.
+            *
+            * Ako bi saldo na bilo kojem datumu
+            * postao negativan, RuntimeException
+            * poništava cijelu DB transakciju.
+            */
+            $this->recalculateOntoBalances(
+                $ontoRecord
+            );
 
-            return $entry;
+            return $entry->refresh();
         });
     }
 
@@ -704,52 +734,127 @@ class OntoService
     protected function recalculateOntoBalances(
         OntoRecord $ontoRecord
     ): void {
+        /*
+        * Zaključavamo sve aktivne stavke ONTO obrasca.
+        *
+        * Redoslijed obračuna određujemo nakon dohvaćanja
+        * kako bi bio potpuno deterministički:
+        *
+        * 1. datum događaja
+        * 2. ulazi prije izlaza na isti datum
+        * 3. entry_no
+        * 4. id
+        *
+        * Time su dopušteni retroaktivni unosi,
+        * a entry_no ostaje audit trag redoslijeda
+        * stvarnog evidentiranja u aplikaciji.
+        */
         $entries =
             OntoEntry::query()
                 ->where(
                     'onto_record_id',
                     $ontoRecord->id
                 )
-                ->orderBy(
-                    'entry_no'
-                )
-                ->orderBy(
-                    'id'
-                )
                 ->lockForUpdate()
-                ->get();
+                ->get()
+                ->sort(
+                    function (
+                        OntoEntry $a,
+                        OntoEntry $b
+                    ): int {
+                        $dateA =
+                            $a->entry_date
+                                ?->format('Y-m-d')
+                            ?? '';
+
+                        $dateB =
+                            $b->entry_date
+                                ?->format('Y-m-d')
+                            ?? '';
+
+                        $dateCompare =
+                            strcmp(
+                                $dateA,
+                                $dateB
+                            );
+
+                        if ($dateCompare !== 0) {
+                            return $dateCompare;
+                        }
+
+                        /*
+                        * Na isti datum ulaz mora biti
+                        * obračunat prije izlaza.
+                        */
+                        $typePriorityA =
+                            $a->entry_type === 'input'
+                                ? 0
+                                : 1;
+
+                        $typePriorityB =
+                            $b->entry_type === 'input'
+                                ? 0
+                                : 1;
+
+                        $typeCompare =
+                            $typePriorityA
+                            <=> $typePriorityB;
+
+                        if ($typeCompare !== 0) {
+                            return $typeCompare;
+                        }
+
+                        $entryNoCompare =
+                            (int) $a->entry_no
+                            <=> (int) $b->entry_no;
+
+                        if ($entryNoCompare !== 0) {
+                            return $entryNoCompare;
+                        }
+
+                        return
+                            (int) $a->id
+                            <=> (int) $b->id;
+                    }
+                )
+                ->values();
 
         $balance = 0.0;
 
         foreach ($entries as $entry) {
             $inputKg =
-                (float)
-                ($entry->input_kg ?? 0);
+                (float) (
+                    $entry->input_kg
+                    ?? 0
+                );
 
             $outputKg =
-                (float)
-                ($entry->output_kg ?? 0);
+                (float) (
+                    $entry->output_kg
+                    ?? 0
+                );
 
-            $balance +=
-                $inputKg;
-
-            $balance -=
-                $outputKg;
+            $balance += $inputKg;
+            $balance -= $outputKg;
 
             /*
-             * Ne dopuštamo da ispravak
-             * napravi povijesno negativno stanje.
-             */
+            * Retroaktivni unos je dopušten,
+            * ali stanje u bilo kojem povijesnom
+            * trenutku ne smije biti negativno.
+            */
             if ($balance < -0.00001) {
                 throw new RuntimeException(
-                    'Ispravak nije moguć jer bi ONTO stanje u jednom trenutku postalo negativno.'
+                    'ONTO stanje bi na datum '
+                    . $entry->entry_date->format('d.m.Y.')
+                    . ' postalo negativno. '
+                    . 'Provjerite nedostaje li raniji ulaz otpada '
+                    . 'ili je potrebno ispraviti datum odnosno količinu.'
                 );
             }
 
             /*
-             * Uklanjamo sitne floating point
-             * ostatke poput -0.00000001.
-             */
+            * Uklanjamo sitne floating-point ostatke.
+            */
             if (
                 abs($balance)
                 < 0.00001
@@ -1075,8 +1180,7 @@ class OntoService
     protected function authorizeOntoRecord(
         OntoRecord $ontoRecord
     ): void {
-        $user =
-            Auth::user();
+        $user = Auth::user();
 
         if (! $user) {
             throw new RuntimeException(
@@ -1084,14 +1188,31 @@ class OntoService
             );
         }
 
-        if (
-            $user->isSuperAdmin()
-        ) {
-            return;
+        /*
+        * Superadmin pregledava poslovne ONTO podatke,
+        * ali ne izvršava transakcije organizacije.
+        */
+        if ($user->isSuperAdmin()) {
+            abort(403);
         }
 
-        $ownerId =
-            $user->ownerId();
+        /*
+        * Korisnik mora imati pristup ONTO modulu.
+        *
+        * Ako ONTO jednog dana postane granularno
+        * kontrolirani modul, ova provjera će automatski
+        * poštovati i update permission.
+        */
+        if (
+            ! $user->hasModulePermission(
+                'onto_records',
+                'update'
+            )
+        ) {
+            abort(403);
+        }
+
+        $ownerId = $user->ownerId();
 
         if (! $ownerId) {
             throw new RuntimeException(
@@ -1100,12 +1221,8 @@ class OntoService
         }
 
         if (
-            (int)
-            $ontoRecord
-                ->user_id
-            !==
-            (int)
-            $ownerId
+            (int) $ontoRecord->user_id
+            !== (int) $ownerId
         ) {
             abort(403);
         }
@@ -1115,8 +1232,7 @@ class OntoService
         WasteTrackingForm $trackingForm,
         OntoRecord $ontoRecord
     ): void {
-        $user =
-            Auth::user();
+        $user = Auth::user();
 
         if (! $user) {
             throw new RuntimeException(
@@ -1124,14 +1240,30 @@ class OntoService
             );
         }
 
-        if (
-            $user->isSuperAdmin()
-        ) {
-            return;
+        if ($user->isSuperAdmin()) {
+            abort(403);
         }
 
-        $ownerId =
-            $user->ownerId();
+        /*
+        * Zaključavanje / otključavanje PL-O
+        * mijenja i PL-O i ONTO stanje.
+        *
+        * Zato korisnik mora imati pravo nad oba modula.
+        */
+        if (
+            ! $user->hasModulePermission(
+                'waste_tracking_forms',
+                'update'
+            )
+            || ! $user->hasModulePermission(
+                'onto_records',
+                'update'
+            )
+        ) {
+            abort(403);
+        }
+
+        $ownerId = $user->ownerId();
 
         if (! $ownerId) {
             throw new RuntimeException(
@@ -1140,35 +1272,17 @@ class OntoService
         }
 
         if (
-            (int)
-            $trackingForm
-                ->user_id
-            !==
-            (int)
-            $ownerId
+            (int) $trackingForm->user_id
+            !== (int) $ownerId
+            || (int) $ontoRecord->user_id
+            !== (int) $ownerId
         ) {
             abort(403);
         }
 
         if (
-            (int)
-            $ontoRecord
-                ->user_id
-            !==
-            (int)
-            $ownerId
-        ) {
-            abort(403);
-        }
-
-        if (
-            (int)
-            $trackingForm
-                ->onto_record_id
-            !==
-            (int)
-            $ontoRecord
-                ->id
+            (int) $trackingForm->onto_record_id
+            !== (int) $ontoRecord->id
         ) {
             throw new RuntimeException(
                 'Prateći list nije povezan s odabranim ONTO zapisom.'

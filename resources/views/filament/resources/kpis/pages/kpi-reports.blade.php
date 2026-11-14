@@ -117,12 +117,12 @@
         |--------------------------------------------------------------------------
         |
         | Tablica namjerno ima minimalnu širinu kako 12 mjeseci,
-        | prosjek i ukupno ne bi bili stisnuti.
+        | prosjek i godišnja vrijednost ne bi bili stisnuti.
         |
         */
         .kpi-table {
             width: 100%;
-            min-width: 2000px;
+            min-width: 2100px;
             border-collapse: collapse;
             table-layout: fixed;
         }
@@ -192,8 +192,8 @@
         }
 
         .kpi-col-summary {
-            width: 115px;
-            min-width: 115px;
+            width: 150px;
+            min-width: 150px;
         }
 
         /*
@@ -284,7 +284,7 @@
         * tablicu lijevo/desno.
         */
         .kpi-table {
-            min-width: 2000px;
+            min-width: 2100px;
         }
 
         .kpi-table th,
@@ -383,7 +383,7 @@
                                 </th>
 
                                 <th class="kpi-right kpi-col-summary">
-                                    Ukupno
+                                    Godišnja vrijednost
                                 </th>
                             </tr>
                         </thead>
@@ -467,9 +467,9 @@
                                     <td class="kpi-right">
                                         <span class="kpi-number">
                                             {{
-                                                $row['total'] !== null
+                                                $row['yearly_value'] !== null
                                                     ? number_format(
-                                                        $row['total'],
+                                                        $row['yearly_value'],
                                                         2,
                                                         ',',
                                                         '.'

@@ -6,43 +6,42 @@ use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Chemicals\Pages;
 use App\Filament\Resources\Chemicals\Schemas\ChemicalForm;
 use App\Models\Chemical;
-use Filament\Actions\BulkAction;
-use Illuminate\Database\Eloquent\Collection;
-use BackedEnum;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
 use App\Support\SecureFilePreview;
+use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
-use Filament\Actions\Action;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\MaxWidth;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use UnitEnum;
 
 class ChemicalResource extends BaseResource
 {
-    protected static ?string $model = Chemical::class;
+    protected static ?string $model =
+        Chemical::class;
 
-    /*
-     * Standardni poslovni multi-tenant modul.
-     */
-    protected static bool $hasOwnership = true;
+    protected static bool $hasOwnership =
+        true;
 
-    /*
-     * Chemical model koristi SoftDeletes.
-     */
-    protected static bool $usesSoftDeletes = true;
+    protected static bool $usesSoftDeletes =
+        true;
 
     protected static BackedEnum|string|null $navigationIcon =
         'heroicon-o-beaker';
@@ -59,7 +58,8 @@ class ChemicalResource extends BaseResource
     protected static ?string $pluralModelLabel =
         'Kemikalije';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort =
+        3;
 
     protected static ?string $recordTitleAttribute =
         'product_name';
@@ -74,115 +74,179 @@ class ChemicalResource extends BaseResource
         return MaxWidth::Full;
     }
 
-    public static function form(Schema $schema): Schema
-    {
-        return ChemicalForm::configure($schema);
+    public static function form(
+        Schema $schema
+    ): Schema {
+        return ChemicalForm::configure(
+            $schema
+        );
     }
 
-    public static function table(Table $table): Table
-    {
+    public static function table(
+        Table $table
+    ): Table {
         return $table
             ->columns([
-                TextColumn::make('product_name')
-                    ->label('Ime proizvoda')
+                TextColumn::make(
+                    'product_name'
+                )
+                    ->label(
+                        'Ime proizvoda'
+                    )
                     ->searchable()
                     ->sortable()
                     ->wrap()
                     ->tooltip(
-                        fn (Chemical $record) =>
-                            (string) $record->product_name
+                        fn (
+                            Chemical $record
+                        ) =>
+                            (string)
+                            $record
+                                ->product_name
                     )
                     ->toggleable(),
 
                 static::userTableColumn(),
 
-                TextColumn::make('cas_number')
+                TextColumn::make(
+                    'cas_number'
+                )
                     ->label('CAS')
                     ->searchable()
                     ->sortable()
                     ->wrap()
                     ->toggleable(),
 
-                TextColumn::make('ufi_number')
+                TextColumn::make(
+                    'ufi_number'
+                )
                     ->label('UFI')
                     ->searchable()
                     ->sortable()
                     ->wrap()
                     ->toggleable(),
 
-                ViewColumn::make('hazard_pictograms')
-                    ->label('Piktogrami')
+                ViewColumn::make(
+                    'hazard_pictograms'
+                )
+                    ->label(
+                        'Piktogrami'
+                    )
                     ->alignCenter()
                     ->view(
                         'filament.tables.columns.hazard-pictograms'
                     )
                     ->toggleable(),
 
-                TextColumn::make('h_statements')
-                    ->label('H oznake')
+                TextColumn::make(
+                    'h_statements'
+                )
+                    ->label(
+                        'H oznake'
+                    )
                     ->alignCenter()
                     ->wrap()
                     ->formatStateUsing(
                         fn ($state) =>
-                            is_array($state)
-                                ? implode(', ', $state)
-                                : (string) $state
+                            is_array(
+                                $state
+                            )
+                                ? implode(
+                                    ', ',
+                                    $state
+                                )
+                                : (string)
+                                    $state
                     )
                     ->toggleable(),
 
-                TextColumn::make('p_statements')
-                    ->label('P oznake')
+                TextColumn::make(
+                    'p_statements'
+                )
+                    ->label(
+                        'P oznake'
+                    )
                     ->alignCenter()
                     ->wrap()
                     ->formatStateUsing(
                         fn ($state) =>
-                            is_array($state)
-                                ? implode(', ', $state)
-                                : (string) $state
+                            is_array(
+                                $state
+                            )
+                                ? implode(
+                                    ', ',
+                                    $state
+                                )
+                                : (string)
+                                    $state
                     )
                     ->toggleable(),
 
-                TextColumn::make('usage_location')
-                    ->label('Mjesto upotrebe')
+                TextColumn::make(
+                    'usage_location'
+                )
+                    ->label(
+                        'Mjesto upotrebe'
+                    )
                     ->alignCenter()
                     ->sortable()
                     ->wrap()
                     ->toggleable(),
 
-                TextColumn::make('annual_quantity')
-                    ->label('Količina')
+                TextColumn::make(
+                    'annual_quantity'
+                )
+                    ->label(
+                        'Količina'
+                    )
                     ->alignCenter()
                     ->sortable()
                     ->wrap()
                     ->toggleable(),
 
-                TextColumn::make('gvi_kgvi')
-                    ->label('GVI / KGVI')
+                TextColumn::make(
+                    'gvi_kgvi'
+                )
+                    ->label(
+                        'GVI / KGVI'
+                    )
                     ->alignCenter()
                     ->wrap()
                     ->toggleable(
-                        isToggledHiddenByDefault: true
+                        isToggledHiddenByDefault:
+                            true
                     ),
 
-                TextColumn::make('voc')
+                TextColumn::make(
+                    'voc'
+                )
                     ->label('VOC')
                     ->alignCenter()
                     ->wrap()
                     ->toggleable(
-                        isToggledHiddenByDefault: true
+                        isToggledHiddenByDefault:
+                            true
                     ),
 
-                TextColumn::make('stl_hzjz')
-                    ->label('STL – HZJZ')
-                    ->date('d.m.Y.')
+                TextColumn::make(
+                    'stl_hzjz'
+                )
+                    ->label(
+                        'STL – HZJZ'
+                    )
+                    ->date(
+                        'd.m.Y.'
+                    )
                     ->sortable()
                     ->alignCenter()
                     ->toggleable(),
 
-                TextColumn::make('attachments')
+                TextColumn::make(
+                    'attachments'
+                )
                     ->label('Prilozi')
                     ->alignment(
-                        \Filament\Support\Enums\Alignment::Center
+                        Alignment::Center
                     )
                     ->html()
                     ->state(
@@ -191,10 +255,12 @@ class ChemicalResource extends BaseResource
                         ): string {
                             if (
                                 ! is_array(
-                                    $record->attachments
+                                    $record
+                                        ->attachments
                                 )
                                 || count(
-                                    $record->attachments
+                                    $record
+                                        ->attachments
                                 ) === 0
                             ) {
                                 return
@@ -202,27 +268,51 @@ class ChemicalResource extends BaseResource
                             }
 
                             return collect(
-                                $record->attachments
+                                $record
+                                    ->attachments
                             )
                                 ->map(
                                     function (
                                         $file,
                                         $index
-                                    ) {
-                                        $url = SecureFilePreview::url(
-                                        $file
-                                    );
+                                    ): string {
+                                        if (
+                                            ! is_string(
+                                                $file
+                                            )
+                                            || blank(
+                                                $file
+                                            )
+                                        ) {
+                                            return '';
+                                        }
 
-                                        $name = e(
-                                            basename($file)
-                                        );
+                                        $url =
+                                            SecureFilePreview::
+                                                url(
+                                                    $file
+                                                );
+
+                                        if (! $url) {
+                                            return '';
+                                        }
+
+                                        $name =
+                                            e(
+                                                basename(
+                                                    $file
+                                                )
+                                            );
 
                                         $number =
-                                            $index + 1;
+                                            $index
+                                            + 1;
 
                                         return
                                             '<a href="'
-                                            . e($url)
+                                            . e(
+                                                $url
+                                            )
                                             . '"
                                                 target="_blank"
                                                 rel="noopener noreferrer"
@@ -252,6 +342,7 @@ class ChemicalResource extends BaseResource
                                             . '</a>';
                                     }
                                 )
+                                ->filter()
                                 ->implode('');
                         }
                     )
@@ -261,41 +352,69 @@ class ChemicalResource extends BaseResource
                         ): string {
                             if (
                                 ! is_array(
-                                    $record->attachments
+                                    $record
+                                        ->attachments
                                 )
                                 || count(
-                                    $record->attachments
+                                    $record
+                                        ->attachments
                                 ) === 0
                             ) {
-                                return 'Nema priloga';
+                                return
+                                    'Nema priloga';
                             }
 
                             return collect(
-                                $record->attachments
+                                $record
+                                    ->attachments
                             )
+                                ->filter(
+                                    fn ($file) =>
+                                        is_string(
+                                            $file
+                                        )
+                                        && filled(
+                                            $file
+                                        )
+                                )
                                 ->map(
                                     fn (
                                         $file,
                                         $index
                                     ) =>
-                                        ($index + 1)
+                                        (
+                                            $index
+                                            + 1
+                                        )
                                         . '. '
-                                        . basename($file)
+                                        . basename(
+                                            $file
+                                        )
                                 )
-                                ->implode("\n");
+                                ->implode(
+                                    "\n"
+                                );
                         }
                     )
                     ->toggleable(),
             ])
             ->filters([
-                SelectFilter::make('status')
-                    ->label('Status zapisa')
-                    ->placeholder('Odaberi status')
+                SelectFilter::make(
+                    'status'
+                )
+                    ->label(
+                        'Status zapisa'
+                    )
+                    ->placeholder(
+                        'Odaberi status'
+                    )
                     ->options([
                         'active' =>
                             'Aktivni zapisi',
+
                         'trashed' =>
                             'Deaktivirani zapisi',
+
                         'all' =>
                             'Svi zapisi',
                     ])
@@ -303,18 +422,23 @@ class ChemicalResource extends BaseResource
                         function (
                             Builder $query,
                             array $data
-                        ) {
+                        ): Builder {
                             return match (
-                                $data['value'] ?? null
+                                $data[
+                                    'value'
+                                ] ?? null
                             ) {
                                 'trashed' =>
-                                    $query->onlyTrashed(),
+                                    $query
+                                        ->onlyTrashed(),
 
                                 'all' =>
-                                    $query->withTrashed(),
+                                    $query
+                                        ->withTrashed(),
 
                                 default =>
-                                    $query->withoutTrashed(),
+                                    $query
+                                        ->withoutTrashed(),
                             };
                         }
                     ),
@@ -322,10 +446,13 @@ class ChemicalResource extends BaseResource
                 SelectFilter::make(
                     'usage_location'
                 )
-                    ->label('Mjesto upotrebe')
+                    ->label(
+                        'Mjesto upotrebe'
+                    )
                     ->options(
-                        fn () =>
-                            static::getEloquentQuery()
+                        fn (): array =>
+                            static::
+                                getEloquentQuery()
                                 ->whereNotNull(
                                     'usage_location'
                                 )
@@ -355,18 +482,44 @@ class ChemicalResource extends BaseResource
             ->actions([
                 ActionGroup::make([
                     ViewAction::make()
-                        ->label('Prikaži')
-                        ->color('gray'),
-
-                    Action::make('qrCode')
-                        ->label('QR kod')
-                        ->icon('heroicon-o-qr-code')
-                        ->color('success')
+                        ->label(
+                            'Prikaži'
+                        )
+                        ->color('gray')
                         ->visible(
                             fn (
                                 Chemical $record
                             ): bool =>
-                                ! $record->trashed()
+                                static::canView(
+                                    $record
+                                )
+                        ),
+
+                    Action::make(
+                        'qrCode'
+                    )
+                        ->label(
+                            'QR kod'
+                        )
+                        ->icon(
+                            'heroicon-o-qr-code'
+                        )
+                        ->color(
+                            'success'
+                        )
+                        ->visible(
+                            fn (
+                                Chemical $record
+                            ): bool =>
+                                ! $record
+                                    ->trashed()
+                                && $record
+                                    ->user_id
+                                    !== null
+                                && static::
+                                    allowsModulePermission(
+                                        'view'
+                                    )
                         )
                         ->url(
                             fn (
@@ -384,23 +537,51 @@ class ChemicalResource extends BaseResource
 
                     EditAction::make()
                         ->label('Uredi')
-                        ->color('warning')
+                        ->color(
+                            'warning'
+                        )
                         ->visible(
                             fn (
                                 Chemical $record
                             ): bool =>
-                                ! $record->trashed()
+                                ! $record
+                                    ->trashed()
+                                && static::canEdit(
+                                    $record
+                                )
                         ),
 
                     DeleteAction::make()
-                        ->label('Deaktiviraj')
+                        ->label(
+                            'Deaktiviraj'
+                        )
                         ->color('danger')
                         ->requiresConfirmation()
                         ->visible(
                             fn (
                                 Chemical $record
                             ): bool =>
-                                ! $record->trashed()
+                                ! $record
+                                    ->trashed()
+                                && static::
+                                    canDelete(
+                                        $record
+                                    )
+                        )
+                        ->before(
+                            function (
+                                $action
+                            ): void {
+                                if (
+                                    ! static::
+                                        ensureModulePermission(
+                                            'delete'
+                                        )
+                                ) {
+                                    $action
+                                        ->halt();
+                                }
+                            }
                         ),
 
                     RestoreAction::make()
@@ -410,7 +591,27 @@ class ChemicalResource extends BaseResource
                             fn (
                                 Chemical $record
                             ): bool =>
-                                $record->trashed()
+                                $record
+                                    ->trashed()
+                                && static::
+                                    canRestore(
+                                        $record
+                                    )
+                        )
+                        ->before(
+                            function (
+                                $action
+                            ): void {
+                                if (
+                                    ! static::
+                                        ensureModulePermission(
+                                            'delete'
+                                        )
+                                ) {
+                                    $action
+                                        ->halt();
+                                }
+                            }
                         ),
 
                     ForceDeleteAction::make()
@@ -422,20 +623,40 @@ class ChemicalResource extends BaseResource
                             fn (
                                 Chemical $record
                             ): bool =>
-                                $record->trashed()
+                                $record
+                                    ->trashed()
+                                && static::
+                                    canForceDelete(
+                                        $record
+                                    )
+                        )
+                        ->before(
+                            function (
+                                $action
+                            ): void {
+                                if (
+                                    ! static::
+                                        ensureModulePermission(
+                                            'delete'
+                                        )
+                                ) {
+                                    $action
+                                        ->halt();
+                                }
+                            }
                         ),
-                ]),
+                ])
+                    ->icon(
+                        Heroicon::
+                            EllipsisVertical
+                    )
+                    ->label(''),
             ])
             ->bulkActions([
-
-                /*
-                * DEAKTIVIRANJE
-                *
-                * Soft delete - zapis ostaje u bazi
-                * i kasnije ga možemo vratiti.
-                */
                 DeleteBulkAction::make()
-                    ->label('Deaktiviraj označeno')
+                    ->label(
+                        'Deaktiviraj označeno'
+                    )
                     ->requiresConfirmation()
                     ->modalHeading(
                         'Deaktiviraj odabrane kemikalije'
@@ -450,25 +671,46 @@ class ChemicalResource extends BaseResource
                         'Odustani'
                     )
                     ->visible(
-                        fn (HasTable $livewire): bool =>
-                            ! static::isOnlyTrashed(
-                                $livewire
-                            )
+                        fn (
+                            HasTable $livewire
+                        ): bool =>
+                            ! static::
+                                isOnlyTrashed(
+                                    $livewire
+                                )
+                            && static::
+                                canDeleteAny()
+                    )
+                    ->before(
+                        function (
+                            $action
+                        ): void {
+                            if (
+                                ! static::
+                                    ensureModulePermission(
+                                        'delete'
+                                    )
+                            ) {
+                                $action
+                                    ->halt();
+                            }
+                        }
                     )
                     ->deselectRecordsAfterCompletion(),
 
                 /*
-                * TRAJNO BRISANJE AKTIVNIH ZAPISA
-                *
-                * Zapis se odmah trajno briše,
-                * bez prethodne deaktivacije.
-                */
+                 * Namjerno zadržavamo postojeću
+                 * mogućnost trajnog brisanja
+                 * aktivnih označenih zapisa.
+                 */
                 BulkAction::make(
                     'delete_selected_permanently'
                 )
-                    ->label('Trajno obriši označeno')
+                    ->label(
+                        'Trajno obriši označeno'
+                    )
                     ->icon(
-                        \Filament\Support\Icons\Heroicon::Trash
+                        Heroicon::Trash
                     )
                     ->color('danger')
                     ->requiresConfirmation()
@@ -485,40 +727,54 @@ class ChemicalResource extends BaseResource
                         'Odustani'
                     )
                     ->visible(
-                        fn (HasTable $livewire): bool =>
-                            ! static::isOnlyTrashed(
-                                $livewire
-                            )
-                            && static::canForceDeleteAny()
+                        fn (
+                            HasTable $livewire
+                        ): bool =>
+                            ! static::
+                                isOnlyTrashed(
+                                    $livewire
+                                )
+                            && static::
+                                canForceDeleteAny()
                     )
                     ->action(
                         function (
-                            Collection $records
+                            EloquentCollection $records
                         ): void {
+                            if (
+                                ! static::
+                                    ensureModulePermission(
+                                        'delete'
+                                    )
+                            ) {
+                                return;
+                            }
+
                             $records->each(
                                 function (
                                     Chemical $record
                                 ): void {
                                     if (
-                                        ! static::canForceDelete(
-                                            $record
-                                        )
+                                        ! static::
+                                            canForceDelete(
+                                                $record
+                                            )
                                     ) {
                                         return;
                                     }
 
-                                    $record->forceDelete();
+                                    $record
+                                        ->forceDelete();
                                 }
                             );
                         }
                     )
                     ->deselectRecordsAfterCompletion(),
 
-                /*
-                * VRAĆANJE DEAKTIVIRANIH ZAPISA
-                */
                 RestoreBulkAction::make()
-                    ->label('Vrati označeno')
+                    ->label(
+                        'Vrati označeno'
+                    )
                     ->requiresConfirmation()
                     ->modalHeading(
                         'Vrati odabrane kemikalije'
@@ -533,19 +789,37 @@ class ChemicalResource extends BaseResource
                         'Odustani'
                     )
                     ->visible(
-                        fn (HasTable $livewire): bool =>
-                            static::isOnlyTrashed(
-                                $livewire
-                            )
-                            && static::canRestoreAny()
+                        fn (
+                            HasTable $livewire
+                        ): bool =>
+                            static::
+                                isOnlyTrashed(
+                                    $livewire
+                                )
+                            && static::
+                                canRestoreAny()
+                    )
+                    ->before(
+                        function (
+                            $action
+                        ): void {
+                            if (
+                                ! static::
+                                    ensureModulePermission(
+                                        'delete'
+                                    )
+                            ) {
+                                $action
+                                    ->halt();
+                            }
+                        }
                     )
                     ->deselectRecordsAfterCompletion(),
 
-                /*
-                * TRAJNO BRISANJE VEĆ DEAKTIVIRANIH
-                */
                 ForceDeleteBulkAction::make()
-                    ->label('Trajno obriši označeno')
+                    ->label(
+                        'Trajno obriši označeno'
+                    )
                     ->requiresConfirmation()
                     ->modalHeading(
                         'Trajno obriši odabrane kemikalije'
@@ -560,11 +834,30 @@ class ChemicalResource extends BaseResource
                         'Odustani'
                     )
                     ->visible(
-                        fn (HasTable $livewire): bool =>
-                            static::isOnlyTrashed(
-                                $livewire
-                            )
-                            && static::canForceDeleteAny()
+                        fn (
+                            HasTable $livewire
+                        ): bool =>
+                            static::
+                                isOnlyTrashed(
+                                    $livewire
+                                )
+                            && static::
+                                canForceDeleteAny()
+                    )
+                    ->before(
+                        function (
+                            $action
+                        ): void {
+                            if (
+                                ! static::
+                                    ensureModulePermission(
+                                        'delete'
+                                    )
+                            ) {
+                                $action
+                                    ->halt();
+                            }
+                        }
                     )
                     ->deselectRecordsAfterCompletion(),
             ]);
@@ -574,9 +867,10 @@ class ChemicalResource extends BaseResource
         HasTable $livewire
     ): bool {
         $state =
-            $livewire->getTableFilterState(
-                'status'
-            );
+            $livewire
+                ->getTableFilterState(
+                    'status'
+                );
 
         return data_get(
             $state,
@@ -588,22 +882,26 @@ class ChemicalResource extends BaseResource
     {
         return [
             'index' =>
-                Pages\ListChemicals::route('/'),
+                Pages\ListChemicals::
+                    route('/'),
 
             'create' =>
-                Pages\CreateChemical::route(
-                    '/create'
-                ),
+                Pages\CreateChemical::
+                    route(
+                        '/create'
+                    ),
 
             'view' =>
-                Pages\ViewChemical::route(
-                    '/{record}'
-                ),
+                Pages\ViewChemical::
+                    route(
+                        '/{record}'
+                    ),
 
             'edit' =>
-                Pages\EditChemical::route(
-                    '/{record}/edit'
-                ),
+                Pages\EditChemical::
+                    route(
+                        '/{record}/edit'
+                    ),
         ];
     }
 }

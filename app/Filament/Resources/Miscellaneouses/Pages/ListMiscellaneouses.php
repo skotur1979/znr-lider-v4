@@ -127,6 +127,9 @@ class ListMiscellaneouses extends BaseListRecords
                         ! MiscellaneousResource::allowsModulePermission(
                             'create'
                         )
+                        || ! MiscellaneousResource::allowsModulePermission(
+                            'update'
+                        )
                     ) {
                         return;
                     }

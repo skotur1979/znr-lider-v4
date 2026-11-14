@@ -37,7 +37,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
-use Illuminate\Validation\Rule;
 
 class MachineResource extends BaseResource
 {
@@ -112,22 +111,18 @@ class MachineResource extends BaseResource
                             )
                             ->columns(2)
                             ->schema([
-                                FormFileUpload::make('ocr_source')
+                               FormFileUpload::make('ocr_source')
                                     ->label('Zapisnik za OCR')
                                     ->disk('local')
                                     ->directory('tmp/machine-ocr')
                                     ->visibility('private')
                                     ->multiple(false)
+                                    ->maxSize(20480)
                                     ->acceptedFileTypes([
                                         'application/pdf',
                                         'image/jpeg',
                                         'image/png',
                                         'image/webp',
-                                        'application/msword',
-                                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                        'application/rtf',
-                                        'text/plain',
-                                        'application/vnd.oasis.opendocument.text',
                                     ])
                                     ->preserveFilenames()
                                     ->openable()
@@ -163,11 +158,11 @@ class MachineResource extends BaseResource
 
                                 TextInput::make('factory_number')
                                     ->label('Tvornički broj')
-                                    ->maxLength(255),
+                                    ->maxLength(125),
 
                                 TextInput::make('inventory_number')
                                     ->label('Inventarni broj')
-                                    ->maxLength(255),
+                                    ->maxLength(125),
                             ]),
 
                         /*
@@ -195,61 +190,20 @@ class MachineResource extends BaseResource
                                     ->required()
                                     ->displayFormat('d.m.Y.')
                                     ->weekStartsOnMonday()
-                                    ->timezone('Europe/Zagreb'),
+                                    ->timezone('Europe/Zagreb')
+                                    ->rule('after_or_equal:examination_valid_from')
+                                    ->validationMessages([
+                                        'after_or_equal' =>
+                                            'Datum do kada ispitivanje vrijedi ne može biti prije datuma ispitivanja.',
+                                    ]),
 
                                 TextInput::make('examined_by')
                                     ->label('Ispitao')
-                                    ->maxLength(255),
+                                    ->maxLength(191),
 
                                 TextInput::make('report_number')
                                     ->label('Broj izvještaja')
-                                    ->maxLength(255)
-                                    ->rule(
-                                        function ($record) {
-                                            /*
-                                             * Organizacijski korisnik:
-                                             * provjera unutar njegove organizacije.
-                                             *
-                                             * Superadmin kod uređivanja:
-                                             * provjera unutar organizacije kojoj
-                                             * postojeći zapis pripada.
-                                             */
-                                            $ownerId =
-                                                static::isSuperAdmin()
-                                                    ? $record?->user_id
-                                                    : static::ownerId();
-
-                                            return Rule::unique(
-                                                'machines',
-                                                'report_number'
-                                            )
-                                                ->where(
-                                                    function (
-                                                        $query
-                                                    ) use (
-                                                        $ownerId
-                                                    ): void {
-                                                        if ($ownerId) {
-                                                            $query->where(
-                                                                'user_id',
-                                                                $ownerId
-                                                            );
-                                                        }
-
-                                                        $query->whereNull(
-                                                            'deleted_at'
-                                                        );
-                                                    }
-                                                )
-                                                ->ignore(
-                                                    $record?->id
-                                                );
-                                        }
-                                    )
-                                    ->validationMessages([
-                                        'unique' =>
-                                            'Već postoji zapis s istim brojem izvještaja.',
-                                    ]),
+                                    ->maxLength(191),
                             ]),
 
                         /*
@@ -271,6 +225,7 @@ class MachineResource extends BaseResource
                                 Textarea::make('remark')
                                     ->label('Napomena')
                                     ->rows(3)
+                                    ->maxLength(1024)
                                     ->columnSpanFull(),
                             ]),
 
@@ -877,10 +832,16 @@ class MachineResource extends BaseResource
                                     'deleted_at',
                                 ]);
 
-                            /*
-                             * Prilozi se NE kopiraju.
-                             */
-                            $newRecord->pdf = [];
+                                /*
+                                * Broj izvještaja pripada konkretnom
+                                * ispitivanju i ne smije se kopirati.
+                                */
+                                $newRecord->report_number = null;
+
+                                /*
+                                * Prilozi se ne kopiraju.
+                                */
+                                $newRecord->pdf = [];
 
                             /*
                              * Standardni ownership.
@@ -936,6 +897,14 @@ class MachineResource extends BaseResource
                     ->modalCancelActionLabel(
                         'Odustani'
                     )
+                    ->visible(
+                    fn (
+                        HasTable $livewire
+                    ): bool =>
+                        self::isOnlyTrashed(
+                            $livewire
+                        )
+                )
                     ->before(
                         static::beforeModulePermission(
                             'delete'

@@ -8,6 +8,7 @@ use App\Filament\Resources\WasteOrganizations\Pages\EditWasteOrganization;
 use App\Filament\Resources\WasteOrganizations\Pages\ListWasteOrganizations;
 use App\Filament\Resources\WasteOrganizations\Pages\ViewWasteOrganization;
 use App\Models\WasteOrganization;
+use App\Models\OntoRecord;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -569,19 +570,38 @@ class WasteOrganizationResource extends BaseResource
     public static function canForceDelete(
         Model $record
     ): bool {
-        if (static::isSuperAdmin()) {
-            return true;
-        }
-
         $user = static::user();
 
         if (! $user) {
             return false;
         }
 
+        /*
+        * Organizacija korištena u bilo kojem
+        * aktivnom ili deaktiviranom ONTO obrascu
+        * mora ostati sačuvana radi povijesne evidencije.
+        */
+        if (
+            OntoRecord::query()
+                ->withTrashed()
+                ->where(
+                    'waste_organization_id',
+                    $record->getKey()
+                )
+                ->exists()
+        ) {
+            return false;
+        }
+
+        if (static::isSuperAdmin()) {
+            return true;
+        }
+
         return (int) $record->user_id
                 === (int) $user->ownerId()
-            && parent::canForceDelete($record);
+            && parent::canForceDelete(
+                $record
+            );
     }
 
     /*

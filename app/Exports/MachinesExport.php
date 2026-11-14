@@ -26,26 +26,33 @@ class MachinesExport implements
 
     protected bool $showUserColumn = false;
 
-    public function __construct(?array $machineIds = null)
-    {
+    public function __construct(
+        ?array $machineIds = null
+    ) {
         $user = auth()->user();
 
+        if (
+            ! $user
+            || ! $user->hasModulePermission(
+                'machines',
+                'view'
+            )
+        ) {
+            $this->machines = collect();
+            $this->showUserColumn = false;
+
+            return;
+        }
+
         $this->showUserColumn =
-            (bool) $user?->isSuperAdmin()
-            || (bool) $user?->canCreateSubusers();
+            $user->isSuperAdmin()
+            || $user->canCreateSubusers();
 
-        $query = MachineResource::getEloquentQuery()
-            ->with('user')
-            ->orderBy('name');
+        $query =
+            MachineResource::getEloquentQuery()
+                ->with('user')
+                ->orderBy('name');
 
-        /*
-         * Ako su ID-evi poslani iz filtrirane tablice,
-         * export mora poštovati točno taj rezultat.
-         *
-         * Važno:
-         * [] znači "filtriranje nije pronašlo ništa"
-         * i zato mora dati prazan export, a ne sve zapise.
-         */
         if ($machineIds !== null) {
             $query->whereIn(
                 'machines.id',
@@ -55,7 +62,8 @@ class MachinesExport implements
             $query->withoutTrashed();
         }
 
-        $this->machines = $query->get();
+        $this->machines =
+            $query->get();
     }
 
     public function collection()

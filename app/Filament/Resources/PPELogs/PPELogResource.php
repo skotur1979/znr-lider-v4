@@ -70,17 +70,20 @@ class PPELogResource extends BaseResource
     /**
      * Zaposlenici dostupni trenutnoj organizaciji.
      */
-    protected static function employeeQuery(): Builder
-    {
+    protected static function employeeQuery(
+        ?PPELog $record = null
+    ): Builder {
         $query = Employee::query();
 
         if (static::isSuperAdmin()) {
-            return $query;
+            $ownerId =
+                (int) ($record?->user_id ?? 0);
+        } else {
+            $ownerId =
+                (int) static::ownerId();
         }
 
-        $ownerId = static::ownerId();
-
-        if (! $ownerId) {
+        if ($ownerId <= 0) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -141,9 +144,12 @@ class PPELogResource extends BaseResource
                             ->live()
                             ->getSearchResultsUsing(
                                 function (
-                                    string $search
+                                    string $search,
+                                    ?PPELog $record
                                 ): array {
-                                    return static::employeeQuery()
+                                    return static::employeeQuery(
+                                        $record
+                                    )
                                         ->where(
                                             function (
                                                 Builder $query
@@ -186,14 +192,17 @@ class PPELogResource extends BaseResource
                             )
                             ->getOptionLabelUsing(
                                 function (
-                                    $value
+                                    $value,
+                                    ?PPELog $record
                                 ): ?string {
                                     if (! $value) {
                                         return null;
                                     }
 
                                     $employee =
-                                        static::employeeQuery()
+                                        static::employeeQuery(
+                                            $record
+                                        )
                                             ->whereKey(
                                                 $value
                                             )
@@ -207,7 +216,8 @@ class PPELogResource extends BaseResource
                             ->afterStateUpdated(
                                 function (
                                     $state,
-                                    $set
+                                    $set,
+                                    ?PPELog $record
                                 ): void {
                                     if (! $state) {
                                         $set(
@@ -234,7 +244,9 @@ class PPELogResource extends BaseResource
                                     }
 
                                     $employee =
-                                        static::employeeQuery()
+                                        static::employeeQuery(
+                                            $record
+                                        )
                                             ->whereKey(
                                                 $state
                                             )
@@ -291,7 +303,8 @@ class PPELogResource extends BaseResource
                                 function (
                                     $state,
                                     callable $set,
-                                    callable $get
+                                    callable $get,
+                                    ?PPELog $record
                                 ): void {
                                     if (
                                         ! $state
@@ -320,7 +333,9 @@ class PPELogResource extends BaseResource
                                         );
 
                                     $employeeQuery =
-                                        static::employeeQuery();
+                                        static::employeeQuery(
+                                            $record
+                                        );
 
                                     $employeeQuery->where(
                                         function (
@@ -810,8 +825,8 @@ class PPELogResource extends BaseResource
     /**
      * Upisnik OZO je poslovni zapis organizacije.
      *
-     * Superadmin ga može pregledavati,
-     * ali ga NE može uređivati.
+     * Superadmin može administrirati postojeći
+     * organizacijski Upisnik OZO, ali ga ne kreira.
      */
     public static function canEdit(
         Model $record

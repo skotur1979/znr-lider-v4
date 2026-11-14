@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Budgets;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Budgets\Pages;
 use App\Models\Budget;
+use Illuminate\Validation\Rule;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -61,12 +62,45 @@ class BudgetResource extends BaseResource
                     TextInput::make('godina')
                         ->label('Godina')
                         ->numeric()
-                        ->required(),
+                        ->required()
+                        ->rules([
+                            'integer',
+                            'min:2000',
+                            'max:2100',
+                        ])
+                        ->rule(
+                            function (?Budget $record) {
+                                $ownerId =
+                                    $record?->user_id
+                                    ?? static::defaultUserId();
+
+                                return Rule::unique(
+                                    'budgets',
+                                    'godina'
+                                )
+                                    ->where(
+                                        fn ($query) =>
+                                            $query->where(
+                                                'user_id',
+                                                $ownerId
+                                            )
+                                    )
+                                    ->ignore(
+                                        $record?->id
+                                    );
+                            }
+                        )
+                        ->validationMessages([
+                            'unique' =>
+                                'Budžet za ovu godinu već postoji.',
+                        ]),
 
                     TextInput::make('ukupni_budget')
                         ->label('Ukupni budžet (€)')
                         ->numeric()
-                        ->required(),
+                        ->required()
+                        ->minValue(0)
+                        ->maxValue(9999999999.99),
                 ]),
         ]);
     }

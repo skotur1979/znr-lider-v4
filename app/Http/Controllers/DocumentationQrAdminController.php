@@ -213,29 +213,44 @@ class DocumentationQrAdminController extends Controller
         DocumentationItem $documentationItem,
         string $permission
     ): void {
-        $user = auth()->user();
+        $user =
+            auth()->user();
 
         abort_unless(
             $user,
             403
         );
 
+        /*
+        * Druga organizacija dobiva 404,
+        * bez otkrivanja postojanja zapisa.
+        */
         if (
             ! $user->isSuperAdmin()
+            && (int) $documentationItem->user_id
+                !== (int) $user->ownerId()
         ) {
-            abort_unless(
-                (int) $documentationItem->user_id
-                    ===
-                (int) $user->ownerId(),
-                404
-            );
+            abort(404);
         }
 
+        $allowed =
+            match ($permission) {
+                'view' =>
+                    DocumentationItemResource::canView(
+                        $documentationItem
+                    ),
+
+                'update' =>
+                    DocumentationItemResource::canEdit(
+                        $documentationItem
+                    ),
+
+                default =>
+                    false,
+            };
+
         abort_unless(
-            DocumentationItemResource
-                ::ensureModulePermission(
-                    $permission
-                ),
+            $allowed,
             403
         );
     }

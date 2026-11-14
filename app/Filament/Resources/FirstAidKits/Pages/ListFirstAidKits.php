@@ -43,8 +43,8 @@ class ListFirstAidKits extends BaseListRecords
                         ->setPaper('a4', 'landscape')
                         ->setOptions([
                             'isHtml5ParserEnabled' => true,
-                            'isRemoteEnabled' => true,
-                            'isPhpEnabled' => true,
+                            'isRemoteEnabled' => false,
+                            'isPhpEnabled' => false,
                             'dpi' => 96,
                             'defaultFont' => 'DejaVu Sans',
                         ]);
@@ -60,7 +60,9 @@ class ListFirstAidKits extends BaseListRecords
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->action(fn () => Excel::download(
-                    new FirstAidKitsExport(),
+                    new FirstAidKitsExport(
+                    $this->getFilteredSortedTableQuery()
+                ),
                     'prva-pomoc-ormarici-' . now()->format('Y-m-d') . '.xlsx'
                 )),
         ];

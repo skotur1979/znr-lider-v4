@@ -2,12 +2,14 @@
 
 namespace App\Imports;
 
+use App\Filament\Resources\PPELogs\PPELogResource;
 use App\Models\Employee;
 use App\Models\PPEEquipment;
 use App\Models\PPEItem;
 use App\Models\PPELog;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
@@ -26,14 +28,35 @@ class PPELogsImport implements ToCollection
 
     public int $missingEmployees = 0;
 
+    /*
+     * OZO nije pronađen u Registru, ali ga
+     * svejedno uvozimo kao ručni OZO.
+     */
     public int $notInRegistry = 0;
+
+    /*
+     * Kompatibilnost sa starijim kodom.
+     */
+    public int $missingEquipment = 0;
 
     public function __construct(
         protected int $ownerId
     ) {
-        if ($this->ownerId <= 0) {
+        $user = Auth::user();
+
+        if (
+            $this->ownerId <= 0
+            || ! $user
+            || $user->isSuperAdmin()
+            || (int) $user->ownerId()
+                !== $this->ownerId
+            || ! PPELogResource::canCreate()
+            || ! PPELogResource::allowsModulePermission(
+                'update'
+            )
+        ) {
             throw new RuntimeException(
-                'Organizacija nije određena.'
+                'Nemate dopuštenje za uvoz Upisnika OZO.'
             );
         }
     }
@@ -41,12 +64,81 @@ class PPELogsImport implements ToCollection
     public function collection(
         Collection $rows
     ): void {
-        [
-            $headerRowIndex,
-            $headers,
-        ] = $this->findHeaderRow(
-            $rows
-        );
+        $headerRowIndex = null;
+        $headers = [];
+
+        foreach (
+            $rows->take(10)
+            as $index => $row
+        ) {
+            $normalized =
+                collect($row)
+                    ->map(
+                        fn ($value): string =>
+                            $this->normalizeHeader(
+                                $value
+                            )
+                    )
+                    ->values()
+                    ->all();
+
+            if (
+                in_array(
+                    'oib',
+                    $normalized,
+                    true
+                )
+                && (
+                    in_array(
+                        'naziv ozo',
+                        $normalized,
+                        true
+                    )
+                    || in_array(
+                        'naziv',
+                        $normalized,
+                        true
+                    )
+                    || in_array(
+                        'ozo',
+                        $normalized,
+                        true
+                    )
+                )
+                && (
+                    in_array(
+                        'datum izdavanja',
+                        $normalized,
+                        true
+                    )
+                    || in_array(
+                        'izdano',
+                        $normalized,
+                        true
+                    )
+                    || in_array(
+                        'datum izdano',
+                        $normalized,
+                        true
+                    )
+                )
+            ) {
+                $headerRowIndex =
+                    (int) $index;
+
+                $headers =
+                    $normalized;
+
+                break;
+            }
+        }
+
+        if ($headerRowIndex === null) {
+            throw new RuntimeException(
+                'Nije pronađen red zaglavlja. '
+                . 'Excel mora sadržavati stupce OIB, Naziv OZO i Datum izdavanja.'
+            );
+        }
 
         $oibIndex =
             $this->headerIndex(
@@ -70,8 +162,8 @@ class PPELogsImport implements ToCollection
             $this->headerIndex(
                 $headers,
                 [
-                    'hrn en norma',
                     'hrn en',
+                    'hrn en norma',
                     'norma',
                     'standard',
                 ],
@@ -91,25 +183,15 @@ class PPELogsImport implements ToCollection
             $this->headerIndex(
                 $headers,
                 [
+                    'rok mjeseci',
                     'rok uporabe mjeseci',
                     'rok upotrebe mjeseci',
-                    'rok mjeseci',
                     'rok uporabe mj',
                     'trajanje mjeseci',
                 ],
                 required: false
             );
 
-        /*
-         * Datum izdavanja više nije
-         * obavezan za SVAKI red.
-         *
-         * Ako zapis već postoji i datum
-         * nije naveden, postojeći datum
-         * jednostavno ostaje.
-         *
-         * Za NOVI zapis ipak je potreban.
-         */
         $issueDateIndex =
             $this->headerIndex(
                 $headers,
@@ -117,8 +199,7 @@ class PPELogsImport implements ToCollection
                     'datum izdavanja',
                     'izdano',
                     'datum izdano',
-                ],
-                required: false
+                ]
             );
 
         $returnDateIndex =
@@ -131,63 +212,170 @@ class PPELogsImport implements ToCollection
                 required: false
             );
 
-        foreach (
+        $dataRows =
             $rows->slice(
                 $headerRowIndex + 1
-            )
-            as $row
-        ) {
+            );
+
+        foreach ($dataRows as $row) {
             $values =
-                collect(
-                    $row
-                )
+                collect($row)
                     ->values();
 
             $oib =
-                $this->normalizeOib(
-                    $values->get(
-                        $oibIndex,
-                        ''
+                preg_replace(
+                    '/\s+/',
+                    '',
+                    trim(
+                        (string)
+                        $values->get(
+                            $oibIndex,
+                            ''
+                        )
                     )
                 );
 
             $equipmentName =
-                trim(
-                    (string)
+                preg_replace(
+                    '/\s+/',
+                    ' ',
+                    trim(
+                        (string)
+                        $values->get(
+                            $equipmentIndex,
+                            ''
+                        )
+                    )
+                );
+
+            $issueDate =
+                $this->parseDate(
                     $values->get(
-                        $equipmentIndex,
-                        ''
+                        $issueDateIndex
                     )
                 );
 
             /*
-             * Potpuno prazan red.
+             * Potpuno prazan red ignoriramo.
              */
             if (
                 $oib === ''
                 && $equipmentName === ''
+                && $issueDate === null
             ) {
                 continue;
             }
 
-            /*
-             * OIB + Naziv OZO su jedina
-             * obavezna identifikacijska polja.
-             */
             if (
                 $oib === ''
                 || $equipmentName === ''
+                || $issueDate === null
             ) {
                 $this->skipped++;
 
                 continue;
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | ZAPOSLENIK
-            |--------------------------------------------------------------------------
-            */
+            if (
+                mb_strlen(
+                    $equipmentName
+                ) > 191
+            ) {
+                $this->skipped++;
+
+                continue;
+            }
+
+            $standard =
+                $standardIndex !== null
+                    ? preg_replace(
+                        '/\s+/',
+                        ' ',
+                        trim(
+                            (string)
+                            $values->get(
+                                $standardIndex,
+                                ''
+                            )
+                        )
+                    )
+                    : '';
+
+            $size =
+                $sizeIndex !== null
+                    ? trim(
+                        (string)
+                        $values->get(
+                            $sizeIndex,
+                            ''
+                        )
+                    )
+                    : '';
+
+            if (
+                mb_strlen($standard) > 191
+                || mb_strlen($size) > 20
+            ) {
+                $this->skipped++;
+
+                continue;
+            }
+
+            $rawDuration =
+                $durationIndex !== null
+                    ? trim(
+                        (string)
+                        $values->get(
+                            $durationIndex,
+                            ''
+                        )
+                    )
+                    : '';
+
+            if (
+                $rawDuration !== ''
+                && ! is_numeric(
+                    $rawDuration
+                )
+            ) {
+                $this->skipped++;
+
+                continue;
+            }
+
+            $durationMonths =
+                $rawDuration !== ''
+                    ? (int) $rawDuration
+                    : 0;
+
+            if (
+                $durationMonths < 0
+                || $durationMonths > 120
+            ) {
+                $this->skipped++;
+
+                continue;
+            }
+
+            $returnDate =
+                $returnDateIndex !== null
+                    ? $this->parseDate(
+                        $values->get(
+                            $returnDateIndex
+                        )
+                    )
+                    : null;
+
+            if (
+                $returnDate
+                && $returnDate->lt(
+                    $issueDate
+                )
+            ) {
+                $this->skipped++;
+
+                continue;
+            }
 
             $employee =
                 $this->findEmployee(
@@ -201,174 +389,10 @@ class PPELogsImport implements ToCollection
                 continue;
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | OPCIONALNA POLJA
-            |--------------------------------------------------------------------------
-            |
-            | Razlikujemo:
-            |
-            | - prazno polje
-            | - stvarno unesenu vrijednost
-            |
-            | Prazna ćelija kod postojećeg
-            | zapisa NE briše postojeći podatak.
-            |
-            */
-
-            $rawStandard =
-                $standardIndex !== null
-                    ? $values->get(
-                        $standardIndex
-                    )
-                    : null;
-
-            $standardProvided =
-                $this->hasValue(
-                    $rawStandard
-                );
-
-            $standard =
-                $standardProvided
-                    ? trim(
-                        (string)
-                        $rawStandard
-                    )
-                    : null;
-
-            $rawSize =
-                $sizeIndex !== null
-                    ? $values->get(
-                        $sizeIndex
-                    )
-                    : null;
-
-            $sizeProvided =
-                $this->hasValue(
-                    $rawSize
-                );
-
-            $size =
-                $sizeProvided
-                    ? trim(
-                        (string)
-                        $rawSize
-                    )
-                    : null;
-
-            $rawDuration =
-                $durationIndex !== null
-                    ? $values->get(
-                        $durationIndex
-                    )
-                    : null;
-
-            $durationProvided =
-                $this->hasValue(
-                    $rawDuration
-                );
-
-            $durationMonths =
-                $durationProvided
-                    ? max(
-                        0,
-                        (int)
-                        $rawDuration
-                    )
-                    : null;
-
-            /*
-            |--------------------------------------------------------------------------
-            | DATUM IZDAVANJA
-            |--------------------------------------------------------------------------
-            */
-
-            $rawIssueDate =
-                $issueDateIndex !== null
-                    ? $values->get(
-                        $issueDateIndex
-                    )
-                    : null;
-
-            $issueDateProvided =
-                $this->hasValue(
-                    $rawIssueDate
-                );
-
-            $issueDate =
-                $issueDateProvided
-                    ? $this->parseDate(
-                        $rawIssueDate
-                    )
-                    : null;
-
-            /*
-             * Ako je korisnik nešto upisao
-             * kao datum, ali datum nije valjan,
-             * cijeli red preskačemo.
-             */
-            if (
-                $issueDateProvided
-                && ! $issueDate
-            ) {
-                $this->skipped++;
-
-                continue;
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | DATUM VRAĆANJA
-            |--------------------------------------------------------------------------
-            */
-
-            $rawReturnDate =
-                $returnDateIndex !== null
-                    ? $values->get(
-                        $returnDateIndex
-                    )
-                    : null;
-
-            $returnDateProvided =
-                $this->hasValue(
-                    $rawReturnDate
-                );
-
-            $returnDate =
-                $returnDateProvided
-                    ? $this->parseDate(
-                        $rawReturnDate
-                    )
-                    : null;
-
-            if (
-                $returnDateProvided
-                && ! $returnDate
-            ) {
-                $this->skipped++;
-
-                continue;
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | REGISTAR OZO
-            |--------------------------------------------------------------------------
-            |
-            | Registar je samo predložak.
-            |
-            | Ako ga pronađemo možemo uzeti
-            | normu i rok za NOVO zaduženje.
-            |
-            | Ako ga nema, red se svejedno
-            | može uvesti iz Excela.
-            |
-            */
-
             $equipment =
                 $this->findEquipment(
                     $equipmentName,
-                    $standard ?? ''
+                    $standard
                 );
 
             if (! $equipment) {
@@ -376,16 +400,39 @@ class PPELogsImport implements ToCollection
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | UPISNIK ZAPOSLENIKA
-            |--------------------------------------------------------------------------
-            */
+             * Ako rok nije naveden u Excelu,
+             * koristimo rok iz Registra OZO.
+             */
+            if (
+                $durationMonths <= 0
+                && $equipment
+            ) {
+                $durationMonths =
+                    (int) (
+                        $equipment
+                            ->duration_months
+                        ?? 0
+                    );
+            }
 
-            $employeeOib =
-                $this->employeeOib(
-                    $employee
-                );
+            $endDate =
+                $returnDate !== null
+                    ? null
+                    : (
+                        $durationMonths > 0
+                            ? $issueDate
+                                ->copy()
+                                ->addMonths(
+                                    $durationMonths
+                                )
+                                ->toDateString()
+                            : null
+                    );
 
+            /*
+             * Jedan Upisnik OZO po zaposleniku
+             * unutar organizacije.
+             */
             $ppeLog =
                 PPELog::withTrashed()
                     ->where(
@@ -394,14 +441,26 @@ class PPELogsImport implements ToCollection
                     )
                     ->where(
                         'user_oib',
-                        $employeeOib
+                        $this->employeeOib(
+                            $employee
+                        )
                     )
                     ->first();
 
             /*
-             * Zaposlenik još nema
-             * Upisnik OZO.
+             * Ako je Upisnik deaktiviran,
+             * import ga ne vraća automatski
+             * i ne izrađuje duplikat.
              */
+            if (
+                $ppeLog
+                && $ppeLog->trashed()
+            ) {
+                $this->skipped++;
+
+                continue;
+            }
+
             if (! $ppeLog) {
                 $ppeLog =
                     PPELog::create([
@@ -412,10 +471,13 @@ class PPELogsImport implements ToCollection
                             $employee->name,
 
                         'user_oib' =>
-                            $employeeOib,
+                            $this->employeeOib(
+                                $employee
+                            ),
 
                         'workplace' =>
-                            $employee->workplace,
+                            $employee
+                                ->workplace,
 
                         'organization_unit' =>
                             $employee
@@ -423,25 +485,15 @@ class PPELogsImport implements ToCollection
                     ]);
             } else {
                 /*
-                 * Ako je Upisnik bio
-                 * deaktiviran, vraćamo ga.
-                 */
-                if (
-                    $ppeLog->trashed()
-                ) {
-                    $ppeLog->restore();
-                }
-
-                /*
-                 * Osvježavamo osnovne podatke
-                 * zaposlenika.
+                 * Osvježavamo snapshot zaposlenika.
                  */
                 $ppeLog->update([
                     'user_last_name' =>
                         $employee->name,
 
                     'workplace' =>
-                        $employee->workplace,
+                        $employee
+                            ->workplace,
 
                     'organization_unit' =>
                         $employee
@@ -450,363 +502,146 @@ class PPELogsImport implements ToCollection
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | TRAŽENJE POSTOJEĆEG AKTIVNOG OZO-a
-            |--------------------------------------------------------------------------
-            |
-            | Datum izdavanja NIJE ključ.
-            |
-            | Primjer:
-            |
-            | postojeće:
-            | Radne cipele | 11.06.2026.
-            |
-            | Excel:
-            | Radne cipele | 20.09.2026.
-            |
-            | rezultat:
-            | datum postojećeg zapisa postaje
-            | 20.09.2026.
-            |
-            | Ne nastaje novi duplikat.
-            |
-            | Vraćena OZO se ne dira jer mora
-            | ostati povijesna evidencija.
-            |
-            */
-
-            $existingQuery =
-                PPEItem::query()
+             * Zaduženje identificiramo po:
+             *
+             * - Upisniku
+             * - datumu izdavanja
+             * - veličini
+             * - registry FK-u ako postoji
+             * - ili nazivu ako je ručni OZO.
+             */
+            $itemQuery =
+                PPEItem::withTrashed()
                     ->where(
                         'personal_protective_equipment_log_id',
                         $ppeLog->id
                     )
+                    ->whereDate(
+                        'issue_date',
+                        $issueDate
+                            ->toDateString()
+                    );
+
+            if ($size === '') {
+                $itemQuery->whereNull(
+                    'size'
+                );
+            } else {
+                $itemQuery->where(
+                    'size',
+                    $size
+                );
+            }
+
+            if ($equipment) {
+                $itemQuery->where(
+                    function (
+                        $query
+                    ) use (
+                        $equipment,
+                        $equipmentName
+                    ): void {
+                        $query
+                            ->where(
+                                'ppe_equipment_id',
+                                $equipment->id
+                            )
+                            ->orWhere(
+                                function (
+                                    $query
+                                ) use (
+                                    $equipmentName
+                                ): void {
+                                    $query
+                                        ->whereNull(
+                                            'ppe_equipment_id'
+                                        )
+                                        ->where(
+                                            'equipment_name',
+                                            $equipmentName
+                                        );
+                                }
+                            );
+                    }
+                );
+            } else {
+                $itemQuery
+                    ->whereNull(
+                        'ppe_equipment_id'
+                    )
                     ->where(
                         'equipment_name',
                         $equipmentName
-                    )
-                    ->whereNull(
-                        'return_date'
                     );
-
-            $item = null;
-
-            /*
-             * Ako je veličina unesena,
-             * prvo pokušavamo pronaći
-             * isti OZO i istu veličinu.
-             */
-            if ($sizeProvided) {
-                $item =
-                    (clone $existingQuery)
-                        ->where(
-                            'size',
-                            $size
-                        )
-                        ->orderByDesc(
-                            'issue_date'
-                        )
-                        ->orderByDesc(
-                            'id'
-                        )
-                        ->first();
             }
 
-            /*
-             * Ako nema točnog podudaranja
-             * po veličini, uzimamo zadnji
-             * aktivni isti OZO.
-             */
-            $item ??=
-                (clone $existingQuery)
-                    ->orderByDesc(
-                        'issue_date'
-                    )
-                    ->orderByDesc(
-                        'id'
-                    )
-                    ->first();
+            $item =
+                $itemQuery->first();
 
-            /*
-            |--------------------------------------------------------------------------
-            | NOVO ZADUŽENJE
-            |--------------------------------------------------------------------------
-            */
+            if (
+                $item
+                && $item->trashed()
+            ) {
+                /*
+                * Deaktivirani OZO ne vraćamo automatski
+                * niti stvaramo novi duplikat.
+                */
+                $this->skipped++;
+
+                continue;
+            }
 
             if (! $item) {
-                /*
-                 * Novi zapis bez datuma
-                 * izdavanja nema smisla.
-                 */
-                if (! $issueDate) {
-                    $this->skipped++;
+                $item =
+                    new PPEItem([
+                        'personal_protective_equipment_log_id' =>
+                            $ppeLog->id,
 
-                    continue;
-                }
+                        'issue_date' =>
+                            $issueDate
+                                ->toDateString(),
 
-                /*
-                 * Ako Norma nije unesena,
-                 * pokušamo je uzeti iz Registra.
-                 */
-                $newStandard =
-                    $standardProvided
+                        'size' =>
+                            $size !== ''
+                                ? $size
+                                : null,
+                    ]);
+            }
+
+            $item->fill([
+                'ppe_equipment_id' =>
+                    $equipment?->id,
+
+                'equipment_name' =>
+                    $equipment?->name
+                    ?? $equipmentName,
+
+                'standard' =>
+                    $standard !== ''
                         ? $standard
-                        : trim(
-                            (string) (
-                                $equipment
-                                    ?->standard
-                                ?? ''
-                            )
-                        );
+                        : $equipment?->standard,
 
-                /*
-                 * Ako Rok nije unesen,
-                 * pokušamo ga uzeti iz Registra.
-                 */
-                $newDuration =
-                    $durationProvided
+                'duration_months' =>
+                    $durationMonths > 0
                         ? $durationMonths
-                        : (
-                            $equipment
-                                ? (int) (
-                                    $equipment
-                                        ->duration_months
-                                    ?? 0
-                                )
-                                : null
-                        );
+                        : null,
 
-                $newEndDate =
-                    null;
+                'end_date' =>
+                    $endDate,
 
-                /*
-                 * Ako je odmah upisan
-                 * Datum vraćanja, nema isteka.
-                 */
-                if (
-                    ! $returnDate
-                    && $newDuration !== null
-                    && $newDuration > 0
-                ) {
-                    $newEndDate =
-                        $issueDate
-                            ->copy()
-                            ->addMonths(
-                                $newDuration
-                            )
-                            ->toDateString();
-                }
+                'return_date' =>
+                    $returnDate
+                        ?->toDateString(),
+            ]);
 
-                PPEItem::create([
-                    'personal_protective_equipment_log_id' =>
-                        $ppeLog->id,
-
-                    'equipment_name' =>
-                        $equipmentName,
-
-                    'standard' =>
-                        $newStandard !== ''
-                            ? $newStandard
-                            : null,
-
-                    'size' =>
-                        $sizeProvided
-                            ? $size
-                            : null,
-
-                    'duration_months' =>
-                        $newDuration,
-
-                    'issue_date' =>
-                        $issueDate
-                            ->toDateString(),
-
-                    'end_date' =>
-                        $newEndDate,
-
-                    'return_date' =>
-                        $returnDate
-                            ?->toDateString(),
-                ]);
+            if (! $item->exists) {
+                $item->save();
 
                 $this->created++;
 
                 continue;
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | AŽURIRANJE POSTOJEĆEG OZO-a
-            |--------------------------------------------------------------------------
-            |
-            | Najvažnije pravilo:
-            |
-            | PRAZNO U EXCELU
-            | =
-            | NE DIRAJ POSTOJEĆU VRIJEDNOST.
-            |
-            */
-
-            $changes = [];
-
-            if ($standardProvided) {
-                $changes[
-                    'standard'
-                ] =
-                    $standard;
-            }
-
-            if ($sizeProvided) {
-                $changes[
-                    'size'
-                ] =
-                    $size;
-            }
-
-            if ($durationProvided) {
-                $changes[
-                    'duration_months'
-                ] =
-                    $durationMonths;
-            }
-
-            /*
-             * Datum izdavanja se mijenja
-             * ako je u Excelu popunjen
-             * i drugačiji od postojećeg.
-             */
-            if ($issueDateProvided) {
-                $changes[
-                    'issue_date'
-                ] =
-                    $issueDate
-                        ->toDateString();
-            }
-
-            /*
-             * Prazan Datum vraćanja
-             * ne briše postojeći podatak.
-             */
-            if ($returnDateProvided) {
-                $changes[
-                    'return_date'
-                ] =
-                    $returnDate
-                        ->toDateString();
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | NOVI DATUM ISTEKA
-            |--------------------------------------------------------------------------
-            */
-
-            $effectiveIssueDate =
-                $issueDateProvided
-                    ? $issueDate
-                    : (
-                        $item->issue_date
-                            ? Carbon::parse(
-                                $item
-                                    ->issue_date
-                            )
-                            : null
-                    );
-
-            $effectiveDuration =
-                $durationProvided
-                    ? $durationMonths
-                    : (
-                        $item
-                            ->duration_months
-                        !== null
-                            ? (int)
-                                $item
-                                    ->duration_months
-                            : null
-                    );
-
-            $effectiveReturnDate =
-                $returnDateProvided
-                    ? $returnDate
-                    : (
-                        $item->return_date
-                            ? Carbon::parse(
-                                $item
-                                    ->return_date
-                            )
-                            : null
-                    );
-
-            /*
-             * Rok ponovno računamo samo ako
-             * je korisnik promijenio:
-             *
-             * - Datum izdavanja
-             * - Rok mjeseci
-             * - Datum vraćanja
-             */
-            if (
-                $issueDateProvided
-                || $durationProvided
-                || $returnDateProvided
-            ) {
-                /*
-                 * Vraćeni OZO nema
-                 * aktivni datum isteka.
-                 */
-                if ($effectiveReturnDate) {
-                    $changes[
-                        'end_date'
-                    ] =
-                        null;
-                } elseif (
-                    $effectiveIssueDate
-                    && $effectiveDuration !== null
-                    && $effectiveDuration > 0
-                ) {
-                    $changes[
-                        'end_date'
-                    ] =
-                        $effectiveIssueDate
-                            ->copy()
-                            ->addMonths(
-                                $effectiveDuration
-                            )
-                            ->toDateString();
-                } elseif (
-                    $durationProvided
-                    && $effectiveDuration === 0
-                ) {
-                    /*
-                     * Rok 0 mjeseci znači
-                     * bez izračunatog isteka.
-                     */
-                    $changes[
-                        'end_date'
-                    ] =
-                        null;
-                }
-            }
-
-            /*
-             * Ako u Excelu nije bilo
-             * ničega za promjenu.
-             */
-            if ($changes === []) {
-                $this->unchanged++;
-
-                continue;
-            }
-
-            $item->fill(
-                $changes
-            );
-
-            /*
-             * Vrijednosti su možda popunjene,
-             * ali identične postojećima.
-             */
             if (! $item->isDirty()) {
                 $this->unchanged++;
 
@@ -818,119 +653,6 @@ class PPELogsImport implements ToCollection
             $this->updated++;
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | OIB
-    |--------------------------------------------------------------------------
-    */
-
-    protected function normalizeOib(
-        mixed $value
-    ): string {
-        if (
-            $value === null
-            || $value === ''
-        ) {
-            return '';
-        }
-
-        /*
-         * Excel ponekad OIB pretvori u broj.
-         */
-        if (is_numeric($value)) {
-            $value =
-                number_format(
-                    (float) $value,
-                    0,
-                    '',
-                    ''
-                );
-        }
-
-        $value =
-            preg_replace(
-                '/\D+/',
-                '',
-                (string) $value
-            );
-
-        if ($value === '') {
-            return '';
-        }
-
-        /*
-         * Vraćanje početne nule
-         * ako ju je Excel uklonio.
-         */
-        return strlen($value) < 11
-            ? str_pad(
-                $value,
-                11,
-                '0',
-                STR_PAD_LEFT
-            )
-            : $value;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | HEADER
-    |--------------------------------------------------------------------------
-    */
-
-    protected function findHeaderRow(
-        Collection $rows
-    ): array {
-        foreach (
-            $rows->take(10)
-            as $index => $row
-        ) {
-            $headers =
-                collect(
-                    $row
-                )
-                    ->map(
-                        fn ($value): string =>
-                            $this
-                                ->normalizeHeader(
-                                    $value
-                                )
-                    )
-                    ->values()
-                    ->all();
-
-            if (
-                in_array(
-                    'oib',
-                    $headers,
-                    true
-                )
-                && in_array(
-                    'naziv ozo',
-                    $headers,
-                    true
-                )
-            ) {
-                return [
-                    (int) $index,
-                    $headers,
-                ];
-            }
-        }
-
-        throw new RuntimeException(
-            'Nije pronađen red zaglavlja. '
-            . 'Excel mora sadržavati stupce '
-            . 'OIB i Naziv OZO.'
-        );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | ZAPOSLENIK
-    |--------------------------------------------------------------------------
-    */
 
     protected function findEmployee(
         string $oib
@@ -950,13 +672,6 @@ class PPELogsImport implements ToCollection
                 $table,
                 'oib'
             );
-
-        if (
-            ! $hasOIBUpper
-            && ! $hasOIBLower
-        ) {
-            return null;
-        }
 
         return Employee::query()
             ->where(
@@ -992,20 +707,18 @@ class PPELogsImport implements ToCollection
     protected function employeeOib(
         Employee $employee
     ): string {
-        return trim(
-            (string) (
-                $employee->OIB
-                ?? $employee->oib
-                ?? ''
+        return preg_replace(
+            '/\s+/',
+            '',
+            trim(
+                (string) (
+                    $employee->OIB
+                    ?? $employee->oib
+                    ?? ''
+                )
             )
         );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | REGISTAR OZO
-    |--------------------------------------------------------------------------
-    */
 
     protected function findEquipment(
         string $name,
@@ -1018,14 +731,14 @@ class PPELogsImport implements ToCollection
                     $this->ownerId
                 )
                 ->where(
+                    'is_active',
+                    true
+                )
+                ->where(
                     'name',
                     $name
                 );
 
-        /*
-         * Ako je Norma navedena,
-         * prvo pokušavamo točan pogodak.
-         */
         if ($standard !== '') {
             $exact =
                 (clone $query)
@@ -1040,40 +753,30 @@ class PPELogsImport implements ToCollection
             }
         }
 
-        /*
-         * Ako postoji više zapisa
-         * istog naziva, aktivni ima prednost.
-         */
-        return $query
-            ->orderByDesc(
-                'is_active'
-            )
-            ->orderBy(
-                'id'
-            )
-            ->first();
-    }
+        $matches =
+            $query
+                ->limit(2)
+                ->get();
 
-    /*
-    |--------------------------------------------------------------------------
-    | HEADER POMOĆNE FUNKCIJE
-    |--------------------------------------------------------------------------
-    */
+        return $matches->count() === 1
+            ? $matches->first()
+            : null;
+    }
 
     protected function headerIndex(
         array $headers,
         array $aliases,
         bool $required = true
     ): ?int {
-        foreach (
-            $aliases
-            as $alias
-        ) {
+        foreach ($aliases as $alias) {
+            $normalizedAlias =
+                $this->normalizeHeader(
+                    $alias
+                );
+
             $index =
                 array_search(
-                    $this->normalizeHeader(
-                        $alias
-                    ),
+                    $normalizedAlias,
                     $headers,
                     true
                 );
@@ -1097,75 +800,29 @@ class PPELogsImport implements ToCollection
     protected function normalizeHeader(
         mixed $value
     ): string {
-        $value =
-            Str::ascii(
-                Str::lower(
-                    (string) $value
-                )
-            );
-
-        $value =
-            preg_replace(
-                '/[^a-z0-9]+/',
-                ' ',
-                $value
-            );
-
         return trim(
             preg_replace(
                 '/\s+/',
                 ' ',
-                (string) $value
+                Str::lower(
+                    Str::ascii(
+                        (string) $value
+                    )
+                )
             )
         );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | PRAZNA / POPUNJENA ĆELIJA
-    |--------------------------------------------------------------------------
-    */
-
-    protected function hasValue(
-        mixed $value
-    ): bool {
-        if ($value === null) {
-            return false;
-        }
-
-        if (is_string($value)) {
-            return trim(
-                $value
-            ) !== '';
-        }
-
-        /*
-         * Broj 0 je stvarna vrijednost,
-         * nije prazna ćelija.
-         */
-        return true;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | DATUM
-    |--------------------------------------------------------------------------
-    */
 
     protected function parseDate(
         mixed $value
     ): ?Carbon {
         if (
-            ! $this->hasValue(
-                $value
-            )
+            $value === null
+            || $value === ''
         ) {
             return null;
         }
 
-        /*
-         * Pravi Excel datum.
-         */
         if (
             is_numeric($value)
             && (float) $value > 0
@@ -1204,9 +861,7 @@ class PPELogsImport implements ToCollection
                 )
                     ->startOfDay();
             } catch (\Throwable) {
-                /*
-                 * Pokušaj idući format.
-                 */
+                // pokušaj sljedeći format
             }
         }
 

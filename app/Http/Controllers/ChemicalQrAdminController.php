@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Filament\Resources\Chemicals\ChemicalResource;
 use App\Models\Chemical;
 use App\Services\ChemicalQrService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -14,24 +15,30 @@ class ChemicalQrAdminController extends Controller
         ChemicalQrService $qrService
     ) {
         $this->authorizeChemical(
-            $chemical
-        );
-
-        $chemical->load('user');
-
-        $qrCode = $qrService->getOrCreate(
             $chemical,
-            auth()->user()
+            'view'
         );
 
-        $svg = $qrService->svg(
-            $qrCode,
-            500
+        $chemical->load(
+            'user'
         );
 
-        $publicUrl = $qrService->publicUrl(
-            $qrCode
-        );
+        $qrCode =
+            $qrService->getOrCreate(
+                $chemical,
+                auth()->user()
+            );
+
+        $svg =
+            $qrService->svg(
+                $qrCode,
+                500
+            );
+
+        $publicUrl =
+            $qrService->publicUrl(
+                $qrCode
+            );
 
         return view(
             'qr.chemical-admin',
@@ -49,13 +56,15 @@ class ChemicalQrAdminController extends Controller
         ChemicalQrService $qrService
     ): RedirectResponse {
         $this->authorizeChemical(
-            $chemical
+            $chemical,
+            'update'
         );
 
-        $qrCode = $qrService->getOrCreate(
-            $chemical,
-            auth()->user()
-        );
+        $qrCode =
+            $qrService->getOrCreate(
+                $chemical,
+                auth()->user()
+            );
 
         $qrService->regenerate(
             $qrCode
@@ -65,7 +74,8 @@ class ChemicalQrAdminController extends Controller
             ->route(
                 'chemical.qr.admin',
                 [
-                    'chemical' => $chemical,
+                    'chemical' =>
+                        $chemical,
                 ]
             )
             ->with(
@@ -79,13 +89,15 @@ class ChemicalQrAdminController extends Controller
         ChemicalQrService $qrService
     ): RedirectResponse {
         $this->authorizeChemical(
-            $chemical
+            $chemical,
+            'update'
         );
 
-        $qrCode = $qrService->getOrCreate(
-            $chemical,
-            auth()->user()
-        );
+        $qrCode =
+            $qrService->getOrCreate(
+                $chemical,
+                auth()->user()
+            );
 
         $qrService->deactivate(
             $qrCode
@@ -95,7 +107,8 @@ class ChemicalQrAdminController extends Controller
             ->route(
                 'chemical.qr.admin',
                 [
-                    'chemical' => $chemical,
+                    'chemical' =>
+                        $chemical,
                 ]
             )
             ->with(
@@ -109,13 +122,15 @@ class ChemicalQrAdminController extends Controller
         ChemicalQrService $qrService
     ): RedirectResponse {
         $this->authorizeChemical(
-            $chemical
+            $chemical,
+            'update'
         );
 
-        $qrCode = $qrService->getOrCreate(
-            $chemical,
-            auth()->user()
-        );
+        $qrCode =
+            $qrService->getOrCreate(
+                $chemical,
+                auth()->user()
+            );
 
         $qrService->activate(
             $qrCode
@@ -125,7 +140,8 @@ class ChemicalQrAdminController extends Controller
             ->route(
                 'chemical.qr.admin',
                 [
-                    'chemical' => $chemical,
+                    'chemical' =>
+                        $chemical,
                 ]
             )
             ->with(
@@ -139,41 +155,62 @@ class ChemicalQrAdminController extends Controller
         ChemicalQrService $qrService
     ) {
         $this->authorizeChemical(
-            $chemical
-        );
-
-        $qrCode = $qrService->getOrCreate(
             $chemical,
-            auth()->user()
+            'view'
         );
 
-        $svg = $qrService->svg(
-            $qrCode,
-            1000
-        );
+        $qrCode =
+            $qrService->getOrCreate(
+                $chemical,
+                auth()->user()
+            );
+
+        $svg =
+            $qrService->svg(
+                $qrCode,
+                1000
+            );
 
         $qrDataUri =
             'data:image/svg+xml;base64,'
-            . base64_encode($svg);
+            . base64_encode(
+                $svg
+            );
 
-        $pdf = Pdf::loadView(
-            'pdf.chemical-qr-label',
-            [
-                'chemical' => $chemical,
-                'qrCode' => $qrCode,
-                'qrDataUri' => $qrDataUri,
-            ]
-        )
-            ->setPaper(
-                'a4',
-                'portrait'
+        $pdf =
+            Pdf::loadView(
+                'pdf.chemical-qr-label',
+                [
+                    'chemical' =>
+                        $chemical,
+
+                    'qrCode' =>
+                        $qrCode,
+
+                    'qrDataUri' =>
+                        $qrDataUri,
+                ]
             )
-            ->setOptions([
-                'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled' => false,
-                'defaultFont' => 'DejaVu Sans',
-                'dpi' => 150,
-            ]);
+                ->setPaper(
+                    'a4',
+                    'portrait'
+                )
+                ->setOptions([
+                    'isHtml5ParserEnabled' =>
+                        true,
+
+                    'isRemoteEnabled' =>
+                        false,
+
+                    'isPhpEnabled' =>
+                        false,
+
+                    'defaultFont' =>
+                        'DejaVu Sans',
+
+                    'dpi' =>
+                        150,
+                ]);
 
         return $pdf->download(
             'qr-kemikalija-'
@@ -183,23 +220,67 @@ class ChemicalQrAdminController extends Controller
     }
 
     protected function authorizeChemical(
-        Chemical $chemical
+        Chemical $chemical,
+        string $permission = 'view'
     ): void {
-        $user = auth()->user();
+        $user =
+            auth()->user();
 
         abort_unless(
             $user,
             403
         );
 
-        if ($user->isSuperAdmin()) {
+        /*
+         * Legacy zapis bez ownera
+         * ne može dobiti organizacijski QR.
+         */
+        abort_unless(
+            $chemical->user_id
+                !== null,
+            404
+        );
+
+        /*
+         * Serverska granularna
+         * permission provjera.
+         */
+        abort_unless(
+            ChemicalResource::
+                allowsModulePermission(
+                    $permission
+                ),
+            403
+        );
+
+        /*
+         * Superadmin smije upravljati
+         * postojećim zapisima organizacija.
+         */
+        if (
+            $user->isSuperAdmin()
+        ) {
             return;
         }
 
+        $ownerId =
+            (int)
+            $user->ownerId();
+
         abort_unless(
-            (int) $chemical->user_id
-                ===
-            (int) $user->ownerId(),
+            $ownerId > 0,
+            403
+        );
+
+        /*
+         * Tuđi record vraća 404,
+         * a ne otkriva da postoji.
+         */
+        abort_unless(
+            (int)
+            $chemical->user_id
+            ===
+            $ownerId,
             404
         );
     }

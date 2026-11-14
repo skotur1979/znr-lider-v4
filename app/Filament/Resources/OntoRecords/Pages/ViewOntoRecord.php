@@ -216,6 +216,7 @@ class ViewOntoRecord extends ViewRecord
                         ! $this->record->is_closed
                         && ! $this->record->trashed()
                         && ! auth()->user()?->isSuperAdmin()
+                        && WasteTrackingFormResource::canCreate()
                 )
                 ->fillForm(function (): array {
                     $record = $this->record->loadMissing([
@@ -272,6 +273,11 @@ class ViewOntoRecord extends ViewRecord
                         ->rows(3),
                 ])
                 ->action(function (array $data): void {
+                    abort_unless(
+                        WasteTrackingFormResource::canCreate(),
+                        403,
+                        'Nemate ovlasti za izradu pratećeg lista.'
+                    );
                     /*
                      * Superadmin smije pregledavati postojeće ONTO zapise,
                      * ali ne smije izrađivati nove poslovne dokumente

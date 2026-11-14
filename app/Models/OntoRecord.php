@@ -62,24 +62,46 @@ class OntoRecord extends Model
 
     public function organization(): BelongsTo
     {
-        return $this->belongsTo(WasteOrganization::class, 'waste_organization_id');
+        return $this
+            ->belongsTo(
+                WasteOrganization::class,
+                'waste_organization_id'
+            )
+            ->withTrashed();
     }
 
     public function organizationLocation(): BelongsTo
     {
-        return $this->belongsTo(WasteOrganizationLocation::class, 'waste_organization_location_id');
+        return $this
+            ->belongsTo(
+                WasteOrganizationLocation::class,
+                'waste_organization_location_id'
+            )
+            ->withTrashed();
     }
 
     public function wasteType(): BelongsTo
     {
-        return $this->belongsTo(WasteType::class, 'waste_type_id');
+        return $this
+            ->belongsTo(
+                WasteType::class,
+                'waste_type_id'
+            )
+            ->withTrashed();
     }
 
     public function entries(): HasMany
     {
-        return $this->hasMany(OntoEntry::class, 'onto_record_id')
+        return $this->hasMany(
+            OntoEntry::class,
+            'onto_record_id'
+        )
             ->orderBy('entry_date')
-            ->orderBy('entry_no');
+            ->orderByRaw(
+                "CASE WHEN entry_type = 'input' THEN 0 ELSE 1 END"
+            )
+            ->orderBy('entry_no')
+            ->orderBy('id');
     }
 
     public function trackingForms(): HasMany

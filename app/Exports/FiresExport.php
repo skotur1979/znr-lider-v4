@@ -33,8 +33,11 @@ class FiresExport implements FromCollection, WithHeadings, WithMapping, WithColu
             ->with('user')
             ->orderBy('place');
 
-        if ($fireIds !== null && count($fireIds) > 0) {
-            $query->whereIn('fires.id', $fireIds);
+        if ($fireIds !== null) {
+            $query->whereIn(
+                'fires.id',
+                $fireIds
+            );
         } else {
             $query->withoutTrashed();
         }

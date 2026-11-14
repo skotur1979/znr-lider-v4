@@ -19,6 +19,28 @@ class QrCodeService
     | RADNA OPREMA
     |--------------------------------------------------------------------------
     */
+    public function findForMachine(
+        Machine $machine
+    ): ?QrCode {
+        return QrCode::query()
+            ->where(
+                'type',
+                'machine'
+            )
+            ->where(
+                'qrable_type',
+                Machine::class
+            )
+            ->where(
+                'qrable_id',
+                $machine->getKey()
+            )
+            ->where(
+                'owner_id',
+                $machine->user_id
+            )
+            ->first();
+    }
 
     public function getOrCreateForMachine(
         Machine $machine,
@@ -26,34 +48,70 @@ class QrCodeService
     ): QrCode {
         $actor ??= Auth::user();
 
-        return QrCode::query()
-            ->firstOrCreate(
-                [
-                    'type' =>
-                        'machine',
+        /*
+        * Prvo provjeravamo postoji li već QR
+        * za ovu radnu opremu.
+        */
+        $existing = QrCode::query()
+            ->where(
+                'type',
+                'machine'
+            )
+            ->where(
+                'qrable_type',
+                Machine::class
+            )
+            ->where(
+                'qrable_id',
+                $machine->getKey()
+            )
+            ->first();
 
-                    'qrable_type' =>
-                        Machine::class,
+        if ($existing) {
+            /*
+            * QR vezan uz radnu opremu mora
+            * pripadati istom owneru.
+            *
+            * Ako nije, ne stvaramo drugi QR
+            * nego zaustavljamo operaciju jer
+            * postoji nekonzistentnost podataka.
+            */
+            if (
+                (int) $existing->owner_id
+                !== (int) $machine->user_id
+            ) {
+                throw new \RuntimeException(
+                    'QR kod radne opreme ima neispravnog vlasnika.'
+                );
+            }
 
-                    'qrable_id' =>
-                        $machine->getKey(),
-                ],
-                [
-                    'owner_id' =>
-                        $machine->user_id,
+            return $existing;
+        }
 
-                    'created_by' =>
-                        $actor?->id,
+        return QrCode::create([
+            'type' =>
+                'machine',
 
-                    'name' =>
-                        $this->machineQrName(
-                            $machine
-                        ),
+            'qrable_type' =>
+                Machine::class,
 
-                    'is_active' =>
-                        true,
-                ]
-            );
+            'qrable_id' =>
+                $machine->getKey(),
+
+            'owner_id' =>
+                $machine->user_id,
+
+            'created_by' =>
+                $actor?->id,
+
+            'name' =>
+                $this->machineQrName(
+                    $machine
+                ),
+
+            'is_active' =>
+                true,
+        ]);
     }
 
     public function publicMachineUrl(
@@ -106,40 +164,95 @@ class QrCodeService
     |--------------------------------------------------------------------------
     */
 
+    public function findForFire(
+        Fire $fire
+    ): ?QrCode {
+        return QrCode::query()
+            ->where(
+                'type',
+                'fire'
+            )
+            ->where(
+                'qrable_type',
+                Fire::class
+            )
+            ->where(
+                'qrable_id',
+                $fire->getKey()
+            )
+            ->where(
+                'owner_id',
+                $fire->user_id
+            )
+            ->first();
+    }
+
     public function getOrCreateForFire(
         Fire $fire,
         ?User $actor = null
     ): QrCode {
         $actor ??= Auth::user();
 
-        return QrCode::query()
-            ->firstOrCreate(
-                [
-                    'type' =>
-                        'fire',
+        /*
+        * Prvo provjeravamo postoji li već QR
+        * za ovaj vatrogasni aparat.
+        */
+        $existing = QrCode::query()
+            ->where(
+                'type',
+                'fire'
+            )
+            ->where(
+                'qrable_type',
+                Fire::class
+            )
+            ->where(
+                'qrable_id',
+                $fire->getKey()
+            )
+            ->first();
 
-                    'qrable_type' =>
-                        Fire::class,
+        if ($existing) {
+            /*
+            * QR mora pripadati istoj organizaciji
+            * kao i vatrogasni aparat.
+            */
+            if (
+                (int) $existing->owner_id
+                !== (int) $fire->user_id
+            ) {
+                throw new \RuntimeException(
+                    'QR kod vatrogasnog aparata ima neispravnog vlasnika.'
+                );
+            }
 
-                    'qrable_id' =>
-                        $fire->getKey(),
-                ],
-                [
-                    'owner_id' =>
-                        $fire->user_id,
+            return $existing;
+        }
 
-                    'created_by' =>
-                        $actor?->id,
+        return QrCode::create([
+            'type' =>
+                'fire',
 
-                    'name' =>
-                        $this->fireQrName(
-                            $fire
-                        ),
+            'qrable_type' =>
+                Fire::class,
 
-                    'is_active' =>
-                        true,
-                ]
-            );
+            'qrable_id' =>
+                $fire->getKey(),
+
+            'owner_id' =>
+                $fire->user_id,
+
+            'created_by' =>
+                $actor?->id,
+
+            'name' =>
+                $this->fireQrName(
+                    $fire
+                ),
+
+            'is_active' =>
+                true,
+        ]);
     }
 
     public function publicFireUrl(

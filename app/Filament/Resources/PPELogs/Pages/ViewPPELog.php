@@ -4,9 +4,11 @@ namespace App\Filament\Resources\PPELogs\Pages;
 
 use App\Exports\PpeLogItemsExport;
 use App\Filament\Resources\PPELogs\PPELogResource;
+use App\Models\PPELog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ViewPPELog extends ViewRecord
@@ -43,6 +45,27 @@ class ViewPPELog extends ViewRecord
         );
     }
 
+    protected function authorizedRecord(): PPELog
+    {
+        $record =
+            PPELogResource::getEloquentQuery()
+                ->whereKey(
+                    $this
+                        ->getRecord()
+                        ->getKey()
+                )
+                ->firstOrFail();
+
+        abort_unless(
+            PPELogResource::canView(
+                $record
+            ),
+            403
+        );
+
+        return $record;
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -58,14 +81,21 @@ class ViewPPELog extends ViewRecord
                 ->color(
                     'warning'
                 )
+                ->visible(
+                    fn (): bool =>
+                        PPELogResource::canView(
+                            $this->getRecord()
+                        )
+                )
                 ->action(
                     function () {
                         $record =
                             $this
-                                ->record
-                                ->load(
-                                    'items'
-                                );
+                                ->authorizedRecord()
+                                ->load([
+                                    'items',
+                                    'user',
+                                ]);
 
                         $pdf =
                             Pdf::loadView(
@@ -87,7 +117,7 @@ class ViewPPELog extends ViewRecord
                                         false,
 
                                     'isPhpEnabled' =>
-                                        true,
+                                        false,
 
                                     'dpi' =>
                                         96,
@@ -96,14 +126,17 @@ class ViewPPELog extends ViewRecord
                                         'DejaVu Sans',
                                 ]);
 
+                        $name =
+                            Str::slug(
+                                (string) (
+                                    $record->user_last_name
+                                    ?: 'ozo'
+                                )
+                            );
+
                         $filename =
                             'OZO-'
-                            . str_replace(
-                                ' ',
-                                '-',
-                                $record
-                                    ->user_last_name
-                            )
+                            . ($name ?: 'zapis')
                             . '-'
                             . now()->format(
                                 'd-m-Y'
@@ -133,23 +166,33 @@ class ViewPPELog extends ViewRecord
                 ->color(
                     'success'
                 )
+                ->visible(
+                    fn (): bool =>
+                        PPELogResource::canView(
+                            $this->getRecord()
+                        )
+                )
                 ->action(
                     function () {
                         $record =
                             $this
-                                ->record
-                                ->load(
-                                    'items'
-                                );
+                                ->authorizedRecord()
+                                ->load([
+                                    'items',
+                                    'user',
+                                ]);
+
+                        $name =
+                            Str::slug(
+                                (string) (
+                                    $record->user_last_name
+                                    ?: 'ozo'
+                                )
+                            );
 
                         $filename =
                             'OZO-'
-                            . str_replace(
-                                ' ',
-                                '-',
-                                $record
-                                    ->user_last_name
-                            )
+                            . ($name ?: 'zapis')
                             . '-'
                             . now()->format(
                                 'd-m-Y'

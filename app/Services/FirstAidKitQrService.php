@@ -9,7 +9,9 @@ use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class FirstAidKitQrService
 {
@@ -19,33 +21,53 @@ class FirstAidKitQrService
     ): QrCode {
         $actor ??= Auth::user();
 
-        return QrCode::query()
-            ->firstOrCreate(
-                [
-                    'type' => 'first_aid_kit',
+        $this->authorizeKit(
+            $firstAidKit,
+            $actor
+        );
+
+        $ownerId =
+            (int) $firstAidKit->user_id;
+
+        $qrCode =
+            QrCode::query()
+                ->firstOrNew([
+                    'type' =>
+                        'first_aid_kit',
 
                     'qrable_type' =>
                         FirstAidKit::class,
 
                     'qrable_id' =>
                         $firstAidKit->getKey(),
-                ],
-                [
-                    'owner_id' =>
-                        $firstAidKit->user_id,
+                ]);
 
-                    'created_by' =>
-                        $actor?->id,
+        $isNew =
+            ! $qrCode->exists;
 
-                    'name' =>
-                        $this->qrName(
-                            $firstAidKit
-                        ),
+        $qrCode->forceFill([
+            'owner_id' =>
+                $ownerId,
 
-                    'is_active' =>
-                        true,
-                ]
-            );
+            'name' =>
+                $this->qrName(
+                    $firstAidKit
+                ),
+        ]);
+
+        if ($isNew) {
+            $qrCode->forceFill([
+                'created_by' =>
+                    $actor?->id,
+
+                'is_active' =>
+                    true,
+            ]);
+        }
+
+        $qrCode->save();
+
+        return $qrCode->refresh();
     }
 
     public function publicUrl(
@@ -73,12 +95,11 @@ class FirstAidKitQrService
                 new SvgImageBackEnd()
             );
 
-        $writer =
+        return (
             new Writer(
                 $renderer
-            );
-
-        return $writer->writeString(
+            )
+        )->writeString(
             $this->publicUrl(
                 $qrCode
             )
@@ -91,14 +112,17 @@ class FirstAidKitQrService
         return
             'Prva pomoć - '
             . trim(
-                (string)
-                $firstAidKit->location
+                (string) $firstAidKit->location
             );
     }
 
     public function regenerate(
         QrCode $qrCode
     ): QrCode {
+        $this->authorizeQr(
+            $qrCode
+        );
+
         $qrCode->forceFill([
             'token' =>
                 QrCode::generateUniqueToken(),
@@ -119,6 +143,10 @@ class FirstAidKitQrService
     public function deactivate(
         QrCode $qrCode
     ): void {
+        $this->authorizeQr(
+            $qrCode
+        );
+
         $qrCode->update([
             'is_active' =>
                 false,
@@ -128,9 +156,79 @@ class FirstAidKitQrService
     public function activate(
         QrCode $qrCode
     ): void {
+        $this->authorizeQr(
+            $qrCode
+        );
+
         $qrCode->update([
             'is_active' =>
                 true,
         ]);
+    }
+
+    protected function authorizeKit(
+        FirstAidKit $firstAidKit,
+        ?User $actor
+    ): void {
+        if (! $actor) {
+            throw new AuthorizationException(
+                'Korisnik nije prijavljen.'
+            );
+        }
+
+        $ownerId =
+            (int) $firstAidKit->user_id;
+
+        if ($ownerId <= 0) {
+            throw ValidationException::withMessages([
+                'user_id' =>
+                    'Ormarić prve pomoći nema valjanu organizaciju.',
+            ]);
+        }
+
+        if (
+            ! $actor->isSuperAdmin()
+            && (int) $actor->ownerId()
+                !== $ownerId
+        ) {
+            throw new AuthorizationException(
+                'Nemate pristup ovom ormariću prve pomoći.'
+            );
+        }
+    }
+
+    protected function authorizeQr(
+        QrCode $qrCode
+    ): void {
+        $actor =
+            Auth::user();
+
+        if (! $actor) {
+            throw new AuthorizationException(
+                'Korisnik nije prijavljen.'
+            );
+        }
+
+        if (
+            $qrCode->type
+                !== 'first_aid_kit'
+            || $qrCode->qrable_type
+                !== FirstAidKit::class
+        ) {
+            throw ValidationException::withMessages([
+                'qr' =>
+                    'QR kod nije QR kod ormarića prve pomoći.',
+            ]);
+        }
+
+        if (
+            ! $actor->isSuperAdmin()
+            && (int) $actor->ownerId()
+                !== (int) $qrCode->owner_id
+        ) {
+            throw new AuthorizationException(
+                'Nemate pravo upravljati ovim QR kodom.'
+            );
+        }
     }
 }

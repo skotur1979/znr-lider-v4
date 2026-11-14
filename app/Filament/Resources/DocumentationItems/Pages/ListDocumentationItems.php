@@ -13,8 +13,13 @@ class ListDocumentationItems extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Nova dokumentacija')
-            ->icon('heroicon-o-plus'),
+            CreateAction::make()
+                ->label('Nova dokumentacija')
+                ->icon('heroicon-o-plus')
+                ->visible(
+                    fn (): bool =>
+                        DocumentationItemResource::canCreate()
+                ),
         ];
     }
 }
