@@ -10,6 +10,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class RiskAssessmentInfolist
 {
@@ -152,10 +153,40 @@ class RiskAssessmentInfolist
                                                             : '—'
                                                 )
                                                 ->url(
-                                                    fn (?string $state): ?string =>
-                                                        filled($state)
-                                                            ? SecureFilePreview::url($state)
-                                                            : null
+                                                    function (?string $state): ?string {
+                                                        if (blank($state)) {
+                                                            return null;
+                                                        }
+
+                                                        $path = ltrim(
+                                                            $state,
+                                                            '/'
+                                                        );
+
+                                                        if (
+                                                            Storage::disk('local')
+                                                                ->exists($path)
+                                                        ) {
+                                                            return SecureFilePreview::url(
+                                                                $path,
+                                                                30,
+                                                                'local'
+                                                            );
+                                                        }
+
+                                                        if (
+                                                            Storage::disk('public')
+                                                                ->exists($path)
+                                                        ) {
+                                                            return SecureFilePreview::url(
+                                                                $path,
+                                                                30,
+                                                                'public'
+                                                            );
+                                                        }
+
+                                                        return null;
+                                                    }
                                                 )
                                                 ->openUrlInNewTab()
                                                 ->badge()

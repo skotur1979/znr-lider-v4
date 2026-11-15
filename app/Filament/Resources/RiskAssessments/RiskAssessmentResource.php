@@ -27,6 +27,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class RiskAssessmentResource extends BaseResource
 {
@@ -98,23 +99,8 @@ class RiskAssessmentResource extends BaseResource
             return false;
         }
 
-        $ownerId = static::ownerId();
-
-        if (! $ownerId) {
-            return false;
-        }
-
-        return (int) $record->user_id === (int) $ownerId;
+        return parent::canEdit($record);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | DELETE
-    |--------------------------------------------------------------------------
-    |
-    | Superadmin ne briše poslovne zapise organizacija.
-    |
-    */
 
     public static function canDelete(Model $record): bool
     {
@@ -122,23 +108,8 @@ class RiskAssessmentResource extends BaseResource
             return false;
         }
 
-        $ownerId = static::ownerId();
-
-        if (! $ownerId) {
-            return false;
-        }
-
-        return (int) $record->user_id === (int) $ownerId;
+        return parent::canDelete($record);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | BULK DELETE
-    |--------------------------------------------------------------------------
-    |
-    | Dodatna zaštita bulk brisanja.
-    |
-    */
 
     public static function canDeleteAny(): bool
     {
@@ -146,7 +117,7 @@ class RiskAssessmentResource extends BaseResource
             return false;
         }
 
-        return static::ownerId() !== null;
+        return parent::canDeleteAny();
     }
 
     public static function form(Schema $schema): Schema
@@ -255,9 +226,9 @@ class RiskAssessmentResource extends BaseResource
 
                             FileUpload::make('file_path')
                                 ->label('Dokument')
-                                ->disk('public')
+                                ->disk('local')
                                 ->directory('risk-assessments/attachments')
-                                ->visibility('public')
+                                ->visibility('private')
                                 ->preserveFilenames()
                                 ->openable()
                                 ->downloadable()
@@ -411,8 +382,27 @@ class RiskAssessmentResource extends BaseResource
                                             return null;
                                         }
 
+                                        $path = ltrim(
+                                            $attachment->file_path,
+                                            '/'
+                                        );
+
+                                        if (
+                                            Storage::disk('local')->exists($path)
+                                        ) {
+                                            $disk = 'local';
+                                        } elseif (
+                                            Storage::disk('public')->exists($path)
+                                        ) {
+                                            $disk = 'public';
+                                        } else {
+                                            return null;
+                                        }
+
                                         $url = SecureFilePreview::url(
-                                            $attachment->file_path
+                                            $path,
+                                            30,
+                                            $disk
                                         );
 
                                         $name = e(

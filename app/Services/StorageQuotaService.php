@@ -183,17 +183,26 @@ class StorageQuotaService
                         );
 
                         /*
-                         * Incidenti:
-                         *
-                         * Novi prilozi:
-                         * storage/app/private
-                         *
-                         * Legacy prilozi:
-                         * storage/app/public
-                         */
+                        * Privatne datoteke:
+                        *
+                        * - Incidenti
+                        * - Prilozi procjene rizika
+                        *
+                        * Novi prilozi:
+                        * storage/app/private
+                        *
+                        * Legacy prilozi:
+                        * storage/app/public
+                        */
                         if (
-                            $modelClass ===
-                            Incident::class
+                            in_array(
+                                $modelClass,
+                                [
+                                    Incident::class,
+                                    RiskAttachment::class,
+                                ],
+                                true
+                            )
                         ) {
                             if (
                                 Storage::disk(

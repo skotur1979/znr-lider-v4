@@ -105,27 +105,57 @@ class RiskAssessmentQrController extends Controller
 
         abort_unless(
             is_string($path)
-            && filled($path)
-            && Storage::disk('public')
-                ->exists($path),
+            && filled($path),
             404
         );
 
+        $path = ltrim(
+            $path,
+            '/'
+        );
+
         /*
-         * Putanja dokumenta nikada se ne
-         * prima iz URL-a.
-         *
-         * URL sadrži samo QR token i index.
-         */
-        return Storage::disk('public')
+        * Novi prilozi procjene rizika
+        * nalaze se na private/local disku.
+        *
+        * Public ostaje privremeni fallback
+        * tijekom migracije starih zapisa.
+        */
+        if (
+            Storage::disk('local')
+                ->exists($path)
+        ) {
+            $disk = 'local';
+        } elseif (
+            Storage::disk('public')
+                ->exists($path)
+        ) {
+            $disk = 'public';
+        } else {
+            abort(404);
+        }
+
+        $fileName = str_replace(
+            ["\r", "\n", '"'],
+            '',
+            basename($path)
+        );
+
+        return Storage::disk($disk)
             ->response(
                 $path,
-                basename($path),
+                $fileName,
                 [
                     'Content-Disposition' =>
                         'inline; filename="'
-                        . basename($path)
+                        . $fileName
                         . '"',
+
+                    'X-Content-Type-Options' =>
+                        'nosniff',
+
+                    'Cache-Control' =>
+                        'private, no-store',
                 ]
             );
     }
