@@ -7,6 +7,8 @@ use App\Services\FormVersionService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class MedicalReferral extends Model
 {
@@ -90,6 +92,143 @@ class MedicalReferral extends Model
         'pushing_enabled' => 'boolean',
     ];
 
+    protected static function booted(): void
+    {
+        /*
+         * Verzija obrasca mora biti određena i kod
+         * kreiranja izvan Filament forme / budućeg API-ja.
+         */
+        static::creating(function (self $record): void {
+            if (blank($record->form_version)) {
+                $record->form_version =
+                    FormVersionService::currentRa1();
+            }
+        });
+
+        /*
+         * Model-level integritet RA-1 ↔ Employee.
+         *
+         * Ova zaštita vrijedi neovisno o Filamentu,
+         * odnosno i za budući API, import, servis ili
+         * direktni model poziv.
+         */
+        static::saving(function (self $record): void {
+            /*
+             * Ručni unos nema vezu na Employee zapis.
+             */
+            if ($record->manual_entry) {
+                $record->employee_id = null;
+
+                if (blank($record->full_name)) {
+                    throw ValidationException::withMessages([
+                        'full_name' =>
+                            'Ime i prezime obavezni su kod ručnog unosa RA-1 uputnice.',
+                    ]);
+                }
+
+                if (blank($record->oib)) {
+                    throw ValidationException::withMessages([
+                        'oib' =>
+                            'OIB je obavezan kod ručnog unosa RA-1 uputnice.',
+                    ]);
+                }
+
+                if (
+                    preg_match(
+                        '/^\d{11}$/',
+                        (string) $record->oib
+                    ) !== 1
+                ) {
+                    throw ValidationException::withMessages([
+                        'oib' =>
+                            'OIB mora sadržavati točno 11 znamenki.',
+                    ]);
+                }
+
+                return;
+            }
+
+            /*
+             * Ako nije ručni unos, RA-1 mora biti
+             * povezan sa zaposlenikom.
+             */
+            if (blank($record->employee_id)) {
+                throw ValidationException::withMessages([
+                    'employee_id' =>
+                        'Zaposlenik je obavezan kada RA-1 nije ručni unos.',
+                ]);
+            }
+
+            /*
+             * Kod organizacijskog korisnika očekivani
+             * owner uzimamo iz prijavljenog korisnika.
+             *
+             * Time tenant provjera radi čak i ako
+             * creating observer naknadno postavlja user_id.
+             */
+            $ownerId = (int) ($record->user_id ?? 0);
+
+            $user = Auth::user();
+
+            if ($user && ! $user->isSuperAdmin()) {
+                $ownerId = (int) ($user->ownerId() ?? 0);
+            }
+
+            if ($ownerId <= 0) {
+                throw ValidationException::withMessages([
+                    'user_id' =>
+                        'Organizacija RA-1 uputnice nije valjano određena.',
+                ]);
+            }
+
+            /*
+             * withTrashed() omogućuje da povijesni RA-1
+             * ostane valjan i ako je zaposlenik kasnije
+             * soft-deaktiviran.
+             */
+            $employee = Employee::withTrashed()
+                ->find($record->employee_id);
+
+            if (! $employee) {
+                throw ValidationException::withMessages([
+                    'employee_id' =>
+                        'Odabrani zaposlenik ne postoji.',
+                ]);
+            }
+
+            /*
+             * Employee i RA-1 moraju pripadati
+             * istoj organizaciji.
+             */
+            if ((int) $employee->user_id !== $ownerId) {
+                throw ValidationException::withMessages([
+                    'employee_id' =>
+                        'Odabrani zaposlenik ne pripada organizaciji RA-1 uputnice.',
+                ]);
+            }
+
+            /*
+             * Novi RA-1 ne smije se povezati s
+             * deaktiviranim zaposlenikom.
+             *
+             * Postojeći povijesni RA-1 smije ostati
+             * povezan ako employee_id nije promijenjen.
+             */
+            if (
+                $employee->trashed()
+                && (
+                    ! $record->exists
+                    || $record->isDirty('employee_id')
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'employee_id' =>
+                        'Nije moguće povezati RA-1 s deaktiviranim zaposlenikom.',
+                ]);
+            }
+        });
+    }
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
@@ -102,14 +241,21 @@ class MedicalReferral extends Model
 
     public function getDisplayNameAttribute(): string
     {
-        return $this->employee->name ?? ($this->full_name ?: 'RA-1 Uputnica');
+        return $this->employee?->name
+            ?? ($this->full_name ?: 'RA-1 Uputnica');
     }
 
     public function getFilamentTitleAttribute(): string
     {
-        return ($this->employee->name ?? $this->full_name ?? 'RA-1')
-            . ' - ' . ($this->referral_number ?: '-');
+        return (
+            $this->employee?->name
+            ?? $this->full_name
+            ?? 'RA-1'
+        )
+            . ' - '
+            . ($this->referral_number ?: '-');
     }
+
     public static function formVersions(): array
     {
         return FormVersionService::ra1Versions();
@@ -117,7 +263,9 @@ class MedicalReferral extends Model
 
     public function getFormVersionLabelAttribute(): string
     {
-        return FormVersionService::ra1Versions()[$this->form_version]
+        return FormVersionService::ra1Versions()[
+            $this->form_version
+        ]
             ?? $this->form_version
             ?? FormVersionService::currentRa1();
     }

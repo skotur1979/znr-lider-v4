@@ -273,7 +273,80 @@ class MedicalReferralResource extends BaseResource
                 ->columns(2)
                 ->schema([
                     TextInput::make('referral_number')
-                        ->label('Broj'),
+                        ->label('Broj')
+                        ->dehydrateStateUsing(
+                            fn (?string $state): ?string =>
+                                filled($state)
+                                    ? trim($state)
+                                    : null
+                        )
+                        ->rules([
+                            fn (?MedicalReferral $record) =>
+                                function (
+                                    string $attribute,
+                                    mixed $value,
+                                    \Closure $fail
+                                ) use ($record): void {
+                                    $number = trim((string) $value);
+
+                                    /*
+                                    * Prazan broj je dopušten jer ga koristi
+                                    * funkcija "Kopiraj i napravi novi".
+                                    */
+                                    if ($number === '') {
+                                        return;
+                                    }
+
+                                    /*
+                                    * Kod uređivanja koristimo ownera
+                                    * postojećeg RA-1 zapisa.
+                                    *
+                                    * Kod kreiranja koristimo ownera
+                                    * prijavljenog organizacijskog korisnika.
+                                    */
+                                    $ownerId = (int) (
+                                        $record?->user_id
+                                        ?? static::ownerId()
+                                        ?? 0
+                                    );
+
+                                    if ($ownerId <= 0) {
+                                        $fail(
+                                            'Organizacija RA-1 uputnice nije valjano određena.'
+                                        );
+
+                                        return;
+                                    }
+
+                                    /*
+                                    * Broj RA-1 mora biti jedinstven
+                                    * unutar iste organizacije.
+                                    *
+                                    * withTrashed() je namjeran:
+                                    * broj deaktivirane uputnice također
+                                    * ostaje rezerviran.
+                                    */
+                                    $exists = MedicalReferral::withTrashed()
+                                        ->where('user_id', $ownerId)
+                                        ->where('referral_number', $number)
+                                        ->when(
+                                            $record?->exists,
+                                            fn ($query) =>
+                                                $query->where(
+                                                    'id',
+                                                    '<>',
+                                                    $record->getKey()
+                                                )
+                                        )
+                                        ->exists();
+
+                                    if ($exists) {
+                                        $fail(
+                                            'RA-1 uputnica s ovim brojem već postoji u ovoj organizaciji.'
+                                        );
+                                    }
+                                },
+                        ]),
 
                     DatePicker::make('referral_date')
                         ->label('Datum'),
