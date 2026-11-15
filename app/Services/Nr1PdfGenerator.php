@@ -830,6 +830,8 @@ $parents = (string) ($referral->name_of_parents ?: ($emp?->name_of_parents ?? ''
             ? Carbon::parse($referral->referral_date)->format($dateFormat)
             : now()->format($dateFormat);
 
+        $date = rtrim($date, '.');
+
         return self::sanitizeFileName(
             ($name ?: 'Bez imena') . ' - NR-1 ' . ($referral->referral_number ?: '-') . ' - ' . $date
         ) . '.pdf';

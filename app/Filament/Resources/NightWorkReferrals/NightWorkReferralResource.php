@@ -337,7 +337,91 @@ class NightWorkReferralResource extends BaseResource
                     TextInput::make(
                         'referral_number'
                     )
-                        ->label('Broj'),
+                        ->label('Broj')
+                        ->dehydrateStateUsing(
+                            fn (?string $state): ?string =>
+                                filled($state)
+                                    ? trim($state)
+                                    : null
+                        )
+                        ->rules([
+                            fn (?NightWorkReferral $record) =>
+                                function (
+                                    string $attribute,
+                                    mixed $value,
+                                    \Closure $fail
+                                ) use ($record): void {
+                                    $number = trim(
+                                        (string) $value
+                                    );
+
+                                    /*
+                                    * Prazan broj je dopušten jer
+                                    * kopirana NR-1 uputnica može
+                                    * privremeno ostati bez broja.
+                                    */
+                                    if ($number === '') {
+                                        return;
+                                    }
+
+                                    /*
+                                    * Kod uređivanja koristimo ownera
+                                    * postojećeg zapisa.
+                                    *
+                                    * Kod kreiranja koristimo ownera
+                                    * prijavljenog organizacijskog
+                                    * korisnika.
+                                    */
+                                    $ownerId = (int) (
+                                        $record?->user_id
+                                        ?? static::ownerId()
+                                        ?? 0
+                                    );
+
+                                    if ($ownerId <= 0) {
+                                        $fail(
+                                            'Organizacija NR-1 uputnice nije valjano određena.'
+                                        );
+
+                                        return;
+                                    }
+
+                                    /*
+                                    * Broj NR-1 mora biti jedinstven
+                                    * unutar iste organizacije.
+                                    *
+                                    * Uključujemo i deaktivirane
+                                    * zapise kako se stari broj
+                                    * ne bi mogao ponovno koristiti.
+                                    */
+                                    $exists =
+                                        NightWorkReferral::withTrashed()
+                                            ->where(
+                                                'user_id',
+                                                $ownerId
+                                            )
+                                            ->where(
+                                                'referral_number',
+                                                $number
+                                            )
+                                            ->when(
+                                                $record?->exists,
+                                                fn ($query) =>
+                                                    $query->where(
+                                                        'id',
+                                                        '<>',
+                                                        $record->getKey()
+                                                    )
+                                            )
+                                            ->exists();
+
+                                    if ($exists) {
+                                        $fail(
+                                            'NR-1 uputnica s ovim brojem već postoji u ovoj organizaciji.'
+                                        );
+                                    }
+                                },
+                        ]),
 
                     DatePicker::make(
                         'referral_date'
