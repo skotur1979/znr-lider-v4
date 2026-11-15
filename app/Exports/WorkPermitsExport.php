@@ -29,6 +29,18 @@ class WorkPermitsExport implements FromCollection, WithHeadings, WithMapping, Sh
         $query = WorkPermitResource::getEloquentQuery()
             ->with('user');
 
+        /*
+        * Ako export nije dobio eksplicitni popis ID-eva,
+        * standardno izvozimo samo aktivne zapise.
+        *
+        * Kada su ID-evi poslani iz Filament tablice,
+        * poštujemo točan skup koji je korisnik filtrirao,
+        * uključujući eventualni prikaz deaktiviranih zapisa.
+        */
+        if ($ids === null) {
+            $query->withoutTrashed();
+        }
+
         if ($ids !== null) {
             if (empty($ids)) {
                 $query->whereRaw('1 = 0');

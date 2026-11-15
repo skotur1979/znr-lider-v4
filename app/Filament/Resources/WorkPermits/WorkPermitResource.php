@@ -183,30 +183,45 @@ class WorkPermitResource extends BaseResource
     {
         $year = now()->year;
 
-        $query = WorkPermit::query()
-            ->withTrashed();
+        $ownerId = static::ownerId();
 
-        if (! static::isSuperAdmin()) {
-            $ownerId = static::ownerId();
-
-            if (! $ownerId) {
-                return '01/' . $year;
-            }
-
-            $query->where(
-                'user_id',
-                $ownerId
-            );
+        if (! $ownerId) {
+            return '01/' . $year;
         }
 
-        $last = $query
-            ->whereYear(
-                'created_at',
-                $year
+        $numbers = WorkPermit::query()
+            ->withTrashed()
+            ->where('user_id', $ownerId)
+            ->where(
+                'permit_number',
+                'like',
+                '%/' . $year
             )
-            ->count();
+            ->pluck('permit_number');
 
-        $next = $last + 1;
+        $max = $numbers
+            ->map(
+                function ($permitNumber) use ($year): int {
+                    if (
+                        ! is_string($permitNumber)
+                        || preg_match(
+                            '/^(\d+)\/' . preg_quote(
+                                (string) $year,
+                                '/'
+                            ) . '$/',
+                            trim($permitNumber),
+                            $matches
+                        ) !== 1
+                    ) {
+                        return 0;
+                    }
+
+                    return (int) $matches[1];
+                }
+            )
+            ->max() ?? 0;
+
+        $next = $max + 1;
 
         return str_pad(
             (string) $next,

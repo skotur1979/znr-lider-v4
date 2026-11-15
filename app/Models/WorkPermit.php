@@ -5,8 +5,9 @@ namespace App\Models;
 use App\Models\Concerns\LogsActivity;
 use App\Services\FormVersionService;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Validation\ValidationException;
 
 class WorkPermit extends Model
 {
@@ -78,13 +79,57 @@ class WorkPermit extends Model
 
     protected static function booted(): void
     {
-        static::creating(function (self $record) {
-            if (blank($record->user_id) && auth()->check()) {
-                $record->user_id = auth()->user()?->ownerId() ?? auth()->id();
+        /*
+         * Ownership i verzija obrasca.
+         */
+        static::creating(function (self $record): void {
+            if (
+                blank($record->user_id)
+                && auth()->check()
+            ) {
+                $record->user_id =
+                    auth()->user()?->ownerId()
+                    ?? auth()->id();
             }
 
             if (blank($record->form_version)) {
-                $record->form_version = FormVersionService::currentWorkPermit();
+                $record->form_version =
+                    FormVersionService::currentWorkPermit();
+            }
+        });
+
+        /*
+         * Integritet datuma.
+         *
+         * Ova provjera radi neovisno o Filament formi,
+         * odnosno vrijedi i za API, import, Tinker
+         * i ostale načine spremanja modela.
+         */
+        static::saving(function (self $record): void {
+            if (
+                $record->valid_from
+                && $record->valid_until
+                && $record->valid_until->lt(
+                    $record->valid_from
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'valid_until' =>
+                        'Datum i vrijeme "Vrijedi do" ne mogu biti prije "Vrijedi od".',
+                ]);
+            }
+
+            if (
+                $record->extension_valid_from
+                && $record->extension_valid_until
+                && $record->extension_valid_until->lt(
+                    $record->extension_valid_from
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'extension_valid_until' =>
+                        'Datum i vrijeme završetka produženja ne mogu biti prije početka produženja.',
+                ]);
             }
         });
     }
@@ -92,107 +137,231 @@ class WorkPermit extends Model
     public static function workTypeOptions(): array
     {
         return [
-            'hot_work' => 'Vrući radovi',
-            'work_at_height' => 'Radovi na visini',
-            'electrical_work' => 'Električarski radovi',
-            'hazardous_chemicals' => 'Rad s opasnim kemikalijama',
-            'other' => 'Ostalo',
+            'hot_work' =>
+                'Vrući radovi',
+
+            'work_at_height' =>
+                'Radovi na visini',
+
+            'electrical_work' =>
+                'Električarski radovi',
+
+            'hazardous_chemicals' =>
+                'Rad s opasnim kemikalijama',
+
+            'other' =>
+                'Ostalo',
         ];
     }
 
     public static function executorTypeOptions(): array
     {
         return [
-            'company_employees' => 'Zaposlenici tvrtke',
-            'external_contractors' => 'Vanjski izvođači',
+            'company_employees' =>
+                'Zaposlenici tvrtke',
+
+            'external_contractors' =>
+                'Vanjski izvođači',
         ];
     }
 
     public static function requiredMeasuresOptions(): array
     {
         return [
-            'remove_flammable_material' => 'Ukloniti zapaljivi materijal u zoni rada od 10 m',
-            'place_fire_extinguishers' => 'U zoni rada postaviti aparate za gašenje požara',
-            'check_welding_bottles' => 'Provjeriti ispravnost boca za zavarivanje',
-            'check_welding_hoses' => 'Provjeriti ispravnost crijeva opreme za zavarivanje',
-            'cover_openings' => 'Pokriti sve otvore u krugu 10 m',
-            'check_grounding_cable' => 'Provjeriti stanje napojnog kabela za uzemljenje',
-            'fire_blankets' => 'Postaviti požarne pokrivače za zadržavanje iskri',
-            'additional_lighting' => 'Osigurati dodatnu rasvjetu',
-            'check_dangerous_gases' => 'Provjeriti prisutnost opasnih plinova',
-            'mark_work_area' => 'Ograditi i označiti mjesto rada',
-            'lototo' => 'Upotreba LOTOTO sustava rada',
-            'additional_risk_assessment' => 'Dodatna procjena rizika',
-            'mandatory_scaffold' => 'Obavezno korištenje radne skele',
-            'safety_rope' => 'Sigurnosno uže',
-            'additional_access_exit' => 'Dodatni pristup / izlaz',
-            'five_rules_electrical' => '5 pravila za rad na el. postrojenjima i instalacijama',
+            'remove_flammable_material' =>
+                'Ukloniti zapaljivi materijal u zoni rada od 10 m',
+
+            'place_fire_extinguishers' =>
+                'U zoni rada postaviti aparate za gašenje požara',
+
+            'check_welding_bottles' =>
+                'Provjeriti ispravnost boca za zavarivanje',
+
+            'check_welding_hoses' =>
+                'Provjeriti ispravnost crijeva opreme za zavarivanje',
+
+            'cover_openings' =>
+                'Pokriti sve otvore u krugu 10 m',
+
+            'check_grounding_cable' =>
+                'Provjeriti stanje napojnog kabela za uzemljenje',
+
+            'fire_blankets' =>
+                'Postaviti požarne pokrivače za zadržavanje iskri',
+
+            'additional_lighting' =>
+                'Osigurati dodatnu rasvjetu',
+
+            'check_dangerous_gases' =>
+                'Provjeriti prisutnost opasnih plinova',
+
+            'mark_work_area' =>
+                'Ograditi i označiti mjesto rada',
+
+            'lototo' =>
+                'Upotreba LOTOTO sustava rada',
+
+            'additional_risk_assessment' =>
+                'Dodatna procjena rizika',
+
+            'mandatory_scaffold' =>
+                'Obavezno korištenje radne skele',
+
+            'safety_rope' =>
+                'Sigurnosno uže',
+
+            'additional_access_exit' =>
+                'Dodatni pristup / izlaz',
+
+            'five_rules_electrical' =>
+                '5 pravila za rad na el. postrojenjima i instalacijama',
         ];
     }
 
     public static function hazardOptions(): array
     {
         return [
-            'fall_from_height' => 'Pad s visine',
-            'sharp_objects' => 'Oštri predmeti',
-            'mechanical_lifting' => 'Mehaničko podizanje',
-            'stored_energy' => 'Pohranjena energija',
-            'hot_cold_surfaces' => 'Vruće / hladne površine',
-            'acids_alkalis' => 'Kiseline / lužine',
-            'heavy_loads' => 'Teški tereti',
-            'electrical_hazard' => 'Električna opasnost',
-            'lack_of_oxygen' => 'Nedostatak kisika',
-            'crushing' => 'Zgnječenja / prignječenja',
-            'vehicle_impact' => 'Udar / nalet vozila',
-            'bad_weather' => 'Loši vremenski uvjeti',
-            'noise' => 'Buka',
-            'explosive_flammable' => 'Eksplozivne / zapaljive tvari',
-            'outdoor_work' => 'Rad na otvorenom',
-            'poor_lighting' => 'Nedovoljna osvijetljenost',
-            'confined_space' => 'Rad u skučenom prostoru',
-            'repetitive_movements' => 'Ponavljajući pokreti',
-            'walking_surfaces' => 'Površine za kretanje',
-            'high_pressure' => 'Visoki tlak',
-            'prolonged_work' => 'Produljeni rad',
-            'eye_strain' => 'Napor vida',
-            'dangerous_vapors_gases' => 'Opasne pare / plinovi',
-            'other' => 'Ostalo',
+            'fall_from_height' =>
+                'Pad s visine',
+
+            'sharp_objects' =>
+                'Oštri predmeti',
+
+            'mechanical_lifting' =>
+                'Mehaničko podizanje',
+
+            'stored_energy' =>
+                'Pohranjena energija',
+
+            'hot_cold_surfaces' =>
+                'Vruće / hladne površine',
+
+            'acids_alkalis' =>
+                'Kiseline / lužine',
+
+            'heavy_loads' =>
+                'Teški tereti',
+
+            'electrical_hazard' =>
+                'Električna opasnost',
+
+            'lack_of_oxygen' =>
+                'Nedostatak kisika',
+
+            'crushing' =>
+                'Zgnječenja / prignječenja',
+
+            'vehicle_impact' =>
+                'Udar / nalet vozila',
+
+            'bad_weather' =>
+                'Loši vremenski uvjeti',
+
+            'noise' =>
+                'Buka',
+
+            'explosive_flammable' =>
+                'Eksplozivne / zapaljive tvari',
+
+            'outdoor_work' =>
+                'Rad na otvorenom',
+
+            'poor_lighting' =>
+                'Nedovoljna osvijetljenost',
+
+            'confined_space' =>
+                'Rad u skučenom prostoru',
+
+            'repetitive_movements' =>
+                'Ponavljajući pokreti',
+
+            'walking_surfaces' =>
+                'Površine za kretanje',
+
+            'high_pressure' =>
+                'Visoki tlak',
+
+            'prolonged_work' =>
+                'Produljeni rad',
+
+            'eye_strain' =>
+                'Napor vida',
+
+            'dangerous_vapors_gases' =>
+                'Opasne pare / plinovi',
+
+            'other' =>
+                'Ostalo',
         ];
     }
 
     public static function ppeOptions(): array
     {
         return [
-            'safety_shoes' => 'Zaštitne cipele s kapicom',
-            'safety_glasses' => 'Zaštitne naočale',
-            'hearing_protection' => 'Antifoni ili čepići',
-            'helmet' => 'Zaštitna kaciga',
-            'work_clothes' => 'Radno odijelo',
-            'protective_mask' => 'Zaštitna maska',
-            'respirator' => 'Respirator',
-            'welding_mask' => 'Maska za zavarivanje',
-            'rubber_boots' => 'Gumene čizme',
-            'half_mask' => 'Zaštitna polumaska',
-            'reflective_vest' => 'Reflektirajući prsluk',
-            'cap_with_protection' => 'Šilt kapa s zaštitom',
-            'protective_gloves' => 'Zaštitne rukavice',
-            'face_shield' => 'Zaštitni vizir',
-            'fall_protection_belt' => 'Pojas za rad na visini',
+            'safety_shoes' =>
+                'Zaštitne cipele s kapicom',
+
+            'safety_glasses' =>
+                'Zaštitne naočale',
+
+            'hearing_protection' =>
+                'Antifoni ili čepići',
+
+            'helmet' =>
+                'Zaštitna kaciga',
+
+            'work_clothes' =>
+                'Radno odijelo',
+
+            'protective_mask' =>
+                'Zaštitna maska',
+
+            'respirator' =>
+                'Respirator',
+
+            'welding_mask' =>
+                'Maska za zavarivanje',
+
+            'rubber_boots' =>
+                'Gumene čizme',
+
+            'half_mask' =>
+                'Zaštitna polumaska',
+
+            'reflective_vest' =>
+                'Reflektirajući prsluk',
+
+            'cap_with_protection' =>
+                'Šilt kapa s zaštitom',
+
+            'protective_gloves' =>
+                'Zaštitne rukavice',
+
+            'face_shield' =>
+                'Zaštitni vizir',
+
+            'fall_protection_belt' =>
+                'Pojas za rad na visini',
         ];
     }
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(
+            User::class
+        );
     }
+
     public static function formVersions(): array
-{
-    return FormVersionService::workPermitVersions();
-}
+    {
+        return FormVersionService::workPermitVersions();
+    }
 
     public function getFormVersionLabelAttribute(): string
     {
-        return FormVersionService::workPermitVersions()[$this->form_version]
+        return FormVersionService::workPermitVersions()[
+            $this->form_version
+        ]
             ?? $this->form_version
             ?? FormVersionService::currentWorkPermit();
     }
