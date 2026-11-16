@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class WorkTask extends Model
 {
@@ -67,6 +68,12 @@ class WorkTask extends Model
 
     protected static function booted(): void
     {
+        /*
+        |--------------------------------------------------------------------------
+        | GLOBALNI VISIBILITY SCOPE
+        |--------------------------------------------------------------------------
+        */
+
         static::addGlobalScope(
             'work_task_visibility',
             function (
@@ -146,6 +153,285 @@ class WorkTask extends Model
                 );
             }
         );
+
+        /*
+        |--------------------------------------------------------------------------
+        | INTEGRITET STATUSA
+        |--------------------------------------------------------------------------
+        |
+        | Završeni zadatak mora imati completed_at.
+        |
+        | Otvoreni zadatak ne smije imati completed_at.
+        |
+        | Pravilo vrijedi bez obzira dolazi li spremanje
+        | iz Filamenta, API-ja, importa ili nekog servisa.
+        |
+        */
+
+        static::saving(
+            function (self $record): void {
+                /*
+                 * Ako je zadatak završen,
+                 * mora imati vrijeme završetka.
+                 */
+                if (
+                    (bool) $record->is_done
+                ) {
+                    if (
+                        ! $record->completed_at
+                    ) {
+                        $record->completed_at =
+                            now();
+                    }
+
+                    return;
+                }
+
+                /*
+                 * Ako je zadatak ponovno otvoren,
+                 * brišemo vrijeme završetka.
+                 */
+                $record->completed_at =
+                    null;
+            }
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | INTEGRITET KOD KREIRANJA
+        |--------------------------------------------------------------------------
+        |
+        | Novi WorkTask uvijek pripada organizaciji
+        | prijavljenog korisnika.
+        |
+        | user_id
+        | = ownerId prijavljenog korisnika
+        |
+        | created_by_user_id
+        | = stvarni prijavljeni korisnik
+        |
+        | Ta polja se ne smiju moći lažirati kroz API,
+        | Tinker, import ili neki budući način kreiranja.
+        |
+        */
+
+        static::creating(
+            function (self $record): void {
+                $user =
+                    Auth::user();
+
+                /*
+                 * CLI / scheduler / queue može imati
+                 * vlastitu eksplicitnu ownership logiku.
+                 */
+                if (! $user) {
+                    return;
+                }
+
+                /*
+                 * Superadmin ne kreira poslovne
+                 * radne zadatke organizacije.
+                 */
+                if (
+                    $user->isSuperAdmin()
+                ) {
+                    throw ValidationException::withMessages([
+                        'user_id' =>
+                            'Superadmin ne može kreirati radni zadatak u ime organizacije.',
+                    ]);
+                }
+
+                $ownerId =
+                    (int) (
+                        $user->ownerId()
+                        ?? 0
+                    );
+
+                if ($ownerId <= 0) {
+                    throw ValidationException::withMessages([
+                        'user_id' =>
+                            'Organizacija radnog zadatka nije valjano određena.',
+                    ]);
+                }
+
+                /*
+                 * Ownership uvijek određujemo
+                 * prema prijavljenom korisniku.
+                 */
+                $record->user_id =
+                    $ownerId;
+
+                /*
+                 * Autor je uvijek stvarni korisnik
+                 * koji kreira radni zadatak.
+                 */
+                $record->created_by_user_id =
+                    $user->id;
+
+                /*
+                 * Sigurni privacy default.
+                 *
+                 * Ako vrijednost nije eksplicitno
+                 * zadana, zadatak ostaje privatan.
+                 */
+                if (
+                    $record
+                        ->is_shared_with_organization
+                    === null
+                ) {
+                    $record
+                        ->is_shared_with_organization =
+                        false;
+                }
+            }
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | INTEGRITET KOD AŽURIRANJA
+        |--------------------------------------------------------------------------
+        |
+        | Postojećem zadatku ne smije se promijeniti:
+        |
+        | - organizacija kojoj pripada
+        | - postojeći autor
+        |
+        | Samo autor smije mijenjati
+        | privatno / organizacijsko dijeljenje.
+        |
+        | Legacy zadatak bez autora može preuzeti
+        | samo glavni korisnik njegove organizacije.
+        |
+        */
+
+        static::updating(
+            function (self $record): void {
+                $user =
+                    Auth::user();
+
+                /*
+                 * CLI / scheduler / queue:
+                 * ne primjenjujemo Auth pravila.
+                 */
+                if (! $user) {
+                    return;
+                }
+
+                /*
+                 * Organizacija postojećeg zadatka
+                 * nikada se ne smije promijeniti.
+                 */
+                $originalOwnerId =
+                    (int) $record->getOriginal(
+                        'user_id'
+                    );
+
+                $record->user_id =
+                    $originalOwnerId;
+
+                $originalCreatorId =
+                    (int) (
+                        $record->getOriginal(
+                            'created_by_user_id'
+                        )
+                        ?? 0
+                    );
+
+                /*
+                 * POSTOJEĆI AUTOR
+                 *
+                 * Ako zadatak već ima autora,
+                 * autor se više ne smije promijeniti.
+                 */
+                if (
+                    $originalCreatorId > 0
+                ) {
+                    $record->created_by_user_id =
+                        $originalCreatorId;
+
+                    /*
+                     * Samo stvarni autor zadatka
+                     * smije promijeniti vidljivost.
+                     *
+                     * Drugi korisnik organizacije
+                     * može uređivati shared zadatak
+                     * ako mu Resource to dopušta,
+                     * ali ne može mijenjati njegovo
+                     * private / shared stanje.
+                     */
+                    if (
+                        (int) $user->id
+                        !== $originalCreatorId
+                    ) {
+                        $record
+                            ->is_shared_with_organization =
+                            (bool) $record->getOriginal(
+                                'is_shared_with_organization'
+                            );
+                    }
+
+                    return;
+                }
+
+                /*
+                 * LEGACY ZADATAK BEZ AUTORA
+                 *
+                 * Superadmin ga ne smije
+                 * preuzeti kao svoj zadatak.
+                 */
+                if (
+                    $user->isSuperAdmin()
+                ) {
+                    $record->created_by_user_id =
+                        null;
+
+                    $record
+                        ->is_shared_with_organization =
+                        (bool) $record->getOriginal(
+                            'is_shared_with_organization'
+                        );
+
+                    return;
+                }
+
+                $ownerId =
+                    (int) (
+                        $user->ownerId()
+                        ?? 0
+                    );
+
+                /*
+                 * Samo glavni korisnik organizacije
+                 * može preuzeti legacy zadatak
+                 * koji nema autora.
+                 */
+                if (
+                    $ownerId > 0
+                    && (int) $user->id === $ownerId
+                    && $originalOwnerId === $ownerId
+                ) {
+                    $record->created_by_user_id =
+                        $user->id;
+
+                    return;
+                }
+
+                /*
+                 * Podkorisnik ili korisnik druge
+                 * organizacije ne može preuzeti
+                 * legacy zadatak niti promijeniti
+                 * njegovu vidljivost.
+                 */
+                $record->created_by_user_id =
+                    null;
+
+                $record
+                    ->is_shared_with_organization =
+                    (bool) $record->getOriginal(
+                        'is_shared_with_organization'
+                    );
+            }
+        );
     }
 
     /*
@@ -185,9 +471,6 @@ class WorkTask extends Model
 
     /**
      * Zadaci dostupni trenutnom korisniku.
-     *
-     * Ovaj scope zadržavamo jer ga možda
-     * postojeći dijelovi aplikacije koriste.
      *
      * Pravilo je isto kao kod globalnog scopea:
      *
