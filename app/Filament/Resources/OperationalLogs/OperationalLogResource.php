@@ -839,6 +839,29 @@ class OperationalLogResource extends BaseResource
      * - superadmin NE uređuje tuđe osobne dnevnike
      * - korisnik uređuje samo vlastiti dnevnik
      */
+
+    /**
+     * Pregled:
+     *
+     * - superadmin smije pregledavati sve osobne dnevnike
+     * - obični korisnik smije pregledavati samo vlastiti dnevnik
+     */
+    public static function canView(Model $record): bool
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return parent::canView($record);
+        }
+
+        return (int) $record->user_id === (int) $user->id
+            && parent::canView($record);
+    }
+
     public static function canEdit(Model $record): bool
     {
         $user = Auth::user();
